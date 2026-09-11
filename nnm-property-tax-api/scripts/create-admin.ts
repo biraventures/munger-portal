@@ -4,7 +4,7 @@
  *
  * Usage:
  *   npm run create-admin -- <username> <password> "<Display Name>" <role>
- *   role is one of: tax_daroga | mutation_nodal_clerk | deputy_commissioner | commissioner
+ *   role is one of the AdminRole values in src/types/admin.types.ts
  *
  * Example:
  *   npm run create-admin -- rmishra "TempPass123!" "Rakesh Mishra" commissioner
@@ -12,18 +12,11 @@
 import "dotenv/config";
 import bcrypt from "bcrypt";
 import { Pool } from "pg";
+import { ADMIN_ROLES } from "../src/types/admin.types";
 
 const [username, password, displayName, role] = process.argv.slice(2);
 
-const VALID_ROLES = [
-  "tax_daroga",
-  "mutation_nodal_clerk",
-  "deputy_commissioner",
-  "commissioner",
-  "stall_prabhari",
-  "city_manager",
-  "trade_license_nodal",
-];
+const VALID_ROLES: string[] = ADMIN_ROLES;
 
 async function main() {
   if (!username || !password || !displayName || !role) {

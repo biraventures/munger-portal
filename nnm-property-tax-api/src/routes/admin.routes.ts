@@ -33,6 +33,22 @@ import { deleteShopHandler } from "../controllers/shopDelete.controller";
 import { postRenumberHolding, postRenameHolding, postFixHoldingNoSpaces } from "../controllers/propertyRenumber.controller";
 import { deletePropertyHandler } from "../controllers/propertyDelete.controller";
 import { getSpacedHoldings, postDeleteSpacedHoldings, postRemoveDuplicateFloors } from "../controllers/propertyBulkCleanup.controller";
+import {
+  searchPropertiesForGeo,
+  listAllPropertyGeoHandler,
+  getPropertyGeo,
+  putPropertyGeo,
+  getGeoProgress,
+  listInfrastructureLinesHandler,
+  createInfrastructureLineHandler,
+  updateInfrastructureLineHandler,
+  deleteInfrastructureLineHandler,
+  importInfrastructureLinesKmlHandler,
+  listWardBoundariesHandler,
+  importWardBoundariesKmlHandler,
+  deleteWardBoundaryHandler,
+  exportGeoData,
+} from "../controllers/geo.controller";
 import { uploadPropertiesXlsxHandler } from "../controllers/propertyBulkImport.controller";
 import { getShopsPendingPublication, postApproveShopPublication } from "../controllers/shopPublicationApproval.controller";
 import {
@@ -211,3 +227,24 @@ adminRouter.patch("/tax-collectors/:id/active", requireNonStallPrabhari, setTaxC
 adminRouter.get("/tax-collectors/available-wards", requireNonStallPrabhari, getAvailableWards);
 adminRouter.get("/tax-collectors/:id/wards", requireNonStallPrabhari, getTaxCollectorWards);
 adminRouter.put("/tax-collectors/:id/wards", requireAdminRole("tax_daroga"), setTaxCollectorWards);
+
+// Assistant Town Planning Supervisor (ATPS) and Commissioner
+// capture/edit coordinates and manage KML imports. Assistant
+// Architect is view-only (the GIS map) - added to search/view/export
+// endpoints but deliberately left off anything that writes data.
+const requireGeoEditRole = requireAdminRole("assistant_town_planning_supervisor", "commissioner");
+const requireGeoViewRole = requireAdminRole("assistant_town_planning_supervisor", "commissioner", "assistant_architect");
+adminRouter.get("/geo/properties/search", requireGeoViewRole, searchPropertiesForGeo);
+adminRouter.get("/geo/properties/all", requireGeoViewRole, listAllPropertyGeoHandler);
+adminRouter.get("/geo/properties/:holdingNo", requireGeoViewRole, getPropertyGeo);
+adminRouter.put("/geo/properties/:holdingNo", requireGeoEditRole, putPropertyGeo);
+adminRouter.get("/geo/progress", requireGeoViewRole, getGeoProgress);
+adminRouter.get("/geo/infrastructure-lines", requireGeoViewRole, listInfrastructureLinesHandler);
+adminRouter.post("/geo/infrastructure-lines", requireGeoEditRole, createInfrastructureLineHandler);
+adminRouter.post("/geo/infrastructure-lines/import-kml", requireGeoEditRole, importInfrastructureLinesKmlHandler);
+adminRouter.put("/geo/infrastructure-lines/:id", requireGeoEditRole, updateInfrastructureLineHandler);
+adminRouter.delete("/geo/infrastructure-lines/:id", requireGeoEditRole, deleteInfrastructureLineHandler);
+adminRouter.get("/geo/ward-boundaries", requireGeoViewRole, listWardBoundariesHandler);
+adminRouter.post("/geo/ward-boundaries/import-kml", requireGeoEditRole, importWardBoundariesKmlHandler);
+adminRouter.delete("/geo/ward-boundaries/:id", requireGeoEditRole, deleteWardBoundaryHandler);
+adminRouter.get("/geo/export", requireGeoViewRole, exportGeoData);

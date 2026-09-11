@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Users, FileClock, FileWarning, LayoutGrid, ShoppingBag, Store, BarChart3, Award, Archive, Download, XCircle, ShieldCheck, Trash2, RefreshCw, Upload } from "lucide-react";
+import { Users, FileClock, FileWarning, LayoutGrid, ShoppingBag, Store, BarChart3, Award, Archive, Download, XCircle, ShieldCheck, Trash2, RefreshCw, Upload, MapPin, Map as MapIcon } from "lucide-react";
 import { AdminHeader } from "@/components/admin-header";
 import { DashboardSummaryWidget } from "@/components/dashboard-summary-widget";
 import { useAdminGuard } from "@/lib/use-admin-guard";
@@ -56,6 +56,57 @@ export default function AdminDashboardPage() {
   const isRestrictedRole = isStallPrabhari || isTradeLicenseNodal;
   const canApproveShopPublication = admin.role === "stall_prabhari" || admin.role === "city_manager" || admin.role === "deputy_commissioner";
   const canApproveDemandActions = admin.role === "stall_prabhari" || admin.role === "city_manager";
+  const isCommissioner = admin.role === "commissioner";
+
+  // Pre-computed per-card visibility so each grouped section's heading
+  // can be hidden entirely when none of its cards apply to this role,
+  // rather than showing an empty section.
+  const showMutationApprovals = !isRestrictedRole;
+  const showCancellationRequests = !isRestrictedRole;
+  const showTaxCollectors = !isRestrictedRole;
+  const showBulkDemandNotices = !isRestrictedRole;
+  const showAllPropertyChanges = isCommissioner;
+  const showRenumberHolding = isCommissioner;
+  const showBulkUploadProperties = isCommissioner;
+  const propertyGroupVisible =
+    showMutationApprovals || showCancellationRequests || showTaxCollectors || showBulkDemandNotices || showAllPropertyChanges || showRenumberHolding || showBulkUploadProperties;
+
+  const showShopAgreementApprovals = !isTradeLicenseNodal;
+  const showShopRentalApplications = !isTradeLicenseNodal;
+  const showShopRentalPreferences = !isTradeLicenseNodal;
+  const showShopRateReport = !isTradeLicenseNodal;
+  const showShopsPendingPublication = canApproveShopPublication;
+  const showShopEditApprovals = canApproveShopPublication;
+  const showDemandReceiptActions = canApproveDemandActions;
+  const showBulkUploadShops = isCommissioner;
+  const showManageShops = isCommissioner;
+  const shopGroupVisible =
+    showShopAgreementApprovals ||
+    showShopRentalApplications ||
+    showShopRentalPreferences ||
+    showShopRateReport ||
+    showShopsPendingPublication ||
+    showShopEditApprovals ||
+    showDemandReceiptActions ||
+    showBulkUploadShops ||
+    showManageShops;
+
+  const showTradeLicenseApplications = !isStallPrabhari;
+  const showTradeLicenseReporting = !isStallPrabhari;
+  const tradeLicenseGroupVisible = showTradeLicenseApplications || showTradeLicenseReporting;
+
+  const showOperators = !isRestrictedRole;
+  const showDocumentArchive = !isRestrictedRole;
+  const showAttendanceReport = isCommissioner;
+  const isAtps = admin.role === "assistant_town_planning_supervisor";
+  const isAssistantArchitect = admin.role === "assistant_architect";
+  const showAssignCoordinates = isAtps || isCommissioner;
+  const showGisMap = isAtps || isAssistantArchitect || isCommissioner;
+  const miscGroupVisible = showOperators || showDocumentArchive || showAttendanceReport || showAssignCoordinates || showGisMap;
+
+  const groupHeadingClass = "mb-4 mt-10 text-lg font-semibold text-slate-800 first:mt-0";
+  const cardClass = "flex flex-col rounded-xl border border-slate-200 bg-white p-6 transition-shadow hover:shadow-md";
+  const iconWrapClass = "mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-blue-50 text-nnm-blue";
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -76,296 +127,279 @@ export default function AdminDashboardPage() {
           visibleTabs={isStallPrabhari ? ["shops", "shopApplications"] : isTradeLicenseNodal ? ["tradeLicenseApplications", "tradeLicensesIssued"] : undefined}
         />
 
-        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
-          {!isRestrictedRole && (
-            <Link
-              href="/admin/change-requests"
-              className="flex flex-col rounded-xl border border-slate-200 bg-white p-6 transition-shadow hover:shadow-md"
-            >
-              <span className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-blue-50 text-nnm-blue">
-                <FileClock className="h-6 w-6" strokeWidth={1.8} />
-              </span>
-              <h3 className="mb-1.5 text-base font-semibold text-slate-900">Mutation Approvals</h3>
-              <p className="text-sm text-slate-500">
-                {myStagePendingCount === null
-                  ? "Review property change requests waiting on your desk."
-                  : `${myStagePendingCount} request${myStagePendingCount === 1 ? "" : "s"} currently waiting on your desk.`}
-              </p>
-            </Link>
-          )}
+        {propertyGroupVisible && (
+          <>
+            <h2 className={groupHeadingClass}>Property Tax</h2>
+            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+              {showMutationApprovals && (
+                <Link href="/admin/change-requests" className={cardClass}>
+                  <span className={iconWrapClass}>
+                    <FileClock className="h-6 w-6" strokeWidth={1.8} />
+                  </span>
+                  <h3 className="mb-1.5 text-base font-semibold text-slate-900">Mutation Approvals</h3>
+                  <p className="text-sm text-slate-500">
+                    {myStagePendingCount === null
+                      ? "Review property change requests waiting on your desk."
+                      : `${myStagePendingCount} request${myStagePendingCount === 1 ? "" : "s"} currently waiting on your desk.`}
+                  </p>
+                </Link>
+              )}
 
-          {!isRestrictedRole && (
-            <Link
-              href="/admin/cancellation-requests"
-              className="flex flex-col rounded-xl border border-slate-200 bg-white p-6 transition-shadow hover:shadow-md"
-            >
-              <span className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-blue-50 text-nnm-blue">
-                <XCircle className="h-6 w-6" strokeWidth={1.8} />
-              </span>
-              <h3 className="mb-1.5 text-base font-semibold text-slate-900">Cancellation Requests</h3>
-              <p className="text-sm text-slate-500">Requests to cancel a demand notice or payment receipt.</p>
-            </Link>
-          )}
+              {showCancellationRequests && (
+                <Link href="/admin/cancellation-requests" className={cardClass}>
+                  <span className={iconWrapClass}>
+                    <XCircle className="h-6 w-6" strokeWidth={1.8} />
+                  </span>
+                  <h3 className="mb-1.5 text-base font-semibold text-slate-900">Cancellation Requests</h3>
+                  <p className="text-sm text-slate-500">Requests to cancel a demand notice or payment receipt.</p>
+                </Link>
+              )}
 
-          {!isTradeLicenseNodal && (
-            <Link
-              href="/admin/shop-agreement-requests"
-              className="flex flex-col rounded-xl border border-slate-200 bg-white p-6 transition-shadow hover:shadow-md"
-            >
-              <span className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-blue-50 text-nnm-blue">
-                <ShoppingBag className="h-6 w-6" strokeWidth={1.8} />
-              </span>
-              <h3 className="mb-1.5 text-base font-semibold text-slate-900">Shop Agreement Approvals</h3>
-              <p className="text-sm text-slate-500">
-                {myShopStagePendingCount === null
-                  ? "Review shop agreement requests waiting on your desk."
-                  : `${myShopStagePendingCount} request${myShopStagePendingCount === 1 ? "" : "s"} currently waiting on your desk.`}
-              </p>
-            </Link>
-          )}
+              {showTaxCollectors && (
+                <Link href="/admin/tax-collectors" className={cardClass}>
+                  <span className={iconWrapClass}>
+                    <Users className="h-6 w-6" strokeWidth={1.8} />
+                  </span>
+                  <h3 className="mb-1.5 text-base font-semibold text-slate-900">Tax Collectors</h3>
+                  <p className="text-sm text-slate-500">Add field collectors and their codes for payment tracking.</p>
+                </Link>
+              )}
 
-          {!isTradeLicenseNodal && (
-            <Link
-              href="/admin/shop-rental-applications"
-              className="flex flex-col rounded-xl border border-slate-200 bg-white p-6 transition-shadow hover:shadow-md"
-            >
-              <span className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-blue-50 text-nnm-blue">
-                <Store className="h-6 w-6" strokeWidth={1.8} />
-              </span>
-              <h3 className="mb-1.5 text-base font-semibold text-slate-900">Shop Rental Applications</h3>
-              <p className="text-sm text-slate-500">
-                {myRentalAppPendingCount === null
-                  ? "Review new tenant applications waiting on your desk."
-                  : `${myRentalAppPendingCount} application${myRentalAppPendingCount === 1 ? "" : "s"} currently waiting on your desk.`}
-              </p>
-            </Link>
-          )}
+              {showBulkDemandNotices && (
+                <Link href="/admin/demand-notices" className={cardClass}>
+                  <span className={iconWrapClass}>
+                    <FileWarning className="h-6 w-6" strokeWidth={1.8} />
+                  </span>
+                  <h3 className="mb-1.5 text-base font-semibold text-slate-900">Bulk Demand Notices</h3>
+                  <p className="text-sm text-slate-500">Generate demand notices for every holding that doesn&apos;t have one yet.</p>
+                </Link>
+              )}
 
-          {!isTradeLicenseNodal && (
-            <Link
-              href="/admin/shop-rental-preferences"
-              className="flex flex-col rounded-xl border border-slate-200 bg-white p-6 transition-shadow hover:shadow-md"
-            >
-              <span className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-blue-50 text-nnm-blue">
-                <Store className="h-6 w-6" strokeWidth={1.8} />
-              </span>
-              <h3 className="mb-1.5 text-base font-semibold text-slate-900">Shop Rental Preferences</h3>
-              <p className="text-sm text-slate-500">Match market/size/bid preferences to vacant shops and allot one.</p>
-            </Link>
-          )}
+              {showAllPropertyChanges && (
+                <Link href="/admin/all-changes" className={cardClass}>
+                  <span className={iconWrapClass}>
+                    <LayoutGrid className="h-6 w-6" strokeWidth={1.8} />
+                  </span>
+                  <h3 className="mb-1.5 text-base font-semibold text-slate-900">All Property Changes</h3>
+                  <p className="text-sm text-slate-500">Every mutation request, done and in process, grouped by category.</p>
+                </Link>
+              )}
 
-          {!isTradeLicenseNodal && (
-            <Link
-              href="/admin/shop-rate-report"
-              className="flex flex-col rounded-xl border border-slate-200 bg-white p-6 transition-shadow hover:shadow-md"
-            >
-              <span className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-blue-50 text-nnm-blue">
-                <BarChart3 className="h-6 w-6" strokeWidth={1.8} />
-              </span>
-              <h3 className="mb-1.5 text-base font-semibold text-slate-900">Shop Rate per Sqft</h3>
-              <p className="text-sm text-slate-500">See which occupied shops are renting below market rate.</p>
-            </Link>
-          )}
+              {showRenumberHolding && (
+                <Link href="/admin/properties-manage" className={cardClass}>
+                  <span className={iconWrapClass}>
+                    <RefreshCw className="h-6 w-6" strokeWidth={1.8} />
+                  </span>
+                  <h3 className="mb-1.5 text-base font-semibold text-slate-900">Manage Properties</h3>
+                  <p className="text-sm text-slate-500">Renumber, rename, delete, or bulk-clean up holding numbers.</p>
+                </Link>
+              )}
 
-          {canApproveShopPublication && (
-            <Link
-              href="/admin/shops-pending-publication"
-              className="flex flex-col rounded-xl border border-slate-200 bg-white p-6 transition-shadow hover:shadow-md"
-            >
-              <span className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-blue-50 text-nnm-blue">
-                <ShieldCheck className="h-6 w-6" strokeWidth={1.8} />
-              </span>
-              <h3 className="mb-1.5 text-base font-semibold text-slate-900">Shops Pending Publication</h3>
-              <p className="text-sm text-slate-500">Review newly-entered shops before they&apos;re publicly listed as available.</p>
-            </Link>
-          )}
+              {showBulkUploadProperties && (
+                <Link href="/admin/properties-bulk-upload" className={cardClass}>
+                  <span className={iconWrapClass}>
+                    <Upload className="h-6 w-6" strokeWidth={1.8} />
+                  </span>
+                  <h3 className="mb-1.5 text-base font-semibold text-slate-900">Bulk Upload Properties</h3>
+                  <p className="text-sm text-slate-500">Import holdings, floors, tax history, and payments from a backup file.</p>
+                </Link>
+              )}
+            </div>
+          </>
+        )}
 
-          {canApproveShopPublication && (
-            <Link
-              href="/admin/shop-edit-requests"
-              className="flex flex-col rounded-xl border border-slate-200 bg-white p-6 transition-shadow hover:shadow-md"
-            >
-              <span className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-blue-50 text-nnm-blue">
-                <FileClock className="h-6 w-6" strokeWidth={1.8} />
-              </span>
-              <h3 className="mb-1.5 text-base font-semibold text-slate-900">Shop Edit Approvals</h3>
-              <p className="text-sm text-slate-500">Review proposed edits to existing shops&apos; details.</p>
-            </Link>
-          )}
+        {shopGroupVisible && (
+          <>
+            <h2 className={groupHeadingClass}>Shops</h2>
+            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+              {showShopAgreementApprovals && (
+                <Link href="/admin/shop-agreement-requests" className={cardClass}>
+                  <span className={iconWrapClass}>
+                    <ShoppingBag className="h-6 w-6" strokeWidth={1.8} />
+                  </span>
+                  <h3 className="mb-1.5 text-base font-semibold text-slate-900">Shop Agreement Approvals</h3>
+                  <p className="text-sm text-slate-500">
+                    {myShopStagePendingCount === null
+                      ? "Review shop agreement requests waiting on your desk."
+                      : `${myShopStagePendingCount} request${myShopStagePendingCount === 1 ? "" : "s"} currently waiting on your desk.`}
+                  </p>
+                </Link>
+              )}
 
-          {canApproveDemandActions && (
-            <Link
-              href="/admin/shop-demand-actions"
-              className="flex flex-col rounded-xl border border-slate-200 bg-white p-6 transition-shadow hover:shadow-md"
-            >
-              <span className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-blue-50 text-nnm-blue">
-                <XCircle className="h-6 w-6" strokeWidth={1.8} />
-              </span>
-              <h3 className="mb-1.5 text-base font-semibold text-slate-900">Demand / Receipt Actions</h3>
-              <p className="text-sm text-slate-500">Cancel or supersede a demand notice, or cancel a payment receipt.</p>
-            </Link>
-          )}
+              {showShopRentalApplications && (
+                <Link href="/admin/shop-rental-applications" className={cardClass}>
+                  <span className={iconWrapClass}>
+                    <Store className="h-6 w-6" strokeWidth={1.8} />
+                  </span>
+                  <h3 className="mb-1.5 text-base font-semibold text-slate-900">Shop Rental Applications</h3>
+                  <p className="text-sm text-slate-500">
+                    {myRentalAppPendingCount === null
+                      ? "Review new tenant applications waiting on your desk."
+                      : `${myRentalAppPendingCount} application${myRentalAppPendingCount === 1 ? "" : "s"} currently waiting on your desk.`}
+                  </p>
+                </Link>
+              )}
 
-          {!isStallPrabhari && (
-            <Link
-              href="/admin/trade-license-requests"
-              className="flex flex-col rounded-xl border border-slate-200 bg-white p-6 transition-shadow hover:shadow-md"
-            >
-              <span className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-blue-50 text-nnm-blue">
-                <Award className="h-6 w-6" strokeWidth={1.8} />
-              </span>
-              <h3 className="mb-1.5 text-base font-semibold text-slate-900">Trade License Applications</h3>
-              <p className="text-sm text-slate-500">
-                {myTradeLicensePendingCount === null
-                  ? "Review trade license applications waiting on your desk."
-                  : `${myTradeLicensePendingCount} application${myTradeLicensePendingCount === 1 ? "" : "s"} currently waiting on your desk.`}
-              </p>
-            </Link>
-          )}
+              {showShopRentalPreferences && (
+                <Link href="/admin/shop-rental-preferences" className={cardClass}>
+                  <span className={iconWrapClass}>
+                    <Store className="h-6 w-6" strokeWidth={1.8} />
+                  </span>
+                  <h3 className="mb-1.5 text-base font-semibold text-slate-900">Shop Rental Preferences</h3>
+                  <p className="text-sm text-slate-500">Match market/size/bid preferences to vacant shops and allot one.</p>
+                </Link>
+              )}
 
-          {!isStallPrabhari && (
-            <Link
-              href="/admin/trade-license-dashboard"
-              className="flex flex-col rounded-xl border border-slate-200 bg-white p-6 transition-shadow hover:shadow-md"
-            >
-              <span className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-blue-50 text-nnm-blue">
-                <BarChart3 className="h-6 w-6" strokeWidth={1.8} />
-              </span>
-              <h3 className="mb-1.5 text-base font-semibold text-slate-900">Trade License - Reporting</h3>
-              <p className="text-sm text-slate-500">Received, pendency, disposal rate, and anything overdue 2+ weeks.</p>
-            </Link>
-          )}
+              {showShopRateReport && (
+                <Link href="/admin/shop-rate-report" className={cardClass}>
+                  <span className={iconWrapClass}>
+                    <BarChart3 className="h-6 w-6" strokeWidth={1.8} />
+                  </span>
+                  <h3 className="mb-1.5 text-base font-semibold text-slate-900">Shop Rate per Sqft</h3>
+                  <p className="text-sm text-slate-500">See which occupied shops are renting below market rate.</p>
+                </Link>
+              )}
 
-          {!isRestrictedRole && (
-            <Link
-              href="/admin/operators"
-              className="flex flex-col rounded-xl border border-slate-200 bg-white p-6 transition-shadow hover:shadow-md"
-            >
-              <span className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-blue-50 text-nnm-blue">
-                <Users className="h-6 w-6" strokeWidth={1.8} />
-              </span>
-              <h3 className="mb-1.5 text-base font-semibold text-slate-900">Operators</h3>
-              <p className="text-sm text-slate-500">Activate or deactivate counter operator accounts.</p>
-            </Link>
-          )}
+              {showShopsPendingPublication && (
+                <Link href="/admin/shops-pending-publication" className={cardClass}>
+                  <span className={iconWrapClass}>
+                    <ShieldCheck className="h-6 w-6" strokeWidth={1.8} />
+                  </span>
+                  <h3 className="mb-1.5 text-base font-semibold text-slate-900">Shops Pending Publication</h3>
+                  <p className="text-sm text-slate-500">Review newly-entered shops before they&apos;re publicly listed as available.</p>
+                </Link>
+              )}
 
-          {!isRestrictedRole && (
-            <Link
-              href="/admin/tax-collectors"
-              className="flex flex-col rounded-xl border border-slate-200 bg-white p-6 transition-shadow hover:shadow-md"
-            >
-              <span className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-blue-50 text-nnm-blue">
-                <Users className="h-6 w-6" strokeWidth={1.8} />
-              </span>
-              <h3 className="mb-1.5 text-base font-semibold text-slate-900">Tax Collectors</h3>
-              <p className="text-sm text-slate-500">Add field collectors and their codes for payment tracking.</p>
-            </Link>
-          )}
+              {showShopEditApprovals && (
+                <Link href="/admin/shop-edit-requests" className={cardClass}>
+                  <span className={iconWrapClass}>
+                    <FileClock className="h-6 w-6" strokeWidth={1.8} />
+                  </span>
+                  <h3 className="mb-1.5 text-base font-semibold text-slate-900">Shop Edit Approvals</h3>
+                  <p className="text-sm text-slate-500">Review proposed edits to existing shops&apos; details.</p>
+                </Link>
+              )}
 
-          {!isRestrictedRole && (
-            <Link
-              href="/admin/demand-notices"
-              className="flex flex-col rounded-xl border border-slate-200 bg-white p-6 transition-shadow hover:shadow-md"
-            >
-              <span className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-blue-50 text-nnm-blue">
-                <FileWarning className="h-6 w-6" strokeWidth={1.8} />
-              </span>
-              <h3 className="mb-1.5 text-base font-semibold text-slate-900">Bulk Demand Notices</h3>
-              <p className="text-sm text-slate-500">Generate demand notices for every holding that doesn&apos;t have one yet.</p>
-            </Link>
-          )}
+              {showDemandReceiptActions && (
+                <Link href="/admin/shop-demand-actions" className={cardClass}>
+                  <span className={iconWrapClass}>
+                    <XCircle className="h-6 w-6" strokeWidth={1.8} />
+                  </span>
+                  <h3 className="mb-1.5 text-base font-semibold text-slate-900">Demand / Receipt Actions</h3>
+                  <p className="text-sm text-slate-500">Cancel or supersede a demand notice, or cancel a payment receipt.</p>
+                </Link>
+              )}
 
-          {!isRestrictedRole && (
-            <Link
-              href="/admin/document-archive"
-              className="flex flex-col rounded-xl border border-slate-200 bg-white p-6 transition-shadow hover:shadow-md"
-            >
-              <span className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-blue-50 text-nnm-blue">
-                <Archive className="h-6 w-6" strokeWidth={1.8} />
-              </span>
-              <h3 className="mb-1.5 text-base font-semibold text-slate-900">Document Archive</h3>
-              <p className="text-sm text-slate-500">Look up any past demand notice, receipt, or violation notice - view only.</p>
-            </Link>
-          )}
+              {showBulkUploadShops && (
+                <Link href="/admin/shops-bulk-upload" className={cardClass}>
+                  <span className={iconWrapClass}>
+                    <Store className="h-6 w-6" strokeWidth={1.8} />
+                  </span>
+                  <h3 className="mb-1.5 text-base font-semibold text-slate-900">Bulk Upload Shops</h3>
+                  <p className="text-sm text-slate-500">Import shops and their current tenancy from a CSV file.</p>
+                </Link>
+              )}
 
-          {admin.role === "commissioner" && (
-            <Link
-              href="/admin/all-changes"
-              className="flex flex-col rounded-xl border border-slate-200 bg-white p-6 transition-shadow hover:shadow-md"
-            >
-              <span className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-blue-50 text-nnm-blue">
-                <LayoutGrid className="h-6 w-6" strokeWidth={1.8} />
-              </span>
-              <h3 className="mb-1.5 text-base font-semibold text-slate-900">All Property Changes</h3>
-              <p className="text-sm text-slate-500">Every mutation request, done and in process, grouped by category.</p>
-            </Link>
-          )}
+              {showManageShops && (
+                <Link href="/admin/shops-manage" className={cardClass}>
+                  <span className={iconWrapClass}>
+                    <Trash2 className="h-6 w-6" strokeWidth={1.8} />
+                  </span>
+                  <h3 className="mb-1.5 text-base font-semibold text-slate-900">Manage Shops</h3>
+                  <p className="text-sm text-slate-500">Delete a shop entered in error - blocked if it has any active payments.</p>
+                </Link>
+              )}
+            </div>
+          </>
+        )}
 
-          {admin.role === "commissioner" && (
-            <Link
-              href="/admin/attendance-report"
-              className="flex flex-col rounded-xl border border-slate-200 bg-white p-6 transition-shadow hover:shadow-md"
-            >
-              <span className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-blue-50 text-nnm-blue">
-                <Download className="h-6 w-6" strokeWidth={1.8} />
-              </span>
-              <h3 className="mb-1.5 text-base font-semibold text-slate-900">Field Staff Attendance Report</h3>
-              <p className="text-sm text-slate-500">Download the monthly attendance CSV for sanitation staff and drivers.</p>
-            </Link>
-          )}
+        {tradeLicenseGroupVisible && (
+          <>
+            <h2 className={groupHeadingClass}>Trade License</h2>
+            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+              {showTradeLicenseApplications && (
+                <Link href="/admin/trade-license-requests" className={cardClass}>
+                  <span className={iconWrapClass}>
+                    <Award className="h-6 w-6" strokeWidth={1.8} />
+                  </span>
+                  <h3 className="mb-1.5 text-base font-semibold text-slate-900">Trade License Applications</h3>
+                  <p className="text-sm text-slate-500">
+                    {myTradeLicensePendingCount === null
+                      ? "Review trade license applications waiting on your desk."
+                      : `${myTradeLicensePendingCount} application${myTradeLicensePendingCount === 1 ? "" : "s"} currently waiting on your desk.`}
+                  </p>
+                </Link>
+              )}
 
-          {admin.role === "commissioner" && (
-            <Link
-              href="/admin/shops-bulk-upload"
-              className="flex flex-col rounded-xl border border-slate-200 bg-white p-6 transition-shadow hover:shadow-md"
-            >
-              <span className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-blue-50 text-nnm-blue">
-                <Store className="h-6 w-6" strokeWidth={1.8} />
-              </span>
-              <h3 className="mb-1.5 text-base font-semibold text-slate-900">Bulk Upload Shops</h3>
-              <p className="text-sm text-slate-500">Import shops and their current tenancy from a CSV file.</p>
-            </Link>
-          )}
+              {showTradeLicenseReporting && (
+                <Link href="/admin/trade-license-dashboard" className={cardClass}>
+                  <span className={iconWrapClass}>
+                    <BarChart3 className="h-6 w-6" strokeWidth={1.8} />
+                  </span>
+                  <h3 className="mb-1.5 text-base font-semibold text-slate-900">Trade License - Reporting</h3>
+                  <p className="text-sm text-slate-500">Received, pendency, disposal rate, and anything overdue 2+ weeks.</p>
+                </Link>
+              )}
+            </div>
+          </>
+        )}
 
-          {admin.role === "commissioner" && (
-            <Link
-              href="/admin/shops-manage"
-              className="flex flex-col rounded-xl border border-slate-200 bg-white p-6 transition-shadow hover:shadow-md"
-            >
-              <span className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-blue-50 text-nnm-blue">
-                <Trash2 className="h-6 w-6" strokeWidth={1.8} />
-              </span>
-              <h3 className="mb-1.5 text-base font-semibold text-slate-900">Manage Shops</h3>
-              <p className="text-sm text-slate-500">Delete a shop entered in error - blocked if it has any financial history.</p>
-            </Link>
-          )}
+        {miscGroupVisible && (
+          <>
+            <h2 className={groupHeadingClass}>Miscellaneous</h2>
+            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+              {showOperators && (
+                <Link href="/admin/operators" className={cardClass}>
+                  <span className={iconWrapClass}>
+                    <Users className="h-6 w-6" strokeWidth={1.8} />
+                  </span>
+                  <h3 className="mb-1.5 text-base font-semibold text-slate-900">Operators</h3>
+                  <p className="text-sm text-slate-500">Activate or deactivate counter operator accounts.</p>
+                </Link>
+              )}
 
-          {admin.role === "commissioner" && (
-            <Link
-              href="/admin/properties-manage"
-              className="flex flex-col rounded-xl border border-slate-200 bg-white p-6 transition-shadow hover:shadow-md"
-            >
-              <span className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-blue-50 text-nnm-blue">
-                <RefreshCw className="h-6 w-6" strokeWidth={1.8} />
-              </span>
-              <h3 className="mb-1.5 text-base font-semibold text-slate-900">Renumber Holding</h3>
-              <p className="text-sm text-slate-500">Fix a holding accidentally created under an already-used number.</p>
-            </Link>
-          )}
+              {showDocumentArchive && (
+                <Link href="/admin/document-archive" className={cardClass}>
+                  <span className={iconWrapClass}>
+                    <Archive className="h-6 w-6" strokeWidth={1.8} />
+                  </span>
+                  <h3 className="mb-1.5 text-base font-semibold text-slate-900">Document Archive</h3>
+                  <p className="text-sm text-slate-500">Look up any past demand notice, receipt, or violation notice - view only.</p>
+                </Link>
+              )}
 
-          {admin.role === "commissioner" && (
-            <Link
-              href="/admin/properties-bulk-upload"
-              className="flex flex-col rounded-xl border border-slate-200 bg-white p-6 transition-shadow hover:shadow-md"
-            >
-              <span className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-blue-50 text-nnm-blue">
-                <Upload className="h-6 w-6" strokeWidth={1.8} />
-              </span>
-              <h3 className="mb-1.5 text-base font-semibold text-slate-900">Bulk Upload Properties</h3>
-              <p className="text-sm text-slate-500">Import holdings, floors, tax history, and payments from a backup file.</p>
-            </Link>
-          )}
-        </div>
+              {showAttendanceReport && (
+                <Link href="/admin/attendance-report" className={cardClass}>
+                  <span className={iconWrapClass}>
+                    <Download className="h-6 w-6" strokeWidth={1.8} />
+                  </span>
+                  <h3 className="mb-1.5 text-base font-semibold text-slate-900">Field Staff Attendance Report</h3>
+                  <p className="text-sm text-slate-500">Download the monthly attendance CSV for sanitation staff and drivers.</p>
+                </Link>
+              )}
+
+              {showAssignCoordinates && (
+                <Link href="/admin/assign-coordinates" className={cardClass}>
+                  <span className={iconWrapClass}>
+                    <MapPin className="h-6 w-6" strokeWidth={1.8} />
+                  </span>
+                  <h3 className="mb-1.5 text-base font-semibold text-slate-900">Assign Holding Coordinates</h3>
+                  <p className="text-sm text-slate-500">Search a holding and capture its GPS point or boundary polygon.</p>
+                </Link>
+              )}
+
+              {showGisMap && (
+                <Link href="/admin/gis-map" className={cardClass}>
+                  <span className={iconWrapClass}>
+                    <MapIcon className="h-6 w-6" strokeWidth={1.8} />
+                  </span>
+                  <h3 className="mb-1.5 text-base font-semibold text-slate-900">GIS Map</h3>
+                  <p className="text-sm text-slate-500">View every holding&apos;s assigned coordinates on one map.</p>
+                </Link>
+              )}
+            </div>
+          </>
+        )}
       </main>
     </div>
   );

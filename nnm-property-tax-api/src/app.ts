@@ -15,7 +15,14 @@ export function createApp() {
   app.use(
     cors({
       origin: env.corsOrigins,
-      methods: ["GET", "POST", "PATCH"],
+      // PUT and DELETE are used throughout the app (deleting a shop
+      // or property, updating a holding's geo coordinates, managing
+      // infrastructure lines) - both were missing here, which curl or
+      // server-to-server testing would never catch (CORS is enforced
+      // by the browser only, not by curl/fetch-from-Node), so this
+      // only surfaced when actually clicking the button in a real
+      // browser.
+      methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
     }),
   );
   // 10mb, not the more typical 1mb - the attendance module's daily
