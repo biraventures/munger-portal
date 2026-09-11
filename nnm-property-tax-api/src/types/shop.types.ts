@@ -25,6 +25,10 @@ export interface ShopWithAgreementSummary {
   base_monthly_rent: string | null;
   rent_paid_till_month: string | null;
   agreement_start_date: Date | null;
+  latest_demand_no: string | null;
+  latest_demand_date: Date | null;
+  demand_holder_name: string | null;
+  demand_base_rent_amount: string | null;
 }
 
 /** What an operator may propose changing about an existing shop's details - a partial set, only the fields actually being edited. */

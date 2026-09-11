@@ -1,4 +1,5 @@
 import ExcelJS from "exceljs";
+import { pool } from "../config/db";
 import { istDateString } from "../utils/istDate";
 import { propertyRepository } from "../repositories/property.repository";
 import { paymentRepository } from "../repositories/payment.repository";
@@ -50,6 +51,9 @@ export function addSheetFromRows(workbook: ExcelJS.Workbook, sheetName: string, 
 
 export type ExportDataset =
   | "properties"
+  | "floors"
+  | "tax_history"
+  | "property_history"
   | "payments"
   | "notices"
   | "changes"
@@ -110,6 +114,18 @@ export async function buildExportWorkbook(dataset: ExportDataset): Promise<Excel
   if (dataset === "properties" || dataset === "all") {
     const rows = await propertyRepository.findAll();
     addSheetFromRows(workbook, "Properties", rows as unknown as Record<string, unknown>[]);
+  }
+  if (dataset === "floors" || dataset === "all") {
+    const { rows } = await pool.query(`SELECT * FROM floors ORDER BY holding_no, id`);
+    addSheetFromRows(workbook, "Floors", rows as Record<string, unknown>[]);
+  }
+  if (dataset === "tax_history" || dataset === "all") {
+    const { rows } = await pool.query(`SELECT * FROM tax_history_stages ORDER BY holding_no, id`);
+    addSheetFromRows(workbook, "Tax History", rows as Record<string, unknown>[]);
+  }
+  if (dataset === "property_history" || dataset === "all") {
+    const { rows } = await pool.query(`SELECT * FROM property_history ORDER BY holding_no, version`);
+    addSheetFromRows(workbook, "Property History", rows as Record<string, unknown>[]);
   }
   if (dataset === "payments" || dataset === "all") {
     const rows = await paymentRepository.findAll();

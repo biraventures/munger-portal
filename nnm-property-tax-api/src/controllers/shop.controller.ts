@@ -145,6 +145,10 @@ export const listShopsWithSummary = asyncHandler(async (_req: Request, res: Resp
       baseMonthlyRent: s.base_monthly_rent,
       rentPaidTillMonth: s.rent_paid_till_month,
       agreementStartDate: s.agreement_start_date,
+      latestDemandNo: s.latest_demand_no,
+      latestDemandDate: s.latest_demand_date,
+      demandHolderName: s.demand_holder_name,
+      demandBaseRentAmount: s.demand_base_rent_amount,
     })),
   });
 });

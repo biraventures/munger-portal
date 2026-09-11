@@ -8,6 +8,9 @@ const querySchema = z.object({
   dataset: z
     .enum([
       "properties",
+      "floors",
+      "tax_history",
+      "property_history",
       "payments",
       "notices",
       "changes",

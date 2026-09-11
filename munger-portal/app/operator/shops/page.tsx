@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { AlertCircle, FilePlus2, Loader2, Plus, Search, Sparkles } from "lucide-react";
+import { AlertCircle, AlertTriangle, FilePlus2, Loader2, Plus, Search, Sparkles } from "lucide-react";
 import { OperatorHeader } from "@/components/operator-header";
 import { ShopAgreementForm } from "@/components/operator/shop-agreement-form";
 import { ShopEditForm } from "@/components/operator/shop-edit-form";
@@ -277,6 +277,7 @@ export default function OperatorShopsPage() {
                       <tr>
                         <th className="px-4 py-3 font-medium">Shop No</th>
                         <th className="px-4 py-3 font-medium">Market</th>
+                        <th className="px-4 py-3 font-medium">Tenant</th>
                         <th className="px-4 py-3 font-medium">Rent Paid Till</th>
                         <th className="px-4 py-3 font-medium">Rent Amount</th>
                         <th className="px-4 py-3 font-medium">Agreement Date</th>
@@ -292,12 +293,36 @@ export default function OperatorShopsPage() {
                             (s.marketName ?? "").toLowerCase().includes(listFilter.toLowerCase()) ||
                             (s.holderName ?? "").toLowerCase().includes(listFilter.toLowerCase()),
                         )
-                        .map((s) => (
+                        .map((s) => {
+                          const tenantMismatch = Boolean(s.holderName && s.demandHolderName && s.holderName !== s.demandHolderName);
+                          const rentMismatch = Boolean(s.baseMonthlyRent && s.demandBaseRentAmount && s.baseMonthlyRent !== s.demandBaseRentAmount);
+                          return (
                           <tr key={s.shopNo} className="border-t border-slate-100">
                             <td className="px-4 py-3 font-mono text-xs">{s.shopNo}</td>
                             <td className="px-4 py-3">{s.marketName ?? "-"}</td>
+                            <td className="px-4 py-3 text-xs">
+                              <div className="text-slate-700">{s.holderName ?? "-"}</div>
+                              <div className="text-slate-400">
+                                <span className="text-slate-400">as per agreement</span>
+                              </div>
+                              {tenantMismatch && (
+                                <div className="mt-1 flex items-center gap-1 text-amber-700" title="Differs from the agreement this shop's most recent demand was actually generated against">
+                                  <AlertTriangle className="h-3 w-3 shrink-0" />
+                                  <span>{s.demandHolderName} <span className="text-amber-500">as per demand</span></span>
+                                </div>
+                              )}
+                            </td>
                             <td className="px-4 py-3 text-xs text-slate-500">{s.rentPaidTillMonth ?? "-"}</td>
-                            <td className="px-4 py-3 text-xs text-slate-500">{s.baseMonthlyRent ? `₹${s.baseMonthlyRent}` : "-"}</td>
+                            <td className="px-4 py-3 text-xs">
+                              <div className="text-slate-700">{s.baseMonthlyRent ? `₹${s.baseMonthlyRent}` : "-"}</div>
+                              <div className="text-slate-400">as per agreement</div>
+                              {rentMismatch && (
+                                <div className="mt-1 flex items-center gap-1 text-amber-700" title="Differs from the agreement this shop's most recent demand was actually generated against">
+                                  <AlertTriangle className="h-3 w-3 shrink-0" />
+                                  <span>₹{s.demandBaseRentAmount} <span className="text-amber-500">as per demand</span></span>
+                                </div>
+                              )}
+                            </td>
                             <td className="px-4 py-3 text-xs text-slate-500">
                               {s.agreementStartDate ? new Date(s.agreementStartDate).toLocaleDateString("en-IN") : "-"}
                             </td>
@@ -317,7 +342,8 @@ export default function OperatorShopsPage() {
                               </div>
                             </td>
                           </tr>
-                        ))}
+                          );
+                        })}
                     </tbody>
                   </table>
                 </div>

@@ -41,7 +41,9 @@ export const shopRepository = {
     const { rows } = await pool.query<ShopWithAgreementSummary>(
       `SELECT
          s.shop_no, s.market_name, s.location, s.status,
-         a.holder_name, a.base_monthly_rent, a.rent_paid_till_month, a.agreement_start_date
+         a.holder_name, a.base_monthly_rent, a.rent_paid_till_month, a.agreement_start_date,
+         d.demand_no AS latest_demand_no, d.demand_date AS latest_demand_date,
+         d.holder_name AS demand_holder_name, d.base_rent_amount AS demand_base_rent_amount
        FROM shops s
        LEFT JOIN LATERAL (
          SELECT holder_name, base_monthly_rent, rent_paid_till_month, agreement_start_date
@@ -49,6 +51,20 @@ export const shopRepository = {
          WHERE shop_agreements.shop_no = s.shop_no AND shop_agreements.status = 'active'
          ORDER BY id DESC LIMIT 1
        ) a ON true
+       LEFT JOIN LATERAL (
+         -- The tenant name/rent as they stood on the agreement a given
+         -- demand was actually generated against - deliberately
+         -- re-read from that demand's own linked shop_agreements row
+         -- (via agreement_id), not from "a" above, since that
+         -- agreement may since have been superseded or edited. A
+         -- mismatch between this and the current agreement above is
+         -- the actual reconciliation signal this is for.
+         SELECT sd.demand_no, sd.demand_date, sd.base_rent_amount, sa.holder_name
+         FROM shop_rent_demands sd
+         JOIN shop_agreements sa ON sa.id = sd.agreement_id
+         WHERE sd.shop_no = s.shop_no
+         ORDER BY sd.demand_date DESC, sd.demand_no DESC LIMIT 1
+       ) d ON true
        ORDER BY s.shop_no ASC`,
     );
     return rows;

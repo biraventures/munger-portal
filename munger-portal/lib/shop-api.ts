@@ -25,6 +25,10 @@ export interface ShopListEntry {
   baseMonthlyRent: string | null;
   rentPaidTillMonth: string | null;
   agreementStartDate: string | null;
+  latestDemandNo: string | null;
+  latestDemandDate: string | null;
+  demandHolderName: string | null;
+  demandBaseRentAmount: string | null;
 }
 
 /** Every shop with its current agreement summary - powers the full-screen shop list. */

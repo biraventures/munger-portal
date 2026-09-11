@@ -224,6 +224,9 @@ export default function AdminDemandNoticesPage() {
                 {(
                   [
                     ["properties", "Property Records", "Owner, address, tax details for every holding"],
+                    ["floors", "Floors", "Every floor entry for every holding - area, construction type, usage"],
+                    ["tax_history", "Tax History", "Historical tax-by-period data for every holding"],
+                    ["property_history", "Property History", "Every recorded change to a holding, by version"],
                     ["payments", "Payments / Transactions", "Every recorded payment, most recent first"],
                     ["notices", "Demand Notices", "Every demand notice generated"],
                     ["changes", "Mutation Approval Requests", "Full change-request history, all tiers and statuses"],

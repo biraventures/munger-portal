@@ -165,6 +165,9 @@ export async function bulkRegenerateTaxHistory(): Promise<BulkRegenerateTaxHisto
 
 export type ExportDataset =
   | "properties"
+  | "floors"
+  | "tax_history"
+  | "property_history"
   | "payments"
   | "notices"
   | "changes"
