@@ -629,6 +629,34 @@ export async function uploadFieldStaffRosterCsv(csvContent: string): Promise<Ros
   return res.json();
 }
 
+/** attendance_admin only - marks every currently-active sanitation field staff member inactive in one action (soft, reversible - never a hard delete). Requires the fixed phrase "deactivate all field staff" typed back exactly, case-insensitive. */
+export async function deactivateAllFieldStaff(confirmationPhrase: string): Promise<{ deactivated: number }> {
+  const res = await fetch(`${API_BASE_URL}/attendance/staff/deactivate-all`, {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify({ confirmationPhrase }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || "Could not deactivate staff.");
+  }
+  return res.json();
+}
+
+/** attendance_admin only - PERMANENTLY deletes every field_staff, field_driver, and field_assistant record along with their attendance/feedback history. Distinct from deactivateAllFieldStaff above (which is safe and reversible) - this is a genuine, irreversible hard delete, reserved for cleaning up a mistaken bulk upload before a corrected one. Requires the fixed phrase "permanently delete all field staff and driver records" typed back exactly, case-insensitive. */
+export async function purgeAllFieldRecords(confirmationPhrase: string): Promise<{ staffDeleted: number; driversDeleted: number; assistantsDeleted: number }> {
+  const res = await fetch(`${API_BASE_URL}/attendance/field-records/purge-all`, {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify({ confirmationPhrase }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || "Could not delete these records.");
+  }
+  return res.json();
+}
+
 // ---------------------------------------------------------------------------
 // Field driver roster management (attendance_admin only)
 // ---------------------------------------------------------------------------
@@ -714,6 +742,29 @@ export async function transferFieldDriver(id: number, wardId: number, shiftId: n
 
 export async function uploadFieldDriverRosterCsv(csvContent: string): Promise<RosterSyncResult> {
   const res = await fetch(`${API_BASE_URL}/attendance/drivers/bulk-upload`, {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify({ csvContent }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || "Upload failed.");
+  }
+  return res.json();
+}
+
+export interface VehicleStaffImportResult {
+  driversCreated: number;
+  driversUpdated: number;
+  assistantsCreated: number;
+  assistantsUpdated: number;
+  skipped: { row: number; reason: string }[];
+  unmatchedVehicles: { row: number; name: string; vehicle: string }[];
+}
+
+/** attendance_admin only - the combined driver + vehicle-assistant CSV format (columns: SL/NO, Unique ID, Location, Driver Name, Father's Name, Phone Number, Employeer, Role, Shift, Vehicle, Registration Number, Driving License, Status). Distinct from uploadFieldDriverRosterCsv's general roster format above. */
+export async function uploadVehicleStaffImportCsv(csvContent: string): Promise<VehicleStaffImportResult> {
+  const res = await fetch(`${API_BASE_URL}/attendance/drivers/vehicle-staff-import`, {
     method: "POST",
     headers: authHeaders(),
     body: JSON.stringify({ csvContent }),

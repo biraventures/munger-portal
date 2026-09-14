@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { AlertCircle, CheckCircle2, Loader2, UserPlus, Upload, ArrowRightLeft } from "lucide-react";
+import { AlertCircle, CheckCircle2, Loader2, UserPlus, Upload, ArrowRightLeft, Trash2 } from "lucide-react";
 import { AttendanceHeader } from "@/components/attendance/attendance-header";
 import { useAttendanceGuard } from "@/lib/use-attendance-guard";
 import {
@@ -12,6 +12,7 @@ import {
   setFieldStaffActive,
   transferFieldStaff,
   uploadFieldStaffRosterCsv,
+  deactivateAllFieldStaff,
   fetchStaffJobRoles,
   setStaffJobRoles,
   type AttendanceWard,
@@ -50,6 +51,11 @@ export default function ManageStaffPage() {
   const [uploadResult, setUploadResult] = useState<RosterSyncResult | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [deactivateAllOpen, setDeactivateAllOpen] = useState(false);
+  const [deactivateAllPhrase, setDeactivateAllPhrase] = useState("");
+  const [deactivateAllSubmitting, setDeactivateAllSubmitting] = useState(false);
+  const [deactivateAllError, setDeactivateAllError] = useState<string | null>(null);
+  const [deactivateAllResult, setDeactivateAllResult] = useState<number | null>(null);
 
   const [transferringId, setTransferringId] = useState<number | null>(null);
   const [transferWardId, setTransferWardId] = useState("");
@@ -199,6 +205,22 @@ export default function ManageStaffPage() {
     }
   }
 
+  async function handleDeactivateAll() {
+    setDeactivateAllSubmitting(true);
+    setDeactivateAllError(null);
+    try {
+      const { deactivated } = await deactivateAllFieldStaff(deactivateAllPhrase);
+      setDeactivateAllResult(deactivated);
+      setDeactivateAllOpen(false);
+      setDeactivateAllPhrase("");
+      await loadStaff();
+    } catch (err) {
+      setDeactivateAllError(err instanceof Error ? err.message : "Could not deactivate staff.");
+    } finally {
+      setDeactivateAllSubmitting(false);
+    }
+  }
+
   if (!user) {
     return <div className="flex min-h-screen items-center justify-center text-sm text-slate-400">Loading...</div>;
   }
@@ -343,6 +365,82 @@ export default function ManageStaffPage() {
                   </ul>
                 </div>
               )}
+            </div>
+          )}
+        </section>
+        )}
+
+        {/* Deactivate all - attendance_admin only, requires typed confirmation phrase */}
+        {isAdmin && (
+        <section className="mb-8 rounded-xl border border-red-200 bg-red-50 p-6">
+          <h2 className="mb-2 flex items-center gap-2 text-sm font-semibold text-red-800">
+            <Trash2 className="h-4 w-4" />
+            Deactivate All Field Staff
+          </h2>
+          <p className="mb-4 text-xs text-red-700">
+            Marks every currently-active sanitation worker inactive in one action. This does not delete anyone or their
+            attendance history - it can be undone by reactivating individuals, or by uploading a fresh roster above.
+          </p>
+
+          {deactivateAllResult !== null && (
+            <div role="status" className="mb-4 flex items-center gap-2 rounded-md border border-green-200 bg-green-50 p-3 text-sm text-green-800">
+              <CheckCircle2 className="h-4 w-4 shrink-0" />
+              {deactivateAllResult} staff member{deactivateAllResult === 1 ? "" : "s"} deactivated.
+            </div>
+          )}
+
+          {!deactivateAllOpen ? (
+            <button
+              onClick={() => {
+                setDeactivateAllOpen(true);
+                setDeactivateAllResult(null);
+                setDeactivateAllError(null);
+              }}
+              className="inline-flex items-center gap-1.5 rounded-md border border-red-300 bg-white px-3 py-2 text-sm font-semibold text-red-700 hover:bg-red-100"
+            >
+              <Trash2 className="h-4 w-4" />
+              Deactivate All Field Staff
+            </button>
+          ) : (
+            <div className="rounded-md border border-red-300 bg-white p-4">
+              <label className="mb-1 block text-xs font-medium text-slate-600">
+                Type <code className="rounded bg-slate-100 px-1 py-0.5">deactivate all field staff</code> to confirm
+              </label>
+              <input
+                value={deactivateAllPhrase}
+                onChange={(e) => setDeactivateAllPhrase(e.target.value)}
+                className={inputClass}
+                placeholder="deactivate all field staff"
+                autoFocus
+              />
+
+              {deactivateAllError && (
+                <div role="alert" className="mt-3 flex items-center gap-2 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+                  <AlertCircle className="h-4 w-4 shrink-0" />
+                  {deactivateAllError}
+                </div>
+              )}
+
+              <div className="mt-4 flex gap-2">
+                <button
+                  onClick={handleDeactivateAll}
+                  disabled={deactivateAllSubmitting || !deactivateAllPhrase.trim()}
+                  className="rounded-md bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-60"
+                >
+                  {deactivateAllSubmitting ? "Deactivating..." : "Confirm Deactivation"}
+                </button>
+                <button
+                  onClick={() => {
+                    setDeactivateAllOpen(false);
+                    setDeactivateAllPhrase("");
+                    setDeactivateAllError(null);
+                  }}
+                  disabled={deactivateAllSubmitting}
+                  className="rounded-md border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50"
+                >
+                  Cancel
+                </button>
+              </div>
             </div>
           )}
         </section>

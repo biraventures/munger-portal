@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { AlertCircle, CheckCircle2, Loader2, UserPlus, Upload, ArrowRightLeft } from "lucide-react";
+import { AlertCircle, CheckCircle2, Loader2, UserPlus, Upload, ArrowRightLeft, Trash2 } from "lucide-react";
 import { AttendanceHeader } from "@/components/attendance/attendance-header";
 import { useAttendanceGuard } from "@/lib/use-attendance-guard";
 import {
@@ -14,6 +14,8 @@ import {
   assignFieldDriver,
   transferFieldDriver,
   uploadFieldDriverRosterCsv,
+  uploadVehicleStaffImportCsv,
+  purgeAllFieldRecords,
   fetchAllAssets,
   type AttendanceWard,
   type AttendanceShift,
@@ -21,6 +23,7 @@ import {
   type FieldDriverSummary,
   type AssetSummary,
   type RosterSyncResult,
+  type VehicleStaffImportResult,
 } from "@/lib/attendance-api";
 
 const inputClass =
@@ -54,6 +57,15 @@ export default function ManageDriversPage() {
   const [uploadResult, setUploadResult] = useState<RosterSyncResult | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [vehicleStaffUploading, setVehicleStaffUploading] = useState(false);
+  const [vehicleStaffResult, setVehicleStaffResult] = useState<VehicleStaffImportResult | null>(null);
+  const [vehicleStaffError, setVehicleStaffError] = useState<string | null>(null);
+  const vehicleStaffFileInputRef = useRef<HTMLInputElement>(null);
+  const [purgeAllOpen, setPurgeAllOpen] = useState(false);
+  const [purgeAllPhrase, setPurgeAllPhrase] = useState("");
+  const [purgeAllSubmitting, setPurgeAllSubmitting] = useState(false);
+  const [purgeAllError, setPurgeAllError] = useState<string | null>(null);
+  const [purgeAllResult, setPurgeAllResult] = useState<{ staffDeleted: number; driversDeleted: number; assistantsDeleted: number } | null>(null);
 
   const [transferringId, setTransferringId] = useState<number | null>(null);
   const [transferWardId, setTransferWardId] = useState("");
@@ -212,6 +224,41 @@ export default function ManageDriversPage() {
     } finally {
       setUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  }
+
+  async function handleVehicleStaffFileSelected(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setVehicleStaffUploading(true);
+    setVehicleStaffError(null);
+    setVehicleStaffResult(null);
+    try {
+      const text = await file.text();
+      const result = await uploadVehicleStaffImportCsv(text);
+      setVehicleStaffResult(result);
+      await loadDrivers();
+    } catch (err) {
+      setVehicleStaffError(err instanceof Error ? err.message : "Import failed.");
+    } finally {
+      setVehicleStaffUploading(false);
+      if (vehicleStaffFileInputRef.current) vehicleStaffFileInputRef.current.value = "";
+    }
+  }
+
+  async function handlePurgeAll() {
+    setPurgeAllSubmitting(true);
+    setPurgeAllError(null);
+    try {
+      const result = await purgeAllFieldRecords(purgeAllPhrase);
+      setPurgeAllResult(result);
+      setPurgeAllOpen(false);
+      setPurgeAllPhrase("");
+      await loadDrivers();
+    } catch (err) {
+      setPurgeAllError(err instanceof Error ? err.message : "Could not delete these records.");
+    } finally {
+      setPurgeAllSubmitting(false);
     }
   }
 
@@ -374,6 +421,165 @@ export default function ManageDriversPage() {
                   </ul>
                 </div>
               )}
+            </div>
+          )}
+        </section>
+        )}
+
+        {/* Combined driver + vehicle assistant import - attendance_admin only */}
+        {isAdmin && (
+        <section className="mb-8 rounded-xl border border-slate-200 bg-white p-6">
+          <h2 className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-700">
+            <Upload className="h-4 w-4" />
+            Import Drivers &amp; Vehicle Assistants (CSV)
+          </h2>
+          <p className="mb-4 text-xs text-slate-500">
+            For a combined roster sheet with columns:{" "}
+            <code className="rounded bg-slate-100 px-1 py-0.5">
+              SL/NO, Unique ID, Location, Driver Name, Father&apos;s Name, Phone Number, Employeer, Role, Shift, Vehicle, Registration
+              Number, Driving License, Status
+            </code>
+            . Role must be &quot;DRIVER&quot; or &quot;Vehicle assistant&quot; - each assistant is linked to the driver listed
+            immediately above it. Rows with a blank Location are filed under a &quot;Central/Unassigned&quot; ward. Vehicle names are
+            matched against the fleet asset registry where possible; unmatched ones are flagged but still imported. This adds to
+            the existing roster rather than replacing it.
+          </p>
+
+          <input
+            ref={vehicleStaffFileInputRef}
+            type="file"
+            accept=".csv"
+            onChange={handleVehicleStaffFileSelected}
+            disabled={vehicleStaffUploading}
+            className="block w-full text-sm text-slate-600 file:mr-4 file:rounded-md file:border-0 file:bg-nnm-blue file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:bg-nnm-blue-dark disabled:opacity-60"
+          />
+
+          {vehicleStaffUploading && (
+            <div className="mt-4 flex items-center gap-2 text-sm text-slate-500">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Processing import...
+            </div>
+          )}
+
+          {vehicleStaffError && (
+            <div role="alert" className="mt-4 flex items-center gap-2 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+              <AlertCircle className="h-4 w-4 shrink-0" />
+              {vehicleStaffError}
+            </div>
+          )}
+
+          {vehicleStaffResult && (
+            <div className="mt-4 rounded-md border border-slate-200 bg-slate-50 p-4 text-sm">
+              <p className="mb-2 font-semibold text-slate-700">
+                Drivers - created {vehicleStaffResult.driversCreated}, updated {vehicleStaffResult.driversUpdated}. Vehicle
+                assistants - created {vehicleStaffResult.assistantsCreated}, updated {vehicleStaffResult.assistantsUpdated}.
+              </p>
+              {vehicleStaffResult.unmatchedVehicles.length > 0 && (
+                <div className="mb-3">
+                  <p className="mb-1 font-semibold text-amber-700">
+                    {vehicleStaffResult.unmatchedVehicles.length} row(s) reference a vehicle not found in the fleet registry
+                    (still imported, just not linked to an asset):
+                  </p>
+                  <ul className="max-h-40 list-inside list-disc space-y-0.5 overflow-y-auto text-xs text-amber-700">
+                    {vehicleStaffResult.unmatchedVehicles.map((u, i) => (
+                      <li key={i}>
+                        Row {u.row}: {u.name} - &quot;{u.vehicle}&quot;
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {vehicleStaffResult.skipped.length > 0 && (
+                <div>
+                  <p className="mb-1 font-semibold text-red-700">{vehicleStaffResult.skipped.length} row(s) skipped:</p>
+                  <ul className="max-h-40 list-inside list-disc space-y-0.5 overflow-y-auto text-xs text-red-700">
+                    {vehicleStaffResult.skipped.map((s, i) => (
+                      <li key={i}>
+                        Row {s.row}: {s.reason}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
+        </section>
+        )}
+
+        {/* Permanent purge - attendance_admin only, requires typed confirmation phrase. Deliberately more severe than the deactivate-all pattern used for staff, since this is irreversible. */}
+        {isAdmin && (
+        <section className="mb-8 rounded-xl border border-red-300 bg-red-50 p-6">
+          <h2 className="mb-2 flex items-center gap-2 text-sm font-semibold text-red-900">
+            <Trash2 className="h-4 w-4" />
+            Permanently Delete All Field Records
+          </h2>
+          <p className="mb-4 text-xs text-red-800">
+            Permanently deletes every driver, vehicle assistant, and sanitation field staff record - along with all of their
+            attendance and feedback history. Unlike every other bulk action in this system, this cannot be undone. Use this
+            only to clear a mistaken upload before importing corrected data.
+          </p>
+
+          {purgeAllResult && (
+            <div role="status" className="mb-4 flex items-center gap-2 rounded-md border border-green-200 bg-green-50 p-3 text-sm text-green-800">
+              <CheckCircle2 className="h-4 w-4 shrink-0" />
+              Deleted {purgeAllResult.staffDeleted} staff, {purgeAllResult.driversDeleted} driver(s), and{" "}
+              {purgeAllResult.assistantsDeleted} vehicle assistant(s).
+            </div>
+          )}
+
+          {!purgeAllOpen ? (
+            <button
+              onClick={() => {
+                setPurgeAllOpen(true);
+                setPurgeAllResult(null);
+                setPurgeAllError(null);
+              }}
+              className="inline-flex items-center gap-1.5 rounded-md border border-red-400 bg-white px-3 py-2 text-sm font-semibold text-red-800 hover:bg-red-100"
+            >
+              <Trash2 className="h-4 w-4" />
+              Permanently Delete All Field Records
+            </button>
+          ) : (
+            <div className="rounded-md border border-red-400 bg-white p-4">
+              <label className="mb-1 block text-xs font-medium text-slate-600">
+                Type <code className="rounded bg-slate-100 px-1 py-0.5">permanently delete all field staff and driver records</code>{" "}
+                to confirm
+              </label>
+              <input
+                value={purgeAllPhrase}
+                onChange={(e) => setPurgeAllPhrase(e.target.value)}
+                className={inputClass}
+                placeholder="permanently delete all field staff and driver records"
+                autoFocus
+              />
+
+              {purgeAllError && (
+                <div role="alert" className="mt-3 flex items-center gap-2 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+                  <AlertCircle className="h-4 w-4 shrink-0" />
+                  {purgeAllError}
+                </div>
+              )}
+
+              <div className="mt-4 flex gap-2">
+                <button
+                  onClick={handlePurgeAll}
+                  disabled={purgeAllSubmitting || !purgeAllPhrase.trim()}
+                  className="rounded-md bg-red-700 px-4 py-2 text-sm font-semibold text-white hover:bg-red-800 disabled:opacity-60"
+                >
+                  {purgeAllSubmitting ? "Deleting..." : "Confirm Permanent Deletion"}
+                </button>
+                <button
+                  onClick={() => {
+                    setPurgeAllOpen(false);
+                    setPurgeAllPhrase("");
+                    setPurgeAllError(null);
+                  }}
+                  disabled={purgeAllSubmitting}
+                  className="rounded-md border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50"
+                >
+                  Cancel
+                </button>
+              </div>
             </div>
           )}
         </section>

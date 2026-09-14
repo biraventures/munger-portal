@@ -81,6 +81,12 @@ export const assetRepository = {
     return rows[0] ?? null;
   },
 
+  /** Fallback lookup by the asset's free-text label (e.g. "Toto-1") for data sources that reference a vehicle by nickname rather than registration number - case-insensitive since labels aren't a normalized field. */
+  async findByLabel(label: string): Promise<AssetRow | null> {
+    const { rows } = await pool.query<AssetRow>(`SELECT * FROM assets WHERE LOWER(label) = LOWER($1) LIMIT 1`, [label]);
+    return rows[0] ?? null;
+  },
+
   async updateStatus(
     id: number,
     input: { currentStatus: "working" | "under_repair" | "not_working"; notWorkingSince: string | null; soundSystemStatus: string | null; batteryStatus: string | null },

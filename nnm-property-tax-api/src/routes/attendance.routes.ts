@@ -47,12 +47,15 @@ import {
   unsuspendStaffHandler,
   transferStaffHandler,
   uploadStaffRosterHandler,
+  deactivateAllStaffHandler,
+  purgeAllFieldRecordsHandler,
   listAllDriversHandler,
   createDriverHandler,
   setDriverActiveHandler,
   transferDriverHandler,
   assignDriverHandler,
   uploadDriverRosterHandler,
+  uploadVehicleStaffImportHandler,
   listAllAssistantsHandler,
   createAssistantHandler,
   setAssistantActiveHandler,
@@ -208,6 +211,8 @@ attendanceRouter.patch("/staff/:id/unsuspend", requireAttendanceRole(["attendanc
 attendanceRouter.patch("/staff/:id/roles", requireAttendanceRole(["attendance_admin"]), setStaffRolesHandler);
 attendanceRouter.patch("/staff/:id/transfer", requireAttendanceRole(["attendance_admin", "sanitation_officer"]), transferStaffHandler);
 attendanceRouter.post("/staff/bulk-upload", requireAttendanceRole(["attendance_admin"]), uploadStaffRosterHandler);
+attendanceRouter.post("/staff/deactivate-all", requireAttendanceRole(["attendance_admin"]), deactivateAllStaffHandler);
+attendanceRouter.post("/field-records/purge-all", requireAttendanceRole(["attendance_admin"]), purgeAllFieldRecordsHandler);
 
 // --- Field driver roster management (same admin/officer split as staff above) ---
 attendanceRouter.get("/drivers/all", requireAttendanceRole(["attendance_admin", "sanitation_officer"]), listAllDriversHandler);
@@ -216,6 +221,7 @@ attendanceRouter.patch("/drivers/:id/active", requireAttendanceRole(["attendance
 attendanceRouter.patch("/drivers/:id/transfer", requireAttendanceRole(["attendance_admin", "sanitation_officer"]), transferDriverHandler);
 attendanceRouter.patch("/drivers/:id/assign", requireAttendanceRole(["attendance_admin"]), assignDriverHandler);
 attendanceRouter.post("/drivers/bulk-upload", requireAttendanceRole(["attendance_admin"]), uploadDriverRosterHandler);
+attendanceRouter.post("/drivers/vehicle-staff-import", requireAttendanceRole(["attendance_admin"]), uploadVehicleStaffImportHandler);
 
 // --- Field assistants (same admin/officer split as staff/drivers above) ---
 attendanceRouter.get("/assistants/all", requireAttendanceRole(["attendance_admin", "sanitation_officer"]), listAllAssistantsHandler);

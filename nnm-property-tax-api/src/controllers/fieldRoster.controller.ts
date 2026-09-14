@@ -6,6 +6,8 @@ import { fieldAssistantRepository } from "../repositories/fieldAssistant.reposit
 import { staffJobRoleRepository } from "../repositories/staffJobRole.repository";
 import { syncStaffRosterFromCsv, createOneStaff } from "../services/fieldStaffRoster.service";
 import { syncDriverRosterFromCsv, createOneDriver, assignDriver } from "../services/fieldDriverRoster.service";
+import { importVehicleStaffCsv } from "../services/vehicleStaffImport.service";
+import { purgeAllFieldStaffAndDrivers } from "../services/fieldStaffPurge.service";
 import {
   propagateSupervisorToAssistants,
   createOneAssistant,
@@ -198,6 +200,60 @@ export const uploadStaffRosterHandler = asyncHandler(async (req: Request, res: R
   res.status(200).json(result);
 });
 
+const DEACTIVATE_ALL_STAFF_PHRASE = "deactivate all field staff";
+const deactivateAllStaffSchema = z.object({
+  confirmationPhrase: z.string().trim().min(1, `Type "${DEACTIVATE_ALL_STAFF_PHRASE}" to confirm.`),
+});
+
+/**
+ * POST /api/v1/attendance/staff/deactivate-all - attendance_admin
+ * only. Marks every currently-active sanitation field_staff member
+ * inactive in one action - the bulk equivalent of the individual
+ * active/inactive toggle, not a hard delete, so attendance history
+ * stays intact and any of them can be reactivated individually or by
+ * re-uploading a roster afterward. Requires a fixed confirmation
+ * phrase (rather than the shop/property delete pattern of typing back
+ * a specific record's own number) since this affects every staff
+ * member at once, not one identifiable record.
+ */
+export const deactivateAllStaffHandler = asyncHandler(async (req: Request, res: Response) => {
+  const parsed = deactivateAllStaffSchema.safeParse(req.body);
+  if (!parsed.success) throw ApiError.badRequest("Invalid request body", parsed.error.flatten().fieldErrors);
+  if (parsed.data.confirmationPhrase.toLowerCase() !== DEACTIVATE_ALL_STAFF_PHRASE) {
+    throw ApiError.badRequest(`Type "${DEACTIVATE_ALL_STAFF_PHRASE}" exactly to confirm.`);
+  }
+
+  const activeIds = await fieldStaffRepository.listActiveIds();
+  await fieldStaffRepository.setActiveMany(activeIds, false);
+  res.status(200).json({ deactivated: activeIds.length });
+});
+
+const PURGE_ALL_PHRASE = "permanently delete all field staff and driver records";
+const purgeAllSchema = z.object({
+  confirmationPhrase: z.string().trim().min(1, `Type "${PURGE_ALL_PHRASE}" to confirm.`),
+});
+
+/**
+ * POST /api/v1/attendance/field-records/purge-all - attendance_admin
+ * only. A genuine, irreversible hard delete of every field_staff,
+ * field_driver, and field_assistant record and their attendance/
+ * feedback history - distinct from deactivateAllStaffHandler above,
+ * which is safe and reversible. Reserved for cleaning up a mistaken
+ * bulk upload before a corrected one, not routine staff departures.
+ * Uses a longer, more explicit confirmation phrase than the
+ * deactivate-all action, reflecting how much more severe this is.
+ */
+export const purgeAllFieldRecordsHandler = asyncHandler(async (req: Request, res: Response) => {
+  const parsed = purgeAllSchema.safeParse(req.body);
+  if (!parsed.success) throw ApiError.badRequest("Invalid request body", parsed.error.flatten().fieldErrors);
+  if (parsed.data.confirmationPhrase.toLowerCase() !== PURGE_ALL_PHRASE) {
+    throw ApiError.badRequest(`Type "${PURGE_ALL_PHRASE}" exactly to confirm.`);
+  }
+
+  const result = await purgeAllFieldStaffAndDrivers();
+  res.status(200).json(result);
+});
+
 // ---------------------------------------------------------------------------
 // Drivers
 // ---------------------------------------------------------------------------
@@ -342,6 +398,22 @@ export const uploadDriverRosterHandler = asyncHandler(async (req: Request, res: 
   if (!parsed.success) throw ApiError.badRequest("Invalid input", parsed.error.flatten().fieldErrors);
 
   const result = await syncDriverRosterFromCsv(parsed.data.csvContent);
+  res.status(200).json(result);
+});
+
+/**
+ * POST /api/v1/attendance/field-roster/vehicle-staff/import - the
+ * combined driver + vehicle-assistant CSV format (see
+ * vehicleStaffImport.service.ts for the exact expected columns and
+ * the adjacency-based driver/assistant linking rule), distinct from
+ * uploadDriverRosterHandler/uploadAssistantRosterHandler's general
+ * roster format above.
+ */
+export const uploadVehicleStaffImportHandler = asyncHandler(async (req: Request, res: Response) => {
+  const parsed = csvUploadSchema.safeParse(req.body);
+  if (!parsed.success) throw ApiError.badRequest("Invalid input", parsed.error.flatten().fieldErrors);
+
+  const result = await importVehicleStaffCsv(parsed.data.csvContent);
   res.status(200).json(result);
 });
 
