@@ -7,7 +7,7 @@ import { staffJobRoleRepository } from "../repositories/staffJobRole.repository"
 import { syncStaffRosterFromCsv, createOneStaff } from "../services/fieldStaffRoster.service";
 import { syncDriverRosterFromCsv, createOneDriver, assignDriver } from "../services/fieldDriverRoster.service";
 import { importVehicleStaffCsv } from "../services/vehicleStaffImport.service";
-import { purgeAllFieldStaffAndDrivers } from "../services/fieldStaffPurge.service";
+import { purgeAllFieldStaffAndDrivers, deleteFieldStaffPermanently } from "../services/fieldStaffPurge.service";
 import { importStaffMergedCsv } from "../services/staffMergedImport.service";
 import {
   propagateSupervisorToAssistants,
@@ -104,6 +104,23 @@ export const setStaffActiveHandler = asyncHandler(async (req: Request, res: Resp
   res.status(200).json({
     staff: { id: updated.id, name: updated.name, externalId: updated.external_id, wardId: updated.ward_id, shiftId: updated.shift_id, active: updated.active },
   });
+});
+
+/**
+ * DELETE /api/v1/attendance/staff/:id - attendance_admin only. A
+ * genuine, irreversible hard delete of one field_staff record and
+ * their attendance/feedback history - distinct from setActive(false)
+ * above (deactivation), which is what routine staff departures should
+ * use instead so their history is preserved. This is for correcting a
+ * mistaken individual entry.
+ */
+export const deleteStaffHandler = asyncHandler(async (req: Request, res: Response) => {
+  const parsed = staffIdParamSchema.safeParse(req.params);
+  if (!parsed.success) throw ApiError.badRequest("Invalid staff id");
+
+  const deleted = await deleteFieldStaffPermanently(parsed.data.id);
+  if (!deleted) throw ApiError.notFound("Staff member not found");
+  res.status(200).json({ deleted: true });
 });
 
 const suspendStaffSchema = z.object({ reason: z.string().trim().min(1, "A reason is required to suspend a worker.").max(2000) });

@@ -594,6 +594,18 @@ export async function setFieldStaffActive(id: number, active: boolean): Promise<
   if (!res.ok) throw new Error("Could not update staff status.");
 }
 
+/** attendance_admin only - PERMANENTLY deletes one staff member and their attendance/feedback history. Distinct from setFieldStaffActive(id, false) above (deactivation), which is what routine departures should use instead so their history is preserved. */
+export async function deleteFieldStaff(id: number): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/attendance/staff/${id}`, {
+    method: "DELETE",
+    headers: authHeaders(),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || "Could not delete this staff member.");
+  }
+}
+
 /** attendance_admin OR sanitation_officer - moves a worker to a different ward (and optionally shift). */
 export async function transferFieldStaff(id: number, wardId: number, shiftId: number | null): Promise<FieldStaffSummary> {
   const res = await fetch(`${API_BASE_URL}/attendance/staff/${id}/transfer`, {

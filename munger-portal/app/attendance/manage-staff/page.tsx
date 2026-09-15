@@ -10,6 +10,7 @@ import {
   fetchAllFieldStaff,
   createFieldStaff,
   setFieldStaffActive,
+  deleteFieldStaff,
   transferFieldStaff,
   uploadFieldStaffRosterCsv,
   uploadStaffMergedImportCsv,
@@ -57,6 +58,10 @@ export default function ManageStaffPage() {
   const [mergedImportResult, setMergedImportResult] = useState<StaffMergedImportResult | null>(null);
   const [mergedImportError, setMergedImportError] = useState<string | null>(null);
   const mergedImportFileInputRef = useRef<HTMLInputElement>(null);
+  const [deletingStaff, setDeletingStaff] = useState<FieldStaffSummary | null>(null);
+  const [deleteConfirmName, setDeleteConfirmName] = useState("");
+  const [deleteSubmitting, setDeleteSubmitting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [deactivateAllOpen, setDeactivateAllOpen] = useState(false);
   const [deactivateAllPhrase, setDeactivateAllPhrase] = useState("");
   const [deactivateAllSubmitting, setDeactivateAllSubmitting] = useState(false);
@@ -243,6 +248,22 @@ export default function ManageStaffPage() {
       setDeactivateAllError(err instanceof Error ? err.message : "Could not deactivate staff.");
     } finally {
       setDeactivateAllSubmitting(false);
+    }
+  }
+
+  async function handleDeleteStaff() {
+    if (!deletingStaff) return;
+    setDeleteSubmitting(true);
+    setDeleteError(null);
+    try {
+      await deleteFieldStaff(deletingStaff.id);
+      setDeletingStaff(null);
+      setDeleteConfirmName("");
+      await loadStaff();
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : "Could not delete this staff member.");
+    } finally {
+      setDeleteSubmitting(false);
     }
   }
 
@@ -555,10 +576,11 @@ export default function ManageStaffPage() {
               <table className="w-full text-sm">
                 <thead className="sticky top-0 bg-slate-50">
                   <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-wide text-slate-500">
+                    <th className="px-3 py-2 font-medium">Unique ID</th>
                     <th className="px-3 py-2 font-medium">Name</th>
-                    <th className="px-3 py-2 font-medium">Ward</th>
+                    <th className="px-3 py-2 font-medium">Ward/Location</th>
+                    <th className="px-3 py-2 font-medium">Role</th>
                     <th className="px-3 py-2 font-medium">Shift</th>
-                    <th className="px-3 py-2 font-medium">Roles</th>
                     <th className="px-3 py-2 font-medium">Status</th>
                     <th className="px-3 py-2 font-medium"></th>
                   </tr>
@@ -566,10 +588,11 @@ export default function ManageStaffPage() {
                 <tbody>
                   {staff.map((s) => (
                     <tr key={s.id} className="border-b border-slate-100 last:border-0">
+                      <td className="px-3 py-2 font-mono text-xs text-slate-500">{s.externalId ?? "-"}</td>
                       <td className="px-3 py-2">{s.name}</td>
                       <td className="px-3 py-2">{wardName(s.wardId)}</td>
-                      <td className="px-3 py-2">{shiftName(s.shiftId)}</td>
                       <td className="max-w-[160px] px-3 py-2 text-xs text-slate-500">{roleNames(s.roleIds)}</td>
+                      <td className="px-3 py-2">{shiftName(s.shiftId)}</td>
                       <td className="px-3 py-2">
                         <span
                           className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase ${s.active ? "bg-green-100 text-green-700" : "bg-slate-200 text-slate-500"}`}
@@ -589,6 +612,16 @@ export default function ManageStaffPage() {
                               </button>
                               <button onClick={() => handleToggleActive(s.id, !s.active)} className="text-xs font-medium text-slate-500 hover:underline">
                                 {s.active ? "Deactivate" : "Activate"}
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setDeletingStaff(s);
+                                  setDeleteConfirmName("");
+                                  setDeleteError(null);
+                                }}
+                                className="text-xs font-medium text-red-600 hover:underline"
+                              >
+                                Delete
                               </button>
                             </>
                           )}
@@ -658,6 +691,56 @@ export default function ManageStaffPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {deletingStaff !== null && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-sm rounded-xl bg-white p-6 shadow-lg">
+            <h2 className="mb-2 flex items-center gap-2 text-sm font-semibold text-red-800">
+              <Trash2 className="h-4 w-4" />
+              Permanently Delete Staff Member
+            </h2>
+            <p className="mb-4 text-xs text-red-700">
+              This permanently deletes {deletingStaff.name} and their attendance/feedback history. Unlike Deactivate, this
+              cannot be undone. If they&apos;ve simply left, use Deactivate instead.
+            </p>
+
+            {deleteError && (
+              <div role="alert" className="mb-4 flex items-center gap-2 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+                <AlertCircle className="h-4 w-4 shrink-0" />
+                {deleteError}
+              </div>
+            )}
+
+            <label className="mb-1 block text-xs font-medium text-slate-600">
+              Type <code className="rounded bg-slate-100 px-1 py-0.5">{deletingStaff.name}</code> to confirm
+            </label>
+            <input value={deleteConfirmName} onChange={(e) => setDeleteConfirmName(e.target.value)} className={inputClass} autoFocus />
+
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setDeletingStaff(null);
+                  setDeleteConfirmName("");
+                  setDeleteError(null);
+                }}
+                disabled={deleteSubmitting}
+                className="rounded-md border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteStaff}
+                disabled={deleteSubmitting || deleteConfirmName.trim() !== deletingStaff.name}
+                className="rounded-md bg-red-700 px-4 py-2 text-sm font-semibold text-white hover:bg-red-800 disabled:opacity-60"
+              >
+                {deleteSubmitting ? "Deleting..." : "Confirm Delete"}
+              </button>
+            </div>
           </div>
         </div>
       )}

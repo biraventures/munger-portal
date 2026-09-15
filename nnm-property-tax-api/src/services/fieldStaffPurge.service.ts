@@ -58,3 +58,32 @@ export async function purgeAllFieldStaffAndDrivers(): Promise<PurgeResult> {
     client.release();
   }
 }
+
+/**
+ * Permanently deletes one field_staff record, along with their
+ * attendance and feedback history - a genuine hard delete, distinct
+ * from setActive(false) (the reversible deactivate used for routine
+ * departures elsewhere in this app). field_staff_job_roles cascades
+ * automatically (ON DELETE CASCADE, migration 029); field_staff_
+ * attendance and field_staff_feedback don't, so they're removed
+ * explicitly here first, same ordering as the bulk purge above.
+ * Returns false if no staff member with that id exists.
+ */
+export async function deleteFieldStaffPermanently(staffId: number): Promise<boolean> {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+
+    await client.query(`DELETE FROM field_staff_feedback WHERE staff_id = $1`, [staffId]);
+    await client.query(`DELETE FROM field_staff_attendance WHERE staff_id = $1`, [staffId]);
+    const result = await client.query(`DELETE FROM field_staff WHERE id = $1`, [staffId]);
+
+    await client.query("COMMIT");
+    return (result.rowCount ?? 0) > 0;
+  } catch (err) {
+    await client.query("ROLLBACK");
+    throw err;
+  } finally {
+    client.release();
+  }
+}
