@@ -12,6 +12,7 @@ import {
   setFieldStaffActive,
   transferFieldStaff,
   uploadFieldStaffRosterCsv,
+  uploadStaffMergedImportCsv,
   deactivateAllFieldStaff,
   fetchStaffJobRoles,
   setStaffJobRoles,
@@ -19,6 +20,7 @@ import {
   type AttendanceShift,
   type FieldStaffSummary,
   type RosterSyncResult,
+  type StaffMergedImportResult,
   type StaffJobRoleSummary,
 } from "@/lib/attendance-api";
 
@@ -51,6 +53,10 @@ export default function ManageStaffPage() {
   const [uploadResult, setUploadResult] = useState<RosterSyncResult | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [mergedImportUploading, setMergedImportUploading] = useState(false);
+  const [mergedImportResult, setMergedImportResult] = useState<StaffMergedImportResult | null>(null);
+  const [mergedImportError, setMergedImportError] = useState<string | null>(null);
+  const mergedImportFileInputRef = useRef<HTMLInputElement>(null);
   const [deactivateAllOpen, setDeactivateAllOpen] = useState(false);
   const [deactivateAllPhrase, setDeactivateAllPhrase] = useState("");
   const [deactivateAllSubmitting, setDeactivateAllSubmitting] = useState(false);
@@ -202,6 +208,25 @@ export default function ManageStaffPage() {
     } finally {
       setUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  }
+
+  async function handleMergedImportFileSelected(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setMergedImportUploading(true);
+    setMergedImportError(null);
+    setMergedImportResult(null);
+    try {
+      const text = await file.text();
+      const result = await uploadStaffMergedImportCsv(text);
+      setMergedImportResult(result);
+      await loadStaff();
+    } catch (err) {
+      setMergedImportError(err instanceof Error ? err.message : "Import failed.");
+    } finally {
+      setMergedImportUploading(false);
+      if (mergedImportFileInputRef.current) mergedImportFileInputRef.current.value = "";
     }
   }
 
@@ -360,6 +385,77 @@ export default function ManageStaffPage() {
                     {uploadResult.errors.map((e, i) => (
                       <li key={i}>
                         Row {e.row}: {e.message}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
+        </section>
+        )}
+
+        {/* Merged data import - attendance_admin only */}
+        {isAdmin && (
+        <section className="mb-8 rounded-xl border border-slate-200 bg-white p-6">
+          <h2 className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-700">
+            <Upload className="h-4 w-4" />
+            Import Field Staff (Merged Data CSV)
+          </h2>
+          <p className="mb-4 text-xs text-slate-500">
+            For a roster sheet with columns:{" "}
+            <code className="rounded bg-slate-100 px-1 py-0.5">
+              SL. No., Unique ID, Name, Father Name, Phone, Employer, Location/Ward, Role, Shift
+            </code>
+            . Covers every municipal field role, not just sanitation - any Role name not already in the system is created
+            automatically. Every distinct Location/Ward value becomes its own entry in the Wards list (not just the numbered
+            wards - offices and special-duty teams too); only a genuinely blank value falls under a shared
+            &quot;Central/Unassigned&quot; ward. This adds to the existing roster rather than replacing it.
+          </p>
+
+          <input
+            ref={mergedImportFileInputRef}
+            type="file"
+            accept=".csv"
+            onChange={handleMergedImportFileSelected}
+            disabled={mergedImportUploading}
+            className="block w-full text-sm text-slate-600 file:mr-4 file:rounded-md file:border-0 file:bg-nnm-blue file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:bg-nnm-blue-dark disabled:opacity-60"
+          />
+
+          {mergedImportUploading && (
+            <div className="mt-4 flex items-center gap-2 text-sm text-slate-500">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Processing import...
+            </div>
+          )}
+
+          {mergedImportError && (
+            <div role="alert" className="mt-4 flex items-center gap-2 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+              <AlertCircle className="h-4 w-4 shrink-0" />
+              {mergedImportError}
+            </div>
+          )}
+
+          {mergedImportResult && (
+            <div className="mt-4 rounded-md border border-slate-200 bg-slate-50 p-4 text-sm">
+              <p className="mb-2 font-semibold text-slate-700">
+                Created {mergedImportResult.created}, updated {mergedImportResult.updated}.
+                {mergedImportResult.rolesCreated.length > 0 && ` ${mergedImportResult.rolesCreated.length} new role(s) added.`}
+                {mergedImportResult.wardsCreated.length > 0 && ` ${mergedImportResult.wardsCreated.length} new ward(s) added.`}
+              </p>
+              {mergedImportResult.rolesCreated.length > 0 && (
+                <p className="mb-2 text-xs text-slate-500">New roles: {mergedImportResult.rolesCreated.join(", ")}</p>
+              )}
+              {mergedImportResult.wardsCreated.length > 0 && (
+                <p className="mb-2 text-xs text-slate-500">New wards: {mergedImportResult.wardsCreated.join(", ")}</p>
+              )}
+              {mergedImportResult.skipped.length > 0 && (
+                <div>
+                  <p className="mb-1 font-semibold text-amber-700">{mergedImportResult.skipped.length} row(s) skipped:</p>
+                  <ul className="max-h-40 list-inside list-disc space-y-0.5 overflow-y-auto text-xs text-amber-700">
+                    {mergedImportResult.skipped.map((s, i) => (
+                      <li key={i}>
+                        Row {s.row}: {s.reason}
                       </li>
                     ))}
                   </ul>

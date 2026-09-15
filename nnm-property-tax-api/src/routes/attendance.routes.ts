@@ -47,6 +47,7 @@ import {
   unsuspendStaffHandler,
   transferStaffHandler,
   uploadStaffRosterHandler,
+  uploadStaffMergedImportHandler,
   deactivateAllStaffHandler,
   purgeAllFieldRecordsHandler,
   listAllDriversHandler,
@@ -211,6 +212,7 @@ attendanceRouter.patch("/staff/:id/unsuspend", requireAttendanceRole(["attendanc
 attendanceRouter.patch("/staff/:id/roles", requireAttendanceRole(["attendance_admin"]), setStaffRolesHandler);
 attendanceRouter.patch("/staff/:id/transfer", requireAttendanceRole(["attendance_admin", "sanitation_officer"]), transferStaffHandler);
 attendanceRouter.post("/staff/bulk-upload", requireAttendanceRole(["attendance_admin"]), uploadStaffRosterHandler);
+attendanceRouter.post("/staff/merged-import", requireAttendanceRole(["attendance_admin"]), uploadStaffMergedImportHandler);
 attendanceRouter.post("/staff/deactivate-all", requireAttendanceRole(["attendance_admin"]), deactivateAllStaffHandler);
 attendanceRouter.post("/field-records/purge-all", requireAttendanceRole(["attendance_admin"]), purgeAllFieldRecordsHandler);
 

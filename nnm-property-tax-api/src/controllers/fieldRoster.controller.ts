@@ -8,6 +8,7 @@ import { syncStaffRosterFromCsv, createOneStaff } from "../services/fieldStaffRo
 import { syncDriverRosterFromCsv, createOneDriver, assignDriver } from "../services/fieldDriverRoster.service";
 import { importVehicleStaffCsv } from "../services/vehicleStaffImport.service";
 import { purgeAllFieldStaffAndDrivers } from "../services/fieldStaffPurge.service";
+import { importStaffMergedCsv } from "../services/staffMergedImport.service";
 import {
   propagateSupervisorToAssistants,
   createOneAssistant,
@@ -414,6 +415,22 @@ export const uploadVehicleStaffImportHandler = asyncHandler(async (req: Request,
   if (!parsed.success) throw ApiError.badRequest("Invalid input", parsed.error.flatten().fieldErrors);
 
   const result = await importVehicleStaffCsv(parsed.data.csvContent);
+  res.status(200).json(result);
+});
+
+/**
+ * POST /api/v1/attendance/staff/merged-import - the "Fresh Data -
+ * Merged Data" CSV format (see staffMergedImport.service.ts for the
+ * exact expected columns), covering every municipal field role in the
+ * file, auto-creating any role name not already in the system.
+ * Distinct from uploadStaffRosterHandler's general Name/Ward/Shift
+ * format above.
+ */
+export const uploadStaffMergedImportHandler = asyncHandler(async (req: Request, res: Response) => {
+  const parsed = csvUploadSchema.safeParse(req.body);
+  if (!parsed.success) throw ApiError.badRequest("Invalid input", parsed.error.flatten().fieldErrors);
+
+  const result = await importStaffMergedCsv(parsed.data.csvContent);
   res.status(200).json(result);
 });
 

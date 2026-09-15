@@ -441,8 +441,8 @@ export default function ManageDriversPage() {
             </code>
             . Role must be &quot;DRIVER&quot; or &quot;Vehicle assistant&quot; - each assistant is linked to the driver listed
             immediately above it. Rows with a blank Location are filed under a &quot;Central/Unassigned&quot; ward. Vehicle names are
-            matched against the fleet asset registry where possible; unmatched ones are flagged but still imported. This adds to
-            the existing roster rather than replacing it.
+            matched against the fleet asset registry where possible; any vehicle not already there is added as a new asset
+            automatically. This adds to the existing roster rather than replacing it.
           </p>
 
           <input
@@ -474,14 +474,14 @@ export default function ManageDriversPage() {
                 Drivers - created {vehicleStaffResult.driversCreated}, updated {vehicleStaffResult.driversUpdated}. Vehicle
                 assistants - created {vehicleStaffResult.assistantsCreated}, updated {vehicleStaffResult.assistantsUpdated}.
               </p>
-              {vehicleStaffResult.unmatchedVehicles.length > 0 && (
+              {vehicleStaffResult.assetsCreated.length > 0 && (
                 <div className="mb-3">
-                  <p className="mb-1 font-semibold text-amber-700">
-                    {vehicleStaffResult.unmatchedVehicles.length} row(s) reference a vehicle not found in the fleet registry
-                    (still imported, just not linked to an asset):
+                  <p className="mb-1 font-semibold text-slate-700">
+                    {vehicleStaffResult.assetsCreated.length} new vehicle(s) added to the Fleet/Asset Registry (no existing
+                    match found for these):
                   </p>
-                  <ul className="max-h-40 list-inside list-disc space-y-0.5 overflow-y-auto text-xs text-amber-700">
-                    {vehicleStaffResult.unmatchedVehicles.map((u, i) => (
+                  <ul className="max-h-40 list-inside list-disc space-y-0.5 overflow-y-auto text-xs text-slate-600">
+                    {vehicleStaffResult.assetsCreated.map((u, i) => (
                       <li key={i}>
                         Row {u.row}: {u.name} - &quot;{u.vehicle}&quot;
                       </li>

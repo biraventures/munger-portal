@@ -629,6 +629,28 @@ export async function uploadFieldStaffRosterCsv(csvContent: string): Promise<Ros
   return res.json();
 }
 
+export interface StaffMergedImportResult {
+  created: number;
+  updated: number;
+  rolesCreated: string[];
+  wardsCreated: string[];
+  skipped: { row: number; reason: string }[];
+}
+
+/** attendance_admin only - the "Fresh Data - Merged Data" CSV format (columns: SL. No., Unique ID, Ward No., Name, Father Name, Phone, Employer, Location, Role, Shift), covering every municipal field role in the file, not just sanitation. Any role name not already in the system is created automatically. Distinct from uploadFieldStaffRosterCsv's general Name/Ward/Shift format above. */
+export async function uploadStaffMergedImportCsv(csvContent: string): Promise<StaffMergedImportResult> {
+  const res = await fetch(`${API_BASE_URL}/attendance/staff/merged-import`, {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify({ csvContent }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || "Upload failed.");
+  }
+  return res.json();
+}
+
 /** attendance_admin only - marks every currently-active sanitation field staff member inactive in one action (soft, reversible - never a hard delete). Requires the fixed phrase "deactivate all field staff" typed back exactly, case-insensitive. */
 export async function deactivateAllFieldStaff(confirmationPhrase: string): Promise<{ deactivated: number }> {
   const res = await fetch(`${API_BASE_URL}/attendance/staff/deactivate-all`, {
@@ -759,7 +781,7 @@ export interface VehicleStaffImportResult {
   assistantsCreated: number;
   assistantsUpdated: number;
   skipped: { row: number; reason: string }[];
-  unmatchedVehicles: { row: number; name: string; vehicle: string }[];
+  assetsCreated: { row: number; name: string; vehicle: string }[];
 }
 
 /** attendance_admin only - the combined driver + vehicle-assistant CSV format (columns: SL/NO, Unique ID, Location, Driver Name, Father's Name, Phone Number, Employeer, Role, Shift, Vehicle, Registration Number, Driving License, Status). Distinct from uploadFieldDriverRosterCsv's general roster format above. */

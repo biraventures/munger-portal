@@ -7,6 +7,14 @@ export const staffJobRoleRepository = {
     return rows;
   },
 
+  /** Case-insensitive find, creating a new role if none matches - used by the bulk roster import, which is expected to introduce role names beyond the pre-seeded list. */
+  async findOrCreateByName(roleName: string): Promise<StaffJobRoleRow> {
+    const existing = await pool.query<StaffJobRoleRow>(`SELECT * FROM staff_job_roles WHERE LOWER(role_name) = LOWER($1) LIMIT 1`, [roleName]);
+    if (existing.rows[0]) return existing.rows[0];
+    const { rows } = await pool.query<StaffJobRoleRow>(`INSERT INTO staff_job_roles (role_name) VALUES ($1) RETURNING *`, [roleName]);
+    return rows[0]!;
+  },
+
   /** All role ids currently assigned to a staff member. */
   async listForStaff(staffId: number): Promise<number[]> {
     const { rows } = await pool.query<{ role_id: number }>(

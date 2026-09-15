@@ -13,7 +13,7 @@ export interface VehicleStaffImportResult {
   assistantsCreated: number;
   assistantsUpdated: number;
   skipped: { row: number; reason: string }[];
-  unmatchedVehicles: { row: number; name: string; vehicle: string }[];
+  assetsCreated: { row: number; name: string; vehicle: string }[];
 }
 
 /** Extracts the ward's number for loose matching against a CSV value like "Ward-1", "Ward 11", or "11" - strips everything but digits so formatting differences between the source sheet and this system's ward names don't cause a false non-match. */
@@ -49,10 +49,13 @@ function wardDigits(s: string): string {
  * - Vehicle names are matched against the fleet registry by
  *   registration number first (more precise, e.g. "BR08G 5327"),
  *   falling back to the free-text vehicle name/label (e.g. "Toto-1",
- *   "JCB"). A row whose vehicle doesn't match anything is still
- *   imported - it's flagged in the result, not rejected, since a
- *   missing fleet-registry match is informational, not a reason to
- *   drop a real staff record.
+ *   "JCB"). A row whose vehicle doesn't match anything gets a brand
+ *   new asset created for it (type "vehicle", labelled with whatever
+ *   name/registration number the row gave) so the vehicle actually
+ *   shows up in the Fleet/Asset Registry, not just referenced by name
+ *   on the driver record - this list is the primary source of truth
+ *   for what vehicles exist, so a driver's vehicle reference should
+ *   never be silently dropped.
  * - Status describes the *vehicle's* working condition, not the
  *   person's - confirmed this applies only to the spare-vehicle rows
  *   that get skipped above (no named staff row in practice carries a
@@ -103,7 +106,7 @@ export async function importVehicleStaffCsv(csvContent: string): Promise<Vehicle
     assistantsCreated: 0,
     assistantsUpdated: 0,
     skipped: [],
-    unmatchedVehicles: [],
+    assetsCreated: [],
   };
 
   let lastDriver: FieldDriverRow | null = null;
@@ -140,8 +143,16 @@ export async function importVehicleStaffCsv(csvContent: string): Promise<Vehicle
       const matched = byRegNumber ?? byLabel;
       if (matched) {
         assetId = matched.id;
-      } else if (vehicleName || regNumber) {
-        result.unmatchedVehicles.push({ row: rowNum, name, vehicle: vehicleName || regNumber });
+      } else {
+        const created = await assetRepository.create({
+          assetType: "vehicle",
+          label: vehicleName || regNumber,
+          vehicleNumber: regNumber || null,
+          chassisNumber: null,
+          trackingType: null,
+        });
+        assetId = created.id;
+        result.assetsCreated.push({ row: rowNum, name, vehicle: vehicleName || regNumber });
       }
     }
 
