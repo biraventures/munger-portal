@@ -123,6 +123,39 @@ export const deleteStaffHandler = asyncHandler(async (req: Request, res: Respons
   res.status(200).json({ deleted: true });
 });
 
+const staffDetailsSchema = z.object({
+  name: z.string().trim().min(1, "Name is required"),
+  externalId: z.string().trim().nullish(),
+});
+
+/** PATCH /api/v1/attendance/staff/:id/details - name and Unique ID (external_id), the two identifying fields no other action (Transfer, Roles, Deactivate) covers. */
+export const updateStaffDetailsHandler = asyncHandler(async (req: Request, res: Response) => {
+  const paramsParsed = staffIdParamSchema.safeParse(req.params);
+  if (!paramsParsed.success) throw ApiError.badRequest("Invalid staff id");
+  const bodyParsed = staffDetailsSchema.safeParse(req.body);
+  if (!bodyParsed.success) throw ApiError.badRequest("Invalid input", bodyParsed.error.flatten().fieldErrors);
+
+  const existing = await fieldStaffRepository.findById(paramsParsed.data.id);
+  if (!existing) throw ApiError.notFound("Staff member not found");
+
+  const externalId = bodyParsed.data.externalId?.trim() || null;
+  if (externalId) {
+    const clash = await fieldStaffRepository.findByExternalId(externalId);
+    if (clash && clash.id !== existing.id) throw ApiError.badRequest(`Unique ID "${externalId}" is already used by another staff member.`);
+  }
+
+  const updated = await fieldStaffRepository.update(existing.id, {
+    name: bodyParsed.data.name,
+    wardId: existing.ward_id,
+    shiftId: existing.shift_id,
+    active: existing.active,
+    externalId,
+  });
+  res.status(200).json({
+    staff: { id: updated!.id, name: updated!.name, externalId: updated!.external_id, wardId: updated!.ward_id, shiftId: updated!.shift_id, active: updated!.active },
+  });
+});
+
 const suspendStaffSchema = z.object({ reason: z.string().trim().min(1, "A reason is required to suspend a worker.").max(2000) });
 
 /**
@@ -352,6 +385,53 @@ export const setDriverActiveHandler = asyncHandler(async (req: Request, res: Res
   });
 });
 
+const driverDetailsSchema = z.object({
+  name: z.string().trim().min(1, "Name is required"),
+  externalId: z.string().trim().nullish(),
+  dlNumber: z.string().trim().nullish(),
+});
+
+/** PATCH /api/v1/attendance/drivers/:id/details - name, Unique ID (external_id), and driving license number - the identifying fields no other action (Transfer, Assign, Deactivate) covers. */
+export const updateDriverDetailsHandler = asyncHandler(async (req: Request, res: Response) => {
+  const paramsParsed = staffIdParamSchema.safeParse(req.params);
+  if (!paramsParsed.success) throw ApiError.badRequest("Invalid driver id");
+  const bodyParsed = driverDetailsSchema.safeParse(req.body);
+  if (!bodyParsed.success) throw ApiError.badRequest("Invalid input", bodyParsed.error.flatten().fieldErrors);
+
+  const existing = await fieldDriverRepository.findById(paramsParsed.data.id);
+  if (!existing) throw ApiError.notFound("Driver not found");
+
+  const externalId = bodyParsed.data.externalId?.trim() || null;
+  if (externalId) {
+    const clash = await fieldDriverRepository.findByExternalId(externalId);
+    if (clash && clash.id !== existing.id) throw ApiError.badRequest(`Unique ID "${externalId}" is already used by another driver.`);
+  }
+
+  const updated = await fieldDriverRepository.update(existing.id, {
+    name: bodyParsed.data.name,
+    dlNumber: bodyParsed.data.dlNumber?.trim() || null,
+    wardId: existing.ward_id,
+    shiftId: existing.shift_id,
+    assetId: existing.asset_id,
+    supervisorId: existing.supervisor_id,
+    active: existing.active,
+    externalId,
+  });
+  res.status(200).json({
+    driver: {
+      id: updated!.id,
+      name: updated!.name,
+      externalId: updated!.external_id,
+      dlNumber: updated!.dl_number,
+      wardId: updated!.ward_id,
+      shiftId: updated!.shift_id,
+      active: updated!.active,
+      assetId: updated!.asset_id,
+      supervisorId: updated!.supervisor_id,
+    },
+  });
+});
+
 const transferDriverSchema = z.object({
   wardId: z.coerce.number().int().positive(),
   shiftId: z.coerce.number().int().positive().nullish(),
@@ -522,6 +602,50 @@ export const setAssistantActiveHandler = asyncHandler(async (req: Request, res: 
       shiftId: updated.shift_id,
       active: updated.active,
       supervisorId: updated.supervisor_id,
+    },
+  });
+});
+
+const assistantDetailsSchema = z.object({
+  name: z.string().trim().min(1, "Name is required"),
+  externalId: z.string().trim().nullish(),
+});
+
+/** PATCH /api/v1/attendance/assistants/:id/details - name and Unique ID (external_id), the identifying fields no other action (Transfer, Deactivate) covers. */
+export const updateAssistantDetailsHandler = asyncHandler(async (req: Request, res: Response) => {
+  const paramsParsed = staffIdParamSchema.safeParse(req.params);
+  if (!paramsParsed.success) throw ApiError.badRequest("Invalid assistant id");
+  const bodyParsed = assistantDetailsSchema.safeParse(req.body);
+  if (!bodyParsed.success) throw ApiError.badRequest("Invalid input", bodyParsed.error.flatten().fieldErrors);
+
+  const existing = await fieldAssistantRepository.findById(paramsParsed.data.id);
+  if (!existing) throw ApiError.notFound("Assistant not found");
+
+  const externalId = bodyParsed.data.externalId?.trim() || null;
+  if (externalId) {
+    const clash = await fieldAssistantRepository.findByExternalId(externalId);
+    if (clash && clash.id !== existing.id) throw ApiError.badRequest(`Unique ID "${externalId}" is already used by another assistant.`);
+  }
+
+  const updated = await fieldAssistantRepository.update(existing.id, {
+    name: bodyParsed.data.name,
+    driverId: existing.driver_id,
+    wardId: existing.ward_id,
+    shiftId: existing.shift_id,
+    supervisorId: existing.supervisor_id,
+    active: existing.active,
+    externalId,
+  });
+  res.status(200).json({
+    assistant: {
+      id: updated!.id,
+      name: updated!.name,
+      externalId: updated!.external_id,
+      driverId: updated!.driver_id,
+      wardId: updated!.ward_id,
+      shiftId: updated!.shift_id,
+      active: updated!.active,
+      supervisorId: updated!.supervisor_id,
     },
   });
 });

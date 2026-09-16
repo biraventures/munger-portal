@@ -36,6 +36,13 @@ const agreementInputSchema = z.object({
   jointHolderName: z.string().nullish(),
   jointHolderRelation: z.string().nullish(),
   jointHolderIdProofNumber: z.string().nullish(),
+  presentOccupantName: z.string().nullish(),
+  presentOccupantAadhaar: z
+    .string()
+    .regex(/^\d{4}\s?\d{4}\s?\d{4}$/, "Aadhaar number should be 12 digits")
+    .nullish()
+    .or(z.literal("")),
+  presentOccupantYearsApprox: z.string().nullish(),
   notes: z.string().nullish(),
   dataStatus: z.enum(["complete", "partial"]).optional(),
   changeReason: z.string().min(1, "A reason is required"),

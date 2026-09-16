@@ -43,6 +43,7 @@ import {
   createStaffHandler,
   setStaffRolesHandler,
   setStaffActiveHandler,
+  updateStaffDetailsHandler,
   deleteStaffHandler,
   suspendStaffHandler,
   unsuspendStaffHandler,
@@ -55,6 +56,7 @@ import {
   createDriverHandler,
   setDriverActiveHandler,
   transferDriverHandler,
+  updateDriverDetailsHandler,
   assignDriverHandler,
   uploadDriverRosterHandler,
   uploadVehicleStaffImportHandler,
@@ -62,6 +64,7 @@ import {
   createAssistantHandler,
   setAssistantActiveHandler,
   transferAssistantHandler,
+  updateAssistantDetailsHandler,
   reassignAssistantDriverHandler,
   uploadAssistantRosterHandler,
 } from "../controllers/fieldRoster.controller";
@@ -82,7 +85,7 @@ import {
   listAssetLogbookHandler,
   logAssetReadingHandler,
 } from "../controllers/asset.controller";
-import { getFleetRegistry, postBaselineSurvey, getBaselineSurvey, getBaselineSurveySummary } from "../controllers/assetBaselineSurvey.controller";
+import { getFleetRegistry, postBaselineSurvey, getBaselineSurvey, getBaselineSurveySummary, downloadBaselineSurveyPdf } from "../controllers/assetBaselineSurvey.controller";
 import { postUploadAssetPhoto, getAssetPhotos, getAssetPhotoFile, deleteAssetPhotoHandler } from "../controllers/assetPhoto.controller";
 import { requireAttendanceRole } from "../middleware/requireAttendanceRole";
 import { loginRateLimiter } from "../middleware/loginRateLimiter";
@@ -208,6 +211,7 @@ attendanceRouter.get("/staff/all", requireAttendanceRole(["attendance_admin", "s
 attendanceRouter.get("/staff-job-roles", requireAttendanceRole(), listStaffJobRolesHandler);
 attendanceRouter.post("/staff", requireAttendanceRole(["attendance_admin"]), createStaffHandler);
 attendanceRouter.patch("/staff/:id/active", requireAttendanceRole(["attendance_admin"]), setStaffActiveHandler);
+attendanceRouter.patch("/staff/:id/details", requireAttendanceRole(["attendance_admin", "sanitation_officer"]), updateStaffDetailsHandler);
 attendanceRouter.delete("/staff/:id", requireAttendanceRole(["attendance_admin"]), deleteStaffHandler);
 attendanceRouter.patch("/staff/:id/suspend", requireAttendanceRole(["attendance_admin"]), suspendStaffHandler);
 attendanceRouter.patch("/staff/:id/unsuspend", requireAttendanceRole(["attendance_admin"]), unsuspendStaffHandler);
@@ -223,6 +227,7 @@ attendanceRouter.get("/drivers/all", requireAttendanceRole(["attendance_admin", 
 attendanceRouter.post("/drivers", requireAttendanceRole(["attendance_admin"]), createDriverHandler);
 attendanceRouter.patch("/drivers/:id/active", requireAttendanceRole(["attendance_admin"]), setDriverActiveHandler);
 attendanceRouter.patch("/drivers/:id/transfer", requireAttendanceRole(["attendance_admin", "sanitation_officer"]), transferDriverHandler);
+attendanceRouter.patch("/drivers/:id/details", requireAttendanceRole(["attendance_admin", "sanitation_officer"]), updateDriverDetailsHandler);
 attendanceRouter.patch("/drivers/:id/assign", requireAttendanceRole(["attendance_admin"]), assignDriverHandler);
 attendanceRouter.post("/drivers/bulk-upload", requireAttendanceRole(["attendance_admin"]), uploadDriverRosterHandler);
 attendanceRouter.post("/drivers/vehicle-staff-import", requireAttendanceRole(["attendance_admin"]), uploadVehicleStaffImportHandler);
@@ -232,6 +237,7 @@ attendanceRouter.get("/assistants/all", requireAttendanceRole(["attendance_admin
 attendanceRouter.post("/assistants", requireAttendanceRole(["attendance_admin"]), createAssistantHandler);
 attendanceRouter.patch("/assistants/:id/active", requireAttendanceRole(["attendance_admin"]), setAssistantActiveHandler);
 attendanceRouter.patch("/assistants/:id/transfer", requireAttendanceRole(["attendance_admin", "sanitation_officer"]), transferAssistantHandler);
+attendanceRouter.patch("/assistants/:id/details", requireAttendanceRole(["attendance_admin", "sanitation_officer"]), updateAssistantDetailsHandler);
 attendanceRouter.patch("/assistants/:id/reassign-driver", requireAttendanceRole(["attendance_admin"]), reassignAssistantDriverHandler);
 attendanceRouter.post("/assistants/bulk-upload", requireAttendanceRole(["attendance_admin"]), uploadAssistantRosterHandler);
 
@@ -242,6 +248,7 @@ attendanceRouter.post("/assets", requireAttendanceRole([...FLEET_EDIT_ROLES]), c
 attendanceRouter.get("/fleet-registry", requireAttendanceRole(), getFleetRegistry);
 attendanceRouter.get("/assets/baseline-survey-summary", requireAttendanceRole(), getBaselineSurveySummary);
 attendanceRouter.get("/assets/:id/baseline-survey", requireAttendanceRole(), getBaselineSurvey);
+attendanceRouter.get("/assets/:id/baseline-survey/pdf", requireAttendanceRole(), downloadBaselineSurveyPdf);
 attendanceRouter.post("/assets/:id/baseline-survey", requireAttendanceRole([...FLEET_EDIT_ROLES]), postBaselineSurvey);
 attendanceRouter.post("/assets/:id/photos", requireAttendanceRole([...FLEET_EDIT_ROLES]), postUploadAssetPhoto);
 attendanceRouter.get("/assets/:id/photos", requireAttendanceRole(), getAssetPhotos);

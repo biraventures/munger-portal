@@ -7,6 +7,7 @@ import {
   postUploadShopAgreementDocument,
   getShopAgreementDocumentMetaHandler,
   getShopAgreementDocumentFile,
+  getShopAgreementDocumentPendingRequest,
 } from "../controllers/shopAgreementDocument.controller";
 import {
   getEscalationPeriods,
@@ -72,6 +73,7 @@ shopRouter.post("/demand-actions", requireOperatorOrAdmin, postRequestDemandActi
 shopRouter.post("/:shopNo/agreement-document", requireOperatorOrAdmin, postUploadShopAgreementDocument);
 shopRouter.get("/:shopNo/agreement-document", requireOperatorOrAdmin, getShopAgreementDocumentMetaHandler);
 shopRouter.get("/:shopNo/agreement-document/file", requireOperatorOrAdmin, getShopAgreementDocumentFile);
+shopRouter.get("/:shopNo/agreement-document/pending-request", requireOperatorOrAdmin, getShopAgreementDocumentPendingRequest);
 
 // Rent escalation history - manually entered, always by whoever
 // reviews the shop's paper agreement (operator or admin). See

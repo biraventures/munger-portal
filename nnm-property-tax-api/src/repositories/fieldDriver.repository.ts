@@ -76,14 +76,16 @@ export const fieldDriverRepository = {
       assetId: number | null;
       supervisorId: number | null;
       active: boolean;
+      externalId?: string | null;
     },
   ): Promise<FieldDriverRow | null> {
     const { rows } = await pool.query<FieldDriverRow>(
       `UPDATE field_drivers
        SET name = COALESCE($2, name), dl_number = $3, ward_id = COALESCE($4, ward_id),
-           shift_id = $5, asset_id = $6, supervisor_id = $7, active = $8
+           shift_id = $5, asset_id = $6, supervisor_id = $7, active = $8,
+           external_id = CASE WHEN $9::boolean THEN $10 ELSE external_id END
        WHERE id = $1 RETURNING *`,
-      [id, input.name ?? null, input.dlNumber, input.wardId ?? null, input.shiftId, input.assetId, input.supervisorId, input.active],
+      [id, input.name ?? null, input.dlNumber, input.wardId ?? null, input.shiftId, input.assetId, input.supervisorId, input.active, input.externalId !== undefined, input.externalId ?? null],
     );
     return rows[0] ?? null;
   },
@@ -114,5 +116,21 @@ export const fieldDriverRepository = {
   async setActiveMany(ids: number[], active: boolean): Promise<void> {
     if (ids.length === 0) return;
     await pool.query(`UPDATE field_drivers SET active = $2 WHERE id = ANY($1::bigint[])`, [ids, active]);
+  },
+
+  /** For the fleet baseline survey's asset dropdown/progress list - showing the driver's name alongside the vehicle makes near-identical entries (many share a generic "Toto-N" label) distinguishable at a glance. Keyed by asset_id, not driver_id, since the lookup direction here is "which driver is tagged to this asset" - a comma-joined list if more than one driver (e.g. separate morning/afternoon shift drivers) is tagged to the same vehicle. */
+  async driverNamesByAssetIds(assetIds: number[]): Promise<Map<number, string>> {
+    const map = new Map<number, string[]>();
+    if (assetIds.length === 0) return new Map();
+    const { rows } = await pool.query<{ asset_id: number; name: string }>(
+      `SELECT asset_id, name FROM field_drivers WHERE asset_id = ANY($1::bigint[]) AND active = TRUE ORDER BY name ASC`,
+      [assetIds],
+    );
+    for (const row of rows) {
+      const existing = map.get(row.asset_id) ?? [];
+      existing.push(row.name);
+      map.set(row.asset_id, existing);
+    }
+    return new Map(Array.from(map.entries()).map(([assetId, names]) => [assetId, names.join(", ")]));
   },
 };

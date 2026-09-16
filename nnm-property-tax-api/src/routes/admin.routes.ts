@@ -58,6 +58,13 @@ import {
   postRejectShopEditRequest,
 } from "../controllers/shopEditRequest.controller";
 import {
+  listShopAgreementDocumentRequestsHandler,
+  getShopAgreementDocumentRequestFile,
+  approveShopAgreementDocumentRequestHandler,
+  rejectShopAgreementDocumentRequestHandler,
+} from "../controllers/shopAgreementDocument.controller";
+import { postCreateShopInspection, listShopInspectionsForShop, listAllShopInspections } from "../controllers/shopInspection.controller";
+import {
   getDemandActionRequests,
   getDemandActionRequestById,
   postApproveDemandAction,
@@ -169,6 +176,22 @@ adminRouter.get("/shop-edit-requests", requirePublicationStageRole, getShopEditR
 adminRouter.get("/shop-edit-requests/:id", requirePublicationStageRole, getShopEditRequestById);
 adminRouter.post("/shop-edit-requests/:id/approve", requirePublicationStageRole, postApproveShopEditRequest);
 adminRouter.post("/shop-edit-requests/:id/reject", requirePublicationStageRole, postRejectShopEditRequest);
+
+// Shop agreement document approval - an uploaded (or changed)
+// signed-agreement PDF doesn't become the shop's live document until
+// it clears the same 3-stage review as shop publication above.
+adminRouter.get("/shop-agreement-document-requests", requirePublicationStageRole, listShopAgreementDocumentRequestsHandler);
+adminRouter.get("/shop-agreement-document-requests/:id/file", requirePublicationStageRole, getShopAgreementDocumentRequestFile);
+adminRouter.post("/shop-agreement-document-requests/:id/approve", requirePublicationStageRole, approveShopAgreementDocumentRequestHandler);
+adminRouter.post("/shop-agreement-document-requests/:id/reject", requirePublicationStageRole, rejectShopAgreementDocumentRequestHandler);
+
+// Shop inspection - City Manager or Deputy Commissioner walks a shop
+// and records which irregularities (if any) they found, from a fixed
+// checklist, plus their own comments.
+const requireInspectionRole = requireAdminRole("city_manager", "deputy_commissioner");
+adminRouter.get("/shop-inspections", requireInspectionRole, listAllShopInspections);
+adminRouter.get("/shops/:shopNo/inspections", requireInspectionRole, listShopInspectionsForShop);
+adminRouter.post("/shops/:shopNo/inspections", requireInspectionRole, postCreateShopInspection);
 
 // Demand notice cancel/supersede and receipt cancel - a separate,
 // FIXED 2-stage chain (Stall Prabhari, then City Manager only - no

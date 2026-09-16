@@ -56,6 +56,7 @@ export interface AssetSurveySummaryRow {
   amc_disposition: string | null;
   deployment_status: string | null;
   open_defect_count: string;
+  driver_name: string | null;
 }
 
 export const assetBaselineSurveyRepository = {
@@ -71,7 +72,8 @@ export const assetBaselineSurveyRepository = {
       `SELECT
          a.id, a.label, a.asset_category, a.asset_type_detail, a.registration_number, a.present_location_yard,
          s.id AS survey_id, s.survey_date, s.surveyed_by, s.overall_status, s.safety_status, s.amc_disposition, s.deployment_status,
-         COALESCE(d.open_count, 0) AS open_defect_count
+         COALESCE(d.open_count, 0) AS open_defect_count,
+         drv.driver_name
        FROM assets a
        LEFT JOIN LATERAL (
          SELECT id, survey_date, surveyed_by, overall_status, safety_status, amc_disposition, deployment_status
@@ -83,6 +85,15 @@ export const assetBaselineSurveyRepository = {
          SELECT COUNT(*) AS open_count FROM asset_defects
          WHERE asset_defects.asset_id = a.id AND repair_status IN ('open', 'in_progress')
        ) d ON true
+       LEFT JOIN LATERAL (
+         -- Comma-joined since more than one driver (e.g. separate
+         -- morning/afternoon shift drivers) can be tagged to the same
+         -- vehicle - see fieldDriver.repository.ts's
+         -- driverNamesByAssetIds() for the equivalent app-side lookup.
+         SELECT string_agg(name, ', ' ORDER BY name) AS driver_name
+         FROM field_drivers
+         WHERE field_drivers.asset_id = a.id AND field_drivers.active = TRUE
+       ) drv ON true
        WHERE a.active = TRUE
        ORDER BY a.label ASC`,
     );

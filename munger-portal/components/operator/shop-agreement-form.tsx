@@ -48,12 +48,16 @@ export function ShopAgreementForm({
     jointHolderName: initial?.jointHolderName ?? "",
     jointHolderRelation: initial?.jointHolderRelation ?? "",
     jointHolderIdProofNumber: initial?.jointHolderIdProofNumber ?? "",
+    presentOccupantName: initial?.presentOccupantName ?? "",
+    presentOccupantAadhaar: initial?.presentOccupantAadhaar ?? "",
+    presentOccupantYearsApprox: initial?.presentOccupantYearsApprox ?? "",
     notes: initial?.notes ?? "",
     changeReason: "",
   });
   const [rentSource, setRentSource] = useState<Source>("demand_register");
   const [nameSource, setNameSource] = useState<Source>("demand_register");
   const [hasJointHolder, setHasJointHolder] = useState(Boolean(initial?.jointHolderName));
+  const [hasPresentOccupant, setHasPresentOccupant] = useState(Boolean(initial?.presentOccupantName));
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<{ id: number; tier: "full" | "data_completion" } | null>(null);
@@ -118,6 +122,9 @@ export function ShopAgreementForm({
         jointHolderName: hasJointHolder ? form.jointHolderName || null : null,
         jointHolderRelation: hasJointHolder ? form.jointHolderRelation || null : null,
         jointHolderIdProofNumber: hasJointHolder ? form.jointHolderIdProofNumber || null : null,
+        presentOccupantName: hasPresentOccupant ? form.presentOccupantName || null : null,
+        presentOccupantAadhaar: hasPresentOccupant ? form.presentOccupantAadhaar || null : null,
+        presentOccupantYearsApprox: hasPresentOccupant ? form.presentOccupantYearsApprox || null : null,
         notes: form.notes || null,
       });
       setResult({ id: res.changeRequestId, tier: res.approvalTier });
@@ -242,6 +249,50 @@ export function ShopAgreementForm({
             <div>
               <label className={labelClass}>Joint holder ID proof (optional)</label>
               <input value={form.jointHolderIdProofNumber ?? ""} onChange={(e) => update("jointHolderIdProofNumber", e.target.value)} className={inputClass} />
+            </div>
+          </div>
+        )}
+      </section>
+
+      <section className="rounded-xl border border-slate-200 bg-white p-6">
+        <div className="mb-4 flex items-center justify-between">
+          <div>
+            <h2 className="text-base font-semibold text-slate-900">Present Occupant</h2>
+            <p className="text-xs text-slate-500">Only if different from the holder above (e.g. an informal succession the paperwork hasn&apos;t caught up with).</p>
+          </div>
+          <label className="flex items-center gap-2 text-sm text-slate-600">
+            <input
+              type="checkbox"
+              checked={hasPresentOccupant}
+              onChange={(e) => setHasPresentOccupant(e.target.checked)}
+              className="h-4 w-4 rounded border-slate-300"
+            />
+            Differs from holder
+          </label>
+        </div>
+        {hasPresentOccupant && (
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div>
+              <label className={labelClass}>Present occupant name</label>
+              <input value={form.presentOccupantName ?? ""} onChange={(e) => update("presentOccupantName", e.target.value)} className={inputClass} />
+            </div>
+            <div>
+              <label className={labelClass}>Aadhaar number (optional)</label>
+              <input
+                value={form.presentOccupantAadhaar ?? ""}
+                onChange={(e) => update("presentOccupantAadhaar", e.target.value)}
+                placeholder="1234 5678 9012"
+                className={inputClass}
+              />
+            </div>
+            <div>
+              <label className={labelClass}>Approx. years occupying (optional)</label>
+              <input
+                value={form.presentOccupantYearsApprox ?? ""}
+                onChange={(e) => update("presentOccupantYearsApprox", e.target.value)}
+                placeholder="e.g. around 8-9 years"
+                className={inputClass}
+              />
             </div>
           </div>
         )}

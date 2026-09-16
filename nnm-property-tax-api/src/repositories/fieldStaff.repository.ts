@@ -76,16 +76,17 @@ export const fieldStaffRepository = {
 
   async update(
     id: number,
-    input: { name?: string; wardId?: number; shiftId: number | null; active: boolean },
+    input: { name?: string; wardId?: number; shiftId: number | null; active: boolean; externalId?: string | null },
   ): Promise<FieldStaffRow | null> {
     const { rows } = await pool.query<FieldStaffRow>(
       `UPDATE field_staff SET
          name = COALESCE($2, name),
          ward_id = COALESCE($3, ward_id),
          shift_id = $4,
-         active = $5
+         active = $5,
+         external_id = CASE WHEN $6::boolean THEN $7 ELSE external_id END
        WHERE id = $1 RETURNING *`,
-      [id, input.name ?? null, input.wardId ?? null, input.shiftId, input.active],
+      [id, input.name ?? null, input.wardId ?? null, input.shiftId, input.active, input.externalId !== undefined, input.externalId ?? null],
     );
     return rows[0] ?? null;
   },

@@ -35,6 +35,9 @@ export interface MyShopDetails {
   securityDeposit: string;
   jointHolderName: string | null;
   jointHolderRelation: string | null;
+  presentOccupantName: string | null;
+  presentOccupantAadhaar: string | null;
+  presentOccupantYearsApprox: string | null;
   status: string;
 }
 
@@ -63,6 +66,9 @@ interface ApiMyShopResponse {
     security_deposit: string;
     joint_holder_name: string | null;
     joint_holder_relation: string | null;
+    present_occupant_name: string | null;
+    present_occupant_aadhaar: string | null;
+    present_occupant_years_approx: string | null;
     status: string;
   };
 }
@@ -105,6 +111,9 @@ export async function lookupMyShopDetails(shopNoQuery: string, mobileNoQuery: st
     securityDeposit: data.agreement.security_deposit,
     jointHolderName: data.agreement.joint_holder_name,
     jointHolderRelation: data.agreement.joint_holder_relation,
+    presentOccupantName: data.agreement.present_occupant_name,
+    presentOccupantAadhaar: data.agreement.present_occupant_aadhaar,
+    presentOccupantYearsApprox: data.agreement.present_occupant_years_approx,
     status: data.agreement.status,
   };
 }

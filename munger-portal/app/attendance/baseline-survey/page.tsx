@@ -194,7 +194,7 @@ function BaselineSurveyPageInner() {
               <option value="">- Select an existing asset -</option>
               {assets?.map((a) => (
                 <option key={a.id} value={a.id}>
-                  {a.label} {a.vehicleNumber ? `(${a.vehicleNumber})` : ""}
+                  {a.label} {a.vehicleNumber ? `(${a.vehicleNumber})` : ""} {a.driverName ? `- Driver: ${a.driverName}` : ""}
                 </option>
               ))}
             </select>

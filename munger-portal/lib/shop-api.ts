@@ -137,6 +137,9 @@ export interface AgreementInput {
   jointHolderName?: string | null;
   jointHolderRelation?: string | null;
   jointHolderIdProofNumber?: string | null;
+  presentOccupantName?: string | null;
+  presentOccupantAadhaar?: string | null;
+  presentOccupantYearsApprox?: string | null;
   notes?: string | null;
   dataStatus?: ShopAgreementDataStatus;
   changeReason: string;
@@ -274,6 +277,9 @@ export interface PrintableShopAgreement {
   miscRebateReason: string | null;
   jointHolderName: string | null;
   jointHolderRelation: string | null;
+  presentOccupantName: string | null;
+  presentOccupantAadhaar: string | null;
+  presentOccupantYearsApprox: string | null;
   status: string;
   verificationUrl: string;
 }
@@ -505,6 +511,31 @@ export async function fetchShopAgreementDocumentMeta(shopNo: string): Promise<Sh
   return data.document;
 }
 
+/** A document uploaded/changed but not yet (or no longer) live - still working through Stall Prabhari -> City Manager -> Deputy Commissioner, or already decided. */
+export interface ShopAgreementDocumentRequest {
+  id: number;
+  shop_no: string;
+  file_name: string;
+  file_size: number;
+  is_change: boolean;
+  uploaded_by: string;
+  uploaded_at: string;
+  status: "pending" | "approved" | "rejected";
+  current_stage: "stall_prabhari" | "city_manager" | "deputy_commissioner";
+  decided_at: string | null;
+  rejected_by: string | null;
+  rejected_role: string | null;
+  rejection_reason: string | null;
+}
+
+/** The shop's document currently awaiting review, if any - null once it's been approved (and become the live document) or rejected. */
+export async function fetchShopAgreementDocumentPendingRequest(shopNo: string): Promise<ShopAgreementDocumentRequest | null> {
+  const res = await fetch(`${API_BASE_URL}/shops/${encodeURIComponent(shopNo)}/agreement-document/pending-request`, { headers: authHeaders() });
+  if (!res.ok) throw new Error("Could not check for a pending agreement document.");
+  const data: { request: ShopAgreementDocumentRequest | null } = await res.json();
+  return data.request;
+}
+
 /** Reads a File object as base64, for sending in the JSON body - this app has no multipart/file-upload middleware set up. */
 function readFileAsBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -519,7 +550,8 @@ function readFileAsBase64(file: File): Promise<string> {
   });
 }
 
-export async function uploadShopAgreementDocument(shopNo: string, file: File): Promise<ShopAgreementDocumentMeta> {
+/** Queues the signed agreement PDF for review - does NOT become the live document immediately. See ShopAgreementDocumentRequest.current_stage for where it stands. */
+export async function uploadShopAgreementDocument(shopNo: string, file: File): Promise<ShopAgreementDocumentRequest> {
   const fileDataBase64 = await readFileAsBase64(file);
   const res = await fetch(`${API_BASE_URL}/shops/${encodeURIComponent(shopNo)}/agreement-document`, {
     method: "POST",
@@ -530,8 +562,8 @@ export async function uploadShopAgreementDocument(shopNo: string, file: File): P
     const body = await res.json().catch(() => ({}));
     throw new Error(body.error || "Could not upload this file.");
   }
-  const data: { document: ShopAgreementDocumentMeta } = await res.json();
-  return data.document;
+  const data: { request: ShopAgreementDocumentRequest } = await res.json();
+  return data.request;
 }
 
 /**

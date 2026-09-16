@@ -170,6 +170,9 @@ export interface PrintableShopAgreement {
   miscRebateReason: string | null;
   jointHolderName: string | null;
   jointHolderRelation: string | null;
+  presentOccupantName: string | null;
+  presentOccupantAadhaar: string | null;
+  presentOccupantYearsApprox: string | null;
   status: string;
   verificationUrl: string;
 }
@@ -210,6 +213,9 @@ export async function getAgreementForPrint(agreementId: number): Promise<Printab
     miscRebateReason: agreement.misc_rebate_reason,
     jointHolderName: agreement.joint_holder_name,
     jointHolderRelation: agreement.joint_holder_relation,
+    presentOccupantName: agreement.present_occupant_name,
+    presentOccupantAadhaar: agreement.present_occupant_aadhaar,
+    presentOccupantYearsApprox: agreement.present_occupant_years_approx,
     status: agreement.status,
     verificationUrl: buildVerificationUrl("agreement", String(agreement.id)),
   };

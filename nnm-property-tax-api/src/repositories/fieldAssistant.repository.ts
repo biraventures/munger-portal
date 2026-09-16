@@ -80,14 +80,15 @@ export const fieldAssistantRepository = {
 
   async update(
     id: number,
-    input: { name?: string; driverId?: number; wardId?: number; shiftId: number | null; supervisorId: number | null; active: boolean },
+    input: { name?: string; driverId?: number; wardId?: number; shiftId: number | null; supervisorId: number | null; active: boolean; externalId?: string | null },
   ): Promise<FieldAssistantRow | null> {
     const { rows } = await pool.query<FieldAssistantRow>(
       `UPDATE field_assistants
        SET name = COALESCE($2, name), driver_id = COALESCE($3, driver_id), ward_id = COALESCE($4, ward_id),
-           shift_id = $5, supervisor_id = $6, active = $7
+           shift_id = $5, supervisor_id = $6, active = $7,
+           external_id = CASE WHEN $8::boolean THEN $9 ELSE external_id END
        WHERE id = $1 RETURNING *`,
-      [id, input.name ?? null, input.driverId ?? null, input.wardId ?? null, input.shiftId, input.supervisorId, input.active],
+      [id, input.name ?? null, input.driverId ?? null, input.wardId ?? null, input.shiftId, input.supervisorId, input.active, input.externalId !== undefined, input.externalId ?? null],
     );
     return rows[0] ?? null;
   },

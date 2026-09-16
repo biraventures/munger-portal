@@ -173,6 +173,13 @@ export default function MyShopDetailsPage() {
                         {details.jointHolderRelation ? ` (${details.jointHolderRelation})` : ""}
                       </div>
                     )}
+                    {details.presentOccupantName && (
+                      <div className="col-span-2">
+                        <b className="inline-block w-[150px]">Present Occupant</b> {details.presentOccupantName}
+                        {details.presentOccupantAadhaar ? ` - Aadhaar: ${details.presentOccupantAadhaar}` : ""}
+                        {details.presentOccupantYearsApprox ? ` (occupying for ${details.presentOccupantYearsApprox})` : ""}
+                      </div>
+                    )}
                   </div>
 
                   <h2 className="mt-5 border-b border-slate-300 pb-1 text-[13px] font-bold text-nnm-blue">Rent Details</h2>

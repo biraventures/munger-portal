@@ -39,6 +39,9 @@ const FIELD_DIFF_ROWS: { label: string; currentKey: string; proposedKey: string 
   { label: "Rebate Reason", currentKey: "misc_rebate_reason", proposedKey: "miscRebateReason" },
   { label: "Joint Holder Name", currentKey: "joint_holder_name", proposedKey: "jointHolderName" },
   { label: "Joint Holder Relation", currentKey: "joint_holder_relation", proposedKey: "jointHolderRelation" },
+  { label: "Present Occupant Name", currentKey: "present_occupant_name", proposedKey: "presentOccupantName" },
+  { label: "Present Occupant Aadhaar", currentKey: "present_occupant_aadhaar", proposedKey: "presentOccupantAadhaar" },
+  { label: "Present Occupant - Approx Years", currentKey: "present_occupant_years_approx", proposedKey: "presentOccupantYearsApprox" },
   { label: "Notes", currentKey: "notes", proposedKey: "notes" },
 ];
 

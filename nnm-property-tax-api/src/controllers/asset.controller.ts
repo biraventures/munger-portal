@@ -1,6 +1,7 @@
 import type { Request, Response } from "express";
 import { z } from "zod";
 import { assetRepository } from "../repositories/asset.repository";
+import { fieldDriverRepository } from "../repositories/fieldDriver.repository";
 import { assetMaintenanceLogRepository } from "../repositories/assetMaintenanceLog.repository";
 import { assetLogbookRepository } from "../repositories/assetLogbook.repository";
 import { asyncHandler } from "../middleware/asyncHandler";
@@ -15,11 +16,12 @@ export const listAllAssetsHandler = asyncHandler(async (req: Request, res: Respo
   const includeArchived = req.query.includeArchived === "true";
   const assets = await assetRepository.listAll(includeArchived);
   const assetIds = assets.map((a) => a.id);
-  const [wardsByAsset, lastServiced, lastRepaired, latestReadingByAsset] = await Promise.all([
+  const [wardsByAsset, lastServiced, lastRepaired, latestReadingByAsset, driverNamesByAsset] = await Promise.all([
     assetRepository.listWardIdsForAssetMany(assetIds),
     assetMaintenanceLogRepository.lastDateByTypeMany(assetIds, "service"),
     assetMaintenanceLogRepository.lastDateByTypeMany(assetIds, "repair"),
     assetLogbookRepository.latestForAssetMany(assetIds),
+    fieldDriverRepository.driverNamesByAssetIds(assetIds),
   ]);
   res.status(200).json({
     assets: assets.map((a) => ({
@@ -37,6 +39,7 @@ export const listAllAssetsHandler = asyncHandler(async (req: Request, res: Respo
       wardIds: wardsByAsset.get(a.id) ?? [],
       lastServicedOn: lastServiced.get(a.id) ?? null,
       lastRepairedOn: lastRepaired.get(a.id) ?? null,
+      driverName: driverNamesByAsset.get(a.id) ?? null,
       latestLogbookReading: (() => {
         const entry = latestReadingByAsset.get(a.id);
         return entry ? { logDate: entry.log_date, reading: entry.reading } : null;

@@ -675,3 +675,110 @@ export async function rejectDemandActionRequest(id: number, notes: string): Prom
   const data: { request: ShopDemandActionRequestSummary } = await res.json();
   return data.request;
 }
+
+// --- Shop inspections (city_manager / deputy_commissioner only) ---
+
+/** Kept in sync with SHOP_IRREGULARITY_OPTIONS in the backend's shopInspection.controller.ts - this fixed list rarely changes, so it's inlined here rather than fetched, matching how other short fixed option lists in this app are handled on the frontend. */
+export const SHOP_IRREGULARITY_OPTIONS = [
+  "Encroachment",
+  "Damage to public property",
+  "Non-timely payment of rent",
+  "Unauthorised change to building plan",
+  "Prevention of subletting",
+  "Business without trade license",
+] as const;
+
+export interface ShopInspection {
+  id: number;
+  shop_no: string;
+  irregularities: string[];
+  comments: string | null;
+  inspected_by: string;
+  inspected_role: string;
+  inspected_at: string;
+}
+
+/** Records a shop inspection - city_manager or deputy_commissioner only. An empty irregularities array is a valid "no issues found" inspection. */
+export async function createShopInspection(shopNo: string, irregularities: string[], comments: string | null): Promise<ShopInspection> {
+  const res = await fetch(`${API_BASE_URL}/admin/shops/${encodeURIComponent(shopNo)}/inspections`, {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify({ irregularities, comments }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || "Could not record this inspection.");
+  }
+  const data: { inspection: ShopInspection } = await res.json();
+  return data.inspection;
+}
+
+/** Inspection history for one shop, most recent first. */
+export async function fetchShopInspections(shopNo: string): Promise<ShopInspection[]> {
+  const res = await fetch(`${API_BASE_URL}/admin/shops/${encodeURIComponent(shopNo)}/inspections`, { headers: authHeaders() });
+  if (!res.ok) throw new Error("Could not load inspection history for this shop.");
+  const data: { inspections: ShopInspection[] } = await res.json();
+  return data.inspections;
+}
+
+// --- Shop agreement document approval (Stall Prabhari / City Manager / Deputy Commissioner review queue) ---
+
+export interface ShopAgreementDocumentRequestSummary {
+  id: number;
+  shop_no: string;
+  file_name: string;
+  file_size: number;
+  is_change: boolean;
+  uploaded_by: string;
+  uploaded_at: string;
+  status: "pending" | "approved" | "rejected";
+  current_stage: "stall_prabhari" | "city_manager" | "deputy_commissioner";
+  decided_at: string | null;
+  rejected_by: string | null;
+  rejected_role: string | null;
+  rejection_reason: string | null;
+}
+
+/** Every pending agreement-document request currently sitting at the calling admin's own stage - empty for any role outside the 3-stage chain. */
+export async function fetchShopAgreementDocumentRequestQueue(): Promise<ShopAgreementDocumentRequestSummary[]> {
+  const res = await fetch(`${API_BASE_URL}/admin/shop-agreement-document-requests`, { headers: authHeaders() });
+  if (!res.ok) throw new Error("Could not load the document review queue.");
+  const data: { requests: ShopAgreementDocumentRequestSummary[] } = await res.json();
+  return data.requests;
+}
+
+/** The PDF bytes of a request still under review, as a viewable blob URL - for the reviewer to actually look at it before deciding. */
+export async function fetchShopAgreementDocumentRequestBlobUrl(requestId: number): Promise<string> {
+  const res = await fetch(`${API_BASE_URL}/admin/shop-agreement-document-requests/${requestId}/file`, { headers: authHeaders() });
+  if (!res.ok) throw new Error("Could not load this document.");
+  const blob = await res.blob();
+  return URL.createObjectURL(blob);
+}
+
+export async function approveShopAgreementDocumentRequest(id: number, notes: string | null): Promise<ShopAgreementDocumentRequestSummary> {
+  const res = await fetch(`${API_BASE_URL}/admin/shop-agreement-document-requests/${id}/approve`, {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify({ notes }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || "Could not approve this document.");
+  }
+  const data: { request: ShopAgreementDocumentRequestSummary } = await res.json();
+  return data.request;
+}
+
+export async function rejectShopAgreementDocumentRequest(id: number, reason: string): Promise<ShopAgreementDocumentRequestSummary> {
+  const res = await fetch(`${API_BASE_URL}/admin/shop-agreement-document-requests/${id}/reject`, {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify({ reason }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || "Could not reject this document.");
+  }
+  const data: { request: ShopAgreementDocumentRequestSummary } = await res.json();
+  return data.request;
+}

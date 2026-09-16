@@ -12,6 +12,7 @@ import {
   createFieldAssistant,
   setFieldAssistantActive,
   transferFieldAssistant,
+  updateFieldAssistantDetails,
   reassignFieldAssistantDriver,
   uploadFieldAssistantRosterCsv,
   type AttendanceWard,
@@ -48,6 +49,11 @@ export default function ManageAssistantsPage() {
   const [uploadError, setUploadError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const [editingAssistant, setEditingAssistant] = useState<FieldAssistantSummary | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editExternalId, setEditExternalId] = useState("");
+  const [editSubmitting, setEditSubmitting] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
   const [transferringId, setTransferringId] = useState<number | null>(null);
   const [transferWardId, setTransferWardId] = useState("");
   const [transferShiftId, setTransferShiftId] = useState("");
@@ -120,6 +126,32 @@ export default function ManageAssistantsPage() {
       await loadAssistants();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not update status.");
+    }
+  }
+
+  function openEditAssistant(a: FieldAssistantSummary) {
+    setEditingAssistant(a);
+    setEditName(a.name);
+    setEditExternalId(a.externalId ?? "");
+    setEditError(null);
+  }
+
+  async function handleEditAssistantSubmit() {
+    if (!editingAssistant) return;
+    if (!editName.trim()) {
+      setEditError("Name is required.");
+      return;
+    }
+    setEditSubmitting(true);
+    setEditError(null);
+    try {
+      await updateFieldAssistantDetails(editingAssistant.id, editName.trim(), editExternalId.trim() || null);
+      setEditingAssistant(null);
+      await loadAssistants();
+    } catch (err) {
+      setEditError(err instanceof Error ? err.message : "Could not update this assistant.");
+    } finally {
+      setEditSubmitting(false);
     }
   }
 
@@ -376,6 +408,9 @@ export default function ManageAssistantsPage() {
                       </td>
                       <td className="px-3 py-2 text-right">
                         <div className="flex justify-end gap-3">
+                          <button onClick={() => openEditAssistant(a)} className="text-xs font-medium text-nnm-blue hover:underline">
+                            Edit
+                          </button>
                           <button onClick={() => openTransfer(a)} className="text-xs font-medium text-nnm-blue hover:underline">
                             Transfer
                           </button>
@@ -400,6 +435,46 @@ export default function ManageAssistantsPage() {
           )}
         </section>
       </main>
+
+      {editingAssistant !== null && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-sm rounded-xl bg-white p-6 shadow-lg">
+            <h2 className="mb-4 text-sm font-semibold text-slate-800">Edit {editingAssistant.name}</h2>
+
+            {editError && (
+              <div role="alert" className="mb-4 flex items-center gap-2 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+                <AlertCircle className="h-4 w-4 shrink-0" />
+                {editError}
+              </div>
+            )}
+
+            <label className="mb-1 block text-xs font-medium text-slate-600">Name</label>
+            <input value={editName} onChange={(e) => setEditName(e.target.value)} className={`${inputClass} mb-3`} autoFocus />
+
+            <label className="mb-1 block text-xs font-medium text-slate-600">Unique ID</label>
+            <input value={editExternalId} onChange={(e) => setEditExternalId(e.target.value)} className={inputClass} placeholder="(optional)" />
+
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setEditingAssistant(null)}
+                disabled={editSubmitting}
+                className="rounded-md border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleEditAssistantSubmit}
+                disabled={editSubmitting}
+                className="rounded-md bg-nnm-blue px-4 py-2 text-sm font-semibold text-white hover:bg-nnm-blue-dark disabled:opacity-60"
+              >
+                {editSubmitting ? "Saving..." : "Save"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {transferringId !== null && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">

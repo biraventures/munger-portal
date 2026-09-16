@@ -3,6 +3,7 @@ import { z } from "zod";
 import { pool } from "../config/db";
 import { assetRepository } from "../repositories/asset.repository";
 import { assetBaselineSurveyRepository } from "../repositories/assetBaselineSurvey.repository";
+import { generateBaselineSurveyPdf } from "../services/baselineSurveyPdf.service";
 import { asyncHandler } from "../middleware/asyncHandler";
 import { ApiError } from "../utils/ApiError";
 import {
@@ -244,4 +245,29 @@ export const getBaselineSurvey = asyncHandler(async (req: Request, res: Response
   const defects = await assetBaselineSurveyRepository.listDefectsForAsset(asset.id);
 
   res.status(200).json({ asset, latestSurvey, defects });
+});
+
+/**
+ * GET /api/v1/attendance/assets/:id/baseline-survey/pdf - a signed-
+ * record PDF of the asset's most recently completed survey. Only
+ * meaningful once a survey exists (404 otherwise, since there's
+ * nothing yet to have "completed").
+ */
+export const downloadBaselineSurveyPdf = asyncHandler(async (req: Request, res: Response) => {
+  const parsed = idParamSchema.safeParse(req.params);
+  if (!parsed.success) throw ApiError.badRequest("Invalid asset id");
+
+  const asset = await assetRepository.findById(parsed.data.id);
+  if (!asset) throw ApiError.notFound("Asset not found");
+
+  const latestSurvey = await assetBaselineSurveyRepository.findLatestSurveyForAsset(asset.id);
+  if (!latestSurvey) throw ApiError.badRequest("This asset has no completed baseline survey yet.");
+  const defects = await assetBaselineSurveyRepository.listDefectsForAsset(asset.id);
+
+  const safeLabel = asset.label.replace(/[^a-zA-Z0-9-]+/g, "-");
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("Content-Disposition", `attachment; filename="baseline-survey-${safeLabel}.pdf"`);
+
+  const doc = generateBaselineSurveyPdf(asset, latestSurvey, defects);
+  doc.pipe(res);
 });

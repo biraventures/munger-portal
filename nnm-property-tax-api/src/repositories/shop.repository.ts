@@ -170,9 +170,11 @@ export const shopAgreementRepository = {
         rent_pre_2019, rent_2019_20, rent_2020_21_onwards,
         agreement_start_date, agreement_end_date, security_deposit,
         misc_cost, misc_cost_reason, misc_rebate, misc_rebate_reason,
-        joint_holder_name, joint_holder_relation, joint_holder_id_proof_number, notes, data_status,
+        joint_holder_name, joint_holder_relation, joint_holder_id_proof_number,
+        present_occupant_name, present_occupant_aadhaar, present_occupant_years_approx,
+        notes, data_status,
         status, created_by, created_date
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,'complete','active',$29, now())
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,'complete','active',$32, now())
       RETURNING *`,
       [
         shopNo,
@@ -202,6 +204,9 @@ export const shopAgreementRepository = {
         a.jointHolderName ?? null,
         a.jointHolderRelation ?? null,
         a.jointHolderIdProofNumber ?? null,
+        a.presentOccupantName ?? null,
+        a.presentOccupantAadhaar ?? null,
+        a.presentOccupantYearsApprox ?? null,
         a.notes ?? null,
         actorDisplayName,
       ],
@@ -231,7 +236,8 @@ export const shopAgreementRepository = {
         agreement_start_date = $18, agreement_end_date = $19, security_deposit = $20,
         misc_cost = $21, misc_cost_reason = $22, misc_rebate = $23, misc_rebate_reason = $24,
         joint_holder_name = $25, joint_holder_relation = $26, joint_holder_id_proof_number = $27,
-        notes = $28, data_status = $29, last_modified_by = $30, last_modified_date = now()
+        present_occupant_name = $28, present_occupant_aadhaar = $29, present_occupant_years_approx = $30,
+        notes = $31, data_status = $32, last_modified_by = $33, last_modified_date = now()
        WHERE id = $1
        RETURNING *`,
       [
@@ -262,6 +268,9 @@ export const shopAgreementRepository = {
         a.jointHolderName ?? null,
         a.jointHolderRelation ?? null,
         a.jointHolderIdProofNumber ?? null,
+        a.presentOccupantName ?? null,
+        a.presentOccupantAadhaar ?? null,
+        a.presentOccupantYearsApprox ?? null,
         a.notes ?? null,
         dataStatus,
         actorDisplayName,

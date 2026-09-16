@@ -80,6 +80,26 @@ export interface ShopAgreementDocumentRow {
 /** Same shape without file_data - for listing/metadata endpoints that shouldn't pull the full PDF bytes into memory just to show upload info. */
 export type ShopAgreementDocumentMeta = Omit<ShopAgreementDocumentRow, "file_data">;
 
+export interface ShopAgreementDocumentRequestRow {
+  id: number;
+  shop_no: string;
+  file_data: Buffer;
+  file_name: string;
+  file_size: number;
+  is_change: boolean;
+  uploaded_by: string;
+  uploaded_at: Date;
+  status: "pending" | "approved" | "rejected";
+  current_stage: "stall_prabhari" | "city_manager" | "deputy_commissioner";
+  decided_at: Date | null;
+  rejected_by: string | null;
+  rejected_role: string | null;
+  rejection_reason: string | null;
+}
+
+/** Same shape without file_data - for the reviewer queue and status display, which shouldn't pull the PDF bytes into memory. */
+export type ShopAgreementDocumentRequestMeta = Omit<ShopAgreementDocumentRequestRow, "file_data">;
+
 /**
  * One "chapter" of a shop's rent history - manually entered, never
  * auto-generated (see migration 042's header comment). A shop with no
@@ -131,6 +151,9 @@ export interface ShopAgreementRow {
   joint_holder_name: string | null;
   joint_holder_relation: string | null;
   joint_holder_id_proof_number: string | null;
+  present_occupant_name: string | null;
+  present_occupant_aadhaar: string | null;
+  present_occupant_years_approx: string | null;
   notes: string | null;
   data_status: ShopAgreementDataStatus;
   rent_paid_till_month: string | null;
@@ -357,6 +380,11 @@ export interface ShopAgreementSaveInput {
   jointHolderName?: string | null;
   jointHolderRelation?: string | null;
   jointHolderIdProofNumber?: string | null;
+  /** Optional - who is actually running the shop today, when different from holderName above (informal succession that the paperwork hasn't caught up with). Never mandatory. */
+  presentOccupantName?: string | null;
+  presentOccupantAadhaar?: string | null;
+  /** Free text ("around 8-9 years") rather than a number - this is rarely known precisely. */
+  presentOccupantYearsApprox?: string | null;
   notes?: string | null;
   dataStatus?: ShopAgreementDataStatus;
   changeReason: string;
@@ -390,4 +418,14 @@ export interface ShopAgreementChangeApprovalRow {
   admin_display_name: string;
   notes: string | null;
   decided_at: Date;
+}
+
+export interface ShopInspectionRow {
+  id: number;
+  shop_no: string;
+  irregularities: string[];
+  comments: string | null;
+  inspected_by: string;
+  inspected_role: string;
+  inspected_at: Date;
 }

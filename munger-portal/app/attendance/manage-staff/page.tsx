@@ -11,6 +11,7 @@ import {
   createFieldStaff,
   setFieldStaffActive,
   deleteFieldStaff,
+  updateFieldStaffDetails,
   transferFieldStaff,
   uploadFieldStaffRosterCsv,
   uploadStaffMergedImportCsv,
@@ -59,6 +60,11 @@ export default function ManageStaffPage() {
   const [mergedImportError, setMergedImportError] = useState<string | null>(null);
   const mergedImportFileInputRef = useRef<HTMLInputElement>(null);
   const [deletingStaff, setDeletingStaff] = useState<FieldStaffSummary | null>(null);
+  const [editingStaff, setEditingStaff] = useState<FieldStaffSummary | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editExternalId, setEditExternalId] = useState("");
+  const [editSubmitting, setEditSubmitting] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
   const [deleteConfirmName, setDeleteConfirmName] = useState("");
   const [deleteSubmitting, setDeleteSubmitting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -264,6 +270,32 @@ export default function ManageStaffPage() {
       setDeleteError(err instanceof Error ? err.message : "Could not delete this staff member.");
     } finally {
       setDeleteSubmitting(false);
+    }
+  }
+
+  function openEdit(s: FieldStaffSummary) {
+    setEditingStaff(s);
+    setEditName(s.name);
+    setEditExternalId(s.externalId ?? "");
+    setEditError(null);
+  }
+
+  async function handleEditSubmit() {
+    if (!editingStaff) return;
+    if (!editName.trim()) {
+      setEditError("Name is required.");
+      return;
+    }
+    setEditSubmitting(true);
+    setEditError(null);
+    try {
+      await updateFieldStaffDetails(editingStaff.id, editName.trim(), editExternalId.trim() || null);
+      setEditingStaff(null);
+      await loadStaff();
+    } catch (err) {
+      setEditError(err instanceof Error ? err.message : "Could not update this staff member.");
+    } finally {
+      setEditSubmitting(false);
     }
   }
 
@@ -602,6 +634,9 @@ export default function ManageStaffPage() {
                       </td>
                       <td className="px-3 py-2 text-right">
                         <div className="flex justify-end gap-3">
+                          <button onClick={() => openEdit(s)} className="text-xs font-medium text-nnm-blue hover:underline">
+                            Edit
+                          </button>
                           <button onClick={() => openTransfer(s)} className="text-xs font-medium text-nnm-blue hover:underline">
                             Transfer
                           </button>
@@ -635,6 +670,46 @@ export default function ManageStaffPage() {
           )}
         </section>
       </main>
+
+      {editingStaff !== null && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-sm rounded-xl bg-white p-6 shadow-lg">
+            <h2 className="mb-4 text-sm font-semibold text-slate-800">Edit {editingStaff.name}</h2>
+
+            {editError && (
+              <div role="alert" className="mb-4 flex items-center gap-2 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+                <AlertCircle className="h-4 w-4 shrink-0" />
+                {editError}
+              </div>
+            )}
+
+            <label className="mb-1 block text-xs font-medium text-slate-600">Name</label>
+            <input value={editName} onChange={(e) => setEditName(e.target.value)} className={`${inputClass} mb-3`} autoFocus />
+
+            <label className="mb-1 block text-xs font-medium text-slate-600">Unique ID</label>
+            <input value={editExternalId} onChange={(e) => setEditExternalId(e.target.value)} className={inputClass} placeholder="(optional)" />
+
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setEditingStaff(null)}
+                disabled={editSubmitting}
+                className="rounded-md border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleEditSubmit}
+                disabled={editSubmitting}
+                className="rounded-md bg-nnm-blue px-4 py-2 text-sm font-semibold text-white hover:bg-nnm-blue-dark disabled:opacity-60"
+              >
+                {editSubmitting ? "Saving..." : "Save"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {transferringId !== null && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">

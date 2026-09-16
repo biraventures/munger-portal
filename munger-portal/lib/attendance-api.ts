@@ -606,6 +606,20 @@ export async function deleteFieldStaff(id: number): Promise<void> {
   }
 }
 
+/** attendance_admin OR sanitation_officer - edits a staff member's name and Unique ID. */
+export async function updateFieldStaffDetails(id: number, name: string, externalId: string | null): Promise<FieldStaffSummary> {
+  const res = await fetch(`${API_BASE_URL}/attendance/staff/${id}/details`, {
+    method: "PATCH",
+    headers: authHeaders(),
+    body: JSON.stringify({ name, externalId }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || "Could not update this staff member.");
+  }
+  return (await res.json()).staff;
+}
+
 /** attendance_admin OR sanitation_officer - moves a worker to a different ward (and optionally shift). */
 export async function transferFieldStaff(id: number, wardId: number, shiftId: number | null): Promise<FieldStaffSummary> {
   const res = await fetch(`${API_BASE_URL}/attendance/staff/${id}/transfer`, {
@@ -774,6 +788,20 @@ export async function transferFieldDriver(id: number, wardId: number, shiftId: n
   return data.driver;
 }
 
+/** attendance_admin OR sanitation_officer - edits a driver's name, Unique ID, and driving license number. */
+export async function updateFieldDriverDetails(id: number, name: string, externalId: string | null, dlNumber: string | null): Promise<FieldDriverSummary> {
+  const res = await fetch(`${API_BASE_URL}/attendance/drivers/${id}/details`, {
+    method: "PATCH",
+    headers: authHeaders(),
+    body: JSON.stringify({ name, externalId, dlNumber }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || "Could not update this driver.");
+  }
+  return (await res.json()).driver;
+}
+
 export async function uploadFieldDriverRosterCsv(csvContent: string): Promise<RosterSyncResult> {
   const res = await fetch(`${API_BASE_URL}/attendance/drivers/bulk-upload`, {
     method: "POST",
@@ -828,6 +856,7 @@ export interface AssetSummary {
   wardIds: number[];
   lastServicedOn: string | null;
   lastRepairedOn: string | null;
+  driverName: string | null;
   trackingType: "km" | "hours" | null;
   latestLogbookReading: { logDate: string; reading: string } | null;
 }
@@ -1029,6 +1058,20 @@ export async function transferFieldAssistant(id: number, wardId: number, shiftId
   }
   const data: { assistant: FieldAssistantSummary } = await res.json();
   return data.assistant;
+}
+
+/** attendance_admin OR sanitation_officer - edits an assistant's name and Unique ID. */
+export async function updateFieldAssistantDetails(id: number, name: string, externalId: string | null): Promise<FieldAssistantSummary> {
+  const res = await fetch(`${API_BASE_URL}/attendance/assistants/${id}/details`, {
+    method: "PATCH",
+    headers: authHeaders(),
+    body: JSON.stringify({ name, externalId }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || "Could not update this assistant.");
+  }
+  return (await res.json()).assistant;
 }
 
 /** attendance_admin only - changes which driver this assistant works under; supervisor is re-inherited from that driver automatically. */
@@ -1341,6 +1384,7 @@ export interface AssetSurveySummary {
   amc_disposition: string | null;
   deployment_status: string | null;
   open_defect_count: string;
+  driver_name: string | null;
 }
 
 /** Every active asset with its latest survey's key fields and open defect count - the fleet-wide survey progress view. */
@@ -1349,4 +1393,22 @@ export async function fetchBaselineSurveySummary(): Promise<AssetSurveySummary[]
   if (!res.ok) throw new Error("Could not load the fleet survey summary.");
   const data: { assets: AssetSurveySummary[] } = await res.json();
   return data.assets;
+}
+
+/** Downloads the signed-record PDF of an asset's most recently completed baseline survey. Fails if no survey has been completed yet. */
+export async function downloadBaselineSurveyPdf(assetId: number, assetLabel: string): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/attendance/assets/${assetId}/baseline-survey/pdf`, { headers: authHeaders() });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || "Could not download the survey PDF.");
+  }
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `baseline-survey-${assetLabel.replace(/[^a-zA-Z0-9-]+/g, "-")}.pdf`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
 }

@@ -5,7 +5,7 @@ import Link from "next/link";
 import { AlertCircle, AlertTriangle, CheckCircle2, Loader2, Search, ClipboardList } from "lucide-react";
 import { AttendanceHeader } from "@/components/attendance/attendance-header";
 import { useAttendanceGuard } from "@/lib/use-attendance-guard";
-import { fetchBaselineSurveySummary, type AssetSurveySummary } from "@/lib/attendance-api";
+import { fetchBaselineSurveySummary, downloadBaselineSurveyPdf, type AssetSurveySummary } from "@/lib/attendance-api";
 
 type FilterMode = "all" | "not_surveyed" | "open_defects";
 
@@ -32,7 +32,11 @@ export default function FleetSurveySummaryPage() {
   const totalCount = assets?.length ?? 0;
 
   const filtered = assets?.filter((a) => {
-    if (search.trim() && !a.label.toLowerCase().includes(search.toLowerCase())) return false;
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      const matches = a.label.toLowerCase().includes(q) || (a.driver_name ?? "").toLowerCase().includes(q) || (a.registration_number ?? "").toLowerCase().includes(q);
+      if (!matches) return false;
+    }
     if (filter === "not_surveyed" && a.survey_id !== null) return false;
     if (filter === "open_defects" && Number(a.open_defect_count) === 0) return false;
     return true;
@@ -54,7 +58,7 @@ export default function FleetSurveySummaryPage() {
         <div className="mb-5 flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-2 rounded-md border border-slate-300 bg-white px-3 py-2">
             <Search className="h-4 w-4 text-slate-400" />
-            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search by label" className="text-sm outline-none" />
+            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search by label, driver, or registration no." className="text-sm outline-none" />
           </div>
           {([
             ["all", "All"],
@@ -93,6 +97,7 @@ export default function FleetSurveySummaryPage() {
               <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-400">
                 <tr>
                   <th className="px-4 py-3 font-medium">Asset</th>
+                  <th className="px-4 py-3 font-medium">Driver</th>
                   <th className="px-4 py-3 font-medium">Type</th>
                   <th className="px-4 py-3 font-medium">Survey</th>
                   <th className="px-4 py-3 font-medium">Overall Status</th>
@@ -104,7 +109,11 @@ export default function FleetSurveySummaryPage() {
               <tbody>
                 {filtered?.map((a) => (
                   <tr key={a.id} className="border-t border-slate-100">
-                    <td className="px-4 py-3 font-medium text-slate-800">{a.label}</td>
+                    <td className="px-4 py-3 font-medium text-slate-800">
+                      {a.label}
+                      {a.registration_number && <span className="ml-1 font-normal text-slate-500">({a.registration_number})</span>}
+                    </td>
+                    <td className="px-4 py-3 text-xs text-slate-500">{a.driver_name ?? "-"}</td>
                     <td className="px-4 py-3 text-xs text-slate-500">{a.asset_type_detail ?? "-"}</td>
                     <td className="px-4 py-3">
                       {a.survey_id ? (
@@ -131,9 +140,19 @@ export default function FleetSurveySummaryPage() {
                       )}
                     </td>
                     <td className="px-4 py-3 text-right">
-                      <Link href={`/attendance/baseline-survey?assetId=${a.id}`} className="text-xs font-semibold text-nnm-blue hover:underline">
-                        {a.survey_id ? "Update" : "Survey now"}
-                      </Link>
+                      <div className="flex justify-end gap-3">
+                        {a.survey_id && (
+                          <button
+                            onClick={() => downloadBaselineSurveyPdf(a.id, a.label)}
+                            className="text-xs font-semibold text-nnm-blue hover:underline"
+                          >
+                            Download PDF
+                          </button>
+                        )}
+                        <Link href={`/attendance/baseline-survey?assetId=${a.id}`} className="text-xs font-semibold text-nnm-blue hover:underline">
+                          {a.survey_id ? "Update" : "Survey now"}
+                        </Link>
+                      </div>
                     </td>
                   </tr>
                 ))}

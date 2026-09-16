@@ -16,6 +16,7 @@ import {
   uploadFieldDriverRosterCsv,
   uploadVehicleStaffImportCsv,
   purgeAllFieldRecords,
+  updateFieldDriverDetails,
   fetchAllAssets,
   type AttendanceWard,
   type AttendanceShift,
@@ -67,6 +68,12 @@ export default function ManageDriversPage() {
   const [purgeAllError, setPurgeAllError] = useState<string | null>(null);
   const [purgeAllResult, setPurgeAllResult] = useState<{ staffDeleted: number; driversDeleted: number; assistantsDeleted: number } | null>(null);
 
+  const [editingDriver, setEditingDriver] = useState<FieldDriverSummary | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editExternalId, setEditExternalId] = useState("");
+  const [editDlNumber, setEditDlNumber] = useState("");
+  const [editSubmitting, setEditSubmitting] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
   const [transferringId, setTransferringId] = useState<number | null>(null);
   const [transferWardId, setTransferWardId] = useState("");
   const [transferShiftId, setTransferShiftId] = useState("");
@@ -155,6 +162,33 @@ export default function ManageDriversPage() {
       await loadDrivers();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not update status.");
+    }
+  }
+
+  function openEditDriver(d: FieldDriverSummary) {
+    setEditingDriver(d);
+    setEditName(d.name);
+    setEditExternalId(d.externalId ?? "");
+    setEditDlNumber(d.dlNumber ?? "");
+    setEditError(null);
+  }
+
+  async function handleEditDriverSubmit() {
+    if (!editingDriver) return;
+    if (!editName.trim()) {
+      setEditError("Name is required.");
+      return;
+    }
+    setEditSubmitting(true);
+    setEditError(null);
+    try {
+      await updateFieldDriverDetails(editingDriver.id, editName.trim(), editExternalId.trim() || null, editDlNumber.trim() || null);
+      setEditingDriver(null);
+      await loadDrivers();
+    } catch (err) {
+      setEditError(err instanceof Error ? err.message : "Could not update this driver.");
+    } finally {
+      setEditSubmitting(false);
     }
   }
 
@@ -624,6 +658,9 @@ export default function ManageDriversPage() {
                       </td>
                       <td className="px-3 py-2 text-right">
                         <div className="flex justify-end gap-3">
+                          <button onClick={() => openEditDriver(d)} className="text-xs font-medium text-nnm-blue hover:underline">
+                            Edit
+                          </button>
                           <button onClick={() => openTransfer(d)} className="text-xs font-medium text-nnm-blue hover:underline">
                             Transfer
                           </button>
@@ -647,6 +684,49 @@ export default function ManageDriversPage() {
           )}
         </section>
       </main>
+
+      {editingDriver !== null && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-sm rounded-xl bg-white p-6 shadow-lg">
+            <h2 className="mb-4 text-sm font-semibold text-slate-800">Edit {editingDriver.name}</h2>
+
+            {editError && (
+              <div role="alert" className="mb-4 flex items-center gap-2 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+                <AlertCircle className="h-4 w-4 shrink-0" />
+                {editError}
+              </div>
+            )}
+
+            <label className="mb-1 block text-xs font-medium text-slate-600">Name</label>
+            <input value={editName} onChange={(e) => setEditName(e.target.value)} className={`${inputClass} mb-3`} autoFocus />
+
+            <label className="mb-1 block text-xs font-medium text-slate-600">Unique ID</label>
+            <input value={editExternalId} onChange={(e) => setEditExternalId(e.target.value)} className={`${inputClass} mb-3`} placeholder="(optional)" />
+
+            <label className="mb-1 block text-xs font-medium text-slate-600">Driving License Number</label>
+            <input value={editDlNumber} onChange={(e) => setEditDlNumber(e.target.value)} className={inputClass} placeholder="(optional)" />
+
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setEditingDriver(null)}
+                disabled={editSubmitting}
+                className="rounded-md border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleEditDriverSubmit}
+                disabled={editSubmitting}
+                className="rounded-md bg-nnm-blue px-4 py-2 text-sm font-semibold text-white hover:bg-nnm-blue-dark disabled:opacity-60"
+              >
+                {editSubmitting ? "Saving..." : "Save"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {transferringId !== null && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Users, FileClock, FileWarning, LayoutGrid, ShoppingBag, Store, BarChart3, Award, Archive, Download, XCircle, ShieldCheck, Trash2, RefreshCw, Upload, MapPin, Map as MapIcon } from "lucide-react";
+import { Users, FileClock, FileWarning, LayoutGrid, ShoppingBag, Store, BarChart3, Award, Archive, Download, XCircle, ShieldCheck, Trash2, RefreshCw, Upload, MapPin, Map as MapIcon, ClipboardCheck } from "lucide-react";
 import { AdminHeader } from "@/components/admin-header";
 import { DashboardSummaryWidget } from "@/components/dashboard-summary-widget";
 import { useAdminGuard } from "@/lib/use-admin-guard";
@@ -77,9 +77,11 @@ export default function AdminDashboardPage() {
   const showShopRateReport = !isTradeLicenseNodal;
   const showShopsPendingPublication = canApproveShopPublication;
   const showShopEditApprovals = canApproveShopPublication;
+  const showShopAgreementDocumentRequests = canApproveShopPublication;
   const showDemandReceiptActions = canApproveDemandActions;
   const showBulkUploadShops = isCommissioner;
   const showManageShops = isCommissioner;
+  const showShopInspection = admin.role === "city_manager" || admin.role === "deputy_commissioner";
   const shopGroupVisible =
     showShopAgreementApprovals ||
     showShopRentalApplications ||
@@ -88,6 +90,8 @@ export default function AdminDashboardPage() {
     showShopsPendingPublication ||
     showShopEditApprovals ||
     showDemandReceiptActions ||
+    showShopInspection ||
+    showShopAgreementDocumentRequests ||
     showBulkUploadShops ||
     showManageShops;
 
@@ -257,6 +261,26 @@ export default function AdminDashboardPage() {
                   </span>
                   <h3 className="mb-1.5 text-base font-semibold text-slate-900">Shop Rate per Sqft</h3>
                   <p className="text-sm text-slate-500">See which occupied shops are renting below market rate.</p>
+                </Link>
+              )}
+
+              {showShopInspection && (
+                <Link href="/admin/shop-inspection" className={cardClass}>
+                  <span className={iconWrapClass}>
+                    <ClipboardCheck className="h-6 w-6" strokeWidth={1.8} />
+                  </span>
+                  <h3 className="mb-1.5 text-base font-semibold text-slate-900">Shop Inspection</h3>
+                  <p className="text-sm text-slate-500">Search a shop and record irregularities found on-site.</p>
+                </Link>
+              )}
+
+              {showShopAgreementDocumentRequests && (
+                <Link href="/admin/shop-agreement-document-requests" className={cardClass}>
+                  <span className={iconWrapClass}>
+                    <FileClock className="h-6 w-6" strokeWidth={1.8} />
+                  </span>
+                  <h3 className="mb-1.5 text-base font-semibold text-slate-900">Shop Agreement Document Approvals</h3>
+                  <p className="text-sm text-slate-500">Review uploaded/changed agreement PDFs waiting on your stage.</p>
                 </Link>
               )}
 
