@@ -4,6 +4,8 @@ import {
   NEW_HOLDING_NO_PREFIX,
   PARTIALLY_KNOWN_HOLDING_NO_DIGITS,
   PARTIALLY_KNOWN_HOLDING_NO_PREFIX,
+  MIGRATED_HOLDING_NO_DIGITS,
+  MIGRATED_HOLDING_NO_PREFIX,
 } from "../constants/taxRates";
 
 async function getNextHoldingNoForSeries(prefix: string, digits: number): Promise<string> {
@@ -17,4 +19,8 @@ export function getNextNewHoldingNo(): Promise<string> {
 
 export function getNextPartiallyKnownHoldingNo(): Promise<string> {
   return getNextHoldingNoForSeries(PARTIALLY_KNOWN_HOLDING_NO_PREFIX, PARTIALLY_KNOWN_HOLDING_NO_DIGITS);
+}
+
+export function getNextMigratedHoldingNo(): Promise<string> {
+  return getNextHoldingNoForSeries(MIGRATED_HOLDING_NO_PREFIX, MIGRATED_HOLDING_NO_DIGITS);
 }

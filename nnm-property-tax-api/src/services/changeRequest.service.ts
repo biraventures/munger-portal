@@ -80,6 +80,10 @@ export async function approveAtCurrentStage(
   // this change request's own log separately records the full approval
   // chain actually used.
   await applyPropertySave(request.holding_no, request.proposed_data, request.requested_by, false);
+  // If this holding was awaiting area finalization (survey_status =
+  // 'surveyed'), an approved mutation on it is that finalization -
+  // clears back to NULL, a no-op for every other holding.
+  await propertyRepository.clearSurveyStatus(request.holding_no);
 
   const finalized = await changeRequestRepository.finalize(id, request.current_stage, "approved");
   if (!finalized) {

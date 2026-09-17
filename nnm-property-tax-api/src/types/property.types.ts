@@ -44,6 +44,10 @@ export interface PropertyRow {
   created_date: Date;
   last_modified_by: string | null;
   last_modified_date: Date | null;
+  survey_status: "to_be_surveyed" | "surveyed" | null;
+  surveyor_name: string | null;
+  surveyor_id_number: string | null;
+  survey_date: string | null;
 }
 
 export interface FloorRow {
@@ -151,4 +155,45 @@ export interface PropertySearchResult {
   taxCalc?: TaxCalculationResult;
   taxHistory?: TaxHistoryStageRow[];
   arrears?: ArrearsSummary;
+}
+
+export type MigratedHoldingSurveyStatus =
+  | "pending_assignment"
+  | "assigned_to_surveyor"
+  | "forwarded_to_operator"
+  | "pending_verification"
+  | "verified_by_tax_daroga"
+  | "finalized";
+
+export interface MigratedHoldingSurveyRow {
+  id: number;
+  holding_no: string;
+  ward: string | null;
+  status: MigratedHoldingSurveyStatus;
+  old_arv_pre_1996: string | null;
+  old_arv_1997_2010: string | null;
+  old_arv_2011_2020: string | null;
+  old_last_payment_year: string | null;
+  old_tax_status: string | null;
+  old_remarks: string | null;
+  assigned_by_username: string | null;
+  assigned_by_display_name: string | null;
+  assigned_by_role: "deputy_commissioner" | "city_manager" | null;
+  assigned_to_tax_daroga_username: string | null;
+  assigned_to_tax_daroga_display_name: string | null;
+  assigned_at: string | null;
+  surveyor_name: string | null;
+  surveyor_id_number: string | null;
+  survey_date: string | null;
+  surveyor_recorded_at: string | null;
+  operator_entered_by: string | null;
+  operator_entered_at: string | null;
+  tax_daroga_verified_by: string | null;
+  tax_daroga_verified_at: string | null;
+  final_verified_by_username: string | null;
+  final_verified_by_display_name: string | null;
+  final_verified_by_role: "deputy_commissioner" | "city_manager" | null;
+  final_verified_at: string | null;
+  created_by: string;
+  created_date: string;
 }

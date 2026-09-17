@@ -65,6 +65,17 @@ import {
 } from "../controllers/shopAgreementDocument.controller";
 import { postCreateShopInspection, listShopInspectionsForShop, listAllShopInspections } from "../controllers/shopInspection.controller";
 import {
+  uploadMigratedHoldingsHandler,
+  listPendingAssignmentHandler,
+  listTaxDarogasHandler,
+  assignToSurveyorHandler,
+  listMyAssignmentsHandler,
+  recordSurveyorHandler,
+  verifyByTaxDarogaHandler,
+  listPendingFinalVerificationHandler,
+  finalizeVerificationHandler,
+} from "../controllers/migratedHoldingSurvey.controller";
+import {
   getDemandActionRequests,
   getDemandActionRequestById,
   postApproveDemandAction,
@@ -192,6 +203,22 @@ const requireInspectionRole = requireAdminRole("city_manager", "deputy_commissio
 adminRouter.get("/shop-inspections", requireInspectionRole, listAllShopInspections);
 adminRouter.get("/shops/:shopNo/inspections", requireInspectionRole, listShopInspectionsForShop);
 adminRouter.post("/shops/:shopNo/inspections", requireInspectionRole, postCreateShopInspection);
+
+// Migrated holding survey workflow - old paper-record holdings
+// bulk-imported under the MUNG-MIG- series. Assignment is split by
+// ward parity: Deputy Commissioner handles odd wards, City Manager
+// handles even wards, and each verifies only what they themselves
+// assigned. See migratedHoldingSurvey.controller.ts.
+adminRouter.post("/migrated-holdings/bulk-upload", requireAdminRole("commissioner"), uploadMigratedHoldingsHandler);
+adminRouter.get("/migrated-holdings/pending-assignment", listPendingAssignmentHandler);
+adminRouter.get("/tax-darogas", listTaxDarogasHandler);
+adminRouter.post("/migrated-holdings/:holdingNo/assign", assignToSurveyorHandler);
+adminRouter.get("/migrated-holdings/my-assignments", listMyAssignmentsHandler);
+adminRouter.post("/migrated-holdings/:holdingNo/record-surveyor", recordSurveyorHandler);
+adminRouter.post("/migrated-holdings/:holdingNo/verify-tax-daroga", verifyByTaxDarogaHandler);
+adminRouter.get("/migrated-holdings/pending-final-verification", listPendingFinalVerificationHandler);
+adminRouter.post("/migrated-holdings/:holdingNo/finalize", finalizeVerificationHandler);
+
 
 // Demand notice cancel/supersede and receipt cancel - a separate,
 // FIXED 2-stage chain (Stall Prabhari, then City Manager only - no

@@ -37,6 +37,7 @@ export function PartiallyKnownForm({
   const [taxPaidTillYear, setTaxPaidTillYear] = useState("");
   const [solidWasteChargeType, setSolidWasteChargeType] = useState("");
   const [solidWasteMonths, setSolidWasteMonths] = useState("12");
+  const [markForSurvey, setMarkForSurvey] = useState(true);
   const [phases, setPhases] = useState<PhaseArvEntry[]>([
     makeBlankPhaseArv(formOptions.periodsOfAssessment, []),
   ]);
@@ -92,6 +93,7 @@ export function PartiallyKnownForm({
           periodOfAssessment: p.periodOfAssessment,
           arvInPeriod: Number(p.arvInPeriod),
         })),
+        markForSurvey,
       });
       setResult(saved);
       onSaved(saved);
@@ -295,6 +297,19 @@ export function PartiallyKnownForm({
           ))}
         </div>
       </section>
+
+      <label className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+        <input
+          type="checkbox"
+          checked={markForSurvey}
+          onChange={(e) => setMarkForSurvey(e.target.checked)}
+          className="mt-0.5 h-4 w-4 rounded border-slate-300"
+        />
+        <span>
+          Mark for physical survey - the area above is only back-calculated from ARV, not measured. Leave this checked
+          unless this holding has already been physically surveyed.
+        </span>
+      </label>
 
       <button
         type="submit"

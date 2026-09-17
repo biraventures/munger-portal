@@ -1,6 +1,6 @@
 "use client";
 
-import { Store, Building2, ShoppingBag, Award, Download } from "lucide-react";
+import { Store, Building2, ShoppingBag, Award, Download, ClipboardCheck } from "lucide-react";
 import { OperatorHeader } from "@/components/operator-header";
 import { OperatorTaskCard } from "@/components/operator-task-card";
 import { DashboardSummaryWidget } from "@/components/dashboard-summary-widget";
@@ -46,6 +46,13 @@ export default function OperatorDashboardPage() {
             icon={Building2}
             title="Property Tax"
             description="Search, create, or edit a holding — generate demand notices and collect payments."
+          />
+
+          <OperatorTaskCard
+            href="/operator/property-survey"
+            icon={ClipboardCheck}
+            title="Property Survey Worklist"
+            description="Holdings added with only old ARV values, awaiting a real physical survey."
           />
 
           <OperatorTaskCard

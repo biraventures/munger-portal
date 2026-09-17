@@ -124,6 +124,16 @@ export const NEW_HOLDING_NO_DIGITS = 7;
 export const PARTIALLY_KNOWN_HOLDING_NO_PREFIX = "MUNGMC-";
 export const PARTIALLY_KNOWN_HOLDING_NO_DIGITS = 6;
 
+// For holdings bulk-imported from old paper/register records (known
+// old ARV, no real floor survey) - a separate series from
+// PARTIALLY_KNOWN above because, unlike that one-off operator-entry
+// flow, these go through the full assign -> survey -> operator entry
+// -> dual verification workflow and get REAL floor-wise details once
+// surveyed, not a synthetic back-calculated area. See
+// migratedHoldingSurvey.service.ts.
+export const MIGRATED_HOLDING_NO_PREFIX = "MUNG-MIG-";
+export const MIGRATED_HOLDING_NO_DIGITS = 5;
+
 export const PARTIALLY_KNOWN_USAGE = "Residential";
 export const PARTIALLY_KNOWN_OCCUPANCY = "self";
 export const PARTIALLY_KNOWN_ROAD_TYPE_FOR_SOLVE: RoadType = "MR";

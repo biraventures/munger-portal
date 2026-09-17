@@ -14,4 +14,6 @@ export interface NewEntryPropertyInput extends Omit<PropertySaveInput, "floors" 
   floors?: FloorInput[];
   /** Required (and only used) for 'partiallyKnown' mode — ARV per known historical phase. */
   taxHistoryStages?: TaxHistoryStageEntryInput[];
+  /** partiallyKnown mode only - marks the holding survey_status = 'to_be_surveyed', since its area is only a back-calculated placeholder until a real survey happens. Meaningless (ignored) for 'new' mode, since that already requires real floors. */
+  markForSurvey?: boolean;
 }

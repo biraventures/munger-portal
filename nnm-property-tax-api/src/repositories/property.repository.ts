@@ -116,4 +116,31 @@ export const propertyRepository = {
     ]);
     return { rows, total };
   },
+
+  /** Every holding currently marked to_be_surveyed or surveyed - for the survey worklist. */
+  async listBySurveyStatus(status: "to_be_surveyed" | "surveyed"): Promise<PropertyRow[]> {
+    const { rows } = await pool.query<PropertyRow>(`SELECT * FROM properties WHERE survey_status = $1 ORDER BY holding_no ASC`, [status]);
+    return rows;
+  },
+
+  /** Marks a freshly-created partially-known holding as needing a real survey - its area is only a back-calculated placeholder until then. */
+  async setSurveyToBeSurveyed(holdingNo: string): Promise<void> {
+    await pool.query(`UPDATE properties SET survey_status = 'to_be_surveyed' WHERE holding_no = $1`, [holdingNo]);
+  },
+
+  /** Records the surveyor's name and ID number and marks the holding surveyed - a direct write, not a mutation-approval change, since this only records who did the fieldwork and doesn't touch any tax-relevant figure. */
+  async recordSurvey(holdingNo: string, surveyorName: string, surveyorIdNumber: string, surveyDate: string): Promise<PropertyRow | null> {
+    const { rows } = await pool.query<PropertyRow>(
+      `UPDATE properties SET survey_status = 'surveyed', surveyor_name = $2, surveyor_id_number = $3, survey_date = $4
+       WHERE holding_no = $1 AND survey_status = 'to_be_surveyed'
+       RETURNING *`,
+      [holdingNo, surveyorName, surveyorIdNumber, surveyDate],
+    );
+    return rows[0] ?? null;
+  },
+
+  /** Clears survey_status back to NULL once the surveyed area has been finalized through the normal mutation-approval chain - see changeRequest.service.ts's approveAtCurrentStage(). A no-op if the holding wasn't in the survey workflow (survey_status already NULL). */
+  async clearSurveyStatus(holdingNo: string): Promise<void> {
+    await pool.query(`UPDATE properties SET survey_status = NULL WHERE holding_no = $1 AND survey_status IS NOT NULL`, [holdingNo]);
+  },
 };

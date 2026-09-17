@@ -61,6 +61,7 @@ const newEntrySchema = z.object({
   presentCategory: z.string().nullish(),
   floors: z.array(floorSchema).optional(),
   taxHistoryStages: z.array(taxHistoryStageEntrySchema).optional(),
+  markForSurvey: z.boolean().optional(),
 });
 
 /**

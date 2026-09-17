@@ -1,5 +1,6 @@
 import { Router } from "express";
-import { getPropertyByHoldingNo, postPropertyLookup } from "../controllers/property.controller";
+import { getPropertyByHoldingNo, postPropertyLookup, postRecordPropertySurvey, getPropertySurveyList } from "../controllers/property.controller";
+import { listPendingOperatorEntryHandler, submitOperatorEntryHandler } from "../controllers/migratedHoldingSurvey.controller";
 import { saveProperty } from "../controllers/propertySave.controller";
 import { postPayment, getPaymentHistory, getReceiptReprint } from "../controllers/payment.controller";
 import { postInitiateOnlinePayment } from "../controllers/onlinePayment.controller";
@@ -21,6 +22,15 @@ export const propertyRouter = Router();
 // come before GET /:holdingNo below, or Express would treat
 // "next-holding-no" as a literal holding number to search for.
 propertyRouter.get("/next-holding-no", requireOperator, previewNextHoldingNo);
+
+// GET /api/v1/properties/survey-list?status=to_be_surveyed|surveyed -
+// same ordering reason as next-holding-no above.
+propertyRouter.get("/survey-list", requireOperatorOrAdmin, getPropertySurveyList);
+
+// GET /api/v1/properties/migrated-holdings/pending-entry - the
+// operator worklist for MUNG-MIG- holdings forwarded by a Tax Daroga.
+// Same ordering reason as next-holding-no above.
+propertyRouter.get("/migrated-holdings/pending-entry", requireOperatorOrAdmin, listPendingOperatorEntryHandler);
 
 // POST /api/v1/properties/preview-tax — MUST come before POST /:holdingNo
 // below, for the same reason. Live calc only, never touches the DB.
@@ -47,6 +57,15 @@ propertyRouter.get("/:holdingNo", requireOperator, getPropertyByHoldingNo);
 
 // POST /api/v1/properties/:holdingNo — create/update a KNOWN-number property (operator only)
 propertyRouter.post("/:holdingNo", requireOperator, saveProperty);
+
+// PATCH /api/v1/properties/:holdingNo/survey - record surveyor name/ID/date (operator or admin)
+propertyRouter.patch("/:holdingNo/survey", requireOperatorOrAdmin, postRecordPropertySurvey);
+
+// POST /api/v1/properties/migrated-holdings/:holdingNo/operator-entry -
+// any operator enters the real, surveyed floor-wise details for a
+// MUNG-MIG- holding forwarded to them. MUST come before POST
+// /:holdingNo above's catch-all would otherwise intercept it.
+propertyRouter.post("/migrated-holdings/:holdingNo/operator-entry", requireOperatorOrAdmin, submitOperatorEntryHandler);
 
 // POST /api/v1/properties/:holdingNo/payments — record a counter payment (operator only)
 propertyRouter.post("/:holdingNo/payments", requireOperator, postPayment);

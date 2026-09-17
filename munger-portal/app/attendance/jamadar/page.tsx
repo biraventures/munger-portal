@@ -32,19 +32,6 @@ function statusBadge(status: string | null) {
   );
 }
 
-function fileToBase64(file: File): Promise<{ base64: string; mimeType: string }> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = reader.result as string;
-      const [, base64] = result.split(",");
-      resolve({ base64: base64 ?? "", mimeType: file.type });
-    };
-    reader.onerror = () => reject(new Error("Could not read the selected file."));
-    reader.readAsDataURL(file);
-  });
-}
-
 export default function JamadarAttendancePage() {
   const user = useAttendanceGuard(["jamadar"]);
   const [workers, setWorkers] = useState<WardWorkerToday[] | null>(null);
@@ -54,7 +41,11 @@ export default function JamadarAttendancePage() {
   const [photoUploaded, setPhotoUploaded] = useState<boolean | null>(null);
   const [photoUploading, setPhotoUploading] = useState(false);
   const [photoError, setPhotoError] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [cameraActive, setCameraActive] = useState(false);
+  const [cameraError, setCameraError] = useState<string | null>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
 
   async function loadWorkers() {
     if (!user?.wardId) return;
@@ -123,22 +114,61 @@ export default function JamadarAttendancePage() {
     }
   }
 
-  async function handlePhotoSelected(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  async function handleStartCamera() {
+    setCameraError(null);
+    try {
+      // Rear-facing camera where available (a group photo is normally
+      // taken of the workers, not a selfie) - falls back to whatever
+      // camera is available on devices with only one.
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+      streamRef.current = stream;
+      setCameraActive(true);
+      // The <video> element only exists once cameraActive is true, so
+      // attach the stream on the next tick once it's mounted.
+      requestAnimationFrame(() => {
+        if (videoRef.current) videoRef.current.srcObject = stream;
+      });
+    } catch (err) {
+      setCameraError(err instanceof Error ? err.message : "Could not access the camera. Check camera permission for this site.");
+    }
+  }
+
+  function stopCamera() {
+    streamRef.current?.getTracks().forEach((track) => track.stop());
+    streamRef.current = null;
+    setCameraActive(false);
+  }
+
+  async function handleCapturePhoto() {
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    if (!video || !canvas) return;
     setPhotoError(null);
     setPhotoUploading(true);
     try {
-      const { base64, mimeType } = await fileToBase64(file);
-      await uploadWardPhoto(base64, mimeType);
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) throw new Error("Could not capture from the camera.");
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
+      const base64 = dataUrl.split(",")[1] ?? "";
+      await uploadWardPhoto(base64, "image/jpeg");
       setPhotoUploaded(true);
+      stopCamera();
     } catch (err) {
       setPhotoError(err instanceof Error ? err.message : "Photo upload failed.");
     } finally {
       setPhotoUploading(false);
-      if (fileInputRef.current) fileInputRef.current.value = "";
     }
   }
+
+  useEffect(() => {
+    // Release the camera if the jamadar navigates away mid-capture.
+    return () => {
+      streamRef.current?.getTracks().forEach((track) => track.stop());
+    };
+  }, []);
 
   if (!user) {
     return <div className="flex min-h-screen items-center justify-center text-sm text-slate-400">Loading...</div>;
@@ -171,28 +201,54 @@ export default function JamadarAttendancePage() {
             </p>
           ) : (
             <>
-              <p className="mb-3 text-sm text-slate-500">One group photo per day for your ward.</p>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/jpeg,image/png"
-                capture="environment"
-                onChange={handlePhotoSelected}
-                disabled={photoUploading}
-                className="text-sm"
-              />
-              {photoUploading && (
-                <span className="ml-2 inline-flex items-center gap-1.5 text-xs text-slate-400">
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  Uploading...
-                </span>
+              <p className="mb-3 text-sm text-slate-500">
+                One group photo per day for your ward - taken live with the camera, right now. Marking anyone in or
+                absent is unlocked once this is done.
+              </p>
+
+              {!cameraActive ? (
+                <button
+                  onClick={handleStartCamera}
+                  className="inline-flex items-center gap-1.5 rounded-md bg-nnm-blue px-3 py-2 text-sm font-semibold text-white hover:bg-nnm-blue-dark"
+                >
+                  <Camera className="h-4 w-4" />
+                  Open Camera
+                </button>
+              ) : (
+                <div>
+                  <video ref={videoRef} autoPlay playsInline muted className="mb-3 w-full max-w-md rounded-md border border-slate-200 bg-black" />
+                  <div className="flex gap-2">
+                    <button
+                      onClick={handleCapturePhoto}
+                      disabled={photoUploading}
+                      className="inline-flex items-center gap-1.5 rounded-md bg-nnm-blue px-3 py-2 text-sm font-semibold text-white hover:bg-nnm-blue-dark disabled:opacity-60"
+                    >
+                      {photoUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Camera className="h-4 w-4" />}
+                      {photoUploading ? "Uploading..." : "Capture & Upload"}
+                    </button>
+                    <button
+                      onClick={stopCamera}
+                      disabled={photoUploading}
+                      className="rounded-md border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-60"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
               )}
+              <canvas ref={canvasRef} className="hidden" />
+
+              {cameraError && <p className="mt-2 text-xs text-red-600">{cameraError}</p>}
               {photoError && <p className="mt-2 text-xs text-red-600">{photoError}</p>}
             </>
           )}
         </section>
 
-        {!workers ? (
+        {photoUploaded !== true ? (
+          <p className="rounded-xl border border-dashed border-slate-300 bg-white p-6 text-center text-sm text-slate-400">
+            Take today&apos;s group photo above to see and mark your workers.
+          </p>
+        ) : !workers ? (
           <div className="flex items-center gap-2 text-sm text-slate-400">
             <Loader2 className="h-4 w-4 animate-spin" />
             Loading workers...

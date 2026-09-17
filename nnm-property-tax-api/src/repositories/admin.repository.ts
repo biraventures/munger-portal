@@ -30,4 +30,13 @@ export const adminRepository = {
     );
     return rows[0] ?? null;
   },
+
+  /** Every active admin holding a given role - e.g. for a Deputy Commissioner/City Manager picking which Tax Daroga to assign a survey to. */
+  async listByRole(role: string): Promise<AdminRow[]> {
+    const { rows } = await pool.query<AdminRow>(
+      `SELECT * FROM admins WHERE role = $1 AND active = TRUE ORDER BY display_name ASC`,
+      [role],
+    );
+    return rows;
+  },
 };

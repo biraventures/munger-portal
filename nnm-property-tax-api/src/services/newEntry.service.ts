@@ -210,6 +210,10 @@ export async function saveNewEntryProperty(input: NewEntryPropertyInput, operato
     { input, floors: floorsWithTax, taxCalc: calc, historyStages: historyStagesToSave },
   );
 
+  if (input.holdingEntryMode === "partiallyKnown" && input.markForSurvey) {
+    await propertyRepository.setSurveyToBeSurveyed(holdingNo);
+  }
+
   return {
     holdingNo,
     holdingEntryMode: input.holdingEntryMode,

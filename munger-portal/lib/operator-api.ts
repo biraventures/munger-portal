@@ -481,3 +481,49 @@ export async function requestCancellation(
     throw new Error(body.error || "Could not submit cancellation request.");
   }
 }
+
+// ---------------------------------------------------------------------------
+// Property survey worklist - holdings added via the partially-known
+// entry flow that need a real physical survey before their area is
+// final. See newEntry.service.ts's markForSurvey / property.controller.ts.
+// ---------------------------------------------------------------------------
+
+export interface PropertySurveyListEntry {
+  holding_no: string;
+  owner_name: string;
+  address: string;
+  ward: string | null;
+  old_holding_no: string | null;
+  survey_status: "to_be_surveyed" | "surveyed";
+  surveyor_name: string | null;
+  surveyor_id_number: string | null;
+  survey_date: string | null;
+}
+
+export async function fetchPropertySurveyList(status: "to_be_surveyed" | "surveyed"): Promise<PropertySurveyListEntry[]> {
+  const token = getOperatorToken();
+  if (!token) throw new Error("Not logged in - please log in again.");
+  const res = await fetch(`${API_BASE_URL}/properties/survey-list?status=${status}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error("Could not load the survey list.");
+  const data: { properties: PropertySurveyListEntry[] } = await res.json();
+  return data.properties;
+}
+
+export async function recordPropertySurvey(holdingNo: string, surveyorName: string, surveyorIdNumber: string, surveyDate: string): Promise<void> {
+  const token = getOperatorToken();
+  if (!token) throw new Error("Not logged in - please log in again.");
+  const res = await fetch(`${API_BASE_URL}/properties/${encodeURIComponent(holdingNo)}/survey`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ surveyorName, surveyorIdNumber, surveyDate }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || "Could not record this survey.");
+  }
+}
