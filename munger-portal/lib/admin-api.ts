@@ -710,3 +710,154 @@ export async function removeDuplicateFloors(): Promise<DuplicateFloorsCleanupRes
   }
   return res.json();
 }
+
+// ---------------------------------------------------------------------------
+// Migrated holding survey workflow (MUNG-MIG- series) - old paper-record
+// holdings bulk-imported, then assigned by ward parity (Deputy
+// Commissioner: odd wards, City Manager: even wards) to a Tax Daroga,
+// who records the surveyor and forwards to an operator for real
+// floor-wise detail entry, then verifies, then the original assigner
+// gives final sign-off. See migratedHoldingSurvey.controller.ts.
+// ---------------------------------------------------------------------------
+
+export interface MigratedHoldingImportResult {
+  holdingsCreated: number;
+  rowsSkipped: number;
+  errors: { row: number; message: string }[];
+}
+
+export async function uploadMigratedHoldingsXlsx(fileDataBase64: string): Promise<MigratedHoldingImportResult> {
+  const res = await fetch(`${API_BASE_URL}/admin/migrated-holdings/bulk-upload`, {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify({ fileDataBase64 }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || "Could not upload this file.");
+  }
+  return res.json();
+}
+
+export type MigratedHoldingSurveyStatus =
+  | "pending_assignment"
+  | "assigned_to_surveyor"
+  | "forwarded_to_operator"
+  | "pending_verification"
+  | "verified_by_tax_daroga"
+  | "finalized";
+
+export interface MigratedHoldingSurvey {
+  id: number;
+  holding_no: string;
+  ward: string | null;
+  status: MigratedHoldingSurveyStatus;
+  old_arv_pre_1996: string | null;
+  old_arv_1997_2010: string | null;
+  old_arv_2011_2020: string | null;
+  old_last_payment_year: string | null;
+  old_tax_status: string | null;
+  old_remarks: string | null;
+  assigned_by_display_name: string | null;
+  assigned_by_role: "deputy_commissioner" | "city_manager" | null;
+  assigned_to_tax_daroga_username: string | null;
+  assigned_to_tax_daroga_display_name: string | null;
+  assigned_at: string | null;
+  surveyor_name: string | null;
+  surveyor_id_number: string | null;
+  survey_date: string | null;
+  operator_entered_by: string | null;
+  operator_entered_at: string | null;
+  tax_daroga_verified_by: string | null;
+  tax_daroga_verified_at: string | null;
+  final_verified_by_display_name: string | null;
+  final_verified_at: string | null;
+}
+
+async function fetchMigratedSurveys(path: string): Promise<MigratedHoldingSurvey[]> {
+  const res = await fetch(`${API_BASE_URL}/admin/migrated-holdings/${path}`, { headers: authHeaders() });
+  if (!res.ok) throw new Error("Could not load this worklist.");
+  const data: { surveys: MigratedHoldingSurvey[] } = await res.json();
+  return data.surveys;
+}
+
+/** Deputy Commissioner (odd wards) / City Manager (even wards) - holdings still awaiting assignment to a Tax Daroga. */
+export function fetchPendingAssignmentHoldings(): Promise<MigratedHoldingSurvey[]> {
+  return fetchMigratedSurveys("pending-assignment");
+}
+
+export interface TaxDarogaOption {
+  username: string;
+  displayName: string;
+}
+
+export async function fetchTaxDarogas(): Promise<TaxDarogaOption[]> {
+  const res = await fetch(`${API_BASE_URL}/admin/tax-darogas`, { headers: authHeaders() });
+  if (!res.ok) throw new Error("Could not load the list of Tax Darogas.");
+  const data: { taxDarogas: TaxDarogaOption[] } = await res.json();
+  return data.taxDarogas;
+}
+
+export async function assignMigratedHolding(holdingNo: string, taxDarogaUsername: string): Promise<MigratedHoldingSurvey> {
+  const res = await fetch(`${API_BASE_URL}/admin/migrated-holdings/${encodeURIComponent(holdingNo)}/assign`, {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify({ taxDarogaUsername }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || "Could not assign this holding.");
+  }
+  const data: { survey: MigratedHoldingSurvey } = await res.json();
+  return data.survey;
+}
+
+/** A Tax Daroga's own worklist - holdings assigned to them, awaiting surveyor recording or their verification. */
+export function fetchMyMigratedAssignments(): Promise<MigratedHoldingSurvey[]> {
+  return fetchMigratedSurveys("my-assignments");
+}
+
+export async function recordMigratedHoldingSurveyor(holdingNo: string, surveyorName: string, surveyorIdNumber: string, surveyDate: string): Promise<MigratedHoldingSurvey> {
+  const res = await fetch(`${API_BASE_URL}/admin/migrated-holdings/${encodeURIComponent(holdingNo)}/record-surveyor`, {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify({ surveyorName, surveyorIdNumber, surveyDate }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || "Could not record this survey.");
+  }
+  const data: { survey: MigratedHoldingSurvey } = await res.json();
+  return data.survey;
+}
+
+export async function verifyMigratedHoldingByTaxDaroga(holdingNo: string): Promise<MigratedHoldingSurvey> {
+  const res = await fetch(`${API_BASE_URL}/admin/migrated-holdings/${encodeURIComponent(holdingNo)}/verify-tax-daroga`, {
+    method: "POST",
+    headers: authHeaders(),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || "Could not verify this holding.");
+  }
+  const data: { survey: MigratedHoldingSurvey } = await res.json();
+  return data.survey;
+}
+
+/** Deputy Commissioner / City Manager - holdings THEY assigned that the Tax Daroga has now verified, awaiting final sign-off. */
+export function fetchPendingFinalVerificationHoldings(): Promise<MigratedHoldingSurvey[]> {
+  return fetchMigratedSurveys("pending-final-verification");
+}
+
+export async function finalizeMigratedHolding(holdingNo: string): Promise<MigratedHoldingSurvey> {
+  const res = await fetch(`${API_BASE_URL}/admin/migrated-holdings/${encodeURIComponent(holdingNo)}/finalize`, {
+    method: "POST",
+    headers: authHeaders(),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || "Could not finalize this holding.");
+  }
+  const data: { survey: MigratedHoldingSurvey } = await res.json();
+  return data.survey;
+}

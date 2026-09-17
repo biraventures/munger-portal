@@ -527,3 +527,57 @@ export async function recordPropertySurvey(holdingNo: string, surveyorName: stri
     throw new Error(body.error || "Could not record this survey.");
   }
 }
+
+// ---------------------------------------------------------------------------
+// Migrated holding (MUNG-MIG-) operator entry - real floor-wise survey
+// details for a holding a Tax Daroga has forwarded. See
+// migratedHoldingSurvey.controller.ts.
+// ---------------------------------------------------------------------------
+
+export interface MigratedHoldingSurveyForOperator {
+  holding_no: string;
+  ward: string | null;
+  surveyor_name: string | null;
+  surveyor_id_number: string | null;
+  survey_date: string | null;
+  old_arv_2011_2020: string | null;
+}
+
+export async function fetchPendingMigratedHoldingEntries(): Promise<MigratedHoldingSurveyForOperator[]> {
+  const token = getOperatorToken();
+  if (!token) throw new Error("Not logged in - please log in again.");
+  const res = await fetch(`${API_BASE_URL}/properties/migrated-holdings/pending-entry`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error("Could not load this worklist.");
+  const data: { surveys: MigratedHoldingSurveyForOperator[] } = await res.json();
+  return data.surveys;
+}
+
+export interface MigratedHoldingFloorInput {
+  floorLabel: string;
+  buildupSqft: number;
+  constType: "RCC" | "Asbestos" | "Other";
+  usageType: string;
+  occupancy: "self" | "rented";
+}
+
+export async function submitMigratedHoldingEntry(
+  holdingNo: string,
+  input: { address: string; zone?: string | null; pincode?: string | null; roadType: "PMR" | "MR" | "OR"; floors: MigratedHoldingFloorInput[] },
+): Promise<void> {
+  const token = getOperatorToken();
+  if (!token) throw new Error("Not logged in - please log in again.");
+  const res = await fetch(`${API_BASE_URL}/properties/migrated-holdings/${encodeURIComponent(holdingNo)}/operator-entry`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || "Could not submit these survey details.");
+  }
+}

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Users, FileClock, FileWarning, LayoutGrid, ShoppingBag, Store, BarChart3, Award, Archive, Download, XCircle, ShieldCheck, Trash2, RefreshCw, Upload, MapPin, Map as MapIcon, ClipboardCheck } from "lucide-react";
+import { Users, FileClock, FileWarning, LayoutGrid, ShoppingBag, Store, BarChart3, Award, Archive, Download, XCircle, ShieldCheck, Trash2, RefreshCw, Upload, MapPin, Map as MapIcon, ClipboardCheck, UserCheck, ClipboardList } from "lucide-react";
 import { AdminHeader } from "@/components/admin-header";
 import { DashboardSummaryWidget } from "@/components/dashboard-summary-widget";
 import { useAdminGuard } from "@/lib/use-admin-guard";
@@ -68,8 +68,12 @@ export default function AdminDashboardPage() {
   const showAllPropertyChanges = isCommissioner;
   const showRenumberHolding = isCommissioner;
   const showBulkUploadProperties = isCommissioner;
+  const showMigratedHoldingsBulkUpload = isCommissioner;
+  const showMigratedHoldingsAssign = admin.role === "deputy_commissioner" || admin.role === "city_manager";
+  const showMigratedHoldingsSurveyor = admin.role === "tax_daroga";
   const propertyGroupVisible =
-    showMutationApprovals || showCancellationRequests || showTaxCollectors || showBulkDemandNotices || showAllPropertyChanges || showRenumberHolding || showBulkUploadProperties;
+    showMutationApprovals || showCancellationRequests || showTaxCollectors || showBulkDemandNotices || showAllPropertyChanges || showRenumberHolding || showBulkUploadProperties ||
+    showMigratedHoldingsBulkUpload || showMigratedHoldingsAssign || showMigratedHoldingsSurveyor;
 
   const showShopAgreementApprovals = !isTradeLicenseNodal;
   const showShopRentalApplications = !isTradeLicenseNodal;
@@ -206,6 +210,36 @@ export default function AdminDashboardPage() {
                   </span>
                   <h3 className="mb-1.5 text-base font-semibold text-slate-900">Bulk Upload Properties</h3>
                   <p className="text-sm text-slate-500">Import holdings, floors, tax history, and payments from a backup file.</p>
+                </Link>
+              )}
+
+              {showMigratedHoldingsBulkUpload && (
+                <Link href="/admin/migrated-holdings-bulk-upload" className={cardClass}>
+                  <span className={iconWrapClass}>
+                    <Upload className="h-6 w-6" strokeWidth={1.8} />
+                  </span>
+                  <h3 className="mb-1.5 text-base font-semibold text-slate-900">Bulk Upload Old Holdings</h3>
+                  <p className="text-sm text-slate-500">Import old paper-record holdings (MUNG-MIG-) pending survey.</p>
+                </Link>
+              )}
+
+              {showMigratedHoldingsAssign && (
+                <Link href="/admin/migrated-holdings-assign" className={cardClass}>
+                  <span className={iconWrapClass}>
+                    <UserCheck className="h-6 w-6" strokeWidth={1.8} />
+                  </span>
+                  <h3 className="mb-1.5 text-base font-semibold text-slate-900">Migrated Holding Surveys</h3>
+                  <p className="text-sm text-slate-500">Assign old holdings to a Tax Daroga and give final sign-off.</p>
+                </Link>
+              )}
+
+              {showMigratedHoldingsSurveyor && (
+                <Link href="/admin/migrated-holdings-surveyor" className={cardClass}>
+                  <span className={iconWrapClass}>
+                    <ClipboardList className="h-6 w-6" strokeWidth={1.8} />
+                  </span>
+                  <h3 className="mb-1.5 text-base font-semibold text-slate-900">My Migrated Holding Surveys</h3>
+                  <p className="text-sm text-slate-500">Record surveyor details and verify entered survey data.</p>
                 </Link>
               )}
             </div>

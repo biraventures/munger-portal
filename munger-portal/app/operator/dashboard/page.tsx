@@ -56,6 +56,13 @@ export default function OperatorDashboardPage() {
           />
 
           <OperatorTaskCard
+            href="/operator/migrated-holding-entry"
+            icon={ClipboardCheck}
+            title="Migrated Holding Survey Entry"
+            description="Enter real floor-wise details for old holdings forwarded by a Tax Daroga."
+          />
+
+          <OperatorTaskCard
             href="/operator/shops-hub"
             icon={Store}
             title="Nagar Nigam Shop / Stall"
