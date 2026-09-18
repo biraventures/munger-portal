@@ -1,8 +1,12 @@
 import type { Request, Response } from "express";
 import { z } from "zod";
+import ExcelJS from "exceljs";
 import { holdingNoSchema } from "../utils/holdingNoSchema";
 import { importMigratedHoldingsXlsx } from "../services/migratedHoldingImport.service";
 import { applyPropertySave } from "../services/propertySave.service";
+import { renameHoldingTo } from "../services/propertyRenumber.service";
+import { getNextFinalizedMigratedHoldingNo } from "../services/holdingNumberSeries.service";
+import { addSheetFromRows } from "../services/export.service";
 import { migratedHoldingSurveyRepository } from "../repositories/migratedHoldingSurvey.repository";
 import { propertyRepository } from "../repositories/property.repository";
 import { adminRepository } from "../repositories/admin.repository";
@@ -44,6 +48,12 @@ export const listPendingAssignmentHandler = asyncHandler(async (req: Request, re
 export const listTaxDarogasHandler = asyncHandler(async (_req: Request, res: Response) => {
   const admins = await adminRepository.listByRole("tax_daroga");
   res.status(200).json({ taxDarogas: admins.map((a) => ({ username: a.username, displayName: a.display_name })) });
+});
+
+/** GET /api/v1/admin/tax-surveyors - the list of active Tax Surveyor accounts, for the Tax Daroga's assignment picker. */
+export const listTaxSurveyorsHandler = asyncHandler(async (_req: Request, res: Response) => {
+  const admins = await adminRepository.listByRole("tax_surveyor");
+  res.status(200).json({ taxSurveyors: admins.map((a) => ({ username: a.username, displayName: a.display_name })) });
 });
 
 const assignSchema = z.object({ taxDarogaUsername: z.string().trim().min(1) });
@@ -90,32 +100,38 @@ export const listMyAssignmentsHandler = asyncHandler(async (req: Request, res: R
   res.status(200).json({ surveys });
 });
 
-const recordSurveyorSchema = z.object({
-  surveyorName: z.string().trim().min(1, "Surveyor name is required"),
-  surveyorIdNumber: z.string().trim().min(1, "Surveyor ID number is required"),
-  surveyDate: z.string().trim().min(1, "Survey date is required"),
-});
+const assignSurveyorSchema = z.object({ taxSurveyorUsername: z.string().trim().min(1) });
 
-/** POST /api/v1/admin/migrated-holdings/:holdingNo/record-surveyor - the assigned Tax Daroga only. */
-export const recordSurveyorHandler = asyncHandler(async (req: Request, res: Response) => {
+/** POST /api/v1/admin/migrated-holdings/:holdingNo/assign-surveyor - the assigned Tax Daroga picks a specific Tax Surveyor to physically survey and submit this holding. */
+export const assignToTaxSurveyorHandler = asyncHandler(async (req: Request, res: Response) => {
   const paramsParsed = holdingNoParamSchema.safeParse(req.params);
   if (!paramsParsed.success) throw ApiError.badRequest("Invalid holding number");
-  const bodyParsed = recordSurveyorSchema.safeParse(req.body);
+  const bodyParsed = assignSurveyorSchema.safeParse(req.body);
   if (!bodyParsed.success) throw ApiError.badRequest("Invalid input", bodyParsed.error.flatten().fieldErrors);
   if (req.admin!.role !== "tax_daroga") throw new ApiError(403, "Not permitted.");
 
-  const updated = await migratedHoldingSurveyRepository.recordSurveyor(
+  const surveyor = await adminRepository.findByUsername(bodyParsed.data.taxSurveyorUsername);
+  if (!surveyor || surveyor.role !== "tax_surveyor") throw ApiError.badRequest("Not a valid Tax Surveyor account.");
+
+  const updated = await migratedHoldingSurveyRepository.assignToTaxSurveyor(
     paramsParsed.data.holdingNo,
     req.admin!.username,
-    bodyParsed.data.surveyorName,
-    bodyParsed.data.surveyorIdNumber,
-    bodyParsed.data.surveyDate,
+    req.admin!.displayName,
+    surveyor.username,
+    surveyor.display_name,
   );
   if (!updated) throw ApiError.badRequest("This holding isn't currently assigned to you awaiting a surveyor.");
   res.status(200).json({ survey: updated });
 });
 
-/** GET /api/v1/properties/migrated-holdings/pending-entry - open to any operator. */
+/** GET /api/v1/admin/migrated-holdings/my-surveys - a Tax Surveyor's own worklist. */
+export const listMySurveysHandler = asyncHandler(async (req: Request, res: Response) => {
+  if (req.admin!.role !== "tax_surveyor") throw new ApiError(403, "Not permitted.");
+  const surveys = await migratedHoldingSurveyRepository.listForTaxSurveyor(req.admin!.username);
+  res.status(200).json({ surveys });
+});
+
+/** GET /api/v1/properties/migrated-holdings/pending-entry - kept for any older in-flight holdings still on the operator-entry path. New assignments go through the Tax Surveyor flow instead. */
 export const listPendingOperatorEntryHandler = asyncHandler(async (_req: Request, res: Response) => {
   const surveys = await migratedHoldingSurveyRepository.listPendingOperatorEntry();
   res.status(200).json({ surveys });
@@ -131,7 +147,8 @@ const floorInputSchema = z.object({
   closingYear: z.string().nullish(),
 });
 
-const operatorEntrySchema = z.object({
+const surveyEntrySchema = z.object({
+  ownerName: z.string().trim().min(1).optional(),
   address: z.string().trim().min(1),
   zone: z.string().nullish(),
   pincode: z.string().nullish(),
@@ -139,47 +156,75 @@ const operatorEntrySchema = z.object({
   floors: z.array(floorInputSchema).min(1, "At least one floor is required"),
 });
 
+async function applySurveyEntry(holdingNo: string, data: z.infer<typeof surveyEntrySchema>, actorDisplayName: string): Promise<void> {
+  const property = await propertyRepository.findByHoldingNo(holdingNo);
+  if (!property) throw ApiError.notFound("Holding not found.");
+
+  const totalArea = data.floors.reduce((sum, f) => sum + f.buildupSqft, 0);
+  const input: PropertySaveInput = {
+    ownerName: data.ownerName?.trim() || property.owner_name,
+    relationType: property.relation_type as PropertySaveInput["relationType"],
+    relationName: property.relation_name,
+    mobileNo: property.mobile_no,
+    areaSqft: totalArea,
+    address: data.address,
+    ward: property.ward,
+    zone: data.zone ?? null,
+    pincode: data.pincode ?? null,
+    assessmentYear: property.assessment_year,
+    roadType: data.roadType,
+    holdingCreationYear: property.holding_creation_year,
+    oldHoldingNo: property.old_holding_no,
+    oldPid: property.old_pid,
+    floors: data.floors as FloorInput[],
+  };
+  await applyPropertySave(holdingNo, input, actorDisplayName, false);
+}
+
+/**
+ * POST /api/v1/admin/migrated-holdings/:holdingNo/submit-survey - the
+ * assigned Tax Surveyor only. Writes the real, surveyed floor-wise
+ * details (and, if given, a corrected owner name - many resurvey
+ * holdings turn out to need a minor name correction against what the
+ * old paper record had) directly to the property - a direct write,
+ * not a change_request mutation, since this workflow's own dual
+ * verification (Tax Daroga, then Deputy Commissioner/City Manager by
+ * ward parity) is the gate here, not the generic mutation approval
+ * chain.
+ */
+export const submitSurveyorEntryHandler = asyncHandler(async (req: Request, res: Response) => {
+  const paramsParsed = holdingNoParamSchema.safeParse(req.params);
+  if (!paramsParsed.success) throw ApiError.badRequest("Invalid holding number");
+  const bodyParsed = surveyEntrySchema.safeParse(req.body);
+  if (!bodyParsed.success) throw ApiError.badRequest("Invalid input", bodyParsed.error.flatten().fieldErrors);
+  if (req.admin!.role !== "tax_surveyor") throw new ApiError(403, "Not permitted.");
+
+  const survey = await migratedHoldingSurveyRepository.findByHoldingNo(paramsParsed.data.holdingNo);
+  if (!survey || survey.status !== "assigned_to_tax_surveyor" || survey.assigned_to_tax_surveyor_username !== req.admin!.username) {
+    throw ApiError.badRequest("This holding isn't currently assigned to you awaiting survey entry.");
+  }
+
+  await applySurveyEntry(paramsParsed.data.holdingNo, bodyParsed.data, req.admin!.displayName);
+  const updated = await migratedHoldingSurveyRepository.recordSurveyorSubmission(paramsParsed.data.holdingNo, req.admin!.username, req.admin!.displayName);
+  res.status(200).json({ survey: updated });
+});
+
 /**
  * POST /api/v1/properties/migrated-holdings/:holdingNo/operator-entry
- * - any operator. Writes the real, surveyed floor-wise details
- * directly to the property (recalculating area/ARV/tax) - a direct
- * write, not a change_request mutation, since this workflow's own
- * dual verification (Tax Daroga, then Deputy Commissioner/City
- * Manager by ward parity) is the gate here, not the generic mutation
- * approval chain.
+ * - kept for any older in-flight holdings still on the operator-entry
+ * path (status forwarded_to_operator). New assignments go through
+ * submitSurveyorEntryHandler above instead.
  */
 export const submitOperatorEntryHandler = asyncHandler(async (req: Request, res: Response) => {
   const paramsParsed = holdingNoParamSchema.safeParse(req.params);
   if (!paramsParsed.success) throw ApiError.badRequest("Invalid holding number");
-  const bodyParsed = operatorEntrySchema.safeParse(req.body);
+  const bodyParsed = surveyEntrySchema.safeParse(req.body);
   if (!bodyParsed.success) throw ApiError.badRequest("Invalid input", bodyParsed.error.flatten().fieldErrors);
 
   const survey = await migratedHoldingSurveyRepository.findByHoldingNo(paramsParsed.data.holdingNo);
   if (!survey || survey.status !== "forwarded_to_operator") throw ApiError.badRequest("This holding isn't currently awaiting operator entry.");
 
-  const property = await propertyRepository.findByHoldingNo(paramsParsed.data.holdingNo);
-  if (!property) throw ApiError.notFound("Holding not found.");
-
-  const totalArea = bodyParsed.data.floors.reduce((sum, f) => sum + f.buildupSqft, 0);
-  const input: PropertySaveInput = {
-    ownerName: property.owner_name,
-    relationType: property.relation_type as PropertySaveInput["relationType"],
-    relationName: property.relation_name,
-    mobileNo: property.mobile_no,
-    areaSqft: totalArea,
-    address: bodyParsed.data.address,
-    ward: property.ward,
-    zone: bodyParsed.data.zone ?? null,
-    pincode: bodyParsed.data.pincode ?? null,
-    assessmentYear: property.assessment_year,
-    roadType: bodyParsed.data.roadType,
-    holdingCreationYear: property.holding_creation_year,
-    oldHoldingNo: property.old_holding_no,
-    oldPid: property.old_pid,
-    floors: bodyParsed.data.floors as FloorInput[],
-  };
-
-  await applyPropertySave(paramsParsed.data.holdingNo, input, req.admin?.displayName ?? req.operator!.displayName, false);
+  await applySurveyEntry(paramsParsed.data.holdingNo, bodyParsed.data, req.admin?.displayName ?? req.operator!.displayName);
   const updated = await migratedHoldingSurveyRepository.recordOperatorEntry(paramsParsed.data.holdingNo, req.admin?.displayName ?? req.operator!.displayName);
   res.status(200).json({ survey: updated });
 });
@@ -195,6 +240,45 @@ export const verifyByTaxDarogaHandler = asyncHandler(async (req: Request, res: R
   res.status(200).json({ survey: updated });
 });
 
+const revertSchema = z.object({
+  reason: z.string().trim().min(1, "A reason is required to revert a submission."),
+  taxSurveyorUsername: z.string().trim().min(1).nullish(),
+});
+
+/**
+ * POST /api/v1/admin/migrated-holdings/:holdingNo/revert - the
+ * assigned Tax Daroga sends a submitted survey back for correction,
+ * to the same surveyor (omit taxSurveyorUsername) or a different one
+ * (provide it).
+ */
+export const revertToSurveyorHandler = asyncHandler(async (req: Request, res: Response) => {
+  const paramsParsed = holdingNoParamSchema.safeParse(req.params);
+  if (!paramsParsed.success) throw ApiError.badRequest("Invalid holding number");
+  const bodyParsed = revertSchema.safeParse(req.body);
+  if (!bodyParsed.success) throw ApiError.badRequest("Invalid input", bodyParsed.error.flatten().fieldErrors);
+  if (req.admin!.role !== "tax_daroga") throw new ApiError(403, "Not permitted.");
+
+  let newSurveyorUsername: string | undefined;
+  let newSurveyorDisplayName: string | undefined;
+  if (bodyParsed.data.taxSurveyorUsername) {
+    const surveyor = await adminRepository.findByUsername(bodyParsed.data.taxSurveyorUsername);
+    if (!surveyor || surveyor.role !== "tax_surveyor") throw ApiError.badRequest("Not a valid Tax Surveyor account.");
+    newSurveyorUsername = surveyor.username;
+    newSurveyorDisplayName = surveyor.display_name;
+  }
+
+  const updated = await migratedHoldingSurveyRepository.revertToSurveyor(
+    paramsParsed.data.holdingNo,
+    req.admin!.username,
+    req.admin!.displayName,
+    bodyParsed.data.reason,
+    newSurveyorUsername,
+    newSurveyorDisplayName,
+  );
+  if (!updated) throw ApiError.badRequest("This holding isn't currently awaiting your verification.");
+  res.status(200).json({ survey: updated });
+});
+
 /** GET /api/v1/admin/migrated-holdings/pending-final-verification - Deputy Commissioner/City Manager sees only holdings THEY assigned. */
 export const listPendingFinalVerificationHandler = asyncHandler(async (req: Request, res: Response) => {
   const role = req.admin!.role;
@@ -203,7 +287,13 @@ export const listPendingFinalVerificationHandler = asyncHandler(async (req: Requ
   res.status(200).json({ surveys });
 });
 
-/** POST /api/v1/admin/migrated-holdings/:holdingNo/finalize - only the Deputy Commissioner/City Manager who made the original assignment. */
+/**
+ * POST /api/v1/admin/migrated-holdings/:holdingNo/finalize - only the
+ * Deputy Commissioner/City Manager who made the original assignment.
+ * On success, renumbers the holding from its MUNG-MIG- number to a
+ * fresh MNN- number - a marker that this holding started out
+ * unsurveyed and has now actually been surveyed and verified.
+ */
 export const finalizeVerificationHandler = asyncHandler(async (req: Request, res: Response) => {
   const paramsParsed = holdingNoParamSchema.safeParse(req.params);
   if (!paramsParsed.success) throw ApiError.badRequest("Invalid holding number");
@@ -212,5 +302,42 @@ export const finalizeVerificationHandler = asyncHandler(async (req: Request, res
 
   const updated = await migratedHoldingSurveyRepository.recordFinalVerification(paramsParsed.data.holdingNo, admin.username, admin.username, admin.displayName, admin.role);
   if (!updated) throw ApiError.badRequest("This holding isn't currently awaiting your final verification.");
-  res.status(200).json({ survey: updated });
+
+  const newHoldingNo = await getNextFinalizedMigratedHoldingNo();
+  await renameHoldingTo(paramsParsed.data.holdingNo, newHoldingNo, admin.displayName);
+  await migratedHoldingSurveyRepository.logRenumberEvent(paramsParsed.data.holdingNo, newHoldingNo, admin.displayName);
+
+  const final = await migratedHoldingSurveyRepository.findByHoldingNo(newHoldingNo);
+  res.status(200).json({ survey: final, newHoldingNo });
+});
+
+/** GET /api/v1/admin/migrated-holdings/:holdingNo/events - the complete event trail for one holding. */
+export const listEventsForHoldingHandler = asyncHandler(async (req: Request, res: Response) => {
+  const parsed = holdingNoParamSchema.safeParse(req.params);
+  if (!parsed.success) throw ApiError.badRequest("Invalid holding number");
+  const events = await migratedHoldingSurveyRepository.listEventsForHolding(parsed.data.holdingNo);
+  res.status(200).json({ events });
+});
+
+/**
+ * GET /api/v1/admin/migrated-holdings/export - commissioner only.
+ * Streams a live-generated .xlsx with two sheets: every migrated
+ * holding's current state, and the complete, append-only event log
+ * behind it (assignment, surveyor submissions, reverts, verification,
+ * finalization, renumbering) - the full data trail this workflow is
+ * meant to leave behind.
+ */
+export const exportMigratedHoldingsHandler = asyncHandler(async (req: Request, res: Response) => {
+  if (req.admin!.role !== "commissioner") throw new ApiError(403, "Not permitted.");
+  const [surveys, events] = await Promise.all([migratedHoldingSurveyRepository.listAll(), migratedHoldingSurveyRepository.listAllEvents()]);
+
+  const workbook = new ExcelJS.Workbook();
+  addSheetFromRows(workbook, "Holdings", surveys as unknown as Record<string, unknown>[]);
+  addSheetFromRows(workbook, "Event Trail", events as unknown as Record<string, unknown>[]);
+
+  const filename = `migrated-holdings-export-${new Date().toISOString().slice(0, 10)}.xlsx`;
+  res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+  res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+  await workbook.xlsx.write(res);
+  res.end();
 });

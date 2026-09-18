@@ -1,10 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { Upload, AlertCircle, CheckCircle2, Loader2 } from "lucide-react";
+import { Upload, AlertCircle, CheckCircle2, Loader2, Download } from "lucide-react";
 import { AdminHeader } from "@/components/admin-header";
 import { useAdminGuard } from "@/lib/use-admin-guard";
-import { uploadMigratedHoldingsXlsx, type MigratedHoldingImportResult } from "@/lib/admin-api";
+import { uploadMigratedHoldingsXlsx, downloadMigratedHoldingsExport, type MigratedHoldingImportResult } from "@/lib/admin-api";
 
 function fileToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -24,6 +24,20 @@ export default function MigratedHoldingsBulkUploadPage() {
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<MigratedHoldingImportResult | null>(null);
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
+
+  async function handleExport() {
+    setExporting(true);
+    setExportError(null);
+    try {
+      await downloadMigratedHoldingsExport();
+    } catch (err) {
+      setExportError(err instanceof Error ? err.message : "Could not download the export.");
+    } finally {
+      setExporting(false);
+    }
+  }
 
   async function handleFileSelected(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -130,6 +144,28 @@ export default function MigratedHoldingsBulkUploadPage() {
                   </ul>
                 </details>
               )}
+            </div>
+          )}
+        </div>
+
+        <div className="mt-8 rounded-xl border border-slate-200 bg-white p-6">
+          <h2 className="mb-1 text-base font-semibold text-slate-900">Complete Data Trail</h2>
+          <p className="mb-4 text-sm text-slate-500">
+            Download every migrated holding&apos;s current state and its full event history (assignments, surveyor
+            submissions, reverts, verifications, finalization) as a spreadsheet.
+          </p>
+          <button
+            onClick={handleExport}
+            disabled={exporting}
+            className="inline-flex items-center gap-1.5 rounded-md bg-nnm-blue px-4 py-2 text-sm font-semibold text-white hover:bg-nnm-blue-dark disabled:opacity-60"
+          >
+            <Download className="h-4 w-4" />
+            {exporting ? "Downloading…" : "Download Export (.xlsx)"}
+          </button>
+          {exportError && (
+            <div role="alert" className="mt-3 flex items-center gap-2 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+              <AlertCircle className="h-4 w-4 shrink-0" />
+              {exportError}
             </div>
           )}
         </div>

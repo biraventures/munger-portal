@@ -26,13 +26,16 @@ export const postPayment = asyncHandler(async (req: Request, res: Response) => {
   if (!paramsParsed.success) {
     throw ApiError.badRequest("Invalid holding number");
   }
+  if (req.admin && req.admin.role !== "tax_collector") {
+    throw new ApiError(403, "Only a Tax Collector or operator can record a payment.");
+  }
 
   const bodyParsed = paymentSchema.safeParse(req.body);
   if (!bodyParsed.success) {
     throw ApiError.badRequest("Invalid payment data", bodyParsed.error.flatten().fieldErrors);
   }
 
-  const collectedBy = req.operator!.displayName;
+  const collectedBy = req.admin?.displayName ?? req.operator!.displayName;
   const result = await submitPayment(paramsParsed.data.holdingNo, bodyParsed.data, collectedBy);
   res.status(200).json(result);
 });

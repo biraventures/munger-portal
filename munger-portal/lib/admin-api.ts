@@ -533,8 +533,11 @@ export interface CancellationRequestSummary {
   holding_no: string;
   reason: string;
   requested_by: string;
+  requested_by_role: string | null;
   requested_at: string;
   status: CancellationRequestStatus;
+  stage: "tax_daroga" | "city_manager";
+  assigned_city_manager_display_name: string | null;
   reviewed_by: string | null;
   reviewed_at: string | null;
   review_notes: string | null;
@@ -742,6 +745,7 @@ export async function uploadMigratedHoldingsXlsx(fileDataBase64: string): Promis
 export type MigratedHoldingSurveyStatus =
   | "pending_assignment"
   | "assigned_to_surveyor"
+  | "assigned_to_tax_surveyor"
   | "forwarded_to_operator"
   | "pending_verification"
   | "verified_by_tax_daroga"
@@ -763,6 +767,10 @@ export interface MigratedHoldingSurvey {
   assigned_to_tax_daroga_username: string | null;
   assigned_to_tax_daroga_display_name: string | null;
   assigned_at: string | null;
+  assigned_to_tax_surveyor_username: string | null;
+  assigned_to_tax_surveyor_display_name: string | null;
+  assigned_to_tax_surveyor_at: string | null;
+  revision_count: number;
   surveyor_name: string | null;
   surveyor_id_number: string | null;
   survey_date: string | null;
@@ -817,15 +825,74 @@ export function fetchMyMigratedAssignments(): Promise<MigratedHoldingSurvey[]> {
   return fetchMigratedSurveys("my-assignments");
 }
 
-export async function recordMigratedHoldingSurveyor(holdingNo: string, surveyorName: string, surveyorIdNumber: string, surveyDate: string): Promise<MigratedHoldingSurvey> {
-  const res = await fetch(`${API_BASE_URL}/admin/migrated-holdings/${encodeURIComponent(holdingNo)}/record-surveyor`, {
+export interface TaxSurveyorOption {
+  username: string;
+  displayName: string;
+}
+
+export async function fetchTaxSurveyors(): Promise<TaxSurveyorOption[]> {
+  const res = await fetch(`${API_BASE_URL}/admin/tax-surveyors`, { headers: authHeaders() });
+  if (!res.ok) throw new Error("Could not load the list of Tax Surveyors.");
+  const data: { taxSurveyors: TaxSurveyorOption[] } = await res.json();
+  return data.taxSurveyors;
+}
+
+/** Tax Daroga picks a specific Tax Surveyor to physically survey and submit a holding assigned to them. */
+export async function assignToTaxSurveyor(holdingNo: string, taxSurveyorUsername: string): Promise<MigratedHoldingSurvey> {
+  const res = await fetch(`${API_BASE_URL}/admin/migrated-holdings/${encodeURIComponent(holdingNo)}/assign-surveyor`, {
     method: "POST",
     headers: authHeaders(),
-    body: JSON.stringify({ surveyorName, surveyorIdNumber, surveyDate }),
+    body: JSON.stringify({ taxSurveyorUsername }),
   });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
-    throw new Error(body.error || "Could not record this survey.");
+    throw new Error(body.error || "Could not assign this holding to a surveyor.");
+  }
+  const data: { survey: MigratedHoldingSurvey } = await res.json();
+  return data.survey;
+}
+
+/** A Tax Surveyor's own worklist - holdings assigned to them to physically survey and submit. */
+export function fetchMyMigratedSurveys(): Promise<MigratedHoldingSurvey[]> {
+  return fetchMigratedSurveys("my-surveys");
+}
+
+export interface MigratedHoldingFloorInput {
+  floorLabel: string;
+  buildupSqft: number;
+  constType: "RCC" | "Asbestos" | "Other";
+  usageType: string;
+  occupancy: "self" | "rented";
+}
+
+/** Tax Surveyor submits the real, surveyed floor-wise details - optionally including a corrected owner name, since many resurvey holdings need one against what the old paper record had. */
+export async function submitTaxSurveyorEntry(
+  holdingNo: string,
+  input: { ownerName?: string; address: string; zone?: string | null; pincode?: string | null; roadType: "PMR" | "MR" | "OR"; floors: MigratedHoldingFloorInput[] },
+): Promise<MigratedHoldingSurvey> {
+  const res = await fetch(`${API_BASE_URL}/admin/migrated-holdings/${encodeURIComponent(holdingNo)}/submit-survey`, {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || "Could not submit these survey details.");
+  }
+  const data: { survey: MigratedHoldingSurvey } = await res.json();
+  return data.survey;
+}
+
+/** Tax Daroga sends a submitted survey back for correction - to the same surveyor (omit taxSurveyorUsername) or a different one. */
+export async function revertMigratedHoldingToSurveyor(holdingNo: string, reason: string, taxSurveyorUsername?: string): Promise<MigratedHoldingSurvey> {
+  const res = await fetch(`${API_BASE_URL}/admin/migrated-holdings/${encodeURIComponent(holdingNo)}/revert`, {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify({ reason, taxSurveyorUsername: taxSurveyorUsername ?? null }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || "Could not revert this submission.");
   }
   const data: { survey: MigratedHoldingSurvey } = await res.json();
   return data.survey;
@@ -860,4 +927,207 @@ export async function finalizeMigratedHolding(holdingNo: string): Promise<Migrat
   }
   const data: { survey: MigratedHoldingSurvey } = await res.json();
   return data.survey;
+}
+
+/** Commissioner only - downloads the full migrated-holdings data trail as a live-generated .xlsx (current state of every holding, plus its complete event history). */
+export async function downloadMigratedHoldingsExport(): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/admin/migrated-holdings/export`, { headers: authHeaders() });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || "Could not download the export.");
+  }
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `migrated-holdings-export-${new Date().toISOString().slice(0, 10)}.xlsx`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+// ---------------------------------------------------------------------------
+// Tax Collector - search a holding, see its pendency, generate a
+// demand notice, collect payment, issue a receipt, or flag it for
+// re-survey with remarks if what they find on the ground looks
+// different from the record. See payment.controller.ts,
+// demandNotice.controller.ts, and propertyResurveyFlag.controller.ts.
+// ---------------------------------------------------------------------------
+
+export interface TaxCollectorPropertySearchResult {
+  found: boolean;
+  message?: string;
+  property?: Record<string, unknown> & {
+    holding_no: string;
+    owner_name: string;
+    address: string;
+    currentTax: string;
+    arrears?: { totalPending: number; penalty: number; stagesConsidered: number; note: string };
+  };
+}
+
+export async function fetchPropertyForCollector(holdingNo: string): Promise<TaxCollectorPropertySearchResult> {
+  const res = await fetch(`${API_BASE_URL}/properties/${encodeURIComponent(holdingNo)}`, { headers: authHeaders() });
+  if (res.status === 404) {
+    const body = await res.json().catch(() => ({}));
+    return { found: false, message: body.error || "No matching holding found." };
+  }
+  if (!res.ok) throw new Error("Could not load this holding.");
+  return res.json();
+}
+
+export interface UnsettledDemandNoticeAdmin {
+  demandNo: string;
+  formattedDemandNo: string;
+  totalAmountDemanded: string;
+}
+
+export async function fetchUnsettledDemandNoticesAdmin(holdingNo: string): Promise<UnsettledDemandNoticeAdmin[]> {
+  const res = await fetch(`${API_BASE_URL}/properties/${encodeURIComponent(holdingNo)}/demand-notices/unsettled`, { headers: authHeaders() });
+  if (!res.ok) throw new Error("Could not load demand notices.");
+  const data: { notices: UnsettledDemandNoticeAdmin[] } = await res.json();
+  return data.notices;
+}
+
+export async function generateDemandNoticeAdmin(holdingNo: string): Promise<Record<string, unknown>> {
+  const res = await fetch(`${API_BASE_URL}/properties/${encodeURIComponent(holdingNo)}/demand-notice`, {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify({}),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || "Could not generate a demand notice.");
+  }
+  return res.json();
+}
+
+export async function submitPaymentAdmin(holdingNo: string, input: { amount: number; paymentMode: string; demandNo?: string; counter?: string }): Promise<Record<string, unknown>> {
+  const res = await fetch(`${API_BASE_URL}/properties/${encodeURIComponent(holdingNo)}/payments`, {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || "Could not record this payment.");
+  }
+  return res.json();
+}
+
+export async function flagPropertyForResurvey(holdingNo: string, remarks: string): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/properties/${encodeURIComponent(holdingNo)}/resurvey-flag`, {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify({ remarks }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || "Could not flag this holding for re-survey.");
+  }
+}
+
+export interface PropertyResurveyFlag {
+  id: number;
+  holding_no: string;
+  flagged_by_display_name: string;
+  remarks: string;
+  flagged_at: string;
+  status: "open" | "reviewed" | "dismissed";
+  reviewed_by_display_name: string | null;
+  reviewed_at: string | null;
+  review_notes: string | null;
+}
+
+export async function fetchResurveyFlags(): Promise<PropertyResurveyFlag[]> {
+  const res = await fetch(`${API_BASE_URL}/admin/property-resurvey-flags`, { headers: authHeaders() });
+  if (!res.ok) throw new Error("Could not load the re-survey flag trail.");
+  const data: { flags: PropertyResurveyFlag[] } = await res.json();
+  return data.flags;
+}
+
+export async function reviewResurveyFlag(id: number, status: "reviewed" | "dismissed", reviewNotes: string | null): Promise<PropertyResurveyFlag> {
+  const res = await fetch(`${API_BASE_URL}/admin/property-resurvey-flags/${id}/review`, {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify({ status, reviewNotes }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || "Could not review this flag.");
+  }
+  const data: { flag: PropertyResurveyFlag } = await res.json();
+  return data.flag;
+}
+
+export async function downloadResurveyFlagsExport(): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/admin/property-resurvey-flags/export`, { headers: authHeaders() });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || "Could not download the export.");
+  }
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `resurvey-flags-export-${new Date().toISOString().slice(0, 10)}.xlsx`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+/** Tax Collector requests cancellation of a demand notice or receipt they issued by mistake - routes through Tax Daroga, then their assigned City Manager. See cancellationRequest.controller.ts. */
+export async function requestCancellationAdmin(requestType: "demand_notice" | "receipt", targetId: string, reason: string): Promise<CancellationRequestSummary> {
+  const res = await fetch(`${API_BASE_URL}/properties/cancellation-requests`, {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify({ requestType, targetId, reason }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || "Could not submit this cancellation request.");
+  }
+  const data: { request: CancellationRequestSummary } = await res.json();
+  return data.request;
+}
+
+export interface TaxCollectorWithAssignment {
+  username: string;
+  displayName: string;
+  assignedCityManagerUsername: string | null;
+}
+
+export async function fetchTaxCollectorsWithAssignment(): Promise<TaxCollectorWithAssignment[]> {
+  const res = await fetch(`${API_BASE_URL}/admin/tax-collectors-with-assignment`, { headers: authHeaders() });
+  if (!res.ok) throw new Error("Could not load Tax Collectors.");
+  const data: { taxCollectors: TaxCollectorWithAssignment[] } = await res.json();
+  return data.taxCollectors;
+}
+
+export interface CityManagerOption {
+  username: string;
+  displayName: string;
+}
+
+export async function fetchCityManagers(): Promise<CityManagerOption[]> {
+  const res = await fetch(`${API_BASE_URL}/admin/city-managers`, { headers: authHeaders() });
+  if (!res.ok) throw new Error("Could not load City Managers.");
+  const data: { cityManagers: CityManagerOption[] } = await res.json();
+  return data.cityManagers;
+}
+
+export async function assignTaxCollectorCityManager(taxCollectorUsername: string, cityManagerUsername: string): Promise<TaxCollectorWithAssignment> {
+  const res = await fetch(`${API_BASE_URL}/admin/tax-collectors/${encodeURIComponent(taxCollectorUsername)}/assign-city-manager`, {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify({ cityManagerUsername }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || "Could not assign this Tax Collector.");
+  }
+  const data: { taxCollector: TaxCollectorWithAssignment } = await res.json();
+  return data.taxCollector;
 }

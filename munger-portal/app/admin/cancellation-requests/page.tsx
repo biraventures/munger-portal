@@ -27,7 +27,11 @@ const STATUS_STYLES: Record<CancellationRequestStatus, string> = {
 
 export default function CancellationRequestsPage() {
   const admin = useAdminGuard();
-  const isTaxDaroga = admin?.role === "tax_daroga";
+
+  function canActOn(r: CancellationRequestSummary): boolean {
+    if (!admin) return false;
+    return (admin.role === "tax_daroga" && r.stage === "tax_daroga") || (admin.role === "city_manager" && r.stage === "city_manager");
+  }
 
   const [status, setStatus] = useState<CancellationRequestStatus | "all">("pending");
   const [requests, setRequests] = useState<CancellationRequestSummary[] | null>(null);
@@ -96,7 +100,9 @@ export default function CancellationRequestsPage() {
       <main className="mx-auto max-w-4xl px-6 py-10">
         <h1 className="mb-1 text-2xl font-semibold text-slate-900">Cancellation Requests</h1>
         <p className="mb-6 text-sm text-slate-500">
-          Requests to cancel a demand notice or payment receipt. {isTaxDaroga ? "Approving a receipt cancellation also reopens its demand notice for payment." : "Only Tax Daroga can approve or reject these."}
+          Requests to cancel a demand notice or payment receipt. An operator&apos;s request is decided by Tax Daroga
+          alone; a Tax Collector&apos;s request additionally needs the sign-off of their assigned City Manager once
+          Tax Daroga approves. Approving a receipt cancellation also reopens its demand notice for payment.
         </p>
 
         <div className="mb-5 flex gap-2">
@@ -150,6 +156,12 @@ export default function CancellationRequestsPage() {
                     <p className="mt-1 text-xs text-slate-500">
                       Requested by {r.requested_by} on {new Date(r.requested_at).toLocaleDateString("en-IN")}
                     </p>
+                    {r.status === "pending" && r.assigned_city_manager_display_name && (
+                      <p className="mt-0.5 text-xs text-amber-700">
+                        {r.stage === "tax_daroga" ? "Awaiting Tax Daroga - then " : "Awaiting "}
+                        {r.assigned_city_manager_display_name}
+                      </p>
+                    )}
                     {r.status !== "pending" && (
                       <p className="mt-1 text-xs text-slate-500">
                         {r.status === "approved" ? "Approved" : "Rejected"} by {r.reviewed_by} on{" "}
@@ -162,7 +174,7 @@ export default function CancellationRequestsPage() {
                     <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-semibold uppercase ${STATUS_STYLES[r.status]}`}>
                       {r.status}
                     </span>
-                    {r.status === "pending" && isTaxDaroga && (
+                    {r.status === "pending" && canActOn(r) && (
                       <div className="flex gap-2">
                         <button
                           onClick={() => openAction(r.id, "approve")}

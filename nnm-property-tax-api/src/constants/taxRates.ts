@@ -134,6 +134,17 @@ export const PARTIALLY_KNOWN_HOLDING_NO_DIGITS = 6;
 export const MIGRATED_HOLDING_NO_PREFIX = "MUNG-MIG-";
 export const MIGRATED_HOLDING_NO_DIGITS = 5;
 
+// Assigned once a migrated holding's survey is FINALLY approved
+// (final Deputy Commissioner/City Manager sign-off) - replaces its
+// MUNG-MIG- number. The MNN- prefix itself is the marker: any holding
+// under it is one that started out unsurveyed (bulk-imported from an
+// old paper record) and has now actually been surveyed and verified,
+// distinct from both the "MMC-" (always properly surveyed from the
+// start) and "MUNGMC-" (still only back-calculated, never a real
+// survey) series.
+export const FINALIZED_MIGRATED_HOLDING_NO_PREFIX = "MNN-";
+export const FINALIZED_MIGRATED_HOLDING_NO_DIGITS = 6;
+
 export const PARTIALLY_KNOWN_USAGE = "Residential";
 export const PARTIALLY_KNOWN_OCCUPANCY = "self";
 export const PARTIALLY_KNOWN_ROAD_TYPE_FOR_SOLVE: RoadType = "MR";

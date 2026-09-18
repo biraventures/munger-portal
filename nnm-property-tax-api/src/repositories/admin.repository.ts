@@ -39,4 +39,13 @@ export const adminRepository = {
     );
     return rows;
   },
+
+  /** Commissioner assigns which of the (two) City Managers reviews a given Tax Collector's cancellation requests. Only meaningful for tax_collector accounts. */
+  async assignCityManager(taxCollectorUsername: string, cityManagerUsername: string): Promise<AdminRow | null> {
+    const { rows } = await pool.query<AdminRow>(
+      `UPDATE admins SET assigned_city_manager_username = $2 WHERE username = $1 AND role = 'tax_collector' RETURNING *`,
+      [taxCollectorUsername, cityManagerUsername],
+    );
+    return rows[0] ?? null;
+  },
 };

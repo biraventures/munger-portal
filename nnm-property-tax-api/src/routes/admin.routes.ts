@@ -68,13 +68,21 @@ import {
   uploadMigratedHoldingsHandler,
   listPendingAssignmentHandler,
   listTaxDarogasHandler,
+  listTaxSurveyorsHandler,
   assignToSurveyorHandler,
   listMyAssignmentsHandler,
-  recordSurveyorHandler,
+  assignToTaxSurveyorHandler,
+  listMySurveysHandler,
+  submitSurveyorEntryHandler,
   verifyByTaxDarogaHandler,
+  revertToSurveyorHandler,
   listPendingFinalVerificationHandler,
   finalizeVerificationHandler,
+  listEventsForHoldingHandler,
+  exportMigratedHoldingsHandler,
 } from "../controllers/migratedHoldingSurvey.controller";
+import { listResurveyFlagsHandler, reviewResurveyFlagHandler, exportResurveyFlagsHandler } from "../controllers/propertyResurveyFlag.controller";
+import { listTaxCollectorsWithAssignmentHandler, listCityManagersHandler, assignCityManagerHandler } from "../controllers/taxCollectorAssignment.controller";
 import {
   getDemandActionRequests,
   getDemandActionRequestById,
@@ -147,13 +155,15 @@ adminRouter.post("/change-requests/:id/approve", requireMutationChainRole, postA
 adminRouter.post("/change-requests/:id/reject", requireMutationChainRole, postRejectChangeRequest);
 
 // Demand notice / receipt cancellation approval queue - viewable by
-// any admin role except Stall Prabhari, but approve/reject is
-// tax_daroga-only (unlike the property mutation chain above, this
-// doesn't escalate through multiple roles).
-const requireTaxDaroga = requireAdminRole("tax_daroga");
+// any admin role except Stall Prabhari. Approve/reject is tax_daroga
+// or city_manager - which one applies to a given request is enforced
+// inside the controller/service by that request's own stage (an
+// operator's request is tax_daroga-only, as before; a Tax Collector's
+// request needs tax_daroga then their assigned City Manager).
+const requireCancellationReviewRole = requireAdminRole("tax_daroga", "city_manager");
 adminRouter.get("/cancellation-requests", requireNonStallPrabhari, getCancellationRequests);
-adminRouter.post("/cancellation-requests/:id/approve", requireTaxDaroga, postApproveCancellation);
-adminRouter.post("/cancellation-requests/:id/reject", requireTaxDaroga, postRejectCancellation);
+adminRouter.post("/cancellation-requests/:id/approve", requireCancellationReviewRole, postApproveCancellation);
+adminRouter.post("/cancellation-requests/:id/reject", requireCancellationReviewRole, postRejectCancellation);
 
 // Shop agreement approval queue (5-stage: Stall Prabhari -> Tax Daroga NOC -> City Manager -> Deputy Commissioner -> Commissioner)
 adminRouter.get("/shop-agreement-requests", getShopAgreementRequests);
@@ -210,14 +220,36 @@ adminRouter.post("/shops/:shopNo/inspections", requireInspectionRole, postCreate
 // handles even wards, and each verifies only what they themselves
 // assigned. See migratedHoldingSurvey.controller.ts.
 adminRouter.post("/migrated-holdings/bulk-upload", requireAdminRole("commissioner"), uploadMigratedHoldingsHandler);
+adminRouter.get("/migrated-holdings/export", requireAdminRole("commissioner"), exportMigratedHoldingsHandler);
 adminRouter.get("/migrated-holdings/pending-assignment", listPendingAssignmentHandler);
 adminRouter.get("/tax-darogas", listTaxDarogasHandler);
+adminRouter.get("/tax-surveyors", listTaxSurveyorsHandler);
+
+// Tax Collector -> City Manager assignment for cancellation-request
+// routing - Commissioner only. See taxCollectorAssignment.controller.ts.
+adminRouter.get("/tax-collectors-with-assignment", requireAdminRole("commissioner"), listTaxCollectorsWithAssignmentHandler);
+adminRouter.get("/city-managers", requireAdminRole("commissioner"), listCityManagersHandler);
+adminRouter.post("/tax-collectors/:username/assign-city-manager", requireAdminRole("commissioner"), assignCityManagerHandler);
 adminRouter.post("/migrated-holdings/:holdingNo/assign", assignToSurveyorHandler);
 adminRouter.get("/migrated-holdings/my-assignments", listMyAssignmentsHandler);
-adminRouter.post("/migrated-holdings/:holdingNo/record-surveyor", recordSurveyorHandler);
+adminRouter.post("/migrated-holdings/:holdingNo/assign-surveyor", assignToTaxSurveyorHandler);
+adminRouter.get("/migrated-holdings/my-surveys", listMySurveysHandler);
+adminRouter.post("/migrated-holdings/:holdingNo/submit-survey", submitSurveyorEntryHandler);
 adminRouter.post("/migrated-holdings/:holdingNo/verify-tax-daroga", verifyByTaxDarogaHandler);
+adminRouter.post("/migrated-holdings/:holdingNo/revert", revertToSurveyorHandler);
 adminRouter.get("/migrated-holdings/pending-final-verification", listPendingFinalVerificationHandler);
 adminRouter.post("/migrated-holdings/:holdingNo/finalize", finalizeVerificationHandler);
+adminRouter.get("/migrated-holdings/:holdingNo/events", listEventsForHoldingHandler);
+
+// Property resurvey flags - raised by Tax Collectors during
+// collection when a holding's recorded details look different from
+// what they found on the ground. Viewable/reviewable by Tax Daroga
+// or Commissioner; export restricted to Commissioner, matching the
+// migrated-holdings export pattern.
+const requireResurveyFlagReviewRole = requireAdminRole("tax_daroga", "commissioner");
+adminRouter.get("/property-resurvey-flags", requireResurveyFlagReviewRole, listResurveyFlagsHandler);
+adminRouter.post("/property-resurvey-flags/:id/review", requireResurveyFlagReviewRole, reviewResurveyFlagHandler);
+adminRouter.get("/property-resurvey-flags/export", requireAdminRole("commissioner"), exportResurveyFlagsHandler);
 
 
 // Demand notice cancel/supersede and receipt cancel - a separate,

@@ -2,22 +2,26 @@ import { pool } from "../config/db";
 import { cancellationRequestRepository } from "../repositories/cancellationRequest.repository";
 import { demandNoticeRepository } from "../repositories/demandNotice.repository";
 import { paymentRepository } from "../repositories/payment.repository";
+import { adminRepository } from "../repositories/admin.repository";
 import { ApiError } from "../utils/ApiError";
 import type { CancellationRequestRow } from "../repositories/cancellationRequest.repository";
 
 /**
- * Any operator can request cancellation of any demand notice or
- * receipt (not restricted to their own) - both go through the same
- * tax_daroga approval used elsewhere in this app, since a receipt
- * cancellation reverses money already collected and a demand notice
- * cancellation removes a bill that's still outstanding; neither
- * should happen unreviewed.
+ * Any operator or Tax Collector can request cancellation of any
+ * demand notice or receipt (not restricted to their own). Both go
+ * through Tax Daroga review; a Tax Collector's request additionally
+ * needs the sign-off of whichever City Manager the Commissioner
+ * assigned to them (see admin.repository.ts's assignCityManager) -
+ * an operator's request is decided by Tax Daroga alone, exactly as
+ * before.
  */
 export async function requestCancellation(
   requestType: "demand_notice" | "receipt",
   targetId: string,
   reason: string,
   requestedBy: string,
+  requestedByUsername?: string | null,
+  requestedByRole?: string | null,
 ): Promise<CancellationRequestRow> {
   if (!reason.trim()) throw ApiError.badRequest("A reason is required to request a cancellation.");
 
@@ -42,7 +46,30 @@ export async function requestCancellation(
     holdingNo = txn.holding_no;
   }
 
-  return cancellationRequestRepository.create({ requestType, targetId, holdingNo, reason: reason.trim(), requestedBy });
+  let assignedCityManagerUsername: string | null = null;
+  let assignedCityManagerDisplayName: string | null = null;
+  if (requestedByRole === "tax_collector" && requestedByUsername) {
+    const collector = await adminRepository.findByUsername(requestedByUsername);
+    if (collector?.assigned_city_manager_username) {
+      const cityManager = await adminRepository.findByUsername(collector.assigned_city_manager_username);
+      if (cityManager) {
+        assignedCityManagerUsername = cityManager.username;
+        assignedCityManagerDisplayName = cityManager.display_name;
+      }
+    }
+  }
+
+  return cancellationRequestRepository.create({
+    requestType,
+    targetId,
+    holdingNo,
+    reason: reason.trim(),
+    requestedBy,
+    requestedByUsername,
+    requestedByRole,
+    assignedCityManagerUsername,
+    assignedCityManagerDisplayName,
+  });
 }
 
 export async function listPendingCancellationRequests(): Promise<CancellationRequestRow[]> {
@@ -54,16 +81,16 @@ export async function listCancellationRequests(status?: "pending" | "approved" |
 }
 
 /**
- * tax_daroga only. Approving a demand-notice cancellation just flags
- * the notice. Approving a receipt cancellation flags the transaction
- * AND reverts its linked demand notice back to unsettled/payable
- * again (per how this was specified) - both happen in one DB
- * transaction, so a failure partway through can never leave the
- * receipt cancelled but the notice still stuck settled, or vice
- * versa (same atomicity principle as submitPayment - see that
- * function's comment history for why this matters).
+ * Atomically finalizes a request as approved AND applies the
+ * cancellation (cancels the receipt/demand notice, reverting a
+ * settled demand notice back to payable if its receipt is what's
+ * being cancelled) in one transaction - a failure partway through can
+ * never leave the request marked approved but the underlying
+ * receipt/notice untouched, or vice versa. Called only once a request
+ * has cleared every stage it needs (Tax Daroga alone, or Tax Daroga
+ * then City Manager).
  */
-export async function approveCancellation(requestId: number, reviewedBy: string, reviewNotes: string | null): Promise<CancellationRequestRow> {
+async function finalizeAndApplyCancellation(requestId: number, reviewedBy: string, reviewNotes: string | null): Promise<CancellationRequestRow> {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
@@ -96,6 +123,37 @@ export async function approveCancellation(requestId: number, reviewedBy: string,
   } finally {
     client.release();
   }
+}
+
+/**
+ * tax_daroga only. For an operator-raised request (no assigned City
+ * Manager), this finalizes and applies the cancellation directly -
+ * unchanged from before. For a Tax-Collector-raised request, this
+ * only advances it to the assigned City Manager's stage; the
+ * cancellation isn't applied until that City Manager approves too.
+ */
+export async function approveCancellationAtTaxDaroga(requestId: number, reviewedBy: string, reviewNotes: string | null): Promise<CancellationRequestRow> {
+  const request = await cancellationRequestRepository.findById(requestId);
+  if (!request) throw ApiError.notFound("Cancellation request not found.");
+  if (request.status !== "pending" || request.stage !== "tax_daroga") throw ApiError.badRequest("This request isn't awaiting your review.");
+
+  if (request.assigned_city_manager_username) {
+    const advanced = await cancellationRequestRepository.advanceToCityManager(requestId, reviewedBy, reviewNotes);
+    if (!advanced) throw ApiError.badRequest("This request is no longer awaiting your review.");
+    return advanced;
+  }
+
+  return finalizeAndApplyCancellation(requestId, reviewedBy, reviewNotes);
+}
+
+/** The City Manager assigned to this request's Tax Collector - final approval, applies the cancellation. */
+export async function approveCancellationAtCityManager(requestId: number, cityManagerUsername: string, reviewedBy: string, reviewNotes: string | null): Promise<CancellationRequestRow> {
+  const request = await cancellationRequestRepository.findById(requestId);
+  if (!request) throw ApiError.notFound("Cancellation request not found.");
+  if (request.status !== "pending" || request.stage !== "city_manager") throw ApiError.badRequest("This request isn't awaiting your review.");
+  if (request.assigned_city_manager_username !== cityManagerUsername) throw ApiError.badRequest("This request wasn't assigned to you.");
+
+  return finalizeAndApplyCancellation(requestId, reviewedBy, reviewNotes);
 }
 
 /** tax_daroga only. Rejecting leaves the notice/receipt completely untouched - only the request itself is marked rejected. */

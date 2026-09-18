@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Users, FileClock, FileWarning, LayoutGrid, ShoppingBag, Store, BarChart3, Award, Archive, Download, XCircle, ShieldCheck, Trash2, RefreshCw, Upload, MapPin, Map as MapIcon, ClipboardCheck, UserCheck, ClipboardList } from "lucide-react";
+import { Users, FileClock, FileWarning, LayoutGrid, ShoppingBag, Store, BarChart3, Award, Archive, Download, XCircle, ShieldCheck, Trash2, RefreshCw, Upload, MapPin, Map as MapIcon, ClipboardCheck, UserCheck, ClipboardList, Receipt } from "lucide-react";
 import { AdminHeader } from "@/components/admin-header";
 import { DashboardSummaryWidget } from "@/components/dashboard-summary-widget";
 import { useAdminGuard } from "@/lib/use-admin-guard";
@@ -53,7 +53,14 @@ export default function AdminDashboardPage() {
   // property-tax tooling or each other's area.
   const isStallPrabhari = admin.role === "stall_prabhari";
   const isTradeLicenseNodal = admin.role === "trade_license_nodal";
-  const isRestrictedRole = isStallPrabhari || isTradeLicenseNodal;
+  const isAtps = admin.role === "assistant_town_planning_supervisor";
+  const isAssistantArchitect = admin.role === "assistant_architect";
+  // ATPS and Assistant Architect are GIS-only roles - restricted from
+  // every group (property/shop/trade license) the same way, not just
+  // a few cards within each, unlike Stall Prabhari/Trade License
+  // Nodal who still see some cards in their own area.
+  const isGisOnlyRole = isAtps || isAssistantArchitect;
+  const isRestrictedRole = isStallPrabhari || isTradeLicenseNodal || isGisOnlyRole;
   const canApproveShopPublication = admin.role === "stall_prabhari" || admin.role === "city_manager" || admin.role === "deputy_commissioner";
   const canApproveDemandActions = admin.role === "stall_prabhari" || admin.role === "city_manager";
   const isCommissioner = admin.role === "commissioner";
@@ -71,14 +78,18 @@ export default function AdminDashboardPage() {
   const showMigratedHoldingsBulkUpload = isCommissioner;
   const showMigratedHoldingsAssign = admin.role === "deputy_commissioner" || admin.role === "city_manager";
   const showMigratedHoldingsSurveyor = admin.role === "tax_daroga";
+  const showMigratedHoldingsMySurveys = admin.role === "tax_surveyor";
+  const showTaxCollectorPage = admin.role === "tax_collector";
+  const showResurveyFlags = admin.role === "tax_daroga" || admin.role === "commissioner";
+  const showTaxCollectorAssignments = isCommissioner;
   const propertyGroupVisible =
     showMutationApprovals || showCancellationRequests || showTaxCollectors || showBulkDemandNotices || showAllPropertyChanges || showRenumberHolding || showBulkUploadProperties ||
-    showMigratedHoldingsBulkUpload || showMigratedHoldingsAssign || showMigratedHoldingsSurveyor;
+    showMigratedHoldingsBulkUpload || showMigratedHoldingsAssign || showMigratedHoldingsSurveyor || showMigratedHoldingsMySurveys || showTaxCollectorPage || showResurveyFlags || showTaxCollectorAssignments;
 
-  const showShopAgreementApprovals = !isTradeLicenseNodal;
-  const showShopRentalApplications = !isTradeLicenseNodal;
-  const showShopRentalPreferences = !isTradeLicenseNodal;
-  const showShopRateReport = !isTradeLicenseNodal;
+  const showShopAgreementApprovals = !isTradeLicenseNodal && !isGisOnlyRole;
+  const showShopRentalApplications = !isTradeLicenseNodal && !isGisOnlyRole;
+  const showShopRentalPreferences = !isTradeLicenseNodal && !isGisOnlyRole;
+  const showShopRateReport = !isTradeLicenseNodal && !isGisOnlyRole;
   const showShopsPendingPublication = canApproveShopPublication;
   const showShopEditApprovals = canApproveShopPublication;
   const showShopAgreementDocumentRequests = canApproveShopPublication;
@@ -99,18 +110,17 @@ export default function AdminDashboardPage() {
     showBulkUploadShops ||
     showManageShops;
 
-  const showTradeLicenseApplications = !isStallPrabhari;
-  const showTradeLicenseReporting = !isStallPrabhari;
+  const showTradeLicenseApplications = !isStallPrabhari && !isGisOnlyRole;
+  const showTradeLicenseReporting = !isStallPrabhari && !isGisOnlyRole;
   const tradeLicenseGroupVisible = showTradeLicenseApplications || showTradeLicenseReporting;
 
   const showOperators = !isRestrictedRole;
   const showDocumentArchive = !isRestrictedRole;
   const showAttendanceReport = isCommissioner;
-  const isAtps = admin.role === "assistant_town_planning_supervisor";
-  const isAssistantArchitect = admin.role === "assistant_architect";
   const showAssignCoordinates = isAtps || isCommissioner;
   const showGisMap = isAtps || isAssistantArchitect || isCommissioner;
-  const miscGroupVisible = showOperators || showDocumentArchive || showAttendanceReport || showAssignCoordinates || showGisMap;
+  const showBuildingMapApproval = isAssistantArchitect;
+  const miscGroupVisible = showOperators || showDocumentArchive || showAttendanceReport || showAssignCoordinates || showGisMap || showBuildingMapApproval;
 
   const groupHeadingClass = "mb-4 mt-10 text-lg font-semibold text-slate-800 first:mt-0";
   const cardClass = "flex flex-col rounded-xl border border-slate-200 bg-white p-6 transition-shadow hover:shadow-md";
@@ -239,7 +249,47 @@ export default function AdminDashboardPage() {
                     <ClipboardList className="h-6 w-6" strokeWidth={1.8} />
                   </span>
                   <h3 className="mb-1.5 text-base font-semibold text-slate-900">My Migrated Holding Surveys</h3>
-                  <p className="text-sm text-slate-500">Record surveyor details and verify entered survey data.</p>
+                  <p className="text-sm text-slate-500">Assign to a Tax Surveyor, verify submissions, revert if needed.</p>
+                </Link>
+              )}
+
+              {showMigratedHoldingsMySurveys && (
+                <Link href="/admin/migrated-holdings-my-surveys" className={cardClass}>
+                  <span className={iconWrapClass}>
+                    <ClipboardList className="h-6 w-6" strokeWidth={1.8} />
+                  </span>
+                  <h3 className="mb-1.5 text-base font-semibold text-slate-900">My Surveys</h3>
+                  <p className="text-sm text-slate-500">Enter real floor-wise details for old holdings assigned to you.</p>
+                </Link>
+              )}
+
+              {showTaxCollectorPage && (
+                <Link href="/admin/tax-collector" className={cardClass}>
+                  <span className={iconWrapClass}>
+                    <Receipt className="h-6 w-6" strokeWidth={1.8} />
+                  </span>
+                  <h3 className="mb-1.5 text-base font-semibold text-slate-900">Tax Collection</h3>
+                  <p className="text-sm text-slate-500">Search a holding, view pendency, collect tax, issue a receipt.</p>
+                </Link>
+              )}
+
+              {showResurveyFlags && (
+                <Link href="/admin/resurvey-flags" className={cardClass}>
+                  <span className={iconWrapClass}>
+                    <FileWarning className="h-6 w-6" strokeWidth={1.8} />
+                  </span>
+                  <h3 className="mb-1.5 text-base font-semibold text-slate-900">Re-Survey Flags</h3>
+                  <p className="text-sm text-slate-500">Holdings flagged by Tax Collectors as looking different on the ground.</p>
+                </Link>
+              )}
+
+              {showTaxCollectorAssignments && (
+                <Link href="/admin/tax-collector-assignments" className={cardClass}>
+                  <span className={iconWrapClass}>
+                    <UserCheck className="h-6 w-6" strokeWidth={1.8} />
+                  </span>
+                  <h3 className="mb-1.5 text-base font-semibold text-slate-900">Tax Collector Assignments</h3>
+                  <p className="text-sm text-slate-500">Choose which City Manager reviews each Tax Collector&apos;s cancellation requests.</p>
                 </Link>
               )}
             </div>
@@ -453,6 +503,16 @@ export default function AdminDashboardPage() {
                   </span>
                   <h3 className="mb-1.5 text-base font-semibold text-slate-900">GIS Map</h3>
                   <p className="text-sm text-slate-500">View every holding&apos;s assigned coordinates on one map.</p>
+                </Link>
+              )}
+
+              {showBuildingMapApproval && (
+                <Link href="/admin/building-map-approval" className={cardClass}>
+                  <span className={iconWrapClass}>
+                    <ClipboardCheck className="h-6 w-6" strokeWidth={1.8} />
+                  </span>
+                  <h3 className="mb-1.5 text-base font-semibold text-slate-900">Building Map Approval</h3>
+                  <p className="text-sm text-slate-500">Review and approve submitted building maps.</p>
                 </Link>
               )}
             </div>

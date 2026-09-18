@@ -3,6 +3,8 @@ const ADMIN_KEY = "nnm_admin_info";
 
 export type AdminRole =
   | "tax_daroga"
+  | "tax_surveyor"
+  | "tax_collector"
   | "mutation_nodal_clerk"
   | "deputy_commissioner"
   | "commissioner"
@@ -14,6 +16,8 @@ export type AdminRole =
 
 export const ADMIN_ROLE_LABELS: Record<AdminRole, string> = {
   tax_daroga: "Tax Daroga",
+  tax_surveyor: "Tax Surveyor",
+  tax_collector: "Tax Collector",
   mutation_nodal_clerk: "Mutation Nodal Clerk",
   deputy_commissioner: "Deputy Municipal Commissioner",
   commissioner: "Municipal Commissioner",
@@ -27,6 +31,8 @@ export const ADMIN_ROLE_LABELS: Record<AdminRole, string> = {
 export const ADMIN_ROLE_ORDER: AdminRole[] = [
   "stall_prabhari",
   "tax_daroga",
+  "tax_surveyor",
+  "tax_collector",
   "city_manager",
   "mutation_nodal_clerk",
   "trade_license_nodal",

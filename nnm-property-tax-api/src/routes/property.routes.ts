@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { getPropertyByHoldingNo, postPropertyLookup, postRecordPropertySurvey, getPropertySurveyList } from "../controllers/property.controller";
 import { listPendingOperatorEntryHandler, submitOperatorEntryHandler } from "../controllers/migratedHoldingSurvey.controller";
+import { postFlagForResurvey, listResurveyFlagsForHoldingHandler } from "../controllers/propertyResurveyFlag.controller";
 import { saveProperty } from "../controllers/propertySave.controller";
 import { postPayment, getPaymentHistory, getReceiptReprint } from "../controllers/payment.controller";
 import { postInitiateOnlinePayment } from "../controllers/onlinePayment.controller";
@@ -36,10 +37,12 @@ propertyRouter.get("/migrated-holdings/pending-entry", requireOperatorOrAdmin, l
 // below, for the same reason. Live calc only, never touches the DB.
 propertyRouter.post("/preview-tax", requireOperator, postPreviewTax);
 
-// POST /api/v1/properties/cancellation-requests - any operator may
-// request cancellation of any demand notice or receipt; nothing
-// actually changes until tax_daroga approves (see admin.routes.ts).
-propertyRouter.post("/cancellation-requests", requireOperator, postRequestCancellation);
+// POST /api/v1/properties/cancellation-requests - any operator or a
+// tax_collector admin may request cancellation of any demand notice
+// or receipt; nothing actually changes until it clears review (see
+// admin.routes.ts) - tax_daroga alone for an operator's request, or
+// tax_daroga then the assigned City Manager for a Tax Collector's.
+propertyRouter.post("/cancellation-requests", requireOperatorOrAdmin, postRequestCancellation);
 
 // POST /api/v1/properties/lookup — public, two-factor citizen search
 // (holding number + mobile number). MUST come before POST /:holdingNo
@@ -53,7 +56,7 @@ propertyRouter.post("/", requireOperator, createNewEntryProperty);
 // GET /api/v1/properties/:holdingNo — operator/admin only. Holding
 // number alone is public no longer — see POST /lookup for the public,
 // two-factor citizen search.
-propertyRouter.get("/:holdingNo", requireOperator, getPropertyByHoldingNo);
+propertyRouter.get("/:holdingNo", requireOperatorOrAdmin, getPropertyByHoldingNo);
 
 // POST /api/v1/properties/:holdingNo — create/update a KNOWN-number property (operator only)
 propertyRouter.post("/:holdingNo", requireOperator, saveProperty);
@@ -67,17 +70,17 @@ propertyRouter.patch("/:holdingNo/survey", requireOperatorOrAdmin, postRecordPro
 // /:holdingNo above's catch-all would otherwise intercept it.
 propertyRouter.post("/migrated-holdings/:holdingNo/operator-entry", requireOperatorOrAdmin, submitOperatorEntryHandler);
 
-// POST /api/v1/properties/:holdingNo/payments — record a counter payment (operator only)
-propertyRouter.post("/:holdingNo/payments", requireOperator, postPayment);
+// POST /api/v1/properties/:holdingNo/payments - record a counter payment (operator, or a tax_collector admin - see the role check inside postPayment)
+propertyRouter.post("/:holdingNo/payments", requireOperatorOrAdmin, postPayment);
 
 // POST /api/v1/properties/:holdingNo/pay/online/initiate — start an online payment (public)
 propertyRouter.post("/:holdingNo/pay/online/initiate", postInitiateOnlinePayment);
 
-// POST /api/v1/properties/:holdingNo/demand-notice — generate a demand notice (operator only)
-propertyRouter.post("/:holdingNo/demand-notice", requireOperator, postGenerateDemandNotice);
+// POST /api/v1/properties/:holdingNo/demand-notice - generate a demand notice (operator, or a tax_collector admin - see the role check inside postGenerateDemandNotice)
+propertyRouter.post("/:holdingNo/demand-notice", requireOperatorOrAdmin, postGenerateDemandNotice);
 
-// GET /api/v1/properties/:holdingNo/demand-notices/unsettled — for the payment picker (operator only)
-propertyRouter.get("/:holdingNo/demand-notices/unsettled", requireOperator, getUnsettledDemandNotices);
+// GET /api/v1/properties/:holdingNo/demand-notices/unsettled - for the payment picker (operator or admin)
+propertyRouter.get("/:holdingNo/demand-notices/unsettled", requireOperatorOrAdmin, getUnsettledDemandNotices);
 
 // Read-only document history + reprints — reachable by operator OR admin.
 // The /demand-notices/:demandNo/print and /payments/:receiptNo/print
@@ -85,6 +88,10 @@ propertyRouter.get("/:holdingNo/demand-notices/unsettled", requireOperator, getU
 // BEFORE the /:holdingNo catch-all further up would otherwise intercept
 // "demand-notices"/"payments" as a literal holding number.
 propertyRouter.get("/:holdingNo/demand-notices/history", requireOperatorOrAdmin, getDemandNoticeHistory);
+
+// POST /api/v1/properties/:holdingNo/resurvey-flag - a Tax Collector flags a holding for re-survey with remarks
+propertyRouter.post("/:holdingNo/resurvey-flag", requireOperatorOrAdmin, postFlagForResurvey);
+propertyRouter.get("/:holdingNo/resurvey-flags", requireOperatorOrAdmin, listResurveyFlagsForHoldingHandler);
 propertyRouter.get("/demand-notices/:demandNo/print", requireOperatorOrAdmin, getDemandNoticeReprint);
 propertyRouter.get("/:holdingNo/payments/history", requireOperatorOrAdmin, getPaymentHistory);
 propertyRouter.get("/payments/:receiptNo/print", requireOperatorOrAdmin, getReceiptReprint);

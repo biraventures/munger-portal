@@ -160,10 +160,22 @@ export interface PropertySearchResult {
 export type MigratedHoldingSurveyStatus =
   | "pending_assignment"
   | "assigned_to_surveyor"
+  | "assigned_to_tax_surveyor"
   | "forwarded_to_operator"
   | "pending_verification"
   | "verified_by_tax_daroga"
   | "finalized";
+
+export interface MigratedHoldingSurveyEventRow {
+  id: number;
+  holding_no: string;
+  event_type: string;
+  actor_username: string | null;
+  actor_display_name: string | null;
+  actor_role: string | null;
+  notes: string | null;
+  created_at: string;
+}
 
 export interface MigratedHoldingSurveyRow {
   id: number;
@@ -181,6 +193,10 @@ export interface MigratedHoldingSurveyRow {
   assigned_by_role: "deputy_commissioner" | "city_manager" | null;
   assigned_to_tax_daroga_username: string | null;
   assigned_to_tax_daroga_display_name: string | null;
+  assigned_to_tax_surveyor_username: string | null;
+  assigned_to_tax_surveyor_display_name: string | null;
+  assigned_to_tax_surveyor_at: string | null;
+  revision_count: number;
   assigned_at: string | null;
   surveyor_name: string | null;
   surveyor_id_number: string | null;
@@ -196,4 +212,18 @@ export interface MigratedHoldingSurveyRow {
   final_verified_at: string | null;
   created_by: string;
   created_date: string;
+}
+
+export interface PropertyResurveyFlagRow {
+  id: number;
+  holding_no: string;
+  flagged_by_username: string;
+  flagged_by_display_name: string;
+  remarks: string;
+  flagged_at: string;
+  status: "open" | "reviewed" | "dismissed";
+  reviewed_by_username: string | null;
+  reviewed_by_display_name: string | null;
+  reviewed_at: string | null;
+  review_notes: string | null;
 }

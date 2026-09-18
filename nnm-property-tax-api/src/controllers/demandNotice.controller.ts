@@ -25,8 +25,11 @@ export const postGenerateDemandNotice = asyncHandler(async (req: Request, res: R
   if (!paramsParsed.success) {
     throw ApiError.badRequest("Invalid holding number");
   }
+  if (req.admin && req.admin.role !== "tax_collector") {
+    throw new ApiError(403, "Only a Tax Collector or operator can generate a demand notice.");
+  }
 
-  const generatedBy = req.operator!.displayName;
+  const generatedBy = req.admin?.displayName ?? req.operator!.displayName;
   const result = await generateDemandNotice(paramsParsed.data.holdingNo, generatedBy);
   res.status(200).json(result);
 });

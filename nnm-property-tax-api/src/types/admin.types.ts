@@ -1,5 +1,7 @@
 export type AdminRole =
   | "tax_daroga"
+  | "tax_surveyor"
+  | "tax_collector"
   | "mutation_nodal_clerk"
   | "deputy_commissioner"
   | "commissioner"
@@ -11,6 +13,8 @@ export type AdminRole =
 
 export const ADMIN_ROLES: AdminRole[] = [
   "tax_daroga",
+  "tax_surveyor",
+  "tax_collector",
   "mutation_nodal_clerk",
   "deputy_commissioner",
   "commissioner",
@@ -23,6 +27,8 @@ export const ADMIN_ROLES: AdminRole[] = [
 
 export const ADMIN_ROLE_LABELS: Record<AdminRole, string> = {
   tax_daroga: "Tax Daroga",
+  tax_surveyor: "Tax Surveyor",
+  tax_collector: "Tax Collector",
   mutation_nodal_clerk: "Mutation Nodal Clerk",
   deputy_commissioner: "Deputy Municipal Commissioner",
   commissioner: "Municipal Commissioner",
@@ -110,6 +116,7 @@ export interface AdminRow {
   role: AdminRole;
   active: boolean;
   email: string | null;
+  assigned_city_manager_username: string | null;
 }
 
 export interface AdminLoginResult {
