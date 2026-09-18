@@ -68,7 +68,8 @@ export default function AdminDashboardPage() {
   // Pre-computed per-card visibility so each grouped section's heading
   // can be hidden entirely when none of its cards apply to this role,
   // rather than showing an empty section.
-  const showMutationApprovals = !isRestrictedRole;
+  const isMutationChainRole = admin.role === "tax_daroga" || admin.role === "mutation_nodal_clerk" || admin.role === "deputy_commissioner" || isCommissioner;
+  const showMutationApprovals = isMutationChainRole;
   const showCancellationRequests = !isRestrictedRole;
   const showTaxCollectors = !isRestrictedRole;
   const showBulkDemandNotices = !isRestrictedRole;

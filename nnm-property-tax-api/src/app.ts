@@ -10,6 +10,15 @@ import { errorHandler, notFoundHandler } from "./middleware/errorHandler";
 export function createApp() {
   const app = express();
 
+  // The app sits behind an nginx reverse proxy (WEB=VM-01 forwarding
+  // to APP=VM-02), which sets X-Forwarded-For. Without telling Express
+  // to trust that one hop, express-rate-limit refuses to use the
+  // header at all (to avoid a client spoofing it to dodge rate
+  // limits) and throws on every request instead - trusting exactly 1
+  // hop tells it nginx is a known, trusted proxy without trusting
+  // anything further upstream that a client could forge.
+  app.set("trust proxy", 1);
+
   app.disable("x-powered-by");
   app.use(helmet());
   app.use(
