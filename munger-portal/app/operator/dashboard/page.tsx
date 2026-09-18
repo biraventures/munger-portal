@@ -1,6 +1,6 @@
 "use client";
 
-import { Store, Building2, ShoppingBag, Award, Download, ClipboardCheck } from "lucide-react";
+import { Store, Building2, ShoppingBag, Award, Download, ClipboardCheck, RotateCcw } from "lucide-react";
 import { OperatorHeader } from "@/components/operator-header";
 import { OperatorTaskCard } from "@/components/operator-task-card";
 import { DashboardSummaryWidget } from "@/components/dashboard-summary-widget";
@@ -60,6 +60,20 @@ export default function OperatorDashboardPage() {
             icon={ClipboardCheck}
             title="Migrated Holding Survey Entry"
             description="Enter real floor-wise details for old holdings forwarded by a Tax Daroga."
+          />
+
+          <OperatorTaskCard
+            href="/operator/reverted-mutations"
+            icon={RotateCcw}
+            title="Reverted Mutations"
+            description="Property mutations a reviewer sent back for correction."
+          />
+
+          <OperatorTaskCard
+            href="/operator/reverted-shop-agreements"
+            icon={RotateCcw}
+            title="Reverted Shop Agreements"
+            description="Shop agreement requests a reviewer sent back for correction."
           />
 
           <OperatorTaskCard

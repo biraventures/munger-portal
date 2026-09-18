@@ -1,5 +1,6 @@
 import { changeRequestRepository } from "../repositories/changeRequest.repository";
 import { propertyRepository } from "../repositories/property.repository";
+import { entryRevertEventRepository } from "../repositories/entryRevertEvent.repository";
 import { applyPropertySave } from "./propertySave.service";
 import { nextApprovalStage } from "../types/admin.types";
 import { ApiError } from "../utils/ApiError";
@@ -126,4 +127,57 @@ export async function rejectAtCurrentStage(
     throw ApiError.badRequest("This request was already reviewed by someone else.");
   }
   return finalized;
+}
+
+/**
+ * Any admin, at whatever stage the request is currently sitting at,
+ * may send it back to the operator for correction instead of
+ * approving or rejecting - with a required comment on what needs
+ * fixing. Logged to the unified entry_revert_events audit trail
+ * (see entryRevertEvent.repository.ts) for the Commissioner's export.
+ */
+export async function revertAtCurrentStage(id: number, admin: AdminTokenPayload, comment: string): Promise<ChangeRequestRow> {
+  const request = await changeRequestRepository.findById(id);
+  if (!request) throw ApiError.notFound("Change request not found");
+  if (request.status !== "pending") {
+    throw ApiError.badRequest(`This request has already been ${request.status}.`);
+  }
+  if (admin.role !== request.current_stage) {
+    throw new ApiError(403, `This request is currently with ${request.current_stage.replace(/_/g, " ")} - it isn't at your stage.`);
+  }
+  if (!comment.trim()) throw ApiError.badRequest("A comment is required explaining what needs to be corrected.");
+
+  const reverted = await changeRequestRepository.revert(id, request.current_stage, admin.displayName, admin.role, comment.trim());
+  if (!reverted) throw ApiError.badRequest("This request moved on before it could be reverted - please refresh.");
+
+  await entryRevertEventRepository.create({
+    entryType: "property_mutation",
+    entryId: id,
+    referenceNo: request.holding_no,
+    originallyRequestedBy: request.requested_by,
+    revertedBy: admin.displayName,
+    revertedByRole: admin.role,
+    revertedFromStage: request.current_stage,
+    comment: comment.trim(),
+  });
+
+  return reverted;
+}
+
+/** The operator's own worklist - every property mutation currently reverted and awaiting correction. */
+export async function listRevertedChangeRequests(): Promise<ChangeRequestRow[]> {
+  return changeRequestRepository.listReverted();
+}
+
+/** Operator corrects and resubmits a reverted request - re-enters the chain from its first stage. */
+export async function resubmitCorrectedChangeRequest(id: number, proposedData: ChangeRequestRow["proposed_data"], changeReference: string): Promise<ChangeRequestRow> {
+  const request = await changeRequestRepository.findById(id);
+  if (!request) throw ApiError.notFound("Change request not found");
+  if (request.status !== "reverted") throw ApiError.badRequest("This request isn't currently awaiting correction.");
+
+  const resubmitted = await changeRequestRepository.resubmitWithCorrections(id, proposedData, changeReference);
+  if (!resubmitted) throw ApiError.badRequest("This request is no longer awaiting correction.");
+
+  await entryRevertEventRepository.markResubmitted("property_mutation", id);
+  return resubmitted;
 }

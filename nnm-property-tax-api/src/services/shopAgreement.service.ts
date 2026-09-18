@@ -1,5 +1,6 @@
 import { shopRepository, shopAgreementRepository } from "../repositories/shop.repository";
 import { shopAgreementChangeRequestRepository } from "../repositories/shopAgreementChangeRequest.repository";
+import { entryRevertEventRepository } from "../repositories/entryRevertEvent.repository";
 import { classifyShopAgreementChange, SHOP_TIER_FINAL_STAGE } from "./shopAgreementClassification.service";
 import { resolveRentPeriods, resolveRentPeriodsFromValues, calculateEffectiveMonthlyRent } from "./rentCalculation.service";
 import { currentYearMonth } from "../utils/yearMonth";
@@ -134,6 +135,59 @@ export async function rejectShopAgreementChange(
     throw ApiError.badRequest("This request was already reviewed by someone else.");
   }
   return finalized;
+}
+
+/**
+ * Any admin, at whatever stage the request is currently sitting at,
+ * may send it back to the operator for correction instead of
+ * approving or rejecting - with a required comment on what needs
+ * fixing. Logged to the unified entry_revert_events audit trail (see
+ * entryRevertEvent.repository.ts) for the Commissioner's export.
+ */
+export async function revertShopAgreementChange(id: number, admin: AdminTokenPayload, comment: string): Promise<ShopAgreementChangeRequestRow> {
+  const request = await shopAgreementChangeRequestRepository.findById(id);
+  if (!request) throw ApiError.notFound("Change request not found");
+  if (request.status !== "pending") {
+    throw ApiError.badRequest(`This request has already been ${request.status}.`);
+  }
+  if (admin.role !== request.current_stage) {
+    throw new ApiError(403, `This request is currently with ${request.current_stage.replace(/_/g, " ")} - it isn't at your stage.`);
+  }
+  if (!comment.trim()) throw ApiError.badRequest("A comment is required explaining what needs to be corrected.");
+
+  const reverted = await shopAgreementChangeRequestRepository.revert(id, request.current_stage as AdminRole, admin.displayName, admin.role, comment.trim());
+  if (!reverted) throw ApiError.badRequest("This request moved on before it could be reverted - please refresh.");
+
+  await entryRevertEventRepository.create({
+    entryType: "shop_agreement",
+    entryId: id,
+    referenceNo: request.shop_no,
+    originallyRequestedBy: request.requested_by,
+    revertedBy: admin.displayName,
+    revertedByRole: admin.role,
+    revertedFromStage: request.current_stage,
+    comment: comment.trim(),
+  });
+
+  return reverted;
+}
+
+/** The operator's own worklist - every shop agreement request currently reverted and awaiting correction. */
+export async function listRevertedShopAgreementChangeRequests(): Promise<ShopAgreementChangeRequestRow[]> {
+  return shopAgreementChangeRequestRepository.listReverted();
+}
+
+/** Operator corrects and resubmits a reverted request - re-enters the chain from its first stage. */
+export async function resubmitCorrectedShopAgreementChange(id: number, proposedData: ShopAgreementSaveInput, changeReason: string): Promise<ShopAgreementChangeRequestRow> {
+  const request = await shopAgreementChangeRequestRepository.findById(id);
+  if (!request) throw ApiError.notFound("Change request not found");
+  if (request.status !== "reverted") throw ApiError.badRequest("This request isn't currently awaiting correction.");
+
+  const resubmitted = await shopAgreementChangeRequestRepository.resubmitWithCorrections(id, proposedData, changeReason);
+  if (!resubmitted) throw ApiError.badRequest("This request is no longer awaiting correction.");
+
+  await entryRevertEventRepository.markResubmitted("shop_agreement", id);
+  return resubmitted;
 }
 
 export async function listShopAgreementChangeRequests(

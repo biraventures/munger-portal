@@ -396,7 +396,7 @@ export interface ShopAgreementChangeRequestRow {
   agreement_id: number | null;
   requested_by: string;
   requested_at: Date;
-  status: "pending" | "approved" | "rejected";
+  status: "pending" | "approved" | "rejected" | "reverted";
   change_reason: string;
   proposed_data: ShopAgreementSaveInput;
   current_stage: string;
@@ -407,6 +407,12 @@ export interface ShopAgreementChangeRequestRow {
   reviewed_role: string | null;
   reviewed_at: Date | null;
   review_notes: string | null;
+  reverted_by: string | null;
+  reverted_by_role: string | null;
+  reverted_from_stage: string | null;
+  reverted_at: Date | null;
+  revert_comment: string | null;
+  revision_count: number;
 }
 
 export interface ShopAgreementChangeApprovalRow {

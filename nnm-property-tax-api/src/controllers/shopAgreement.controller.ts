@@ -4,6 +4,9 @@ import {
   submitAgreementChange,
   approveShopAgreementChange,
   rejectShopAgreementChange,
+  revertShopAgreementChange,
+  listRevertedShopAgreementChangeRequests,
+  resubmitCorrectedShopAgreementChange,
   listShopAgreementChangeRequests,
   getShopAgreementChangeRequestDetail,
   getAgreementForPrint,
@@ -123,5 +126,39 @@ export const postRejectShopAgreementRequest = asyncHandler(async (req: Request, 
   if (!bodyParsed.success) throw ApiError.badRequest("A reason is required to reject", bodyParsed.error.flatten().fieldErrors);
 
   const updated = await rejectShopAgreementChange(paramsParsed.data.id, req.admin!, bodyParsed.data.notes);
+  res.status(200).json({ request: updated });
+});
+const revertBodySchema = z.object({ comment: z.string().trim().min(1, "A comment is required explaining what needs to be corrected.").max(2000) });
+
+/** POST /api/v1/admin/shop-agreement-requests/:id/revert - any admin, at whatever stage the request is currently at. */
+export const postRevertShopAgreementRequest = asyncHandler(async (req: Request, res: Response) => {
+  const paramsParsed = idParamSchema.safeParse(req.params);
+  if (!paramsParsed.success) throw ApiError.badRequest("Invalid id");
+  const bodyParsed = revertBodySchema.safeParse(req.body);
+  if (!bodyParsed.success) throw ApiError.badRequest("Invalid input", bodyParsed.error.flatten().fieldErrors);
+
+  const updated = await revertShopAgreementChange(paramsParsed.data.id, req.admin!, bodyParsed.data.comment);
+  res.status(200).json({ request: updated });
+});
+
+/** GET /api/v1/shops/agreement-requests/reverted - operator's worklist of shop agreements sent back for correction. */
+export const getRevertedShopAgreementRequests = asyncHandler(async (_req: Request, res: Response) => {
+  const requests = await listRevertedShopAgreementChangeRequests();
+  res.status(200).json({ requests });
+});
+
+/** POST /api/v1/shops/agreement-requests/:id/resubmit - operator corrects and resubmits a reverted shop agreement request. */
+export const postResubmitShopAgreementRequest = asyncHandler(async (req: Request, res: Response) => {
+  const paramsParsed = idParamSchema.safeParse(req.params);
+  if (!paramsParsed.success) throw ApiError.badRequest("Invalid id");
+  const bodyParsed = agreementInputSchema.safeParse(req.body);
+  if (!bodyParsed.success) throw ApiError.badRequest("Invalid agreement data", bodyParsed.error.flatten().fieldErrors);
+
+  const existing = await getShopAgreementChangeRequestDetail(paramsParsed.data.id);
+  const updated = await resubmitCorrectedShopAgreementChange(
+    paramsParsed.data.id,
+    { ...bodyParsed.data, shopNo: existing.request.shop_no },
+    bodyParsed.data.changeReason,
+  );
   res.status(200).json({ request: updated });
 });

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Users, FileClock, FileWarning, LayoutGrid, ShoppingBag, Store, BarChart3, Award, Archive, Download, XCircle, ShieldCheck, Trash2, RefreshCw, Upload, MapPin, Map as MapIcon, ClipboardCheck, UserCheck, ClipboardList, Receipt } from "lucide-react";
+import { Users, FileClock, FileWarning, LayoutGrid, ShoppingBag, Store, BarChart3, Award, Archive, Download, XCircle, ShieldCheck, Trash2, RefreshCw, Upload, MapPin, Map as MapIcon, ClipboardCheck, UserCheck, ClipboardList, Receipt, RotateCcw } from "lucide-react";
 import { AdminHeader } from "@/components/admin-header";
 import { DashboardSummaryWidget } from "@/components/dashboard-summary-widget";
 import { useAdminGuard } from "@/lib/use-admin-guard";
@@ -82,9 +82,10 @@ export default function AdminDashboardPage() {
   const showTaxCollectorPage = admin.role === "tax_collector";
   const showResurveyFlags = admin.role === "tax_daroga" || admin.role === "commissioner";
   const showTaxCollectorAssignments = isCommissioner;
+  const showRevertAuditTrail = isCommissioner;
   const propertyGroupVisible =
     showMutationApprovals || showCancellationRequests || showTaxCollectors || showBulkDemandNotices || showAllPropertyChanges || showRenumberHolding || showBulkUploadProperties ||
-    showMigratedHoldingsBulkUpload || showMigratedHoldingsAssign || showMigratedHoldingsSurveyor || showMigratedHoldingsMySurveys || showTaxCollectorPage || showResurveyFlags || showTaxCollectorAssignments;
+    showMigratedHoldingsBulkUpload || showMigratedHoldingsAssign || showMigratedHoldingsSurveyor || showMigratedHoldingsMySurveys || showTaxCollectorPage || showResurveyFlags || showTaxCollectorAssignments || showRevertAuditTrail;
 
   const showShopAgreementApprovals = !isTradeLicenseNodal && !isGisOnlyRole;
   const showShopRentalApplications = !isTradeLicenseNodal && !isGisOnlyRole;
@@ -290,6 +291,16 @@ export default function AdminDashboardPage() {
                   </span>
                   <h3 className="mb-1.5 text-base font-semibold text-slate-900">Tax Collector Assignments</h3>
                   <p className="text-sm text-slate-500">Choose which City Manager reviews each Tax Collector&apos;s cancellation requests.</p>
+                </Link>
+              )}
+
+              {showRevertAuditTrail && (
+                <Link href="/admin/revert-audit-trail" className={cardClass}>
+                  <span className={iconWrapClass}>
+                    <RotateCcw className="h-6 w-6" strokeWidth={1.8} />
+                  </span>
+                  <h3 className="mb-1.5 text-base font-semibold text-slate-900">Revert Audit Trail</h3>
+                  <p className="text-sm text-slate-500">Property mutations and shop agreements sent back to operators for correction.</p>
                 </Link>
               )}
             </div>

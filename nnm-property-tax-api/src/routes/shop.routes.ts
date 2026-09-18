@@ -1,6 +1,11 @@
 import { Router } from "express";
 import { getShopByShopNo, postShopLookup, postCreateShop, getMarketList, getNextShopNumber, listVacantShops, listShopsWithSummary } from "../controllers/shop.controller";
-import { postSubmitAgreementChange, getPrintableAgreement } from "../controllers/shopAgreement.controller";
+import {
+  postSubmitAgreementChange,
+  getPrintableAgreement,
+  getRevertedShopAgreementRequests,
+  postResubmitShopAgreementRequest,
+} from "../controllers/shopAgreement.controller";
 import { postSubmitShopEditRequest } from "../controllers/shopEditRequest.controller";
 import { postRequestDemandAction } from "../controllers/shopDemandAction.controller";
 import {
@@ -54,6 +59,13 @@ shopRouter.get("/:shopNo", requireOperator, getShopByShopNo);
 
 // POST /api/v1/shops/:shopNo/agreement — queue a new/edited agreement for the 5-stage approval chain
 shopRouter.post("/:shopNo/agreement", requireOperator, postSubmitAgreementChange);
+
+// GET /api/v1/shops/agreement-requests/reverted - operator's worklist
+// of shop agreements sent back for correction.
+shopRouter.get("/agreement-requests/reverted", requireOperator, getRevertedShopAgreementRequests);
+// POST /api/v1/shops/agreement-requests/:id/resubmit - operator
+// corrects and resubmits a reverted shop agreement request.
+shopRouter.post("/agreement-requests/:id/resubmit", requireOperator, postResubmitShopAgreementRequest);
 
 // Propose an edit to an existing shop's own details (location,
 // market, ward, area) - operator only, matching the property/holding

@@ -9,7 +9,7 @@ function authHeaders(): HeadersInit {
   return { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
 }
 
-export type ShopChangeRequestStatus = "pending" | "approved" | "rejected";
+export type ShopChangeRequestStatus = "pending" | "approved" | "rejected" | "reverted";
 
 export type ShopApprovalTier = "full" | "data_completion";
 
@@ -28,6 +28,12 @@ export interface ShopAgreementChangeRequestSummary {
   reviewed_role: string | null;
   reviewed_at: string | null;
   review_notes: string | null;
+  reverted_by: string | null;
+  reverted_by_role: string | null;
+  reverted_from_stage: string | null;
+  reverted_at: string | null;
+  revert_comment: string | null;
+  revision_count: number;
 }
 
 export async function fetchShopAgreementRequests(opts: {
@@ -90,6 +96,21 @@ export async function rejectShopAgreementRequest(id: number, notes: string): Pro
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     throw new Error(body.error || "Could not reject this request.");
+  }
+  const data: { request: ShopAgreementChangeRequestSummary } = await res.json();
+  return data.request;
+}
+
+/** Any admin at their own stage may send a pending shop agreement request back to the operator for correction, instead of approve/reject. */
+export async function revertShopAgreementRequest(id: number, comment: string): Promise<ShopAgreementChangeRequestSummary> {
+  const res = await fetch(`${API_BASE_URL}/admin/shop-agreement-requests/${id}/revert`, {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify({ comment }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || "Could not revert this request.");
   }
   const data: { request: ShopAgreementChangeRequestSummary } = await res.json();
   return data.request;

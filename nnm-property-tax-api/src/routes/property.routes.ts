@@ -2,7 +2,8 @@ import { Router } from "express";
 import { getPropertyByHoldingNo, postPropertyLookup, postRecordPropertySurvey, getPropertySurveyList } from "../controllers/property.controller";
 import { listPendingOperatorEntryHandler, submitOperatorEntryHandler } from "../controllers/migratedHoldingSurvey.controller";
 import { postFlagForResurvey, listResurveyFlagsForHoldingHandler } from "../controllers/propertyResurveyFlag.controller";
-import { saveProperty } from "../controllers/propertySave.controller";
+import { saveProperty, postResubmitChangeRequest } from "../controllers/propertySave.controller";
+import { getRevertedChangeRequests } from "../controllers/changeRequest.controller";
 import { postPayment, getPaymentHistory, getReceiptReprint } from "../controllers/payment.controller";
 import { postInitiateOnlinePayment } from "../controllers/onlinePayment.controller";
 import { createNewEntryProperty, previewNextHoldingNo } from "../controllers/newEntry.controller";
@@ -60,6 +61,15 @@ propertyRouter.get("/:holdingNo", requireOperatorOrAdmin, getPropertyByHoldingNo
 
 // POST /api/v1/properties/:holdingNo — create/update a KNOWN-number property (operator only)
 propertyRouter.post("/:holdingNo", requireOperator, saveProperty);
+
+// GET /api/v1/properties/change-requests/reverted - operator's
+// worklist of mutations sent back for correction. Segment count (3
+// after /properties) differs from the /:holdingNo catch-all (1), so
+// no route-ordering conflict either way.
+propertyRouter.get("/change-requests/reverted", requireOperator, getRevertedChangeRequests);
+// POST /api/v1/properties/change-requests/:id/resubmit - operator
+// corrects and resubmits a reverted mutation.
+propertyRouter.post("/change-requests/:id/resubmit", requireOperator, postResubmitChangeRequest);
 
 // PATCH /api/v1/properties/:holdingNo/survey - record surveyor name/ID/date (operator or admin)
 propertyRouter.patch("/:holdingNo/survey", requireOperatorOrAdmin, postRecordPropertySurvey);

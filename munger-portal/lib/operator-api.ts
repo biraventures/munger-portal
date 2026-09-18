@@ -96,6 +96,48 @@ export async function saveProperty(holdingNo: string, payload: Record<string, un
   return res.json();
 }
 
+export interface RevertedChangeRequest {
+  id: number;
+  holding_no: string;
+  change_basis: string;
+  change_reference: string;
+  proposed_data: Record<string, unknown>;
+  reverted_by: string;
+  reverted_by_role: string;
+  reverted_from_stage: string;
+  reverted_at: string;
+  revert_comment: string;
+  revision_count: number;
+}
+
+/** The operator's worklist of property mutations a reviewer sent back for correction. */
+export async function fetchRevertedChangeRequests(): Promise<RevertedChangeRequest[]> {
+  const token = getOperatorToken();
+  if (!token) throw new Error("Not logged in - please log in again.");
+  const res = await fetch(`${API_BASE_URL}/properties/change-requests/reverted`, { headers: { Authorization: `Bearer ${token}` } });
+  if (!res.ok) throw new Error("Could not load your reverted requests.");
+  const data: { requests: RevertedChangeRequest[] } = await res.json();
+  return data.requests;
+}
+
+/** Operator corrects and resubmits a reverted mutation - re-enters the approval chain from its first stage. */
+export async function resubmitChangeRequest(id: number, payload: Record<string, unknown>): Promise<{ status: string; current_stage: string }> {
+  const token = getOperatorToken();
+  if (!token) throw new Error("Not logged in - please log in again.");
+  const res = await fetch(`${API_BASE_URL}/properties/change-requests/${id}/resubmit`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    const err: SaveError = { message: body.error || "Could not resubmit this request.", details: body.details };
+    throw err;
+  }
+  const data: { request: { status: string; current_stage: string } } = await res.json();
+  return data.request;
+}
+
 export type HoldingEntryMode = "new" | "partiallyKnown";
 
 export async function previewNextHoldingNo(mode: HoldingEntryMode): Promise<string> {

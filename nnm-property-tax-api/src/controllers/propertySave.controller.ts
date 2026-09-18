@@ -2,6 +2,7 @@ import type { Request, Response } from "express";
 import { z } from "zod";
 import { holdingNoSchema } from "../utils/holdingNoSchema";
 import { savePropertyByHoldingNo } from "../services/propertySave.service";
+import { resubmitCorrectedChangeRequest } from "../services/changeRequest.service";
 import { asyncHandler } from "../middleware/asyncHandler";
 import { ApiError } from "../utils/ApiError";
 
@@ -15,7 +16,7 @@ const floorSchema = z.object({
   closingYear: z.string().nullish(),
 });
 
-const propertySaveSchema = z.object({
+export const propertySaveSchema = z.object({
   oldHoldingNo: z.string().nullish(),
   oldPid: z.string().nullish(),
   khesraNo: z.string().nullish(),
@@ -84,4 +85,23 @@ export const saveProperty = asyncHandler(async (req: Request, res: Response) => 
 
   const result = await savePropertyByHoldingNo(paramsParsed.data.holdingNo, bodyParsed.data, operatorDisplayName);
   res.status(200).json(result);
+});
+const idParamSchema = z.object({ id: z.coerce.number().int().positive() });
+
+/**
+ * POST /api/v1/properties/change-requests/:id/resubmit - operator
+ * corrects and resubmits a mutation that was reverted back to them,
+ * per the SAME propertySaveSchema a normal save uses (this is,
+ * functionally, a full re-save of the proposed data) - re-enters the
+ * approval chain from its first stage.
+ */
+export const postResubmitChangeRequest = asyncHandler(async (req: Request, res: Response) => {
+  const paramsParsed = idParamSchema.safeParse(req.params);
+  if (!paramsParsed.success) throw ApiError.badRequest("Invalid change request id");
+  const bodyParsed = propertySaveSchema.safeParse(req.body);
+  if (!bodyParsed.success) throw ApiError.badRequest("Invalid property data", bodyParsed.error.flatten().fieldErrors);
+  if (!bodyParsed.data.changeReference) throw ApiError.badRequest("A change reference is required.");
+
+  const result = await resubmitCorrectedChangeRequest(paramsParsed.data.id, bodyParsed.data, bodyParsed.data.changeReference);
+  res.status(200).json({ request: result });
 });

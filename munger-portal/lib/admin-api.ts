@@ -34,7 +34,7 @@ export async function setOperatorActive(id: number, active: boolean): Promise<Op
   return data.operator;
 }
 
-export type ChangeRequestStatus = "pending" | "approved" | "rejected";
+export type ChangeRequestStatus = "pending" | "approved" | "rejected" | "reverted";
 
 export type ApprovalTier = "minor" | "significant" | "mutation";
 
@@ -59,6 +59,12 @@ export interface ChangeRequestSummary {
   reviewed_role: string | null;
   reviewed_at: string | null;
   review_notes: string | null;
+  reverted_by: string | null;
+  reverted_by_role: string | null;
+  reverted_from_stage: string | null;
+  reverted_at: string | null;
+  revert_comment: string | null;
+  revision_count: number;
 }
 
 export async function fetchChangeRequests(opts: {
@@ -121,6 +127,21 @@ export async function rejectChangeRequest(id: number, notes: string): Promise<Ch
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     throw new Error(body.error || "Could not reject this request.");
+  }
+  const data: { request: ChangeRequestSummary } = await res.json();
+  return data.request;
+}
+
+/** Any admin at their own stage may send a pending mutation back to the operator for correction, instead of approve/reject. */
+export async function revertChangeRequest(id: number, comment: string): Promise<ChangeRequestSummary> {
+  const res = await fetch(`${API_BASE_URL}/admin/change-requests/${id}/revert`, {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify({ comment }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || "Could not revert this request.");
   }
   const data: { request: ChangeRequestSummary } = await res.json();
   return data.request;
@@ -1130,4 +1151,43 @@ export async function assignTaxCollectorCityManager(taxCollectorUsername: string
   }
   const data: { taxCollector: TaxCollectorWithAssignment } = await res.json();
   return data.taxCollector;
+}
+
+export interface EntryRevertEvent {
+  id: number;
+  entry_type: "property_mutation" | "shop_agreement";
+  entry_id: number;
+  reference_no: string;
+  originally_requested_by: string;
+  reverted_by: string;
+  reverted_by_role: string;
+  reverted_from_stage: string;
+  comment: string;
+  reverted_at: string;
+  resubmitted_at: string | null;
+}
+
+/** Commissioner only - the unified revert-to-operator audit trail across property mutations and shop agreements. */
+export async function fetchEntryRevertEvents(): Promise<EntryRevertEvent[]> {
+  const res = await fetch(`${API_BASE_URL}/admin/entry-revert-events`, { headers: authHeaders() });
+  if (!res.ok) throw new Error("Could not load the revert audit trail.");
+  const data: { events: EntryRevertEvent[] } = await res.json();
+  return data.events;
+}
+
+export async function downloadEntryRevertEventsExport(): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/admin/entry-revert-events/export`, { headers: authHeaders() });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || "Could not download the export.");
+  }
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `revert-audit-trail-${new Date().toISOString().slice(0, 10)}.xlsx`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
 }

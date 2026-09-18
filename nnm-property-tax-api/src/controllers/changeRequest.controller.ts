@@ -1,12 +1,19 @@
 import type { Request, Response } from "express";
 import { z } from "zod";
-import { listChangeRequests, getChangeRequestDetail, approveAtCurrentStage, rejectAtCurrentStage } from "../services/changeRequest.service";
+import {
+  listChangeRequests,
+  getChangeRequestDetail,
+  approveAtCurrentStage,
+  rejectAtCurrentStage,
+  revertAtCurrentStage,
+  listRevertedChangeRequests,
+} from "../services/changeRequest.service";
 import { ADMIN_ROLES } from "../types/admin.types";
 import { asyncHandler } from "../middleware/asyncHandler";
 import { ApiError } from "../utils/ApiError";
 
 const listQuerySchema = z.object({
-  status: z.enum(["pending", "approved", "rejected"]).optional(),
+  status: z.enum(["pending", "approved", "rejected", "reverted"]).optional(),
   // "true" = only requests currently sitting at MY role's stage (what I can act on right now)
   myStage: z
     .string()
@@ -60,4 +67,22 @@ export const postRejectChangeRequest = asyncHandler(async (req: Request, res: Re
 
   const result = await rejectAtCurrentStage(paramsParsed.data.id, req.admin!, bodyParsed.data.notes);
   res.status(200).json({ request: result });
+});
+const revertBodySchema = z.object({ comment: z.string().trim().min(1, "A comment is required explaining what needs to be corrected.").max(2000) });
+
+/** POST /api/v1/admin/change-requests/:id/revert - any admin, at whatever stage the request is currently at. */
+export const postRevertChangeRequest = asyncHandler(async (req: Request, res: Response) => {
+  const paramsParsed = idParamSchema.safeParse(req.params);
+  if (!paramsParsed.success) throw ApiError.badRequest("Invalid change request id");
+  const bodyParsed = revertBodySchema.safeParse(req.body);
+  if (!bodyParsed.success) throw ApiError.badRequest("Invalid request body", bodyParsed.error.flatten().fieldErrors);
+
+  const result = await revertAtCurrentStage(paramsParsed.data.id, req.admin!, bodyParsed.data.comment);
+  res.status(200).json({ request: result });
+});
+
+/** GET /api/v1/properties/change-requests/reverted - operator's worklist of mutations sent back for correction. */
+export const getRevertedChangeRequests = asyncHandler(async (_req: Request, res: Response) => {
+  const requests = await listRevertedChangeRequests();
+  res.status(200).json({ requests });
 });

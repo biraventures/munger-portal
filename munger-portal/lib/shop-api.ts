@@ -161,6 +161,42 @@ export async function submitAgreementChange(
   return res.json();
 }
 
+export interface RevertedShopAgreementRequest {
+  id: number;
+  shop_no: string;
+  change_reason: string;
+  proposed_data: AgreementInput;
+  reverted_by: string;
+  reverted_by_role: string;
+  reverted_from_stage: string;
+  reverted_at: string;
+  revert_comment: string;
+  revision_count: number;
+}
+
+/** The operator's worklist of shop agreement requests a reviewer sent back for correction. */
+export async function fetchRevertedShopAgreementRequests(): Promise<RevertedShopAgreementRequest[]> {
+  const res = await fetch(`${API_BASE_URL}/shops/agreement-requests/reverted`, { headers: authHeaders() });
+  if (!res.ok) throw new Error("Could not load your reverted requests.");
+  const data: { requests: RevertedShopAgreementRequest[] } = await res.json();
+  return data.requests;
+}
+
+/** Operator corrects and resubmits a reverted shop agreement request - re-enters the approval chain from its first stage. */
+export async function resubmitShopAgreementRequest(id: number, input: AgreementInput): Promise<{ status: string; current_stage: string }> {
+  const res = await fetch(`${API_BASE_URL}/shops/agreement-requests/${id}/resubmit`, {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || "Could not resubmit this request.");
+  }
+  const data: { request: { status: string; current_stage: string } } = await res.json();
+  return data.request;
+}
+
 export interface UnsettledShopDemand {
   demandNo: string;
   formattedDemandNo: string;

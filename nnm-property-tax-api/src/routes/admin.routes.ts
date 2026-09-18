@@ -13,6 +13,7 @@ import {
   getChangeRequestById,
   postApproveChangeRequest,
   postRejectChangeRequest,
+  postRevertChangeRequest,
 } from "../controllers/changeRequest.controller";
 import {
   getCancellationRequests,
@@ -27,6 +28,7 @@ import {
   getShopAgreementRequestById,
   postApproveShopAgreementRequest,
   postRejectShopAgreementRequest,
+  postRevertShopAgreementRequest,
 } from "../controllers/shopAgreement.controller";
 import { listAllShops, getPerSqftReport, uploadShopsCsvHandler } from "../controllers/shop.controller";
 import { deleteShopHandler } from "../controllers/shopDelete.controller";
@@ -83,6 +85,7 @@ import {
 } from "../controllers/migratedHoldingSurvey.controller";
 import { listResurveyFlagsHandler, reviewResurveyFlagHandler, exportResurveyFlagsHandler } from "../controllers/propertyResurveyFlag.controller";
 import { listTaxCollectorsWithAssignmentHandler, listCityManagersHandler, assignCityManagerHandler } from "../controllers/taxCollectorAssignment.controller";
+import { listEntryRevertEventsHandler, exportEntryRevertEventsHandler } from "../controllers/entryRevertEvent.controller";
 import {
   getDemandActionRequests,
   getDemandActionRequestById,
@@ -153,6 +156,7 @@ adminRouter.get("/change-requests", requireMutationChainRole, getChangeRequests)
 adminRouter.get("/change-requests/:id", requireMutationChainRole, getChangeRequestById);
 adminRouter.post("/change-requests/:id/approve", requireMutationChainRole, postApproveChangeRequest);
 adminRouter.post("/change-requests/:id/reject", requireMutationChainRole, postRejectChangeRequest);
+adminRouter.post("/change-requests/:id/revert", requireMutationChainRole, postRevertChangeRequest);
 
 // Demand notice / receipt cancellation approval queue - viewable by
 // any admin role except Stall Prabhari. Approve/reject is tax_daroga
@@ -170,6 +174,13 @@ adminRouter.get("/shop-agreement-requests", getShopAgreementRequests);
 adminRouter.get("/shop-agreement-requests/:id", getShopAgreementRequestById);
 adminRouter.post("/shop-agreement-requests/:id/approve", postApproveShopAgreementRequest);
 adminRouter.post("/shop-agreement-requests/:id/reject", postRejectShopAgreementRequest);
+adminRouter.post("/shop-agreement-requests/:id/revert", postRevertShopAgreementRequest);
+
+// Commissioner-only unified audit trail of every revert-to-operator
+// event across property mutations and shop agreements. See
+// entryRevertEvent.controller.ts.
+adminRouter.get("/entry-revert-events", requireAdminRole("commissioner"), listEntryRevertEventsHandler);
+adminRouter.get("/entry-revert-events/export", requireAdminRole("commissioner"), exportEntryRevertEventsHandler);
 adminRouter.get("/shops", listAllShops);
 adminRouter.post("/shops/bulk-upload", requireAdminRole("commissioner"), uploadShopsCsvHandler);
 adminRouter.delete("/shops/:shopNo", requireAdminRole("commissioner"), deleteShopHandler);

@@ -3,7 +3,7 @@ import type { ShopAgreementChangeApprovalRow, ShopAgreementChangeRequestRow, Sho
 import type { AdminRole } from "../types/admin.types";
 import { SHOP_APPROVAL_STAGE_ORDER } from "../types/admin.types";
 
-export type ShopChangeRequestStatus = "pending" | "approved" | "rejected";
+export type ShopChangeRequestStatus = "pending" | "approved" | "rejected" | "reverted";
 
 export const shopAgreementChangeRequestRepository = {
   async create(
@@ -101,6 +101,38 @@ export const shopAgreementChangeRequestRepository = {
        WHERE id = $1 AND status = 'pending' AND current_stage = $2
        RETURNING *`,
       [id, atStage, status],
+    );
+    return rows[0] ?? null;
+  },
+
+  /** Any admin at their own stage may send a pending request back to the operator for correction, instead of approve/reject. */
+  async revert(id: number, atStage: AdminRole, revertedBy: string, revertedByRole: string, comment: string): Promise<ShopAgreementChangeRequestRow | null> {
+    const { rows } = await pool.query<ShopAgreementChangeRequestRow>(
+      `UPDATE shop_agreement_change_requests
+       SET status = 'reverted', reverted_by = $3, reverted_by_role = $4, reverted_from_stage = $2, reverted_at = now(), revert_comment = $5
+       WHERE id = $1 AND status = 'pending' AND current_stage = $2
+       RETURNING *`,
+      [id, atStage, revertedBy, revertedByRole, comment],
+    );
+    return rows[0] ?? null;
+  },
+
+  /** The operator's worklist - every shop agreement request currently reverted and awaiting correction. */
+  async listReverted(): Promise<ShopAgreementChangeRequestRow[]> {
+    const { rows } = await pool.query<ShopAgreementChangeRequestRow>(`SELECT * FROM shop_agreement_change_requests WHERE status = 'reverted' ORDER BY reverted_at ASC`);
+    return rows;
+  },
+
+  /** Operator corrects and resubmits a reverted request - resets to pending at the FIRST stage of the chain, since corrected data hasn't been reviewed by anyone yet. */
+  async resubmitWithCorrections(id: number, proposedData: ShopAgreementSaveInput, changeReason: string): Promise<ShopAgreementChangeRequestRow | null> {
+    const { rows } = await pool.query<ShopAgreementChangeRequestRow>(
+      `UPDATE shop_agreement_change_requests
+       SET status = 'pending', current_stage = $3, proposed_data = $2, change_reason = $4,
+           reverted_by = NULL, reverted_by_role = NULL, reverted_from_stage = NULL, reverted_at = NULL, revert_comment = NULL,
+           revision_count = revision_count + 1
+       WHERE id = $1 AND status = 'reverted'
+       RETURNING *`,
+      [id, JSON.stringify(proposedData), SHOP_APPROVAL_STAGE_ORDER[0], changeReason],
     );
     return rows[0] ?? null;
   },

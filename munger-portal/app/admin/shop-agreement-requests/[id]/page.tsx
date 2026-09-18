@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { AlertCircle, CheckCircle2, Loader2, XCircle } from "lucide-react";
+import { AlertCircle, CheckCircle2, Loader2, XCircle, RotateCcw } from "lucide-react";
 import { AdminHeader } from "@/components/admin-header";
 import { StageBadge } from "@/components/admin/stage-badge";
 import { useAdminGuard } from "@/lib/use-admin-guard";
@@ -10,6 +10,7 @@ import {
   fetchShopAgreementRequestDetail,
   approveShopAgreementRequest,
   rejectShopAgreementRequest,
+  revertShopAgreementRequest,
   type ShopAgreementChangeRequestDetail,
 } from "@/lib/admin-shop-api";
 import { ADMIN_ROLE_LABELS } from "@/lib/admin-auth";
@@ -60,7 +61,8 @@ export default function ShopAgreementRequestDetailPage() {
   const [detail, setDetail] = useState<ShopAgreementChangeRequestDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notes, setNotes] = useState("");
-  const [acting, setActing] = useState<"approve" | "reject" | null>(null);
+  const [acting, setActing] = useState<"approve" | "reject" | "revert" | null>(null);
+  const [reverting, setReverting] = useState(false);
 
   function load() {
     fetchShopAgreementRequestDetail(id)
@@ -101,6 +103,25 @@ export default function ShopAgreementRequestDetailPage() {
       setNotes("");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not reject.");
+    } finally {
+      setActing(null);
+    }
+  }
+
+  async function handleRevert() {
+    if (!notes.trim()) {
+      setError("A comment is required explaining what needs to be corrected.");
+      return;
+    }
+    setActing("revert");
+    setError(null);
+    try {
+      await revertShopAgreementRequest(id, notes);
+      load();
+      setNotes("");
+      setReverting(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not revert.");
     } finally {
       setActing(null);
     }
@@ -227,26 +248,69 @@ export default function ShopAgreementRequestDetailPage() {
                 <textarea
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
-                  placeholder="Notes (required to reject, optional to approve)"
+                  placeholder={reverting ? "Comment explaining what needs to be corrected" : "Notes (required to reject, optional to approve)"}
                   rows={3}
                   className="mb-4 w-full rounded-md border border-slate-300 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-nnm-blue focus:ring-offset-1"
                 />
-                <div className="flex gap-3">
-                  <button
-                    onClick={handleApprove}
-                    disabled={acting !== null}
-                    className="rounded-md bg-nnm-blue px-5 py-2.5 text-sm font-semibold text-white hover:bg-nnm-blue-dark disabled:opacity-60"
-                  >
-                    {acting === "approve" ? "Approving…" : "Approve"}
-                  </button>
-                  <button
-                    onClick={handleReject}
-                    disabled={acting !== null}
-                    className="rounded-md border border-red-300 px-5 py-2.5 text-sm font-semibold text-red-600 hover:bg-red-50 disabled:opacity-60"
-                  >
-                    {acting === "reject" ? "Rejecting…" : "Reject"}
-                  </button>
+                <div className="flex flex-wrap gap-3">
+                  {!reverting ? (
+                    <>
+                      <button
+                        onClick={handleApprove}
+                        disabled={acting !== null}
+                        className="rounded-md bg-nnm-blue px-5 py-2.5 text-sm font-semibold text-white hover:bg-nnm-blue-dark disabled:opacity-60"
+                      >
+                        {acting === "approve" ? "Approving…" : "Approve"}
+                      </button>
+                      <button
+                        onClick={handleReject}
+                        disabled={acting !== null}
+                        className="rounded-md border border-red-300 px-5 py-2.5 text-sm font-semibold text-red-600 hover:bg-red-50 disabled:opacity-60"
+                      >
+                        {acting === "reject" ? "Rejecting…" : "Reject"}
+                      </button>
+                      <button
+                        onClick={() => setReverting(true)}
+                        disabled={acting !== null}
+                        className="inline-flex items-center gap-1.5 rounded-md border border-amber-300 px-5 py-2.5 text-sm font-semibold text-amber-700 hover:bg-amber-50 disabled:opacity-60"
+                      >
+                        <RotateCcw className="h-4 w-4" />
+                        Revert to Operator
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        onClick={handleRevert}
+                        disabled={acting !== null}
+                        className="rounded-md bg-amber-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-amber-700 disabled:opacity-60"
+                      >
+                        {acting === "revert" ? "Reverting…" : "Confirm Revert to Operator"}
+                      </button>
+                      <button
+                        onClick={() => {
+                          setReverting(false);
+                          setNotes("");
+                        }}
+                        className="rounded-md border border-slate-300 px-5 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50"
+                      >
+                        Cancel
+                      </button>
+                    </>
+                  )}
                 </div>
+              </section>
+            ) : detail.request.status === "reverted" ? (
+              <section className="rounded-xl border border-amber-200 bg-amber-50 p-6">
+                <h2 className="mb-1 flex items-center gap-1.5 text-base font-semibold text-amber-900">
+                  <RotateCcw className="h-4 w-4" />
+                  Reverted to Operator
+                </h2>
+                <p className="text-sm text-amber-800">
+                  Sent back by {detail.request.reverted_by}
+                  {detail.request.reverted_at ? ` on ${new Date(detail.request.reverted_at).toLocaleDateString("en-IN")}` : ""} - awaiting operator correction.
+                </p>
+                {detail.request.revert_comment && <p className="mt-1 text-sm text-amber-700">&ldquo;{detail.request.revert_comment}&rdquo;</p>}
               </section>
             ) : detail.request.status === "pending" ? (
               <p className="text-sm text-slate-500">

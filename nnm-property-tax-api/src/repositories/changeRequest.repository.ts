@@ -136,4 +136,42 @@ export const changeRequestRepository = {
     );
     return rows[0] ?? null;
   },
+
+  /** Any admin at their own stage may send a pending request back to the operator for correction, instead of approve/reject. Atomic on the same pending+atStage guard as approve/reject. */
+  async revert(id: number, atStage: AdminRole, revertedBy: string, revertedByRole: string, comment: string): Promise<ChangeRequestRow | null> {
+    const { rows } = await pool.query<ChangeRequestRow>(
+      `UPDATE property_change_requests
+       SET status = 'reverted', reverted_by = $3, reverted_by_role = $4, reverted_from_stage = $2, reverted_at = now(), revert_comment = $5
+       WHERE id = $1 AND status = 'pending' AND current_stage = $2
+       RETURNING *`,
+      [id, atStage, revertedBy, revertedByRole, comment],
+    );
+    return rows[0] ?? null;
+  },
+
+  /** The operator's worklist - every request currently reverted and awaiting correction. Not restricted to who originally submitted it, since any operator at the counter can pick one up. */
+  async listReverted(): Promise<ChangeRequestRow[]> {
+    const { rows } = await pool.query<ChangeRequestRow>(`SELECT * FROM property_change_requests WHERE status = 'reverted' ORDER BY reverted_at ASC`);
+    return rows;
+  },
+
+  /**
+   * The operator corrects and resubmits a reverted request - replaces
+   * proposed_data with their correction, resets it to pending at the
+   * FIRST stage of the chain (not where it was reverted from), since
+   * corrected data hasn't been reviewed by anyone yet, and bumps
+   * revision_count for the audit trail.
+   */
+  async resubmitWithCorrections(id: number, proposedData: PropertySaveInput, changeReference: string): Promise<ChangeRequestRow | null> {
+    const { rows } = await pool.query<ChangeRequestRow>(
+      `UPDATE property_change_requests
+       SET status = 'pending', current_stage = $3, proposed_data = $2, change_reference = $4,
+           reverted_by = NULL, reverted_by_role = NULL, reverted_from_stage = NULL, reverted_at = NULL, revert_comment = NULL,
+           revision_count = revision_count + 1
+       WHERE id = $1 AND status = 'reverted'
+       RETURNING *`,
+      [id, JSON.stringify(proposedData), APPROVAL_STAGE_ORDER[0], changeReference],
+    );
+    return rows[0] ?? null;
+  },
 };
