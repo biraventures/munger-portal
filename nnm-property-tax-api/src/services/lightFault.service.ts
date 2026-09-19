@@ -1,10 +1,11 @@
 import { lightFaultRepository } from "../repositories/lightFault.repository";
 import { lightRepository } from "../repositories/light.repository";
 import { contractorWardRepository } from "../repositories/contractorWard.repository";
-import { accruePenaltiesForFault } from "./penaltyAccrual.service";
+import { streetlightCityManagerAssignmentRepository } from "../repositories/streetlightCityManagerAssignment.repository";
 import { ApiError } from "../utils/ApiError";
 import type { LightFaultRow } from "../types/streetlight.types";
 import type { AttendanceTokenPayload } from "../types/attendance.types";
+import type { AdminTokenPayload } from "../types/admin.types";
 
 const REPAIR_DEADLINE_HOURS = 72;
 
@@ -14,13 +15,22 @@ async function findResponsibleContractor(wardId: number): Promise<number | null>
   return mapping?.contractor_id ?? null;
 }
 
+/** Both non-functional-since fields are optional, but if a since-date is given it can't be in the future (a claimed history, not a schedule). */
+function validateNonFunctionalSince(nonFunctionalSince: string | null | undefined): void {
+  if (!nonFunctionalSince) return;
+  const parsed = new Date(nonFunctionalSince);
+  if (Number.isNaN(parsed.getTime())) throw ApiError.badRequest("Invalid non-functional-since date.");
+  if (parsed.getTime() > Date.now()) throw ApiError.badRequest("Non-functional-since date can't be in the future.");
+}
+
 /** Staff-reported fault - any logged-in attendance role, per what was asked for ("all staff"). */
 export async function reportFaultByStaff(
   user: AttendanceTokenPayload,
-  input: { lightId: number; notes: string | null },
+  input: { lightId: number; notes: string | null; nonFunctionalSince?: string | null; localSourceName?: string | null },
 ): Promise<LightFaultRow> {
   const light = await lightRepository.findById(input.lightId);
   if (!light) throw ApiError.notFound("Light not found.");
+  validateNonFunctionalSince(input.nonFunctionalSince);
 
   const contractorId = await findResponsibleContractor(light.ward_id);
   const now = new Date();
@@ -35,6 +45,43 @@ export async function reportFaultByStaff(
     reportedByUserId: user.sub,
     reporterPhone: null,
     reporterNotes: input.notes,
+    nonFunctionalSince: input.nonFunctionalSince ?? null,
+    localSourceName: input.localSourceName ?? null,
+    assignedContractorId: contractorId,
+  });
+}
+
+/**
+ * Admin-side fault report - Tax Surveyor, Tax Collector, Tax Daroga,
+ * Stall Prabhari, or JE/AE-Mechanical noticing a damaged light during
+ * their regular field work. Lands in the same light_faults
+ * table/workflow as staff and public reports; only the difference is
+ * which column records who reported it (reported_by_admin_username
+ * instead of reported_by_user_id).
+ */
+export async function reportFaultByAdmin(
+  admin: AdminTokenPayload,
+  input: { lightId: number; notes: string | null; nonFunctionalSince?: string | null; localSourceName?: string | null },
+): Promise<LightFaultRow> {
+  const light = await lightRepository.findById(input.lightId);
+  if (!light) throw ApiError.notFound("Light not found.");
+  validateNonFunctionalSince(input.nonFunctionalSince);
+
+  const contractorId = await findResponsibleContractor(light.ward_id);
+  const now = new Date();
+  const deadlineAt = new Date(now.getTime() + REPAIR_DEADLINE_HOURS * 3600_000);
+
+  return lightFaultRepository.create({
+    lightId: light.id,
+    reportedGpsLat: null,
+    reportedGpsLng: null,
+    deadlineAt,
+    reportedByType: "admin",
+    reportedByAdminUsername: admin.username,
+    reporterPhone: null,
+    reporterNotes: input.notes,
+    nonFunctionalSince: input.nonFunctionalSince ?? null,
+    localSourceName: input.localSourceName ?? null,
     assignedContractorId: contractorId,
   });
 }
@@ -52,10 +99,13 @@ export async function reportFaultByPublic(input: {
   gpsLng: number;
   phone: string;
   notes: string | null;
+  nonFunctionalSince?: string | null;
+  localSourceName?: string | null;
 }): Promise<LightFaultRow> {
   if (!/^[0-9]{10}$/.test(input.phone)) {
     throw ApiError.badRequest("Please provide a valid 10-digit phone number.");
   }
+  validateNonFunctionalSince(input.nonFunctionalSince);
 
   const light = input.serialNumber ? await lightRepository.findBySerialNumber(input.serialNumber) : null;
   const contractorId = light ? await findResponsibleContractor(light.ward_id) : null;
@@ -72,24 +122,37 @@ export async function reportFaultByPublic(input: {
     reportedByUserId: null,
     reporterPhone: input.phone,
     reporterNotes: input.notes,
+    nonFunctionalSince: input.nonFunctionalSince ?? null,
+    localSourceName: input.localSourceName ?? null,
     assignedContractorId: contractorId,
   });
 }
 
 /**
- * Marks a fault repaired and runs one final penalty accrual pass
- * immediately - so the day of repair itself is captured even if
- * nobody views the penalty list again afterward (the lazy,
- * view-triggered accrual only scans still-OPEN faults).
+ * Marks a fault repaired - only while it's still open (a light can't
+ * be marked repaired unless it was first reported damaged, which
+ * "only succeeds if still open" enforces directly). If the caller is
+ * a streetlight city_manager, they must be the one the Commissioner
+ * has specifically assigned to this task - any other allowed role
+ * (contractor, JE, AE, nodal clerk, DMC, commissioner, attendance
+ * admin) is unaffected by that restriction. No penalty accrual (the
+ * delay itself is what the Commissioner's delay report surfaces
+ * instead - see streetlightDelayReport.service.ts).
  */
 export async function markFaultRepaired(user: AttendanceTokenPayload, faultId: number, repairNotes: string | null): Promise<LightFaultRow> {
+  if (user.role === "city_manager") {
+    const assignment = await streetlightCityManagerAssignmentRepository.get();
+    if (assignment.assigned_city_manager_id !== user.sub) {
+      throw new ApiError(403, "You are not the City Manager currently assigned to streetlight faults.");
+    }
+  }
+
   const updated = await lightFaultRepository.markRepaired(faultId, user.sub, repairNotes);
   if (!updated) {
     const existing = await lightFaultRepository.findById(faultId);
     if (!existing) throw ApiError.notFound("Fault not found.");
     throw ApiError.badRequest("This fault has already been marked repaired.");
   }
-  await accruePenaltiesForFault(updated);
   return updated;
 }
 

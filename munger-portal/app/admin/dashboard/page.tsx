@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Users, FileClock, FileWarning, LayoutGrid, ShoppingBag, Store, BarChart3, Award, Archive, Download, XCircle, ShieldCheck, Trash2, RefreshCw, Upload, MapPin, Map as MapIcon, ClipboardCheck, UserCheck, ClipboardList, Receipt, RotateCcw } from "lucide-react";
+import { Users, FileClock, FileWarning, LayoutGrid, ShoppingBag, Store, BarChart3, Award, Archive, Download, XCircle, ShieldCheck, Trash2, RefreshCw, Upload, MapPin, Map as MapIcon, ClipboardCheck, UserCheck, ClipboardList, Receipt, RotateCcw, AlertTriangle, Lightbulb, Route, Clock } from "lucide-react";
 import { AdminHeader } from "@/components/admin-header";
 import { DashboardSummaryWidget } from "@/components/dashboard-summary-widget";
 import { useAdminGuard } from "@/lib/use-admin-guard";
@@ -60,7 +60,7 @@ export default function AdminDashboardPage() {
   // a few cards within each, unlike Stall Prabhari/Trade License
   // Nodal who still see some cards in their own area.
   const isGisOnlyRole = isAtps || isAssistantArchitect;
-  const isRestrictedRole = isStallPrabhari || isTradeLicenseNodal || isGisOnlyRole;
+  const isRestrictedRole = isStallPrabhari || isTradeLicenseNodal || isGisOnlyRole || admin.role === "je_mechanical" || admin.role === "ae_mechanical";
   const canApproveShopPublication = admin.role === "stall_prabhari" || admin.role === "city_manager" || admin.role === "deputy_commissioner";
   const canApproveDemandActions = admin.role === "stall_prabhari" || admin.role === "city_manager";
   const isCommissioner = admin.role === "commissioner";
@@ -84,6 +84,9 @@ export default function AdminDashboardPage() {
   const showResurveyFlags = admin.role === "tax_daroga" || admin.role === "commissioner";
   const showTaxCollectorAssignments = isCommissioner;
   const showRevertAuditTrail = isCommissioner;
+  const showStreetlightCommissionerTools = isCommissioner;
+  const isStreetlightReporterRole =
+    admin.role === "tax_daroga" || admin.role === "tax_surveyor" || admin.role === "tax_collector" || admin.role === "stall_prabhari" || admin.role === "je_mechanical" || admin.role === "ae_mechanical";
   const propertyGroupVisible =
     showMutationApprovals || showCancellationRequests || showTaxCollectors || showBulkDemandNotices || showAllPropertyChanges || showRenumberHolding || showBulkUploadProperties ||
     showMigratedHoldingsBulkUpload || showMigratedHoldingsAssign || showMigratedHoldingsSurveyor || showMigratedHoldingsMySurveys || showTaxCollectorPage || showResurveyFlags || showTaxCollectorAssignments || showRevertAuditTrail;
@@ -123,6 +126,7 @@ export default function AdminDashboardPage() {
   const showGisMap = isAtps || isAssistantArchitect || isCommissioner;
   const showBuildingMapApproval = isAssistantArchitect;
   const miscGroupVisible = showOperators || showDocumentArchive || showAttendanceReport || showAssignCoordinates || showGisMap || showBuildingMapApproval;
+  const streetlightGroupVisible = showStreetlightCommissionerTools || isStreetlightReporterRole;
 
   const groupHeadingClass = "mb-4 mt-10 text-lg font-semibold text-slate-800 first:mt-0";
   const cardClass = "flex flex-col rounded-xl border border-slate-200 bg-white p-6 transition-shadow hover:shadow-md";
@@ -458,6 +462,63 @@ export default function AdminDashboardPage() {
                   </span>
                   <h3 className="mb-1.5 text-base font-semibold text-slate-900">Trade License - Reporting</h3>
                   <p className="text-sm text-slate-500">Received, pendency, disposal rate, and anything overdue 2+ weeks.</p>
+                </Link>
+              )}
+            </div>
+          </>
+        )}
+
+        {streetlightGroupVisible && (
+          <>
+            <h2 className={groupHeadingClass}>Streetlights</h2>
+            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+              {isStreetlightReporterRole && (
+                <Link href="/admin/report-streetlight-fault" className={cardClass}>
+                  <span className={iconWrapClass}>
+                    <AlertTriangle className="h-6 w-6" strokeWidth={1.8} />
+                  </span>
+                  <h3 className="mb-1.5 text-base font-semibold text-slate-900">Report Streetlight Fault</h3>
+                  <p className="text-sm text-slate-500">Report a damaged or non-functional streetlight noticed in the field.</p>
+                </Link>
+              )}
+
+              {showStreetlightCommissionerTools && (
+                <Link href="/admin/streetlights-bulk-upload" className={cardClass}>
+                  <span className={iconWrapClass}>
+                    <Lightbulb className="h-6 w-6" strokeWidth={1.8} />
+                  </span>
+                  <h3 className="mb-1.5 text-base font-semibold text-slate-900">Streetlight Bulk Upload</h3>
+                  <p className="text-sm text-slate-500">Import street-wise light inventory from a Nagar Nigam or EESL CSV.</p>
+                </Link>
+              )}
+
+              {showStreetlightCommissionerTools && (
+                <Link href="/admin/street-segments" className={cardClass}>
+                  <span className={iconWrapClass}>
+                    <Route className="h-6 w-6" strokeWidth={1.8} />
+                  </span>
+                  <h3 className="mb-1.5 text-base font-semibold text-slate-900">Street Segments</h3>
+                  <p className="text-sm text-slate-500">Add or update GPS for each street&apos;s start and end points.</p>
+                </Link>
+              )}
+
+              {showStreetlightCommissionerTools && (
+                <Link href="/admin/streetlight-city-manager" className={cardClass}>
+                  <span className={iconWrapClass}>
+                    <UserCheck className="h-6 w-6" strokeWidth={1.8} />
+                  </span>
+                  <h3 className="mb-1.5 text-base font-semibold text-slate-900">Streetlight City Manager</h3>
+                  <p className="text-sm text-slate-500">Choose which City Manager follows up on streetlight faults.</p>
+                </Link>
+              )}
+
+              {showStreetlightCommissionerTools && (
+                <Link href="/admin/streetlight-delay-report" className={cardClass}>
+                  <span className={iconWrapClass}>
+                    <Clock className="h-6 w-6" strokeWidth={1.8} />
+                  </span>
+                  <h3 className="mb-1.5 text-base font-semibold text-slate-900">Streetlight Delay Report</h3>
+                  <p className="text-sm text-slate-500">How long streetlight repairs are taking against the 72-hour deadline.</p>
                 </Link>
               )}
             </div>

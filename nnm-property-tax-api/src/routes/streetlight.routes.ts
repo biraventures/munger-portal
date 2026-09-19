@@ -16,7 +16,15 @@ import {
   listFaultPenaltiesHandler,
   listAllPenaltiesHandler,
   myPenaltyTotalHandler,
+  getWardStatusDashboardHandler,
+  getStreetStatusDashboardHandler,
 } from "../controllers/streetlight.controller";
+import {
+  postRequestLightChangeHandler,
+  listLightChangeRequestsHandler,
+  postApproveLightChangeHandler,
+  postRejectLightChangeHandler,
+} from "../controllers/lightChangeRequest.controller";
 import { requireAttendanceRole } from "../middleware/requireAttendanceRole";
 
 export const streetlightRouter = Router();
@@ -52,6 +60,22 @@ streetlightRouter.get("/lights", requireAttendanceRole(), listLightsHandler);
 streetlightRouter.post("/lights", requireAttendanceRole([...REGISTRY_MANAGE_ROLES]), createLightHandler);
 streetlightRouter.post("/lights/bulk-upload", requireAttendanceRole([...REGISTRY_MANAGE_ROLES]), uploadLightsCsvHandler);
 streetlightRouter.patch("/lights/:id/active", requireAttendanceRole([...REGISTRY_MANAGE_ROLES]), setLightActiveHandler);
+
+// --- Light change requests (add/status/deactivate/reactivate/delete)
+// - proposed by JE/AE/nodal clerk/contractor, approved through
+// city_manager -> deputy_municipal_commissioner ->
+// municipal_commissioner in order. Nothing applies until the final
+// approval. See lightChangeRequest.controller.ts. ---
+const LIGHT_CHANGE_REQUESTER_ROLES = ["streetlight_je", "streetlight_ae", "streetlight_nodal_clerk", "streetlight_contractor"] as const;
+const LIGHT_CHANGE_APPROVER_ROLES = ["city_manager", "deputy_municipal_commissioner", "municipal_commissioner"] as const;
+streetlightRouter.post("/light-change-requests", requireAttendanceRole([...LIGHT_CHANGE_REQUESTER_ROLES]), postRequestLightChangeHandler);
+streetlightRouter.get("/light-change-requests", requireAttendanceRole(), listLightChangeRequestsHandler);
+streetlightRouter.post("/light-change-requests/:id/approve", requireAttendanceRole([...LIGHT_CHANGE_APPROVER_ROLES]), postApproveLightChangeHandler);
+streetlightRouter.post("/light-change-requests/:id/reject", requireAttendanceRole([...LIGHT_CHANGE_APPROVER_ROLES]), postRejectLightChangeHandler);
+
+// --- Status dashboard, ward-wise and street-wise - City Manager, DMC, Municipal Commissioner ---
+streetlightRouter.get("/status-dashboard/wards", requireAttendanceRole([...OVERSIGHT_ROLES]), getWardStatusDashboardHandler);
+streetlightRouter.get("/status-dashboard/streets", requireAttendanceRole([...OVERSIGHT_ROLES]), getStreetStatusDashboardHandler);
 
 // --- Contractor-ward assignment ---
 streetlightRouter.get("/contractor-wards", requireAttendanceRole(), listContractorWardsHandler);

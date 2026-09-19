@@ -183,11 +183,16 @@ export async function fetchFaults(status?: "open" | "repaired"): Promise<LightFa
 }
 
 /** Any logged-in attendance role can report a fault - "all staff", per what was asked for. */
-export async function reportFault(lightId: number, notes: string | null): Promise<LightFault> {
+export async function reportFault(
+  lightId: number,
+  notes: string | null,
+  nonFunctionalSince?: string | null,
+  localSourceName?: string | null,
+): Promise<LightFault> {
   const res = await fetch(`${API_BASE_URL}/streetlight/faults`, {
     method: "POST",
     headers: authHeaders(),
-    body: JSON.stringify({ lightId, notes }),
+    body: JSON.stringify({ lightId, notes, nonFunctionalSince, localSourceName }),
   });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
@@ -280,4 +285,122 @@ export async function submitStreetlightGrievance(input: {
     throw new Error(body.error || "Could not submit your report - please try again.");
   }
   return res.json();
+}
+
+// ---------------------------------------------------------------------------
+// Light change requests - add/status-change/deactivate/reactivate/
+// delete, approved through city_manager -> deputy_municipal_commissioner
+// -> municipal_commissioner. See lightChangeRequest.controller.ts.
+// ---------------------------------------------------------------------------
+
+export type LightChangeActionType = "add" | "status_change" | "deactivate" | "reactivate" | "delete";
+export type LightChangeStage = "city_manager" | "deputy_municipal_commissioner" | "municipal_commissioner";
+
+export interface LightChangeRequest {
+  id: number;
+  action_type: LightChangeActionType;
+  light_id: number | null;
+  proposed_data: Record<string, unknown> | null;
+  reason: string;
+  requested_by_user_id: number;
+  requested_at: string;
+  status: "pending" | "approved" | "rejected";
+  current_stage: LightChangeStage;
+  final_decided_at: string | null;
+  reviewed_by_user_id: number | null;
+  reviewed_at: string | null;
+  review_notes: string | null;
+}
+
+export async function requestLightChange(input: {
+  actionType: LightChangeActionType;
+  lightId: number | null;
+  proposedData: Record<string, unknown> | null;
+  reason: string;
+}): Promise<LightChangeRequest> {
+  const res = await fetch(`${API_BASE_URL}/streetlight/light-change-requests`, {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || "Could not submit this request.");
+  }
+  const data: { request: LightChangeRequest } = await res.json();
+  return data.request;
+}
+
+export async function fetchLightChangeRequests(status?: "pending" | "approved" | "rejected"): Promise<LightChangeRequest[]> {
+  const params = status ? `?status=${status}` : "";
+  const res = await fetch(`${API_BASE_URL}/streetlight/light-change-requests${params}`, { headers: authHeaders() });
+  if (!res.ok) throw new Error("Could not load light change requests.");
+  const data: { requests: LightChangeRequest[] } = await res.json();
+  return data.requests;
+}
+
+export async function approveLightChange(id: number, notes: string | null): Promise<LightChangeRequest> {
+  const res = await fetch(`${API_BASE_URL}/streetlight/light-change-requests/${id}/approve`, {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify({ notes }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || "Could not approve this request.");
+  }
+  const data: { request: LightChangeRequest } = await res.json();
+  return data.request;
+}
+
+export async function rejectLightChange(id: number, notes: string): Promise<LightChangeRequest> {
+  const res = await fetch(`${API_BASE_URL}/streetlight/light-change-requests/${id}/reject`, {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify({ notes }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || "Could not reject this request.");
+  }
+  const data: { request: LightChangeRequest } = await res.json();
+  return data.request;
+}
+
+// ---------------------------------------------------------------------------
+// Status dashboard - ward-wise and street-wise. City Manager, DMC,
+// Municipal Commissioner.
+// ---------------------------------------------------------------------------
+
+export interface WardStatus {
+  wardId: number;
+  wardName: string;
+  totalLights: number;
+  notWorking: number;
+  working: number;
+}
+
+export async function fetchWardStatusDashboard(): Promise<WardStatus[]> {
+  const res = await fetch(`${API_BASE_URL}/streetlight/status-dashboard/wards`, { headers: authHeaders() });
+  if (!res.ok) throw new Error("Could not load the ward status dashboard.");
+  const data: { wards: WardStatus[] } = await res.json();
+  return data.wards;
+}
+
+export interface StreetStatus {
+  segmentId: number | null;
+  wardName: string | null;
+  startPoint: string | null;
+  endPoint: string | null;
+  agencyName: string | null;
+  totalLights: number;
+  notWorking: number;
+  working: number;
+}
+
+export async function fetchStreetStatusDashboard(): Promise<StreetStatus[]> {
+  const res = await fetch(`${API_BASE_URL}/streetlight/status-dashboard/streets`, { headers: authHeaders() });
+  if (!res.ok) throw new Error("Could not load the street status dashboard.");
+  const data: { streets: StreetStatus[] } = await res.json();
+  return data.streets;
 }

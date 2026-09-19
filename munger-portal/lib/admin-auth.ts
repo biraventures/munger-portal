@@ -12,7 +12,9 @@ export type AdminRole =
   | "city_manager"
   | "trade_license_nodal"
   | "assistant_town_planning_supervisor"
-  | "assistant_architect";
+  | "assistant_architect"
+  | "je_mechanical"
+  | "ae_mechanical";
 
 export const ADMIN_ROLE_LABELS: Record<AdminRole, string> = {
   tax_daroga: "Tax Daroga",
@@ -26,6 +28,8 @@ export const ADMIN_ROLE_LABELS: Record<AdminRole, string> = {
   trade_license_nodal: "Trade License Nodal",
   assistant_town_planning_supervisor: "Assistant Town Planning Supervisor",
   assistant_architect: "Assistant Architect",
+  je_mechanical: "JE - Mechanical",
+  ae_mechanical: "AE - Mechanical",
 };
 
 export const ADMIN_ROLE_ORDER: AdminRole[] = [
@@ -38,6 +42,8 @@ export const ADMIN_ROLE_ORDER: AdminRole[] = [
   "trade_license_nodal",
   "assistant_town_planning_supervisor",
   "assistant_architect",
+  "je_mechanical",
+  "ae_mechanical",
   "deputy_commissioner",
   "commissioner",
 ];

@@ -8,6 +8,7 @@ import { lightFaultPenaltyRepository } from "../repositories/lightFaultPenalty.r
 import { reportFaultByStaff, markFaultRepaired, linkFaultToLight } from "../services/lightFault.service";
 import { accrueAllOverduePenalties, accruePenaltiesForFault } from "../services/penaltyAccrual.service";
 import { importLightsCsv } from "../services/lightCsvImport.service";
+import { buildWardStatusDashboard, buildStreetStatusDashboard } from "../services/streetlightStatusDashboard.service";
 import { asyncHandler } from "../middleware/asyncHandler";
 import { ApiError } from "../utils/ApiError";
 
@@ -178,12 +179,22 @@ export const listFaultsHandler = asyncHandler(async (req: Request, res: Response
   });
 });
 
-const reportFaultSchema = z.object({ lightId: z.coerce.number().int().positive(), notes: z.string().trim().nullish() });
+const reportFaultSchema = z.object({
+  lightId: z.coerce.number().int().positive(),
+  notes: z.string().trim().nullish(),
+  nonFunctionalSince: z.string().trim().nullish(),
+  localSourceName: z.string().trim().nullish(),
+});
 
 export const reportFaultHandler = asyncHandler(async (req: Request, res: Response) => {
   const parsed = reportFaultSchema.safeParse(req.body);
   if (!parsed.success) throw ApiError.badRequest("Invalid input", parsed.error.flatten().fieldErrors);
-  const fault = await reportFaultByStaff(req.attendanceUser!, { lightId: parsed.data.lightId, notes: parsed.data.notes ?? null });
+  const fault = await reportFaultByStaff(req.attendanceUser!, {
+    lightId: parsed.data.lightId,
+    notes: parsed.data.notes ?? null,
+    nonFunctionalSince: parsed.data.nonFunctionalSince ?? null,
+    localSourceName: parsed.data.localSourceName ?? null,
+  });
   res.status(200).json({ fault: { id: fault.id, lightId: fault.light_id, deadlineAt: fault.deadline_at, assignedContractorId: fault.assigned_contractor_id } });
 });
 
@@ -245,4 +256,19 @@ export const myPenaltyTotalHandler = asyncHandler(async (req: Request, res: Resp
   await accrueAllOverduePenalties();
   const total = await lightFaultPenaltyRepository.totalForUser(req.attendanceUser!.sub);
   res.status(200).json({ total });
+});
+
+// ---------------------------------------------------------------------------
+// Status dashboard - ward-wise and street-wise, for City Manager,
+// Deputy Municipal Commissioner, and Municipal Commissioner.
+// ---------------------------------------------------------------------------
+
+export const getWardStatusDashboardHandler = asyncHandler(async (_req: Request, res: Response) => {
+  const wards = await buildWardStatusDashboard();
+  res.status(200).json({ wards });
+});
+
+export const getStreetStatusDashboardHandler = asyncHandler(async (_req: Request, res: Response) => {
+  const streets = await buildStreetStatusDashboard();
+  res.status(200).json({ streets });
 });

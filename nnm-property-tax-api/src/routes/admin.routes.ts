@@ -87,6 +87,19 @@ import { listResurveyFlagsHandler, reviewResurveyFlagHandler, exportResurveyFlag
 import { listTaxCollectorsWithAssignmentHandler, listCityManagersHandler, assignCityManagerHandler } from "../controllers/taxCollectorAssignment.controller";
 import { listEntryRevertEventsHandler, exportEntryRevertEventsHandler } from "../controllers/entryRevertEvent.controller";
 import {
+  uploadStreetWiseLightsHandler,
+  listStreetSegmentsHandler,
+  setStreetSegmentGpsHandler,
+  listLightsForSegmentHandler,
+  reportStreetlightFaultHandler,
+  listStreetlightFaultsHandler,
+  getStreetlightDelayReportHandler,
+  exportStreetlightDelayReportHandler,
+  listStreetlightCityManagersHandler,
+  getStreetlightCityManagerAssignmentHandler,
+  assignStreetlightCityManagerHandler,
+} from "../controllers/streetlightAdmin.controller";
+import {
   getDemandActionRequests,
   getDemandActionRequestById,
   postApproveDemandAction,
@@ -181,6 +194,26 @@ adminRouter.post("/shop-agreement-requests/:id/revert", postRevertShopAgreementR
 // entryRevertEvent.controller.ts.
 adminRouter.get("/entry-revert-events", requireAdminRole("commissioner"), listEntryRevertEventsHandler);
 adminRouter.get("/entry-revert-events/export", requireAdminRole("commissioner"), exportEntryRevertEventsHandler);
+
+// Streetlights - street-wise bulk import and GPS entry are
+// Commissioner-only master-data management; fault reporting is open
+// to the six field roles who notice damage during their regular
+// work; fault viewing is open to any admin for coordination; the
+// City Manager assignment and delay report are Commissioner-only.
+// See streetlightAdmin.controller.ts.
+const requireStreetlightReporterRole = requireAdminRole("tax_daroga", "tax_surveyor", "tax_collector", "stall_prabhari", "je_mechanical", "ae_mechanical");
+adminRouter.post("/streetlights/bulk-upload", requireAdminRole("commissioner"), uploadStreetWiseLightsHandler);
+adminRouter.get("/street-segments", listStreetSegmentsHandler);
+adminRouter.patch("/street-segments/:id/gps", requireAdminRole("commissioner"), setStreetSegmentGpsHandler);
+adminRouter.get("/street-segments/:id/lights", requireStreetlightReporterRole, listLightsForSegmentHandler);
+adminRouter.post("/streetlight-faults", requireStreetlightReporterRole, reportStreetlightFaultHandler);
+adminRouter.get("/streetlight-faults", listStreetlightFaultsHandler);
+adminRouter.get("/streetlight-faults/delay-report", requireAdminRole("commissioner"), getStreetlightDelayReportHandler);
+adminRouter.get("/streetlight-faults/delay-report/export", requireAdminRole("commissioner"), exportStreetlightDelayReportHandler);
+adminRouter.get("/streetlight-city-managers", requireAdminRole("commissioner"), listStreetlightCityManagersHandler);
+adminRouter.get("/streetlight-city-manager-assignment", requireAdminRole("commissioner"), getStreetlightCityManagerAssignmentHandler);
+adminRouter.post("/streetlight-city-manager-assignment", requireAdminRole("commissioner"), assignStreetlightCityManagerHandler);
+
 adminRouter.get("/shops", listAllShops);
 adminRouter.post("/shops/bulk-upload", requireAdminRole("commissioner"), uploadShopsCsvHandler);
 adminRouter.delete("/shops/:shopNo", requireAdminRole("commissioner"), deleteShopHandler);
