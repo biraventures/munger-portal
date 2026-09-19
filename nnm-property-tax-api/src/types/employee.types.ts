@@ -49,11 +49,15 @@ export interface EmployeeRow {
   employment_type: EmploymentType;
   epf_uan: string | null;
   unauthorised_absence_days: number;
+  municipal_board_recommendation: boolean;
+  proceeding_number: string | null;
+  proceeding_date: string | null;
   status: EmployeeStatus;
   created_by: string;
   created_at: string;
   verified_by: string | null;
   verified_at: string | null;
+  deleted_at: string | null;
 }
 
 /**

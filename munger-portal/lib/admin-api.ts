@@ -1452,11 +1452,15 @@ export interface Employee {
   employment_type: EmploymentType;
   epf_uan: string | null;
   unauthorised_absence_days: number;
+  municipal_board_recommendation: boolean;
+  proceeding_number: string | null;
+  proceeding_date: string | null;
   status: EmployeeStatus;
   created_by: string;
   created_at: string;
   verified_by: string | null;
   verified_at: string | null;
+  deleted_at: string | null;
   yearsOfService: { years: number; months: number };
 }
 
@@ -1476,6 +1480,9 @@ export interface CreateEmployeeInput {
   employmentType: EmploymentType;
   epfUan?: string | null;
   unauthorisedAbsenceDays?: number;
+  municipalBoardRecommendation?: boolean;
+  proceedingNumber?: string | null;
+  proceedingDate?: string | null;
 }
 
 export async function createEmployee(input: CreateEmployeeInput): Promise<Employee> {
@@ -1490,6 +1497,40 @@ export async function createEmployee(input: CreateEmployeeInput): Promise<Employ
   }
   const data: { employee: Employee } = await res.json();
   return data.employee;
+}
+
+/** Fetches a record for correction/addition/deletion by Aadhaar number - null (not an error) when nothing matches yet. */
+export async function searchEmployeeByAadhaar(aadhaarNumber: string): Promise<Employee | null> {
+  const res = await fetch(`${API_BASE_URL}/admin/employees/search?aadhaar=${encodeURIComponent(aadhaarNumber)}`, { headers: authHeaders() });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || "Could not search for this Aadhaar number.");
+  }
+  const data: { employee: Employee | null } = await res.json();
+  return data.employee;
+}
+
+/** Corrects an existing record - resets it to pending_verification if it was already verified, since the corrected data hasn't been checked yet. */
+export async function updateEmployee(id: number, input: CreateEmployeeInput): Promise<Employee> {
+  const res = await fetch(`${API_BASE_URL}/admin/employees/${id}`, {
+    method: "PATCH",
+    headers: authHeaders(),
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || "Could not update this employee record.");
+  }
+  const data: { employee: Employee } = await res.json();
+  return data.employee;
+}
+
+export async function deleteEmployee(id: number): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/admin/employees/${id}`, { method: "DELETE", headers: authHeaders() });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || "Could not delete this employee record.");
+  }
 }
 
 export async function fetchEmployees(status?: EmployeeStatus): Promise<Employee[]> {

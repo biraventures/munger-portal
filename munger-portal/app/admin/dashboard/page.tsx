@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Users, FileClock, FileWarning, LayoutGrid, ShoppingBag, Store, BarChart3, Award, Archive, Download, XCircle, ShieldCheck, Trash2, RefreshCw, Upload, MapPin, Map as MapIcon, ClipboardCheck, UserCheck, ClipboardList, Receipt, RotateCcw, AlertTriangle, Lightbulb, Route, Clock } from "lucide-react";
+import { Users, FileClock, FileWarning, LayoutGrid, ShoppingBag, Store, BarChart3, Award, Archive, Download, XCircle, ShieldCheck, Trash2, RefreshCw, Upload, MapPin, Map as MapIcon, ClipboardCheck, UserCheck, ClipboardList, Receipt, RotateCcw, AlertTriangle, Lightbulb, Route, Clock, List } from "lucide-react";
 import { AdminHeader } from "@/components/admin-header";
 import { DashboardSummaryWidget } from "@/components/dashboard-summary-widget";
 import { useAdminGuard } from "@/lib/use-admin-guard";
@@ -85,6 +85,7 @@ export default function AdminDashboardPage() {
   const showTaxCollectorAssignments = isCommissioner;
   const showRevertAuditTrail = isCommissioner;
   const showEmployeeDatabaseEntry = admin.role === "establishment_clerk";
+  const showEmployeeDatabaseList = admin.role === "establishment_clerk";
   const showEmployeeDatabaseVerify = admin.role === "city_manager";
   const showEmployeeDatabaseProgress = isCommissioner;
   const showStreetlightCommissionerTools = isCommissioner;
@@ -129,7 +130,7 @@ export default function AdminDashboardPage() {
   const showGisMap = isAtps || isAssistantArchitect || isCommissioner;
   const showBuildingMapApproval = isAssistantArchitect;
   const miscGroupVisible = showOperators || showDocumentArchive || showAttendanceReport || showAssignCoordinates || showGisMap || showBuildingMapApproval;
-  const employeeDatabaseGroupVisible = showEmployeeDatabaseEntry || showEmployeeDatabaseVerify || showEmployeeDatabaseProgress;
+  const employeeDatabaseGroupVisible = showEmployeeDatabaseEntry || showEmployeeDatabaseList || showEmployeeDatabaseVerify || showEmployeeDatabaseProgress;
   const streetlightGroupVisible = showStreetlightCommissionerTools || isStreetlightReporterRole;
 
   const groupHeadingClass = "mb-4 mt-10 text-lg font-semibold text-slate-800 first:mt-0";
@@ -539,7 +540,17 @@ export default function AdminDashboardPage() {
                     <Users className="h-6 w-6" strokeWidth={1.8} />
                   </span>
                   <h3 className="mb-1.5 text-base font-semibold text-slate-900">Employee Database Entry</h3>
-                  <p className="text-sm text-slate-500">Add a new municipal employee/officer record.</p>
+                  <p className="text-sm text-slate-500">Search by Aadhaar to correct/delete a record, or add a new one.</p>
+                </Link>
+              )}
+
+              {showEmployeeDatabaseList && (
+                <Link href="/admin/employee-database-list" className={cardClass}>
+                  <span className={iconWrapClass}>
+                    <List className="h-6 w-6" strokeWidth={1.8} />
+                  </span>
+                  <h3 className="mb-1.5 text-base font-semibold text-slate-900">All Employee Records</h3>
+                  <p className="text-sm text-slate-500">Every record entered so far, with verification status.</p>
                 </Link>
               )}
 

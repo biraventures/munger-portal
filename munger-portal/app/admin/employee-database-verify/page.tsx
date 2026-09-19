@@ -113,6 +113,13 @@ export default function EmployeeDatabaseVerifyPage() {
                   <p>{EDUCATIONAL_QUALIFICATION_LABELS[e.educational_qualification]}</p>
                   <p>Appointed: {new Date(e.date_of_appointment).toLocaleDateString("en-IN")}</p>
                   {e.appointment_order_number && <p>Order No: {e.appointment_order_number}</p>}
+                  <p>MB Recommendation: {e.municipal_board_recommendation ? "Yes" : "No"}</p>
+                  {e.municipal_board_recommendation && e.proceeding_number && (
+                    <p>
+                      Proceeding: {e.proceeding_number}
+                      {e.proceeding_date ? ` (${new Date(e.proceeding_date).toLocaleDateString("en-IN")})` : ""}
+                    </p>
+                  )}
                   <p>{APPOINTING_AUTHORITY_LABELS[e.appointing_authority]}</p>
                   <p>{EMPLOYMENT_TYPE_LABELS[e.employment_type]}</p>
                   <p>

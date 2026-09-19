@@ -1,4 +1,4 @@
-import { employeeRepository, type CreateEmployeeInput } from "../repositories/employee.repository";
+import { employeeRepository, type CreateEmployeeInput, type EmployeeFieldsInput } from "../repositories/employee.repository";
 import { ApiError } from "../utils/ApiError";
 import type { EmployeeRow } from "../types/employee.types";
 
@@ -16,7 +16,8 @@ function validateDates(dateOfBirth: string, dateOfAppointment: string): void {
   }
 }
 
-export async function createEmployee(input: CreateEmployeeInput): Promise<EmployeeRow> {
+/** Shared by create and update - the same set of checks applies whether this is a brand-new record or a correction to an existing one. */
+function validateFields(input: EmployeeFieldsInput): void {
   if (!input.name.trim()) throw ApiError.badRequest("Name is required.");
   if (!input.homeDistrict.trim()) throw ApiError.badRequest("Home district is required.");
   if (!/^[0-9]{12}$/.test(input.aadhaarNumber)) throw ApiError.badRequest("Aadhaar number must be exactly 12 digits.");
@@ -25,7 +26,37 @@ export async function createEmployee(input: CreateEmployeeInput): Promise<Employ
   }
   validateDates(input.dateOfBirth, input.dateOfAppointment);
 
+  if (input.municipalBoardRecommendation) {
+    if (!input.proceedingNumber?.trim()) throw ApiError.badRequest("Proceeding number is required when Municipal Board recommendation is yes.");
+    if (!input.proceedingDate) throw ApiError.badRequest("Proceeding date is required when Municipal Board recommendation is yes.");
+    if (Number.isNaN(new Date(input.proceedingDate).getTime())) throw ApiError.badRequest("Invalid proceeding date.");
+  }
+}
+
+export async function createEmployee(input: CreateEmployeeInput): Promise<EmployeeRow> {
+  validateFields(input);
   return employeeRepository.create(input);
+}
+
+/** Search by Aadhaar number - what the Establishment Clerk's "search for correction/addition/deletion" flow uses. Returns null (not an error) when nothing matches, so the caller can offer to add a new record instead. */
+export async function findEmployeeByAadhaar(aadhaarNumber: string): Promise<EmployeeRow | null> {
+  if (!/^[0-9]{12}$/.test(aadhaarNumber)) throw ApiError.badRequest("Aadhaar number must be exactly 12 digits.");
+  return employeeRepository.findByAadhaar(aadhaarNumber);
+}
+
+export async function updateEmployee(id: number, input: EmployeeFieldsInput): Promise<EmployeeRow> {
+  const existing = await employeeRepository.findById(id);
+  if (!existing) throw ApiError.notFound("Employee record not found.");
+  validateFields(input);
+
+  const updated = await employeeRepository.update(id, input);
+  if (!updated) throw ApiError.notFound("Employee record not found.");
+  return updated;
+}
+
+export async function deleteEmployee(id: number): Promise<void> {
+  const deleted = await employeeRepository.softDelete(id);
+  if (!deleted) throw ApiError.notFound("Employee record not found.");
 }
 
 export async function verifyEmployee(id: number, verifiedBy: string): Promise<EmployeeRow> {

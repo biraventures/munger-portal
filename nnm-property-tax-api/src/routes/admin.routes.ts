@@ -88,7 +88,10 @@ import { listTaxCollectorsWithAssignmentHandler, listCityManagersHandler, assign
 import { listEntryRevertEventsHandler, exportEntryRevertEventsHandler } from "../controllers/entryRevertEvent.controller";
 import {
   postCreateEmployeeHandler,
+  searchEmployeeByAadhaarHandler,
   listEmployeesHandler,
+  patchUpdateEmployeeHandler,
+  deleteEmployeeHandler,
   postVerifyEmployeeHandler,
   getEmployeeDatabaseProgressHandler,
 } from "../controllers/employee.controller";
@@ -225,7 +228,10 @@ adminRouter.post("/streetlight-city-manager-assignment", requireAdminRole("commi
 // employee.controller.ts.
 const requireEmployeeViewRole = requireAdminRole("establishment_clerk", "city_manager", "commissioner");
 adminRouter.post("/employees", requireAdminRole("establishment_clerk"), postCreateEmployeeHandler);
+adminRouter.get("/employees/search", requireAdminRole("establishment_clerk"), searchEmployeeByAadhaarHandler);
 adminRouter.get("/employees", requireEmployeeViewRole, listEmployeesHandler);
+adminRouter.patch("/employees/:id", requireAdminRole("establishment_clerk"), patchUpdateEmployeeHandler);
+adminRouter.delete("/employees/:id", requireAdminRole("establishment_clerk"), deleteEmployeeHandler);
 adminRouter.post("/employees/:id/verify", requireAdminRole("city_manager"), postVerifyEmployeeHandler);
 adminRouter.get("/employees/progress", requireAdminRole("commissioner"), getEmployeeDatabaseProgressHandler);
 
