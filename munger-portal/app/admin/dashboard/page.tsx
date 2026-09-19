@@ -60,7 +60,7 @@ export default function AdminDashboardPage() {
   // a few cards within each, unlike Stall Prabhari/Trade License
   // Nodal who still see some cards in their own area.
   const isGisOnlyRole = isAtps || isAssistantArchitect;
-  const isRestrictedRole = isStallPrabhari || isTradeLicenseNodal || isGisOnlyRole || admin.role === "je_mechanical" || admin.role === "ae_mechanical";
+  const isRestrictedRole = isStallPrabhari || isTradeLicenseNodal || isGisOnlyRole || admin.role === "je_mechanical" || admin.role === "ae_mechanical" || admin.role === "establishment_clerk";
   const canApproveShopPublication = admin.role === "stall_prabhari" || admin.role === "city_manager" || admin.role === "deputy_commissioner";
   const canApproveDemandActions = admin.role === "stall_prabhari" || admin.role === "city_manager";
   const isCommissioner = admin.role === "commissioner";
@@ -84,6 +84,9 @@ export default function AdminDashboardPage() {
   const showResurveyFlags = admin.role === "tax_daroga" || admin.role === "commissioner";
   const showTaxCollectorAssignments = isCommissioner;
   const showRevertAuditTrail = isCommissioner;
+  const showEmployeeDatabaseEntry = admin.role === "establishment_clerk";
+  const showEmployeeDatabaseVerify = admin.role === "city_manager";
+  const showEmployeeDatabaseProgress = isCommissioner;
   const showStreetlightCommissionerTools = isCommissioner;
   const isStreetlightReporterRole =
     admin.role === "tax_daroga" || admin.role === "tax_surveyor" || admin.role === "tax_collector" || admin.role === "stall_prabhari" || admin.role === "je_mechanical" || admin.role === "ae_mechanical";
@@ -126,6 +129,7 @@ export default function AdminDashboardPage() {
   const showGisMap = isAtps || isAssistantArchitect || isCommissioner;
   const showBuildingMapApproval = isAssistantArchitect;
   const miscGroupVisible = showOperators || showDocumentArchive || showAttendanceReport || showAssignCoordinates || showGisMap || showBuildingMapApproval;
+  const employeeDatabaseGroupVisible = showEmployeeDatabaseEntry || showEmployeeDatabaseVerify || showEmployeeDatabaseProgress;
   const streetlightGroupVisible = showStreetlightCommissionerTools || isStreetlightReporterRole;
 
   const groupHeadingClass = "mb-4 mt-10 text-lg font-semibold text-slate-800 first:mt-0";
@@ -519,6 +523,43 @@ export default function AdminDashboardPage() {
                   </span>
                   <h3 className="mb-1.5 text-base font-semibold text-slate-900">Streetlight Delay Report</h3>
                   <p className="text-sm text-slate-500">How long streetlight repairs are taking against the 72-hour deadline.</p>
+                </Link>
+              )}
+            </div>
+          </>
+        )}
+
+        {employeeDatabaseGroupVisible && (
+          <>
+            <h2 className={groupHeadingClass}>Employee Database</h2>
+            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+              {showEmployeeDatabaseEntry && (
+                <Link href="/admin/employee-database-entry" className={cardClass}>
+                  <span className={iconWrapClass}>
+                    <Users className="h-6 w-6" strokeWidth={1.8} />
+                  </span>
+                  <h3 className="mb-1.5 text-base font-semibold text-slate-900">Employee Database Entry</h3>
+                  <p className="text-sm text-slate-500">Add a new municipal employee/officer record.</p>
+                </Link>
+              )}
+
+              {showEmployeeDatabaseVerify && (
+                <Link href="/admin/employee-database-verify" className={cardClass}>
+                  <span className={iconWrapClass}>
+                    <UserCheck className="h-6 w-6" strokeWidth={1.8} />
+                  </span>
+                  <h3 className="mb-1.5 text-base font-semibold text-slate-900">Employee Records - Verification</h3>
+                  <p className="text-sm text-slate-500">Verify new employee database entries.</p>
+                </Link>
+              )}
+
+              {showEmployeeDatabaseProgress && (
+                <Link href="/admin/employee-database-progress" className={cardClass}>
+                  <span className={iconWrapClass}>
+                    <BarChart3 className="h-6 w-6" strokeWidth={1.8} />
+                  </span>
+                  <h3 className="mb-1.5 text-base font-semibold text-slate-900">Employee Database Progress</h3>
+                  <p className="text-sm text-slate-500">How the municipal employee database build-out is going.</p>
                 </Link>
               )}
             </div>

@@ -11,7 +11,8 @@ export type AdminRole =
   | "assistant_town_planning_supervisor"
   | "assistant_architect"
   | "je_mechanical"
-  | "ae_mechanical";
+  | "ae_mechanical"
+  | "establishment_clerk";
 
 export const ADMIN_ROLES: AdminRole[] = [
   "tax_daroga",
@@ -27,6 +28,7 @@ export const ADMIN_ROLES: AdminRole[] = [
   "assistant_architect",
   "je_mechanical",
   "ae_mechanical",
+  "establishment_clerk",
 ];
 
 export const ADMIN_ROLE_LABELS: Record<AdminRole, string> = {
@@ -43,6 +45,7 @@ export const ADMIN_ROLE_LABELS: Record<AdminRole, string> = {
   assistant_architect: "Assistant Architect",
   je_mechanical: "JE - Mechanical",
   ae_mechanical: "AE - Mechanical",
+  establishment_clerk: "Establishment Clerk",
 };
 
 /**

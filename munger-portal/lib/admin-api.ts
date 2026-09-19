@@ -1394,3 +1394,134 @@ export async function downloadStreetlightDelayReport(): Promise<void> {
   a.remove();
   URL.revokeObjectURL(url);
 }
+
+// ---------------------------------------------------------------------------
+// Municipal employee database - Establishment Clerk enters records,
+// City Manager verifies, Commissioner sees overall progress. See
+// employee.controller.ts.
+// ---------------------------------------------------------------------------
+
+export type ReservationCategory = "scheduled_caste" | "scheduled_tribe" | "other_backward_class" | "extremely_backward_class" | "backward_class_women" | "divyang" | "general";
+export type EducationalQualification = "below_matric" | "matriculation" | "intermediate" | "diploma_degree";
+export type AppointingAuthority = "government_of_bihar" | "munger_municipal_corporation";
+export type EmploymentType = "permanent" | "contractual" | "daily_wage";
+export type EmployeeStatus = "pending_verification" | "verified";
+
+export const RESERVATION_CATEGORY_LABELS: Record<ReservationCategory, string> = {
+  scheduled_caste: "Scheduled Caste",
+  scheduled_tribe: "Scheduled Tribe",
+  other_backward_class: "Other Backward Class",
+  extremely_backward_class: "Extremely Backward Class",
+  backward_class_women: "Backward Class Women",
+  divyang: "Divyang",
+  general: "General",
+};
+
+export const EDUCATIONAL_QUALIFICATION_LABELS: Record<EducationalQualification, string> = {
+  below_matric: "Below Matric",
+  matriculation: "Matriculation",
+  intermediate: "Intermediate",
+  diploma_degree: "Diploma/Degree",
+};
+
+export const APPOINTING_AUTHORITY_LABELS: Record<AppointingAuthority, string> = {
+  government_of_bihar: "Government of Bihar",
+  munger_municipal_corporation: "Munger Municipal Corporation",
+};
+
+export const EMPLOYMENT_TYPE_LABELS: Record<EmploymentType, string> = {
+  permanent: "Permanent",
+  contractual: "Contractual",
+  daily_wage: "Daily Wage",
+};
+
+export interface Employee {
+  id: number;
+  name: string;
+  father_name: string | null;
+  husband_name: string | null;
+  home_district: string;
+  date_of_birth: string;
+  aadhaar_number: string;
+  pan_number: string | null;
+  reservation_category: ReservationCategory;
+  educational_qualification: EducationalQualification;
+  date_of_appointment: string;
+  appointment_order_number: string | null;
+  appointing_authority: AppointingAuthority;
+  employment_type: EmploymentType;
+  epf_uan: string | null;
+  unauthorised_absence_days: number;
+  status: EmployeeStatus;
+  created_by: string;
+  created_at: string;
+  verified_by: string | null;
+  verified_at: string | null;
+  yearsOfService: { years: number; months: number };
+}
+
+export interface CreateEmployeeInput {
+  name: string;
+  fatherName?: string | null;
+  husbandName?: string | null;
+  homeDistrict: string;
+  dateOfBirth: string;
+  aadhaarNumber: string;
+  panNumber?: string | null;
+  reservationCategory: ReservationCategory;
+  educationalQualification: EducationalQualification;
+  dateOfAppointment: string;
+  appointmentOrderNumber?: string | null;
+  appointingAuthority: AppointingAuthority;
+  employmentType: EmploymentType;
+  epfUan?: string | null;
+  unauthorisedAbsenceDays?: number;
+}
+
+export async function createEmployee(input: CreateEmployeeInput): Promise<Employee> {
+  const res = await fetch(`${API_BASE_URL}/admin/employees`, {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || "Could not save this employee record.");
+  }
+  const data: { employee: Employee } = await res.json();
+  return data.employee;
+}
+
+export async function fetchEmployees(status?: EmployeeStatus): Promise<Employee[]> {
+  const params = status ? `?status=${status}` : "";
+  const res = await fetch(`${API_BASE_URL}/admin/employees${params}`, { headers: authHeaders() });
+  if (!res.ok) throw new Error("Could not load employee records.");
+  const data: { employees: Employee[] } = await res.json();
+  return data.employees;
+}
+
+export async function verifyEmployee(id: number): Promise<Employee> {
+  const res = await fetch(`${API_BASE_URL}/admin/employees/${id}/verify`, {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify({}),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || "Could not verify this record.");
+  }
+  const data: { employee: Employee } = await res.json();
+  return data.employee;
+}
+
+export interface EmployeeDatabaseProgress {
+  total: number;
+  verified: number;
+  pending: number;
+}
+
+export async function fetchEmployeeDatabaseProgress(): Promise<EmployeeDatabaseProgress> {
+  const res = await fetch(`${API_BASE_URL}/admin/employees/progress`, { headers: authHeaders() });
+  if (!res.ok) throw new Error("Could not load progress.");
+  return res.json();
+}

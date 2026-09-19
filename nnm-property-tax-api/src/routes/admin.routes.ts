@@ -87,6 +87,12 @@ import { listResurveyFlagsHandler, reviewResurveyFlagHandler, exportResurveyFlag
 import { listTaxCollectorsWithAssignmentHandler, listCityManagersHandler, assignCityManagerHandler } from "../controllers/taxCollectorAssignment.controller";
 import { listEntryRevertEventsHandler, exportEntryRevertEventsHandler } from "../controllers/entryRevertEvent.controller";
 import {
+  postCreateEmployeeHandler,
+  listEmployeesHandler,
+  postVerifyEmployeeHandler,
+  getEmployeeDatabaseProgressHandler,
+} from "../controllers/employee.controller";
+import {
   uploadStreetWiseLightsHandler,
   listStreetSegmentsHandler,
   setStreetSegmentGpsHandler,
@@ -213,6 +219,15 @@ adminRouter.get("/streetlight-faults/delay-report/export", requireAdminRole("com
 adminRouter.get("/streetlight-city-managers", requireAdminRole("commissioner"), listStreetlightCityManagersHandler);
 adminRouter.get("/streetlight-city-manager-assignment", requireAdminRole("commissioner"), getStreetlightCityManagerAssignmentHandler);
 adminRouter.post("/streetlight-city-manager-assignment", requireAdminRole("commissioner"), assignStreetlightCityManagerHandler);
+
+// Municipal employee database - Establishment Clerk enters records,
+// City Manager verifies, Commissioner sees overall progress. See
+// employee.controller.ts.
+const requireEmployeeViewRole = requireAdminRole("establishment_clerk", "city_manager", "commissioner");
+adminRouter.post("/employees", requireAdminRole("establishment_clerk"), postCreateEmployeeHandler);
+adminRouter.get("/employees", requireEmployeeViewRole, listEmployeesHandler);
+adminRouter.post("/employees/:id/verify", requireAdminRole("city_manager"), postVerifyEmployeeHandler);
+adminRouter.get("/employees/progress", requireAdminRole("commissioner"), getEmployeeDatabaseProgressHandler);
 
 adminRouter.get("/shops", listAllShops);
 adminRouter.post("/shops/bulk-upload", requireAdminRole("commissioner"), uploadShopsCsvHandler);
