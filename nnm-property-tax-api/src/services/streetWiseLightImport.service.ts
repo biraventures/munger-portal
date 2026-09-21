@@ -79,7 +79,7 @@ export async function importStreetWiseLightsCsv(agency: StreetlightAgency, csvCo
       const endPoint = pick(row, ["Street end point", "End point"]) || null;
       const countRaw = pick(row, COUNT_HEADERS);
       const count = parseInt(countRaw, 10);
-      if (!countRaw || Number.isNaN(count) || count <= 0) {
+      if (!countRaw || Number.isNaN(count) || count < 0) {
         result.errors.push({ row: rowNum, message: "Missing or invalid light count" });
         continue;
       }
