@@ -4,23 +4,15 @@ import { useEffect, useState } from "react";
 import { AlertCircle, CheckCircle2, RotateCcw } from "lucide-react";
 import { OperatorHeader } from "@/components/operator-header";
 import { useOperatorGuard } from "@/lib/use-operator-guard";
+import { ShopAgreementForm } from "@/components/operator/shop-agreement-form";
 import { fetchRevertedShopAgreementRequests, resubmitShopAgreementRequest, type RevertedShopAgreementRequest, type AgreementInput } from "@/lib/shop-api";
-
-const inputClass = "w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-nnm-blue focus:ring-offset-1";
 
 export default function RevertedShopAgreementsPage() {
   const operator = useOperatorGuard();
   const [list, setList] = useState<RevertedShopAgreementRequest[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-
   const [editing, setEditing] = useState<RevertedShopAgreementRequest | null>(null);
-  const [holderName, setHolderName] = useState("");
-  const [holderMobile, setHolderMobile] = useState("");
-  const [baseMonthlyRent, setBaseMonthlyRent] = useState(0);
-  const [securityDeposit, setSecurityDeposit] = useState(0);
-  const [changeReason, setChangeReason] = useState("");
-  const [submitting, setSubmitting] = useState(false);
 
   function load() {
     fetchRevertedShopAgreementRequests()
@@ -37,40 +29,22 @@ export default function RevertedShopAgreementsPage() {
     setEditing(r);
     setSuccess(null);
     setError(null);
-    const d = r.proposed_data;
-    setHolderName(d.holderName ?? "");
-    setHolderMobile(d.holderMobile ?? "");
-    setBaseMonthlyRent(Number(d.baseMonthlyRent ?? 0));
-    setSecurityDeposit(Number(d.securityDeposit ?? 0));
-    setChangeReason(r.change_reason);
   }
 
-  async function handleResubmit() {
-    if (!editing) return;
-    if (!holderName.trim() || baseMonthlyRent <= 0 || !changeReason.trim()) {
-      setError("Holder name, monthly rent, and change reason are required.");
-      return;
-    }
-    setSubmitting(true);
-    setError(null);
-    try {
-      const input: AgreementInput = {
-        ...editing.proposed_data,
-        holderName: holderName.trim(),
-        holderMobile: holderMobile.trim() || null,
-        baseMonthlyRent,
-        securityDeposit,
-        changeReason: changeReason.trim(),
-      };
-      await resubmitShopAgreementRequest(editing.id, input);
-      setSuccess(`${editing.shop_no} resubmitted for approval.`);
-      setEditing(null);
-      load();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not resubmit this correction.");
-    } finally {
-      setSubmitting(false);
-    }
+  async function handleResubmit(input: AgreementInput): Promise<{ changeRequestId: number; approvalTier: "full" | "data_completion" }> {
+    if (!editing) throw new Error("No request selected.");
+    await resubmitShopAgreementRequest(editing.id, input);
+    // Resubmitting always re-enters the chain from its first stage
+    // (see resubmitCorrectedShopAgreementChange on the backend) -
+    // "full" is what actually happens here, not a guess, since there's
+    // no shortened data_completion path for a correction.
+    return { changeRequestId: editing.id, approvalTier: "full" };
+  }
+
+  function handleSubmitted() {
+    setSuccess(`${editing?.shop_no} resubmitted for approval.`);
+    setEditing(null);
+    load();
   }
 
   if (!operator) {
@@ -81,7 +55,7 @@ export default function RevertedShopAgreementsPage() {
     <div className="min-h-screen bg-slate-50">
       <OperatorHeader operator={operator} />
 
-      <main className="mx-auto max-w-2xl px-6 py-10">
+      <main className="mx-auto max-w-3xl px-6 py-10">
         <h1 className="mb-1 flex items-center gap-2 text-2xl font-semibold text-slate-900">
           <RotateCcw className="h-6 w-6" />
           Reverted Shop Agreements
@@ -137,36 +111,14 @@ export default function RevertedShopAgreementsPage() {
             </div>
             <p className="mb-5 text-sm text-amber-700">&ldquo;{editing.revert_comment}&rdquo;</p>
 
-            <div className="mb-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div className="sm:col-span-2">
-                <label className="mb-1 block text-xs font-medium text-slate-600">Holder name</label>
-                <input value={holderName} onChange={(e) => setHolderName(e.target.value)} className={inputClass} autoFocus />
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-medium text-slate-600">Mobile</label>
-                <input value={holderMobile} onChange={(e) => setHolderMobile(e.target.value)} className={inputClass} />
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-medium text-slate-600">Monthly rent</label>
-                <input type="number" value={baseMonthlyRent || ""} onChange={(e) => setBaseMonthlyRent(Number(e.target.value))} className={inputClass} />
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-medium text-slate-600">Security deposit</label>
-                <input type="number" value={securityDeposit || ""} onChange={(e) => setSecurityDeposit(Number(e.target.value))} className={inputClass} />
-              </div>
-              <div className="sm:col-span-2">
-                <label className="mb-1 block text-xs font-medium text-slate-600">Change reason</label>
-                <textarea value={changeReason} onChange={(e) => setChangeReason(e.target.value)} rows={2} className={inputClass} />
-              </div>
-            </div>
-
-            <button
-              onClick={handleResubmit}
-              disabled={submitting}
-              className="w-full rounded-md bg-nnm-blue px-4 py-3 text-sm font-semibold text-white hover:bg-nnm-blue-dark disabled:opacity-60"
-            >
-              {submitting ? "Resubmitting…" : "Resubmit for Approval"}
-            </button>
+            <ShopAgreementForm
+              shopNo={editing.shop_no}
+              isEditing
+              initial={{ ...editing.proposed_data, changeReason: editing.change_reason }}
+              onSubmit={handleResubmit}
+              onSubmitted={handleSubmitted}
+              submitLabel="Resubmit for Approval"
+            />
           </div>
         )}
       </main>

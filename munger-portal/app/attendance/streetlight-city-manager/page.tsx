@@ -2,18 +2,18 @@
 
 import { useEffect, useState } from "react";
 import { AlertCircle, CheckCircle2, UserCheck } from "lucide-react";
-import { AdminHeader } from "@/components/admin-header";
-import { useAdminGuard } from "@/lib/use-admin-guard";
+import { AttendanceHeader } from "@/components/attendance/attendance-header";
+import { useAttendanceGuard } from "@/lib/use-attendance-guard";
 import {
-  fetchStreetlightCityManagers,
+  fetchStreetlightCityManagerOptions,
   fetchStreetlightCityManagerAssignment,
-  assignStreetlightCityManager,
+  assignStreetlightCityManagerOnAttendance,
   type StreetlightCityManagerOption,
   type StreetlightCityManagerAssignment,
-} from "@/lib/admin-api";
+} from "@/lib/streetlight-api";
 
 export default function StreetlightCityManagerPage() {
-  const admin = useAdminGuard();
+  const attendance = useAttendanceGuard();
   const [cityManagers, setCityManagers] = useState<StreetlightCityManagerOption[]>([]);
   const [assignment, setAssignment] = useState<StreetlightCityManagerAssignment | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -22,15 +22,15 @@ export default function StreetlightCityManagerPage() {
   const [selected, setSelected] = useState<number | "">("");
 
   useEffect(() => {
-    if (!admin) return;
-    Promise.all([fetchStreetlightCityManagers(), fetchStreetlightCityManagerAssignment()])
+    if (!attendance) return;
+    Promise.all([fetchStreetlightCityManagerOptions(), fetchStreetlightCityManagerAssignment()])
       .then(([managers, current]) => {
         setCityManagers(managers);
         setAssignment(current);
         setSelected(current.assigned_city_manager_id ?? "");
       })
       .catch((err) => setError(err instanceof Error ? err.message : "Could not load City Managers."));
-  }, [admin]);
+  }, [attendance]);
 
   async function handleAssign() {
     if (!selected) return;
@@ -38,7 +38,7 @@ export default function StreetlightCityManagerPage() {
     setError(null);
     setSuccess(false);
     try {
-      const updated = await assignStreetlightCityManager(selected);
+      const updated = await assignStreetlightCityManagerOnAttendance(selected);
       setAssignment(updated);
       setSuccess(true);
     } catch (err) {
@@ -48,14 +48,14 @@ export default function StreetlightCityManagerPage() {
     }
   }
 
-  if (!admin) {
+  if (!attendance) {
     return <div className="flex min-h-screen items-center justify-center text-sm text-slate-400">Loading…</div>;
   }
 
-  if (admin.role !== "commissioner") {
+  if (attendance.role !== "municipal_commissioner" && attendance.role !== "attendance_admin") {
     return (
       <div className="min-h-screen bg-slate-50">
-        <AdminHeader admin={admin} />
+        <AttendanceHeader user={attendance} />
         <main className="mx-auto max-w-2xl px-6 py-10">
           <div role="alert" className="flex items-center gap-2 rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-700">
             <AlertCircle className="h-4 w-4 shrink-0" />
@@ -70,7 +70,7 @@ export default function StreetlightCityManagerPage() {
 
   return (
     <div className="min-h-screen bg-slate-50">
-      <AdminHeader admin={admin} />
+      <AttendanceHeader user={attendance} />
 
       <main className="mx-auto max-w-xl px-6 py-10">
         <h1 className="mb-1 flex items-center gap-2 text-2xl font-semibold text-slate-900">

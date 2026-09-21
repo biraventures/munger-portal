@@ -25,6 +25,17 @@ import {
   postApproveLightChangeHandler,
   postRejectLightChangeHandler,
 } from "../controllers/lightChangeRequest.controller";
+import {
+  uploadStreetWiseLightsAttendanceHandler,
+  listStreetSegmentsAttendanceHandler,
+  setStreetSegmentGpsAttendanceHandler,
+  listLightsForSegmentAttendanceHandler,
+  listStreetlightCityManagersAttendanceHandler,
+  getStreetlightCityManagerAssignmentAttendanceHandler,
+  assignStreetlightCityManagerAttendanceHandler,
+  getStreetlightDelayReportAttendanceHandler,
+  exportStreetlightDelayReportAttendanceHandler,
+} from "../controllers/streetlightCommissioner.controller";
 import { requireAttendanceRole } from "../middleware/requireAttendanceRole";
 
 export const streetlightRouter = Router();
@@ -76,6 +87,23 @@ streetlightRouter.post("/light-change-requests/:id/reject", requireAttendanceRol
 // --- Status dashboard, ward-wise and street-wise - City Manager, DMC, Municipal Commissioner ---
 streetlightRouter.get("/status-dashboard/wards", requireAttendanceRole([...OVERSIGHT_ROLES]), getWardStatusDashboardHandler);
 streetlightRouter.get("/status-dashboard/streets", requireAttendanceRole([...OVERSIGHT_ROLES]), getStreetStatusDashboardHandler);
+
+// --- Commissioner's tools, brought over from the admin login so
+// everything streetlight-related lives on this side (asset
+// management) too - street-wise bulk import, street segment GPS,
+// City Manager assignment, and the delay report. Same underlying
+// services as their admin-side counterparts in
+// streetlightAdmin.controller.ts, which are untouched. ---
+const COMMISSIONER_ROLES = ["municipal_commissioner", "attendance_admin"] as const;
+streetlightRouter.post("/street-wise-bulk-upload", requireAttendanceRole([...COMMISSIONER_ROLES]), uploadStreetWiseLightsAttendanceHandler);
+streetlightRouter.get("/street-segments", requireAttendanceRole(), listStreetSegmentsAttendanceHandler);
+streetlightRouter.patch("/street-segments/:id/gps", requireAttendanceRole([...COMMISSIONER_ROLES]), setStreetSegmentGpsAttendanceHandler);
+streetlightRouter.get("/street-segments/:id/lights", requireAttendanceRole(), listLightsForSegmentAttendanceHandler);
+streetlightRouter.get("/streetlight-city-managers", requireAttendanceRole([...COMMISSIONER_ROLES]), listStreetlightCityManagersAttendanceHandler);
+streetlightRouter.get("/streetlight-city-manager-assignment", requireAttendanceRole([...COMMISSIONER_ROLES]), getStreetlightCityManagerAssignmentAttendanceHandler);
+streetlightRouter.post("/streetlight-city-manager-assignment", requireAttendanceRole([...COMMISSIONER_ROLES]), assignStreetlightCityManagerAttendanceHandler);
+streetlightRouter.get("/streetlight-delay-report", requireAttendanceRole([...COMMISSIONER_ROLES]), getStreetlightDelayReportAttendanceHandler);
+streetlightRouter.get("/streetlight-delay-report/export", requireAttendanceRole([...COMMISSIONER_ROLES]), exportStreetlightDelayReportAttendanceHandler);
 
 // --- Contractor-ward assignment ---
 streetlightRouter.get("/contractor-wards", requireAttendanceRole(), listContractorWardsHandler);

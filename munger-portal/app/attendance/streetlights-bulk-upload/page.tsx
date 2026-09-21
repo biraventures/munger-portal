@@ -2,12 +2,12 @@
 
 import { useState } from "react";
 import { Upload, AlertCircle, CheckCircle2, Lightbulb } from "lucide-react";
-import { AdminHeader } from "@/components/admin-header";
-import { useAdminGuard } from "@/lib/use-admin-guard";
-import { uploadStreetWiseLightsCsv, type StreetWiseImportResult } from "@/lib/admin-api";
+import { AttendanceHeader } from "@/components/attendance/attendance-header";
+import { useAttendanceGuard } from "@/lib/use-attendance-guard";
+import { uploadStreetWiseLightsCsv, type StreetWiseImportResult } from "@/lib/streetlight-api";
 
 export default function StreetlightsBulkUploadPage() {
-  const admin = useAdminGuard();
+  const attendance = useAttendanceGuard();
   const [agency, setAgency] = useState<"NN" | "EESL">("NN");
   const [fileName, setFileName] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -33,14 +33,14 @@ export default function StreetlightsBulkUploadPage() {
     }
   }
 
-  if (!admin) {
+  if (!attendance) {
     return <div className="flex min-h-screen items-center justify-center text-sm text-slate-400">Loading…</div>;
   }
 
-  if (admin.role !== "commissioner") {
+  if (attendance.role !== "municipal_commissioner" && attendance.role !== "attendance_admin") {
     return (
       <div className="min-h-screen bg-slate-50">
-        <AdminHeader admin={admin} />
+        <AttendanceHeader user={attendance} />
         <main className="mx-auto max-w-2xl px-6 py-10">
           <div role="alert" className="flex items-center gap-2 rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-700">
             <AlertCircle className="h-4 w-4 shrink-0" />
@@ -53,7 +53,7 @@ export default function StreetlightsBulkUploadPage() {
 
   return (
     <div className="min-h-screen bg-slate-50">
-      <AdminHeader admin={admin} />
+      <AttendanceHeader user={attendance} />
 
       <main className="mx-auto max-w-2xl px-6 py-10">
         <h1 className="mb-1 flex items-center gap-2 text-2xl font-semibold text-slate-900">

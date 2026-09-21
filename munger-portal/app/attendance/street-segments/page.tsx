@@ -2,14 +2,14 @@
 
 import { useEffect, useState } from "react";
 import { AlertCircle, CheckCircle2, MapPin, Route } from "lucide-react";
-import { AdminHeader } from "@/components/admin-header";
-import { useAdminGuard } from "@/lib/use-admin-guard";
-import { fetchStreetSegments, setStreetSegmentGps, type StreetSegment } from "@/lib/admin-api";
+import { AttendanceHeader } from "@/components/attendance/attendance-header";
+import { useAttendanceGuard } from "@/lib/use-attendance-guard";
+import { fetchStreetSegmentsList, setStreetSegmentGps, type StreetSegment } from "@/lib/streetlight-api";
 
 const inputClass = "w-full rounded-md border border-slate-300 px-2.5 py-1.5 text-sm outline-none focus:ring-2 focus:ring-nnm-blue focus:ring-offset-1";
 
 export default function StreetSegmentsPage() {
-  const admin = useAdminGuard();
+  const attendance = useAttendanceGuard();
   const [segments, setSegments] = useState<StreetSegment[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState<number | null>(null);
@@ -21,15 +21,15 @@ export default function StreetSegmentsPage() {
   const [successId, setSuccessId] = useState<number | null>(null);
 
   function load() {
-    fetchStreetSegments()
+    fetchStreetSegmentsList()
       .then(setSegments)
       .catch((err) => setError(err instanceof Error ? err.message : "Could not load street segments."));
   }
 
   useEffect(() => {
-    if (!admin) return;
+    if (!attendance) return;
     load();
-  }, [admin]);
+  }, [attendance]);
 
   function openEdit(s: StreetSegment) {
     setEditing(s.id);
@@ -61,14 +61,14 @@ export default function StreetSegmentsPage() {
     }
   }
 
-  if (!admin) {
+  if (!attendance) {
     return <div className="flex min-h-screen items-center justify-center text-sm text-slate-400">Loading…</div>;
   }
 
-  if (admin.role !== "commissioner") {
+  if (attendance.role !== "municipal_commissioner" && attendance.role !== "attendance_admin") {
     return (
       <div className="min-h-screen bg-slate-50">
-        <AdminHeader admin={admin} />
+        <AttendanceHeader user={attendance} />
         <main className="mx-auto max-w-2xl px-6 py-10">
           <div role="alert" className="flex items-center gap-2 rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-700">
             <AlertCircle className="h-4 w-4 shrink-0" />
@@ -81,7 +81,7 @@ export default function StreetSegmentsPage() {
 
   return (
     <div className="min-h-screen bg-slate-50">
-      <AdminHeader admin={admin} />
+      <AttendanceHeader user={attendance} />
 
       <main className="mx-auto max-w-3xl px-6 py-10">
         <h1 className="mb-1 flex items-center gap-2 text-2xl font-semibold text-slate-900">

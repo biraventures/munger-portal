@@ -1199,25 +1199,6 @@ export async function downloadEntryRevertEventsExport(): Promise<void> {
 // delay report. See streetlightAdmin.controller.ts.
 // ---------------------------------------------------------------------------
 
-export interface StreetWiseImportResult {
-  segmentsCreated: number;
-  lightsCreated: number;
-  errors: { row: number; message: string }[];
-}
-
-export async function uploadStreetWiseLightsCsv(agency: "NN" | "EESL", csvContent: string): Promise<StreetWiseImportResult> {
-  const res = await fetch(`${API_BASE_URL}/admin/streetlights/bulk-upload`, {
-    method: "POST",
-    headers: authHeaders(),
-    body: JSON.stringify({ agency, csvContent }),
-  });
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body.error || "Could not upload this file.");
-  }
-  return res.json();
-}
-
 export interface StreetSegment {
   id: number;
   ward_id: number;
@@ -1239,23 +1220,6 @@ export async function fetchStreetSegments(): Promise<StreetSegment[]> {
   if (!res.ok) throw new Error("Could not load street segments.");
   const data: { segments: StreetSegment[] } = await res.json();
   return data.segments;
-}
-
-export async function setStreetSegmentGps(
-  id: number,
-  input: { startGpsLat?: number | null; startGpsLng?: number | null; endGpsLat?: number | null; endGpsLng?: number | null },
-): Promise<StreetSegment> {
-  const res = await fetch(`${API_BASE_URL}/admin/street-segments/${id}/gps`, {
-    method: "PATCH",
-    headers: authHeaders(),
-    body: JSON.stringify(input),
-  });
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body.error || "Could not save GPS for this segment.");
-  }
-  const data: { segment: StreetSegment } = await res.json();
-  return data.segment;
 }
 
 export interface StreetlightLight {
@@ -1310,89 +1274,6 @@ export async function fetchStreetlightFaults(status?: "open" | "repaired"): Prom
   if (!res.ok) throw new Error("Could not load streetlight faults.");
   const data: { faults: StreetlightFaultEnriched[] } = await res.json();
   return data.faults;
-}
-
-export interface StreetlightCityManagerOption {
-  id: number;
-  displayName: string;
-}
-
-export async function fetchStreetlightCityManagers(): Promise<StreetlightCityManagerOption[]> {
-  const res = await fetch(`${API_BASE_URL}/admin/streetlight-city-managers`, { headers: authHeaders() });
-  if (!res.ok) throw new Error("Could not load City Managers.");
-  const data: { cityManagers: StreetlightCityManagerOption[] } = await res.json();
-  return data.cityManagers;
-}
-
-export interface StreetlightCityManagerAssignment {
-  id: number;
-  assigned_city_manager_id: number | null;
-  assigned_by: string | null;
-  assigned_at: string | null;
-}
-
-export async function fetchStreetlightCityManagerAssignment(): Promise<StreetlightCityManagerAssignment> {
-  const res = await fetch(`${API_BASE_URL}/admin/streetlight-city-manager-assignment`, { headers: authHeaders() });
-  if (!res.ok) throw new Error("Could not load the current assignment.");
-  const data: { assignment: StreetlightCityManagerAssignment } = await res.json();
-  return data.assignment;
-}
-
-export async function assignStreetlightCityManager(cityManagerId: number): Promise<StreetlightCityManagerAssignment> {
-  const res = await fetch(`${API_BASE_URL}/admin/streetlight-city-manager-assignment`, {
-    method: "POST",
-    headers: authHeaders(),
-    body: JSON.stringify({ cityManagerId }),
-  });
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body.error || "Could not save this assignment.");
-  }
-  const data: { assignment: StreetlightCityManagerAssignment } = await res.json();
-  return data.assignment;
-}
-
-export interface StreetlightDelayReportRow {
-  faultId: number;
-  serialNumber: string | null;
-  wardName: string | null;
-  startPoint: string | null;
-  endPoint: string | null;
-  agencyName: string | null;
-  reportedByType: "staff" | "public" | "admin";
-  reportedAt: string;
-  nonFunctionalSince: string | null;
-  localSourceName: string | null;
-  status: "open" | "repaired";
-  repairedAt: string | null;
-  deadlineAt: string;
-  hoursTaken: number | null;
-  hoursOverdue: number | null;
-  pastDeadline: boolean;
-}
-
-export async function fetchStreetlightDelayReport(): Promise<StreetlightDelayReportRow[]> {
-  const res = await fetch(`${API_BASE_URL}/admin/streetlight-faults/delay-report`, { headers: authHeaders() });
-  if (!res.ok) throw new Error("Could not load the delay report.");
-  const data: { report: StreetlightDelayReportRow[] } = await res.json();
-  return data.report;
-}
-
-export async function downloadStreetlightDelayReport(): Promise<void> {
-  const res = await fetch(`${API_BASE_URL}/admin/streetlight-faults/delay-report/export`, { headers: authHeaders() });
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body.error || "Could not download the export.");
-  }
-  const blob = await res.blob();
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `streetlight-delay-report-${new Date().toISOString().slice(0, 10)}.xlsx`;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
 }
 
 // ---------------------------------------------------------------------------
