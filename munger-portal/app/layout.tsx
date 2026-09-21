@@ -15,6 +15,7 @@ import "@fontsource/public-sans/700.css";
 import "@fontsource/ibm-plex-mono/500.css";
 import "@fontsource/ibm-plex-mono/600.css";
 import "./globals.css";
+import { ChunkErrorRecovery } from "@/components/chunk-error-recovery";
 
 export const metadata: Metadata = {
   title: "Munger Nagar Nigam — Citizen Services Portal",
@@ -27,7 +28,10 @@ export default function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en">
-      <body className="font-body antialiased">{children}</body>
+      <body className="font-body antialiased">
+        <ChunkErrorRecovery />
+        {children}
+      </body>
     </html>
   );
 }

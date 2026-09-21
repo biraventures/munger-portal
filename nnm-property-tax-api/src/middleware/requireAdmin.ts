@@ -26,9 +26,13 @@ export function requireAdmin(req: Request, _res: Response, next: NextFunction): 
     if (payload.type !== "admin") {
       throw new Error("wrong token type");
     }
+    if (payload.isDemo && req.method !== "GET") {
+      throw new ApiError(403, "This is a read-only demo account - changes can't be saved.");
+    }
     req.admin = payload;
     next();
-  } catch {
+  } catch (err) {
+    if (err instanceof ApiError) throw err;
     throw new ApiError(401, "Invalid or expired session — please log in again");
   }
 }

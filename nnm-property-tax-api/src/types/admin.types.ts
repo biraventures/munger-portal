@@ -126,6 +126,7 @@ export interface AdminRow {
   active: boolean;
   email: string | null;
   assigned_city_manager_username: string | null;
+  is_demo: boolean;
 }
 
 export interface AdminLoginResult {
@@ -135,6 +136,7 @@ export interface AdminLoginResult {
     username: string;
     displayName: string;
     role: AdminRole;
+    isDemo: boolean;
   };
 }
 
@@ -145,4 +147,5 @@ export interface AdminTokenPayload {
   username: string;
   displayName: string;
   role: AdminRole;
+  isDemo: boolean;
 }

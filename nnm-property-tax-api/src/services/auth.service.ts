@@ -25,6 +25,7 @@ export async function login(username: string, password: string): Promise<LoginRe
     sub: operator.id,
     username: operator.username,
     displayName: operator.display_name,
+    isDemo: operator.is_demo,
   };
 
   const token = jwt.sign(payload, env.JWT_SECRET, { expiresIn: env.JWT_EXPIRES_IN as jwt.SignOptions["expiresIn"] });
@@ -35,6 +36,7 @@ export async function login(username: string, password: string): Promise<LoginRe
       id: operator.id,
       username: operator.username,
       displayName: operator.display_name,
+      isDemo: operator.is_demo,
     },
   };
 }

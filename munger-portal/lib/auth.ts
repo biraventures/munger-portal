@@ -5,6 +5,7 @@ export interface OperatorInfo {
   id: number;
   username: string;
   displayName: string;
+  isDemo: boolean;
 }
 
 const API_BASE_URL =

@@ -56,6 +56,7 @@ export interface AdminInfo {
   username: string;
   displayName: string;
   role: AdminRole;
+  isDemo: boolean;
 }
 
 const API_BASE_URL =
