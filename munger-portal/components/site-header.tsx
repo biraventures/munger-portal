@@ -6,6 +6,7 @@ import Image from "next/image";
 import { PROPERTY_TAX_SEARCH_PATH } from "@/lib/config";
 import { getOperatorToken } from "@/lib/auth";
 import { getAdminToken } from "@/lib/admin-auth";
+import logoImg from '@/public/logo.png'
 
 export function SiteHeader() {
   const [staffSignedIn, setStaffSignedIn] = useState(false);
@@ -18,7 +19,7 @@ export function SiteHeader() {
     <header className="sticky top-0 z-50 border-b border-line bg-paper/90 backdrop-blur-md">
       <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-3.5">
         <Link href="/" className="flex items-center gap-3">
-          <Image src="/logo.png" alt="Munger Nagar Nigam" width={40} height={40} className="h-10 w-10 shrink-0" priority />
+          <Image src={logoImg} alt="Munger Nagar Nigam" width={40} height={40} className="h-10 w-10 shrink-0" priority />
           <span className="leading-tight">
             <span className="block font-display text-[16.5px] font-semibold text-ink">
               मुंगेर नगर निगम
