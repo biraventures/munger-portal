@@ -101,7 +101,8 @@ export default function StreetlightsBulkUploadPage() {
               <div role="status" className="mb-3 flex items-center gap-2 rounded-md border border-green-200 bg-green-50 p-3 text-sm text-green-800">
                 <CheckCircle2 className="h-4 w-4 shrink-0" />
                 {result.segmentsCreated} street segment{result.segmentsCreated === 1 ? "" : "s"} and {result.lightsCreated} light
-                {result.lightsCreated === 1 ? "" : "s"} created.
+                {result.lightsCreated === 1 ? "" : "s"} created
+                {result.faultsCreated > 0 ? `, with ${result.faultsCreated} already flagged as non-functional.` : "."}
               </div>
               {result.errors.length > 0 && (
                 <details className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">

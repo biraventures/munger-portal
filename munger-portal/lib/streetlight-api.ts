@@ -414,6 +414,7 @@ export async function fetchStreetStatusDashboard(): Promise<StreetStatus[]> {
 export interface StreetWiseImportResult {
   segmentsCreated: number;
   lightsCreated: number;
+  faultsCreated: number;
   errors: { row: number; message: string }[];
 }
 
