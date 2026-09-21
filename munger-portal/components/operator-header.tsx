@@ -5,6 +5,7 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { LogOut } from "lucide-react";
 import { operatorLogout, type OperatorInfo } from "@/lib/auth";
+import logoImg from '@/public/logo.png'
 
 export function OperatorHeader({ operator }: { operator: OperatorInfo }) {
   const router = useRouter();
@@ -18,7 +19,7 @@ export function OperatorHeader({ operator }: { operator: OperatorInfo }) {
     <header className="border-b border-slate-200 bg-white">
       <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-3.5">
         <Link href="/operator/dashboard" className="flex items-center gap-2.5">
-          <Image src="/logo.png" alt="Munger Nagar Nigam" width={32} height={32} className="h-8 w-8 shrink-0" />
+          <Image src={logoImg} alt="Munger Nagar Nigam" width={32} height={32} className="h-8 w-8 shrink-0" />
           <span className="text-sm font-semibold text-slate-900">NNM Operator Portal</span>
         </Link>
         <nav className="hidden sm:block">
