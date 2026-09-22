@@ -19,7 +19,6 @@ import {
 } from "@/lib/streetlight-api";
 
 const OVERSIGHT_ROLES = ["city_manager", "deputy_municipal_commissioner", "municipal_commissioner", "attendance_admin"];
-const COMMISSIONER_ROLES = ["municipal_commissioner", "attendance_admin"];
 const SWITCH_STATUS_LABELS: Record<LightSwitchStatus, string> = { working: "Working", not_working: "Not Working", automatic: "Automatic", joint: "Joint" };
 const inputClass = "w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-nnm-blue focus:ring-offset-1";
 
@@ -217,7 +216,8 @@ export default function StreetlightStatusDashboardPage() {
     );
   }
 
-  const canManageStreets = COMMISSIONER_ROLES.includes(attendance.role);
+  const canManageStreets = OVERSIGHT_ROLES.includes(attendance.role);
+  const canEditLights = OVERSIGHT_ROLES.includes(attendance.role);
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -381,7 +381,7 @@ export default function StreetlightStatusDashboardPage() {
                               ) : !s.segmentId || !segmentLights[s.segmentId] || segmentLights[s.segmentId]!.length === 0 ? (
                                 <div>
                                   <p className="mb-3 text-xs text-slate-400">No lights on this street yet.</p>
-                                  {canManageStreets && (
+                                  {canEditLights && (
                                     <button
                                       onClick={() => handleInsertLight(s.segmentId!, 0)}
                                       disabled={insertingSeq === 0}
@@ -394,7 +394,7 @@ export default function StreetlightStatusDashboardPage() {
                                 </div>
                               ) : (
                                 <div className="space-y-2">
-                                  {canManageStreets && (
+                                  {canEditLights && (
                                     <button
                                       onClick={() => handleInsertLight(s.segmentId!, 0)}
                                       disabled={insertingSeq === 0}
@@ -422,7 +422,7 @@ export default function StreetlightStatusDashboardPage() {
                                           )}
                                           {!l.active && <span className="rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-semibold uppercase text-slate-600">Inactive</span>}
 
-                                          {canManageStreets && (
+                                          {canEditLights && (
                                             <select
                                               value={l.switchStatus ?? ""}
                                               disabled={changingStatusLightId === l.lightId}
@@ -453,7 +453,7 @@ export default function StreetlightStatusDashboardPage() {
                                           </div>
                                         )}
                                       </div>
-                                      {canManageStreets && l.lightSerialSeq != null && (
+                                      {canEditLights && l.lightSerialSeq != null && (
                                         <button
                                           onClick={() => handleInsertLight(s.segmentId!, l.lightSerialSeq!)}
                                           disabled={insertingSeq === l.lightSerialSeq}

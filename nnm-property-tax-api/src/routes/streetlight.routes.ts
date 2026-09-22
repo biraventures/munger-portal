@@ -111,8 +111,8 @@ const COMMISSIONER_ROLES = ["municipal_commissioner", "attendance_admin"] as con
 streetlightRouter.post("/street-wise-bulk-upload", requireAttendanceRole([...COMMISSIONER_ROLES]), uploadStreetWiseLightsAttendanceHandler);
 streetlightRouter.get("/street-segments", requireAttendanceRole(), listStreetSegmentsAttendanceHandler);
 streetlightRouter.patch("/street-segments/:id/gps", requireAttendanceRole([...COMMISSIONER_ROLES]), setStreetSegmentGpsAttendanceHandler);
-streetlightRouter.post("/street-segments", requireAttendanceRole([...COMMISSIONER_ROLES]), createStreetSegmentHandler);
-streetlightRouter.patch("/street-segments/:id", requireAttendanceRole([...COMMISSIONER_ROLES]), updateStreetSegmentHandler);
+streetlightRouter.post("/street-segments", requireAttendanceRole([...OVERSIGHT_ROLES]), createStreetSegmentHandler);
+streetlightRouter.patch("/street-segments/:id", requireAttendanceRole([...OVERSIGHT_ROLES]), updateStreetSegmentHandler);
 streetlightRouter.get("/street-segments/:id/lights", requireAttendanceRole(), listLightsForSegmentAttendanceHandler);
 streetlightRouter.get("/streetlight-city-managers", requireAttendanceRole([...COMMISSIONER_ROLES]), listStreetlightCityManagersAttendanceHandler);
 streetlightRouter.get("/streetlight-city-manager-assignment", requireAttendanceRole([...COMMISSIONER_ROLES]), getStreetlightCityManagerAssignmentAttendanceHandler);
