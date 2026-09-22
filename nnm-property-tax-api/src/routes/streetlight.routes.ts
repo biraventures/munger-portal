@@ -37,6 +37,9 @@ import {
   getStreetlightDelayReportAttendanceHandler,
   exportStreetlightDelayReportAttendanceHandler,
   deleteAllStreetlightDataHandler,
+  listDeactivatedLightsHandler,
+  verifyLightForDeletionHandler,
+  deleteVerifiedLightHandler,
 } from "../controllers/streetlightCommissioner.controller";
 import { requireAttendanceRole } from "../middleware/requireAttendanceRole";
 
@@ -108,6 +111,9 @@ streetlightRouter.post("/streetlight-city-manager-assignment", requireAttendance
 streetlightRouter.get("/streetlight-delay-report", requireAttendanceRole([...COMMISSIONER_ROLES]), getStreetlightDelayReportAttendanceHandler);
 streetlightRouter.get("/streetlight-delay-report/export", requireAttendanceRole([...COMMISSIONER_ROLES]), exportStreetlightDelayReportAttendanceHandler);
 streetlightRouter.delete("/all-data", requireAttendanceRole([...COMMISSIONER_ROLES]), deleteAllStreetlightDataHandler);
+streetlightRouter.get("/deactivated", requireAttendanceRole([...COMMISSIONER_ROLES]), listDeactivatedLightsHandler);
+streetlightRouter.post("/deactivated/:id/verify-for-deletion", requireAttendanceRole(["city_manager", "attendance_admin"]), verifyLightForDeletionHandler);
+streetlightRouter.delete("/deactivated/:id", requireAttendanceRole([...COMMISSIONER_ROLES]), deleteVerifiedLightHandler);
 
 // --- Contractor-ward assignment ---
 streetlightRouter.get("/contractor-wards", requireAttendanceRole(), listContractorWardsHandler);

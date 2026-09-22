@@ -126,3 +126,34 @@ export const deleteAllStreetlightDataHandler = asyncHandler(async (req: Request,
   const result = await deleteAllStreetlightData();
   res.status(200).json(result);
 });
+
+/**
+ * A separate deactivate-then-verify-then-delete flow for streetlights
+ * - distinct from the light_change_requests approval chain (which
+ * requires full City Manager -> DMC -> Commissioner approval just to
+ * deactivate). Here, a light already deactivated (via the existing
+ * direct toggle) shows up in this list awaiting the City Manager's
+ * field verification before it can be deleted.
+ */
+export const listDeactivatedLightsHandler = asyncHandler(async (_req: Request, res: Response) => {
+  const lights = await lightRepository.listDeactivated();
+  res.status(200).json({ lights });
+});
+
+const lightIdParamSchema = z.object({ id: z.coerce.number().int().positive() });
+
+export const verifyLightForDeletionHandler = asyncHandler(async (req: Request, res: Response) => {
+  const parsed = lightIdParamSchema.safeParse(req.params);
+  if (!parsed.success) throw ApiError.badRequest("Invalid light id");
+  const updated = await lightRepository.verifyForDeletion(parsed.data.id, req.attendanceUser!.displayName);
+  if (!updated) throw ApiError.badRequest("Light not found, not deactivated, or already deleted.");
+  res.status(200).json({ light: updated });
+});
+
+export const deleteVerifiedLightHandler = asyncHandler(async (req: Request, res: Response) => {
+  const parsed = lightIdParamSchema.safeParse(req.params);
+  if (!parsed.success) throw ApiError.badRequest("Invalid light id");
+  const deleted = await lightRepository.softDeleteVerified(parsed.data.id);
+  if (!deleted) throw ApiError.badRequest("Light not found, not deactivated, or not yet field-verified.");
+  res.status(200).json({ success: true });
+});

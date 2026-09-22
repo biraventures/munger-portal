@@ -623,3 +623,39 @@ export async function deleteAllStreetlightData(confirm: string): Promise<DeleteA
   }
   return res.json();
 }
+
+// ---------------------------------------------------------------------------
+// A separate deactivate-then-verify-then-delete flow for streetlights,
+// distinct from the light change requests approval chain.
+// ---------------------------------------------------------------------------
+
+export interface DeactivatedLight {
+  id: number;
+  serial_number: string;
+  ward_id: number;
+  verified_for_deletion_by: string | null;
+  verified_for_deletion_at: string | null;
+}
+
+export async function fetchDeactivatedLights(): Promise<DeactivatedLight[]> {
+  const res = await fetch(`${API_BASE_URL}/streetlight/deactivated`, { headers: authHeaders() });
+  if (!res.ok) throw new Error("Could not load deactivated streetlights.");
+  const data: { lights: DeactivatedLight[] } = await res.json();
+  return data.lights;
+}
+
+export async function verifyLightForDeletion(id: number): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/streetlight/deactivated/${id}/verify-for-deletion`, { method: "POST", headers: authHeaders() });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || "Could not verify this streetlight.");
+  }
+}
+
+export async function deleteVerifiedLight(id: number): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/streetlight/deactivated/${id}`, { method: "DELETE", headers: authHeaders() });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || "Could not delete this streetlight.");
+  }
+}

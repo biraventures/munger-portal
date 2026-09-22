@@ -116,6 +116,29 @@ export const setAssetActiveHandler = asyncHandler(async (req: Request, res: Resp
   res.status(200).json({ asset: { id: updated.id, active: updated.active } });
 });
 
+/** GET /api/v1/attendance/assets/deactivated - awaiting Junior Engineer field verification and deletion. */
+export const listDeactivatedAssetsHandler = asyncHandler(async (_req: Request, res: Response) => {
+  const assets = await assetRepository.listDeactivated();
+  res.status(200).json({ assets });
+});
+
+/** Junior Engineer's field verification, before deletion is allowed. */
+export const verifyAssetForDeletionHandler = asyncHandler(async (req: Request, res: Response) => {
+  const paramsParsed = assetIdParamSchema.safeParse(req.params);
+  if (!paramsParsed.success) throw ApiError.badRequest("Invalid asset id");
+  const updated = await assetRepository.verifyForDeletion(paramsParsed.data.id, req.attendanceUser!.displayName);
+  if (!updated) throw ApiError.badRequest("Asset not found, not deactivated, or already deleted.");
+  res.status(200).json({ asset: updated });
+});
+
+export const deleteAssetHandler = asyncHandler(async (req: Request, res: Response) => {
+  const paramsParsed = assetIdParamSchema.safeParse(req.params);
+  if (!paramsParsed.success) throw ApiError.badRequest("Invalid asset id");
+  const deleted = await assetRepository.softDelete(paramsParsed.data.id);
+  if (!deleted) throw ApiError.badRequest("Asset not found, not deactivated, or not yet field-verified.");
+  res.status(200).json({ success: true });
+});
+
 export const listAssetMaintenanceLogHandler = asyncHandler(async (req: Request, res: Response) => {
   const paramsParsed = assetIdParamSchema.safeParse(req.params);
   if (!paramsParsed.success) throw ApiError.badRequest("Invalid asset id");

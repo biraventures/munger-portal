@@ -41,6 +41,9 @@ export interface AssetRow {
   meter_functional: boolean | null;
   current_reading_date: string | null;
   current_reading_verified_by: string | null;
+  verified_for_deletion_by: string | null;
+  verified_for_deletion_at: string | null;
+  deleted_at: string | null;
 }
 
 export const assetRepository = {
@@ -49,11 +52,35 @@ export const assetRepository = {
     return rows[0] ?? null;
   },
 
-  /** includeArchived=false (default) hides active=false assets - archived is the everyday view; the toggle to see archived ones is explicit. */
+  /** includeArchived=false (default) hides active=false assets - archived is the everyday view; the toggle to see archived ones is explicit. Always excludes soft-deleted assets regardless. */
   async listAll(includeArchived = false): Promise<AssetRow[]> {
-    const where = includeArchived ? "" : "WHERE active = TRUE";
+    const where = includeArchived ? "WHERE deleted_at IS NULL" : "WHERE active = TRUE AND deleted_at IS NULL";
     const { rows } = await pool.query<AssetRow>(`SELECT * FROM assets ${where} ORDER BY label ASC`);
     return rows;
+  },
+
+  /** Deactivated (active=false) assets awaiting field verification and deletion. */
+  async listDeactivated(): Promise<AssetRow[]> {
+    const { rows } = await pool.query<AssetRow>(`SELECT * FROM assets WHERE active = FALSE AND deleted_at IS NULL ORDER BY label ASC`);
+    return rows;
+  },
+
+  /** Records the Junior Engineer's field verification, before deletion is allowed. */
+  async verifyForDeletion(id: number, verifiedBy: string): Promise<AssetRow | null> {
+    const { rows } = await pool.query<AssetRow>(
+      `UPDATE assets SET verified_for_deletion_by = $2, verified_for_deletion_at = now() WHERE id = $1 AND active = FALSE AND deleted_at IS NULL RETURNING *`,
+      [id, verifiedBy],
+    );
+    return rows[0] ?? null;
+  },
+
+  /** Soft delete - only allowed once field-verified. Keeps the row (and its maintenance/attendance history) but removes it from every listing. */
+  async softDelete(id: number): Promise<AssetRow | null> {
+    const { rows } = await pool.query<AssetRow>(
+      `UPDATE assets SET deleted_at = now() WHERE id = $1 AND active = FALSE AND verified_for_deletion_at IS NOT NULL AND deleted_at IS NULL RETURNING *`,
+      [id],
+    );
+    return rows[0] ?? null;
   },
 
   async create(input: {

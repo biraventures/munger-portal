@@ -37,6 +37,8 @@ export interface LightRow {
   segment_id: number | null;
   light_serial_seq: number | null;
   deleted_at: string | null;
+  verified_for_deletion_by: string | null;
+  verified_for_deletion_at: string | null;
 }
 
 export interface ContractorWardRow {

@@ -55,3 +55,30 @@ export const setAttendanceUserActiveHandler = asyncHandler(async (req: Request, 
     user: { id: updated.id, username: updated.username, displayName: updated.display_name, role: updated.role, wardId: updated.ward_id, active: updated.active },
   });
 });
+
+/** GET /api/v1/attendance/users/deactivated - deactivated staff logins awaiting APSWMO field verification and deletion. */
+export const listDeactivatedAttendanceUsersHandler = asyncHandler(async (_req: Request, res: Response) => {
+  const users = await attendanceUserRepository.listDeactivated();
+  res.status(200).json({ users });
+});
+
+/** POST /api/v1/attendance/users/:id/verify-for-deletion - APSWMO's field verification, before deletion is allowed. */
+export const verifyAttendanceUserForDeletionHandler = asyncHandler(async (req: Request, res: Response) => {
+  const parsed = idParamSchema.safeParse(req.params);
+  if (!parsed.success) throw ApiError.badRequest("Invalid user id");
+  const updated = await attendanceUserRepository.verifyForDeletion(parsed.data.id, req.attendanceUser!.displayName);
+  if (!updated) throw ApiError.badRequest("Staff account not found, not deactivated, or already deleted.");
+  res.status(200).json({
+    user: { id: updated.id, username: updated.username, displayName: updated.display_name, role: updated.role, verifiedForDeletionBy: updated.verified_for_deletion_by },
+  });
+});
+
+/** DELETE /api/v1/attendance/users/:id - only once field-verified. */
+export const deleteAttendanceUserHandler = asyncHandler(async (req: Request, res: Response) => {
+  const parsed = idParamSchema.safeParse(req.params);
+  if (!parsed.success) throw ApiError.badRequest("Invalid user id");
+  if (req.attendanceUser!.sub === parsed.data.id) throw ApiError.badRequest("You can't delete your own account.");
+  const deleted = await attendanceUserRepository.softDelete(parsed.data.id);
+  if (!deleted) throw ApiError.badRequest("Staff account not found, not deactivated, or not yet field-verified.");
+  res.status(200).json({ success: true });
+});

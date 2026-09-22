@@ -94,6 +94,9 @@ export interface AttendanceUserRow {
   role: AttendanceRole;
   ward_id: number | null;
   active: boolean;
+  verified_for_deletion_by: string | null;
+  verified_for_deletion_at: string | null;
+  deleted_at: string | null;
 }
 
 export interface AttendanceLoginResult {

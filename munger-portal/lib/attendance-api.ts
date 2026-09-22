@@ -519,6 +519,38 @@ export async function setAttendanceUserActive(id: number, active: boolean): Prom
   if (!res.ok) throw new Error("Could not update user status.");
 }
 
+export interface DeactivatedAttendanceUser {
+  id: number;
+  username: string;
+  display_name: string;
+  role: string;
+  verified_for_deletion_by: string | null;
+  verified_for_deletion_at: string | null;
+}
+
+export async function fetchDeactivatedAttendanceUsers(): Promise<DeactivatedAttendanceUser[]> {
+  const res = await fetch(`${API_BASE_URL}/attendance/users/deactivated`, { headers: authHeaders() });
+  if (!res.ok) throw new Error("Could not load deactivated staff.");
+  const data: { users: DeactivatedAttendanceUser[] } = await res.json();
+  return data.users;
+}
+
+export async function verifyAttendanceUserForDeletion(id: number): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/attendance/users/${id}/verify-for-deletion`, { method: "POST", headers: authHeaders() });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || "Could not verify this staff account.");
+  }
+}
+
+export async function deleteAttendanceUser(id: number): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/attendance/users/${id}`, { method: "DELETE", headers: authHeaders() });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || "Could not delete this staff account.");
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Officer dashboard summary
 // ---------------------------------------------------------------------------
@@ -905,6 +937,38 @@ export async function setAssetActive(id: number, active: boolean): Promise<void>
     body: JSON.stringify({ active }),
   });
   if (!res.ok) throw new Error("Could not update asset status.");
+}
+
+export interface DeactivatedAsset {
+  id: number;
+  asset_type: "vehicle" | "tricycle" | "hand_cart";
+  label: string;
+  vehicle_number: string | null;
+  verified_for_deletion_by: string | null;
+  verified_for_deletion_at: string | null;
+}
+
+export async function fetchDeactivatedAssets(): Promise<DeactivatedAsset[]> {
+  const res = await fetch(`${API_BASE_URL}/attendance/assets/deactivated`, { headers: authHeaders() });
+  if (!res.ok) throw new Error("Could not load deactivated assets.");
+  const data: { assets: DeactivatedAsset[] } = await res.json();
+  return data.assets;
+}
+
+export async function verifyAssetForDeletion(id: number): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/attendance/assets/${id}/verify-for-deletion`, { method: "POST", headers: authHeaders() });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || "Could not verify this asset.");
+  }
+}
+
+export async function deleteAsset(id: number): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/attendance/assets/${id}`, { method: "DELETE", headers: authHeaders() });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || "Could not delete this asset.");
+  }
 }
 
 export interface AssetMaintenanceLogEntry {

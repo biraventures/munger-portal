@@ -74,9 +74,33 @@ export const lightRepository = {
     return rows[0] ?? null;
   },
 
-  /** Soft delete - keeps the row (and any fault history referencing it) but removes it from the active registry. */
+  /** Soft delete - keeps the row (and any fault history referencing it) but removes it from the active registry. Used by the light_change_requests approval chain's final step. */
   async softDelete(id: number): Promise<LightRow | null> {
     const { rows } = await pool.query<LightRow>(`UPDATE lights SET deleted_at = now(), active = FALSE WHERE id = $1 AND deleted_at IS NULL RETURNING *`, [id]);
+    return rows[0] ?? null;
+  },
+
+  /** Deactivated (active=false) lights awaiting City Manager field verification and deletion - the separate deactivate-then-verify-then-delete flow, distinct from the light_change_requests approval chain. */
+  async listDeactivated(): Promise<LightRow[]> {
+    const { rows } = await pool.query<LightRow>(`SELECT * FROM lights WHERE active = FALSE AND deleted_at IS NULL ORDER BY serial_number ASC`);
+    return rows;
+  },
+
+  /** Records the City Manager's field verification, before deletion is allowed in this flow. */
+  async verifyForDeletion(id: number, verifiedBy: string): Promise<LightRow | null> {
+    const { rows } = await pool.query<LightRow>(
+      `UPDATE lights SET verified_for_deletion_by = $2, verified_for_deletion_at = now() WHERE id = $1 AND active = FALSE AND deleted_at IS NULL RETURNING *`,
+      [id, verifiedBy],
+    );
+    return rows[0] ?? null;
+  },
+
+  /** Soft delete, but only once field-verified - the separate deactivate-then-verify-then-delete flow's own delete step. */
+  async softDeleteVerified(id: number): Promise<LightRow | null> {
+    const { rows } = await pool.query<LightRow>(
+      `UPDATE lights SET deleted_at = now() WHERE id = $1 AND active = FALSE AND verified_for_deletion_at IS NOT NULL AND deleted_at IS NULL RETURNING *`,
+      [id],
+    );
     return rows[0] ?? null;
   },
 };

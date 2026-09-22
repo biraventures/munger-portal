@@ -19,7 +19,8 @@ export type AttendanceRole =
   | "municipal_commissioner"
   | "pyau_je"
   | "pyau_ae"
-  | "pyau_contractor";
+  | "pyau_contractor"
+  | "apswmo";
 
 export const ATTENDANCE_ROLE_LABELS: Record<AttendanceRole, string> = {
   jamadar: "Jamadar",
@@ -40,6 +41,7 @@ export const ATTENDANCE_ROLE_LABELS: Record<AttendanceRole, string> = {
   pyau_je: "Junior Engineer (Pyau)",
   pyau_ae: "Assistant Engineer (Pyau)",
   pyau_contractor: "Maintenance Contractor (Pyau)",
+  apswmo: "APSWMO",
 };
 
 export const WARD_SCOPED_ROLES: AttendanceRole[] = ["jamadar", "driver_supervisor"];
