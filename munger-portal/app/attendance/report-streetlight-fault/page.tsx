@@ -39,6 +39,10 @@ export default function ReportStreetlightFaultAttendancePage() {
       .catch((err) => setError(err instanceof Error ? err.message : "Could not load street segments."));
   }, [attendance]);
 
+  useEffect(() => {
+    if (attendance?.wardName) setSelectedWard(attendance.wardName);
+  }, [attendance]);
+
   const wardNames = useMemo(() => {
     if (!segments) return [];
     return Array.from(new Set(segments.map((s) => s.ward_name))).sort();
@@ -132,15 +136,24 @@ export default function ReportStreetlightFaultAttendancePage() {
         )}
 
         <div className="rounded-xl border border-slate-200 bg-white p-6">
-          <label className="mb-1 block text-xs font-medium text-slate-600">Ward</label>
-          <select value={selectedWard} onChange={(e) => handleWardChange(e.target.value)} className={`${inputClass} mb-4`}>
-            <option value="">{segments ? "Choose a ward…" : "Loading…"}</option>
-            {wardNames.map((w) => (
-              <option key={w} value={w}>
-                {w}
-              </option>
-            ))}
-          </select>
+          {attendance.wardName ? (
+            <div className="mb-4">
+              <label className="mb-1 block text-xs font-medium text-slate-600">Ward</label>
+              <div className={`${inputClass} bg-slate-50 text-slate-700`}>{attendance.wardName}</div>
+            </div>
+          ) : (
+            <>
+              <label className="mb-1 block text-xs font-medium text-slate-600">Ward</label>
+              <select value={selectedWard} onChange={(e) => handleWardChange(e.target.value)} className={`${inputClass} mb-4`}>
+                <option value="">{segments ? "Choose a ward…" : "Loading…"}</option>
+                {wardNames.map((w) => (
+                  <option key={w} value={w}>
+                    {w}
+                  </option>
+                ))}
+              </select>
+            </>
+          )}
 
           {selectedWard && (
             <>

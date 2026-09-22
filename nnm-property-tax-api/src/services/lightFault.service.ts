@@ -5,6 +5,7 @@ import { streetlightCityManagerAssignmentRepository } from "../repositories/stre
 import { ApiError } from "../utils/ApiError";
 import type { LightFaultRow } from "../types/streetlight.types";
 import type { AttendanceTokenPayload } from "../types/attendance.types";
+import { WARD_SCOPED_ROLES } from "../types/attendance.types";
 import type { AdminTokenPayload } from "../types/admin.types";
 
 const REPAIR_DEADLINE_HOURS = 72;
@@ -30,6 +31,9 @@ export async function reportFaultByStaff(
 ): Promise<LightFaultRow> {
   const light = await lightRepository.findById(input.lightId);
   if (!light) throw ApiError.notFound("Light not found.");
+  if (WARD_SCOPED_ROLES.includes(user.role) && light.ward_id !== user.wardId) {
+    throw new ApiError(403, "You can only report streetlights in your own assigned ward.");
+  }
   validateNonFunctionalSince(input.nonFunctionalSince);
 
   const contractorId = await findResponsibleContractor(light.ward_id);

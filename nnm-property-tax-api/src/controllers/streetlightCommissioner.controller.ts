@@ -4,6 +4,8 @@ import ExcelJS from "exceljs";
 import { importStreetWiseLightsCsv } from "../services/streetWiseLightImport.service";
 import { buildStreetlightDelayReport } from "../services/streetlightDelayReport.service";
 import { deleteAllStreetlightData } from "../services/streetlightStatusDashboard.service";
+import { insertLightAfterSequence } from "../services/lightInsert.service";
+import { createStreetSegment, updateStreetSegment } from "../services/streetSegmentManagement.service";
 import { addSheetFromRows } from "../services/export.service";
 import { streetSegmentRepository } from "../repositories/streetSegment.repository";
 import { lightRepository } from "../repositories/light.repository";
@@ -156,4 +158,94 @@ export const deleteVerifiedLightHandler = asyncHandler(async (req: Request, res:
   const deleted = await lightRepository.softDeleteVerified(parsed.data.id);
   if (!deleted) throw ApiError.badRequest("Light not found, not deactivated, or not yet field-verified.");
   res.status(200).json({ success: true });
+});
+
+const lightIdParamSchemaSwitchStatus = z.object({ id: z.coerce.number().int().positive() });
+const setSwitchStatusSchema = z.object({ switchStatus: z.enum(["working", "not_working", "automatic", "joint"]) });
+
+/**
+ * Direct functional-status edit from the status dashboard's
+ * street-wise drill-down - deliberately not routed through the
+ * light_change_requests approval chain (which requires a JE/AE/nodal
+ * clerk to propose first), since an oversight role looking at the
+ * dashboard should be able to correct this right there. Only
+ * switch_status itself changes - never touches fault records, so
+ * repair history is untouched.
+ */
+export const setLightSwitchStatusHandler = asyncHandler(async (req: Request, res: Response) => {
+  const paramsParsed = lightIdParamSchemaSwitchStatus.safeParse(req.params);
+  if (!paramsParsed.success) throw ApiError.badRequest("Invalid light id");
+  const bodyParsed = setSwitchStatusSchema.safeParse(req.body);
+  if (!bodyParsed.success) throw ApiError.badRequest("Invalid input", bodyParsed.error.flatten().fieldErrors);
+
+  const updated = await lightRepository.setSwitchStatus(paramsParsed.data.id, bodyParsed.data.switchStatus);
+  if (!updated) throw ApiError.notFound("Light not found.");
+  res.status(200).json({ light: updated });
+});
+
+const insertLightSchema = z.object({ segmentId: z.coerce.number().int().positive(), afterSeq: z.coerce.number().int().min(0) });
+
+/**
+ * Inserts a light into a street at a specific position (e.g. between
+ * the 4th and 5th light on a survey that missed one), shifting later
+ * lights' numbering up by one without touching their own data. From
+ * the status dashboard's street-wise drill-down.
+ */
+export const insertLightHandler = asyncHandler(async (req: Request, res: Response) => {
+  const parsed = insertLightSchema.safeParse(req.body);
+  if (!parsed.success) throw ApiError.badRequest("Invalid input", parsed.error.flatten().fieldErrors);
+  const light = await insertLightAfterSequence(parsed.data.segmentId, parsed.data.afterSeq);
+  res.status(200).json({ light });
+});
+
+const streetAgencySchema = z.enum(["NN", "EESL"]);
+const createStreetSegmentSchema = z.object({
+  wardId: z.coerce.number().int().positive(),
+  agency: streetAgencySchema,
+  startPoint: z.string().trim().min(1),
+  intermediatePoint: z.string().trim().nullish(),
+  endPoint: z.string().trim().nullish(),
+  lightCount: z.coerce.number().int().min(0),
+});
+
+/** POST /api/v1/streetlight/street-segments - "Add new street" on the status dashboard's ward-wise view, as opposed to the bulk CSV upload. */
+export const createStreetSegmentHandler = asyncHandler(async (req: Request, res: Response) => {
+  const parsed = createStreetSegmentSchema.safeParse(req.body);
+  if (!parsed.success) throw ApiError.badRequest("Invalid input", parsed.error.flatten().fieldErrors);
+  const segment = await createStreetSegment({
+    wardId: parsed.data.wardId,
+    agency: parsed.data.agency,
+    startPoint: parsed.data.startPoint,
+    intermediatePoint: parsed.data.intermediatePoint ?? null,
+    endPoint: parsed.data.endPoint ?? null,
+    lightCount: parsed.data.lightCount,
+    createdBy: req.attendanceUser!.displayName,
+  });
+  res.status(200).json({ segment });
+});
+
+const segmentIdParamSchemaEdit = z.object({ id: z.coerce.number().int().positive() });
+const updateStreetSegmentSchema = z.object({
+  wardId: z.coerce.number().int().positive(),
+  agency: streetAgencySchema,
+  startPoint: z.string().trim().min(1),
+  intermediatePoint: z.string().trim().nullish(),
+  endPoint: z.string().trim().nullish(),
+});
+
+/** PATCH /api/v1/streetlight/street-segments/:id - edit a street's own details (ward, name, agency); regenerates its lights' serial numbers to match if the ward or name changed. */
+export const updateStreetSegmentHandler = asyncHandler(async (req: Request, res: Response) => {
+  const paramsParsed = segmentIdParamSchemaEdit.safeParse(req.params);
+  if (!paramsParsed.success) throw ApiError.badRequest("Invalid segment id");
+  const bodyParsed = updateStreetSegmentSchema.safeParse(req.body);
+  if (!bodyParsed.success) throw ApiError.badRequest("Invalid input", bodyParsed.error.flatten().fieldErrors);
+
+  const segment = await updateStreetSegment(paramsParsed.data.id, {
+    wardId: bodyParsed.data.wardId,
+    agency: bodyParsed.data.agency,
+    startPoint: bodyParsed.data.startPoint,
+    intermediatePoint: bodyParsed.data.intermediatePoint ?? null,
+    endPoint: bodyParsed.data.endPoint ?? null,
+  });
+  res.status(200).json({ segment });
 });

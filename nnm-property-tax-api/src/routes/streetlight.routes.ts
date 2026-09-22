@@ -41,6 +41,10 @@ import {
   listDeactivatedLightsHandler,
   verifyLightForDeletionHandler,
   deleteVerifiedLightHandler,
+  setLightSwitchStatusHandler,
+  insertLightHandler,
+  createStreetSegmentHandler,
+  updateStreetSegmentHandler,
 } from "../controllers/streetlightCommissioner.controller";
 import { requireAttendanceRole } from "../middleware/requireAttendanceRole";
 
@@ -94,6 +98,8 @@ streetlightRouter.post("/light-change-requests/:id/reject", requireAttendanceRol
 streetlightRouter.get("/status-dashboard/wards", requireAttendanceRole([...OVERSIGHT_ROLES]), getWardStatusDashboardHandler);
 streetlightRouter.get("/status-dashboard/streets", requireAttendanceRole([...OVERSIGHT_ROLES]), getStreetStatusDashboardHandler);
 streetlightRouter.get("/status-dashboard/segments/:id/lights", requireAttendanceRole([...OVERSIGHT_ROLES]), getSegmentLightStatusHandler);
+streetlightRouter.patch("/lights/:id/switch-status", requireAttendanceRole([...OVERSIGHT_ROLES]), setLightSwitchStatusHandler);
+streetlightRouter.post("/lights/insert", requireAttendanceRole([...OVERSIGHT_ROLES]), insertLightHandler);
 
 // --- Commissioner's tools, brought over from the admin login so
 // everything streetlight-related lives on this side (asset
@@ -105,6 +111,8 @@ const COMMISSIONER_ROLES = ["municipal_commissioner", "attendance_admin"] as con
 streetlightRouter.post("/street-wise-bulk-upload", requireAttendanceRole([...COMMISSIONER_ROLES]), uploadStreetWiseLightsAttendanceHandler);
 streetlightRouter.get("/street-segments", requireAttendanceRole(), listStreetSegmentsAttendanceHandler);
 streetlightRouter.patch("/street-segments/:id/gps", requireAttendanceRole([...COMMISSIONER_ROLES]), setStreetSegmentGpsAttendanceHandler);
+streetlightRouter.post("/street-segments", requireAttendanceRole([...COMMISSIONER_ROLES]), createStreetSegmentHandler);
+streetlightRouter.patch("/street-segments/:id", requireAttendanceRole([...COMMISSIONER_ROLES]), updateStreetSegmentHandler);
 streetlightRouter.get("/street-segments/:id/lights", requireAttendanceRole(), listLightsForSegmentAttendanceHandler);
 streetlightRouter.get("/streetlight-city-managers", requireAttendanceRole([...COMMISSIONER_ROLES]), listStreetlightCityManagersAttendanceHandler);
 streetlightRouter.get("/streetlight-city-manager-assignment", requireAttendanceRole([...COMMISSIONER_ROLES]), getStreetlightCityManagerAssignmentAttendanceHandler);

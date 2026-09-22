@@ -590,6 +590,8 @@ export interface SegmentLightStatus {
   active: boolean;
   working: boolean;
   faultHistory: SegmentLightFaultHistoryEntry[];
+  lightSerialSeq: number | null;
+  switchStatus: "working" | "not_working" | "automatic" | "joint" | null;
 }
 
 export async function fetchSegmentLightStatus(segmentId: number): Promise<SegmentLightStatus[]> {
@@ -672,5 +674,82 @@ export async function deleteVerifiedLight(id: number): Promise<void> {
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     throw new Error(body.error || "Could not delete this streetlight.");
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Direct functional-status edit and light insertion from the status
+// dashboard's street-wise drill-down.
+// ---------------------------------------------------------------------------
+
+export type LightSwitchStatus = "working" | "not_working" | "automatic" | "joint";
+
+export async function setLightSwitchStatus(lightId: number, switchStatus: LightSwitchStatus): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/streetlight/lights/${lightId}/switch-status`, {
+    method: "PATCH",
+    headers: authHeaders(),
+    body: JSON.stringify({ switchStatus }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || "Could not update the functional status.");
+  }
+}
+
+/** Inserts a light into a street right after the given sequence number (0 = as the new first light). Every later light's numbering shifts up by one; nothing else about them changes. */
+export async function insertLight(segmentId: number, afterSeq: number): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/streetlight/lights/insert`, {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify({ segmentId, afterSeq }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || "Could not insert a light here.");
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Add/edit a street directly from the status dashboard's ward-wise view.
+// ---------------------------------------------------------------------------
+
+export interface CreateStreetSegmentInput {
+  wardId: number;
+  agency: "NN" | "EESL";
+  startPoint: string;
+  intermediatePoint: string | null;
+  endPoint: string | null;
+  lightCount: number;
+}
+
+export async function createStreetSegment(input: CreateStreetSegmentInput): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/streetlight/street-segments`, {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || "Could not add this street.");
+  }
+}
+
+export interface UpdateStreetSegmentInput {
+  wardId: number;
+  agency: "NN" | "EESL";
+  startPoint: string;
+  intermediatePoint: string | null;
+  endPoint: string | null;
+}
+
+export async function updateStreetSegment(segmentId: number, input: UpdateStreetSegmentInput): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/streetlight/street-segments/${segmentId}`, {
+    method: "PATCH",
+    headers: authHeaders(),
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || "Could not save these changes.");
   }
 }

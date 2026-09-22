@@ -76,6 +76,8 @@ export interface SegmentLightStatusRow {
   active: boolean;
   working: boolean;
   faultHistory: SegmentLightFaultHistoryRow[];
+  lightSerialSeq: number | null;
+  switchStatus: "working" | "not_working" | "automatic" | "joint" | null;
 }
 
 /**
@@ -85,8 +87,8 @@ export interface SegmentLightStatusRow {
  * first.
  */
 export async function buildSegmentLightStatus(segmentId: number): Promise<SegmentLightStatusRow[]> {
-  const { rows: lights } = await pool.query<{ id: number; serial_number: string; active: boolean }>(
-    `SELECT id, serial_number, active FROM lights WHERE segment_id = $1 AND deleted_at IS NULL ORDER BY light_serial_seq ASC`,
+  const { rows: lights } = await pool.query<{ id: number; serial_number: string; active: boolean; light_serial_seq: number | null; switch_status: "working" | "not_working" | "automatic" | "joint" | null }>(
+    `SELECT id, serial_number, active, light_serial_seq, switch_status FROM lights WHERE segment_id = $1 AND deleted_at IS NULL ORDER BY light_serial_seq ASC`,
     [segmentId],
   );
   if (lights.length === 0) return [];
@@ -125,6 +127,8 @@ export async function buildSegmentLightStatus(segmentId: number): Promise<Segmen
       active: l.active,
       working: !history.some((h) => h.status === "open"),
       faultHistory: history,
+      lightSerialSeq: l.light_serial_seq,
+      switchStatus: l.switch_status,
     };
   });
 }

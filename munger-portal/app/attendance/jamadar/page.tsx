@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { AlertCircle, Camera, CheckCircle2, Loader2, LogIn, LogOut, UserX } from "lucide-react";
+import Link from "next/link";
+import { AlertCircle, Camera, CheckCircle2, Loader2, LogIn, LogOut, UserX, Lightbulb } from "lucide-react";
 import { AttendanceHeader } from "@/components/attendance/attendance-header";
 import { useAttendanceGuard } from "@/lib/use-attendance-guard";
 import {
@@ -243,6 +244,19 @@ export default function JamadarAttendancePage() {
             </>
           )}
         </section>
+
+        <Link
+          href="/attendance/report-streetlight-fault"
+          className="mb-6 flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-6 transition-shadow hover:shadow-md"
+        >
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-50 text-nnm-blue">
+            <Lightbulb className="h-5 w-5" strokeWidth={1.8} />
+          </span>
+          <div>
+            <h2 className="text-sm font-semibold text-slate-800">Streetlights</h2>
+            <p className="text-xs text-slate-500">Report a damaged or non-functional streetlight in {user.wardName}.</p>
+          </div>
+        </Link>
 
         {photoUploaded !== true ? (
           <p className="rounded-xl border border-dashed border-slate-300 bg-white p-6 text-center text-sm text-slate-400">
