@@ -5,7 +5,7 @@ import { lightRepository } from "../repositories/light.repository";
 import { contractorWardRepository } from "../repositories/contractorWard.repository";
 import { lightFaultRepository } from "../repositories/lightFault.repository";
 import { lightFaultPenaltyRepository } from "../repositories/lightFaultPenalty.repository";
-import { reportFaultByStaff, markFaultRepaired, linkFaultToLight } from "../services/lightFault.service";
+import { reportFaultByStaff, markFaultRepaired, linkFaultToLight, getLightRepairHistorySummary } from "../services/lightFault.service";
 import { accrueAllOverduePenalties, accruePenaltiesForFault } from "../services/penaltyAccrual.service";
 import { importLightsCsv } from "../services/lightCsvImport.service";
 import { buildWardStatusDashboard, buildStreetStatusDashboard, buildSegmentLightStatus } from "../services/streetlightStatusDashboard.service";
@@ -184,6 +184,8 @@ const reportFaultSchema = z.object({
   notes: z.string().trim().nullish(),
   nonFunctionalSince: z.string().trim().nullish(),
   localSourceName: z.string().trim().nullish(),
+  gpsLat: z.coerce.number().min(-90).max(90).nullish(),
+  gpsLng: z.coerce.number().min(-180).max(180).nullish(),
 });
 
 export const reportFaultHandler = asyncHandler(async (req: Request, res: Response) => {
@@ -194,6 +196,8 @@ export const reportFaultHandler = asyncHandler(async (req: Request, res: Respons
     notes: parsed.data.notes ?? null,
     nonFunctionalSince: parsed.data.nonFunctionalSince ?? null,
     localSourceName: parsed.data.localSourceName ?? null,
+    gpsLat: parsed.data.gpsLat ?? null,
+    gpsLng: parsed.data.gpsLng ?? null,
   });
   res.status(200).json({ fault: { id: fault.id, lightId: fault.light_id, deadlineAt: fault.deadline_at, assignedContractorId: fault.assigned_contractor_id } });
 });
@@ -281,4 +285,14 @@ export const getSegmentLightStatusHandler = asyncHandler(async (req: Request, re
   if (!parsed.success) throw ApiError.badRequest("Invalid segment id");
   const lights = await buildSegmentLightStatus(parsed.data.id);
   res.status(200).json({ lights });
+});
+
+const lightIdParamSchemaRepairHistory = z.object({ id: z.coerce.number().int().positive() });
+
+/** GET /api/v1/streetlight/lights/:id/repair-history-summary - Commissioner only. Deliberately not exposed to AE/JE reporting a fault. */
+export const getLightRepairHistorySummaryHandler = asyncHandler(async (req: Request, res: Response) => {
+  const parsed = lightIdParamSchemaRepairHistory.safeParse(req.params);
+  if (!parsed.success) throw ApiError.badRequest("Invalid light id");
+  const summary = await getLightRepairHistorySummary(parsed.data.id);
+  res.status(200).json(summary);
 });

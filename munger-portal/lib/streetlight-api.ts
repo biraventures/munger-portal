@@ -188,11 +188,13 @@ export async function reportFault(
   notes: string | null,
   nonFunctionalSince?: string | null,
   localSourceName?: string | null,
+  gpsLat?: number | null,
+  gpsLng?: number | null,
 ): Promise<LightFault> {
   const res = await fetch(`${API_BASE_URL}/streetlight/faults`, {
     method: "POST",
     headers: authHeaders(),
-    body: JSON.stringify({ lightId, notes, nonFunctionalSince, localSourceName }),
+    body: JSON.stringify({ lightId, notes, nonFunctionalSince, localSourceName, gpsLat, gpsLng }),
   });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
@@ -200,6 +202,19 @@ export async function reportFault(
   }
   const data: { fault: LightFault } = await res.json();
   return data.fault;
+}
+
+export interface LightRepairHistorySummary {
+  hasPriorRepairs: boolean;
+  repairedCount: number;
+  openFaultCount: number;
+}
+
+/** Commissioner-only - deliberately not usable by AE/JE or other fault reporters. */
+export async function fetchLightRepairHistorySummary(lightId: number): Promise<LightRepairHistorySummary> {
+  const res = await fetch(`${API_BASE_URL}/streetlight/lights/${lightId}/repair-history-summary`, { headers: authHeaders() });
+  if (!res.ok) throw new Error("Could not load repair history.");
+  return res.json();
 }
 
 export async function markFaultRepaired(faultId: number, repairNotes: string | null): Promise<void> {

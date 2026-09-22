@@ -891,6 +891,13 @@ export interface AssetSummary {
   driverName: string | null;
   trackingType: "km" | "hours" | null;
   latestLogbookReading: { logDate: string; reading: string } | null;
+  registrationNumber: string | null;
+  engineNumber: string | null;
+  manufacturer: string | null;
+  model: string | null;
+  variant: string | null;
+  yearOfManufacture: number | null;
+  owner: string | null;
 }
 
 export async function fetchAllAssets(): Promise<AssetSummary[]> {
@@ -937,6 +944,32 @@ export async function setAssetActive(id: number, active: boolean): Promise<void>
     body: JSON.stringify({ active }),
   });
   if (!res.ok) throw new Error("Could not update asset status.");
+}
+
+export interface UpdateAssetDetailsInput {
+  assetType: "vehicle" | "tricycle" | "hand_cart";
+  label: string;
+  vehicleNumber: string | null;
+  chassisNumber: string | null;
+  registrationNumber: string | null;
+  engineNumber: string | null;
+  manufacturer: string | null;
+  model: string | null;
+  variant: string | null;
+  yearOfManufacture: number | null;
+  owner: string | null;
+}
+
+export async function updateAssetDetails(id: number, input: UpdateAssetDetailsInput): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/attendance/assets/${id}/details`, {
+    method: "PATCH",
+    headers: authHeaders(),
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || "Could not save these changes.");
+  }
 }
 
 export interface DeactivatedAsset {

@@ -97,6 +97,54 @@ export const assetRepository = {
     return rows[0]!;
   },
 
+  /**
+   * Corrects an asset's core identification details - the fields
+   * that show up in the main registry and are most likely to need a
+   * fix (a typo in the label, a wrong vehicle number, etc.), as
+   * opposed to the fuller Module 01/02/03 baseline survey fields
+   * (updateBaselineDetails) which have their own dedicated flow.
+   */
+  async updateDetails(
+    id: number,
+    input: {
+      assetType: "vehicle" | "tricycle" | "hand_cart";
+      label: string;
+      vehicleNumber: string | null;
+      chassisNumber: string | null;
+      registrationNumber: string | null;
+      engineNumber: string | null;
+      manufacturer: string | null;
+      model: string | null;
+      variant: string | null;
+      yearOfManufacture: number | null;
+      owner: string | null;
+    },
+  ): Promise<AssetRow | null> {
+    const { rows } = await pool.query<AssetRow>(
+      `UPDATE assets SET
+        asset_type = $2, label = $3, vehicle_number = $4, chassis_number = $5,
+        registration_number = $6, engine_number = $7, manufacturer = $8, model = $9, variant = $10,
+        year_of_manufacture = $11, owner = $12
+       WHERE id = $1 AND deleted_at IS NULL
+       RETURNING *`,
+      [
+        id,
+        input.assetType,
+        input.label,
+        input.vehicleNumber,
+        input.chassisNumber,
+        input.registrationNumber,
+        input.engineNumber,
+        input.manufacturer,
+        input.model,
+        input.variant,
+        input.yearOfManufacture,
+        input.owner,
+      ],
+    );
+    return rows[0] ?? null;
+  },
+
   async setTrackingType(id: number, trackingType: "km" | "hours" | null): Promise<AssetRow | null> {
     const { rows } = await pool.query<AssetRow>(`UPDATE assets SET tracking_type = $2 WHERE id = $1 RETURNING *`, [id, trackingType]);
     return rows[0] ?? null;

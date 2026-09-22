@@ -82,6 +82,7 @@ import {
   createAssetHandler,
   setAssetWardsHandler,
   setAssetActiveHandler,
+  updateAssetDetailsHandler,
   listDeactivatedAssetsHandler,
   verifyAssetForDeletionHandler,
   deleteAssetHandler,
@@ -265,6 +266,7 @@ attendanceRouter.get("/asset-photos/:photoId/file", requireAttendanceRole(), get
 attendanceRouter.delete("/asset-photos/:photoId", requireAttendanceRole([...FLEET_EDIT_ROLES]), deleteAssetPhotoHandler);
 attendanceRouter.patch("/assets/:id/wards", requireAttendanceRole([...FLEET_EDIT_ROLES]), setAssetWardsHandler);
 attendanceRouter.patch("/assets/:id/active", requireAttendanceRole([...FLEET_EDIT_ROLES]), setAssetActiveHandler);
+attendanceRouter.patch("/assets/:id/details", requireAttendanceRole([...FLEET_EDIT_ROLES]), updateAssetDetailsHandler);
 attendanceRouter.get("/assets/deactivated", requireAttendanceRole([...FLEET_EDIT_ROLES]), listDeactivatedAssetsHandler);
 attendanceRouter.post("/assets/:id/verify-for-deletion", requireAttendanceRole(["junior_engineer", "attendance_admin"]), verifyAssetForDeletionHandler);
 attendanceRouter.delete("/assets/:id", requireAttendanceRole([...FLEET_EDIT_ROLES]), deleteAssetHandler);

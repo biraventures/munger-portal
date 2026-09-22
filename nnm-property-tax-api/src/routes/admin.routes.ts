@@ -99,6 +99,7 @@ import {
   listStreetSegmentsHandler,
   listLightsForSegmentHandler,
   reportStreetlightFaultHandler,
+  getLightRepairHistorySummaryAdminHandler,
   listStreetlightFaultsHandler,
 } from "../controllers/streetlightAdmin.controller";
 import {
@@ -208,6 +209,7 @@ const requireStreetlightReporterRole = requireAdminRole("tax_daroga", "tax_surve
 adminRouter.get("/street-segments", listStreetSegmentsHandler);
 adminRouter.get("/street-segments/:id/lights", requireStreetlightReporterRole, listLightsForSegmentHandler);
 adminRouter.post("/streetlight-faults", requireStreetlightReporterRole, reportStreetlightFaultHandler);
+adminRouter.get("/lights/:id/repair-history-summary", requireAdminRole("commissioner"), getLightRepairHistorySummaryAdminHandler);
 adminRouter.get("/streetlight-faults", listStreetlightFaultsHandler);
 
 // Municipal employee database - Establishment Clerk enters records,

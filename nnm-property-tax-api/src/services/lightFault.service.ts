@@ -23,10 +23,10 @@ function validateNonFunctionalSince(nonFunctionalSince: string | null | undefine
   if (parsed.getTime() > Date.now()) throw ApiError.badRequest("Non-functional-since date can't be in the future.");
 }
 
-/** Staff-reported fault - any logged-in attendance role, per what was asked for ("all staff"). */
+/** Staff-reported fault - any logged-in attendance role, per what was asked for ("all staff"). Captures the reporter's GPS location if given, building up a location record of faulty lights over time. */
 export async function reportFaultByStaff(
   user: AttendanceTokenPayload,
-  input: { lightId: number; notes: string | null; nonFunctionalSince?: string | null; localSourceName?: string | null },
+  input: { lightId: number; notes: string | null; nonFunctionalSince?: string | null; localSourceName?: string | null; gpsLat?: number | null; gpsLng?: number | null },
 ): Promise<LightFaultRow> {
   const light = await lightRepository.findById(input.lightId);
   if (!light) throw ApiError.notFound("Light not found.");
@@ -38,8 +38,8 @@ export async function reportFaultByStaff(
 
   return lightFaultRepository.create({
     lightId: light.id,
-    reportedGpsLat: null,
-    reportedGpsLng: null,
+    reportedGpsLat: input.gpsLat ?? null,
+    reportedGpsLng: input.gpsLng ?? null,
     deadlineAt,
     reportedByType: "staff",
     reportedByUserId: user.sub,
@@ -61,7 +61,7 @@ export async function reportFaultByStaff(
  */
 export async function reportFaultByAdmin(
   admin: AdminTokenPayload,
-  input: { lightId: number; notes: string | null; nonFunctionalSince?: string | null; localSourceName?: string | null },
+  input: { lightId: number; notes: string | null; nonFunctionalSince?: string | null; localSourceName?: string | null; gpsLat?: number | null; gpsLng?: number | null },
 ): Promise<LightFaultRow> {
   const light = await lightRepository.findById(input.lightId);
   if (!light) throw ApiError.notFound("Light not found.");
@@ -73,8 +73,8 @@ export async function reportFaultByAdmin(
 
   return lightFaultRepository.create({
     lightId: light.id,
-    reportedGpsLat: null,
-    reportedGpsLng: null,
+    reportedGpsLat: input.gpsLat ?? null,
+    reportedGpsLng: input.gpsLng ?? null,
     deadlineAt,
     reportedByType: "admin",
     reportedByAdminUsername: admin.username,
@@ -174,4 +174,23 @@ export async function linkFaultToLight(faultId: number, lightId: number): Promis
   const updated = await lightFaultRepository.linkToLight(faultId, lightId, contractorId);
   if (!updated) throw ApiError.notFound("Fault not found.");
   return updated;
+}
+
+export interface LightRepairHistorySummary {
+  hasPriorRepairs: boolean;
+  repairedCount: number;
+  openFaultCount: number;
+}
+
+/**
+ * Whether a light has been repaired before, and how many times - a
+ * separate, restricted lookup used only during fault reporting, kept
+ * deliberately Commissioner-only (per what was asked for: AE/JE
+ * reporting a fault shouldn't see this, only the Commissioner can).
+ */
+export async function getLightRepairHistorySummary(lightId: number): Promise<LightRepairHistorySummary> {
+  const faults = await lightFaultRepository.listByLight(lightId);
+  const repairedCount = faults.filter((f) => f.status === "repaired").length;
+  const openFaultCount = faults.filter((f) => f.status === "open").length;
+  return { hasPriorRepairs: repairedCount > 0, repairedCount, openFaultCount };
 }

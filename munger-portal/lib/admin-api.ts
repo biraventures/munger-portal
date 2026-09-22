@@ -1242,16 +1242,31 @@ export async function reportStreetlightFault(
   notes: string | null,
   nonFunctionalSince?: string | null,
   localSourceName?: string | null,
+  gpsLat?: number | null,
+  gpsLng?: number | null,
 ): Promise<void> {
   const res = await fetch(`${API_BASE_URL}/admin/streetlight-faults`, {
     method: "POST",
     headers: authHeaders(),
-    body: JSON.stringify({ lightId, notes, nonFunctionalSince, localSourceName }),
+    body: JSON.stringify({ lightId, notes, nonFunctionalSince, localSourceName, gpsLat, gpsLng }),
   });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     throw new Error(body.error || "Could not report this fault.");
   }
+}
+
+export interface LightRepairHistorySummary {
+  hasPriorRepairs: boolean;
+  repairedCount: number;
+  openFaultCount: number;
+}
+
+/** Commissioner-only - deliberately not usable by JE-Mechanical/AE-Mechanical or other fault reporters. */
+export async function fetchLightRepairHistorySummary(lightId: number): Promise<LightRepairHistorySummary> {
+  const res = await fetch(`${API_BASE_URL}/admin/lights/${lightId}/repair-history-summary`, { headers: authHeaders() });
+  if (!res.ok) throw new Error("Could not load repair history.");
+  return res.json();
 }
 
 export interface StreetlightFaultEnriched {

@@ -1,10 +1,19 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { AlertCircle, AlertTriangle, CheckCircle2 } from "lucide-react";
+import { AlertCircle, AlertTriangle, CheckCircle2, History } from "lucide-react";
 import { AttendanceHeader } from "@/components/attendance/attendance-header";
 import { useAttendanceGuard } from "@/lib/use-attendance-guard";
-import { fetchStreetSegmentsList, fetchLightsForStreetSegment, reportFault, type StreetSegment, type StreetlightLightOption } from "@/lib/streetlight-api";
+import {
+  fetchStreetSegmentsList,
+  fetchLightsForStreetSegment,
+  reportFault,
+  fetchLightRepairHistorySummary,
+  type StreetSegment,
+  type StreetlightLightOption,
+  type LightRepairHistorySummary,
+} from "@/lib/streetlight-api";
+import { getCurrentGpsPosition } from "@/lib/geolocation";
 
 const inputClass = "w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-nnm-blue focus:ring-offset-1";
 
@@ -21,6 +30,7 @@ export default function ReportStreetlightFaultAttendancePage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [repairHistory, setRepairHistory] = useState<LightRepairHistorySummary | null>(null);
 
   useEffect(() => {
     if (!attendance) return;
@@ -53,6 +63,16 @@ export default function ReportStreetlightFaultAttendancePage() {
       .catch((err) => setError(err instanceof Error ? err.message : "Could not load lights for this segment."));
   }, [selectedSegmentId]);
 
+  useEffect(() => {
+    if (!attendance || attendance.role !== "municipal_commissioner" || !selectedLightId) {
+      setRepairHistory(null);
+      return;
+    }
+    fetchLightRepairHistorySummary(selectedLightId)
+      .then(setRepairHistory)
+      .catch(() => setRepairHistory(null));
+  }, [attendance, selectedLightId]);
+
   function handleWardChange(ward: string) {
     setSelectedWard(ward);
     setSelectedSegmentId("");
@@ -66,7 +86,8 @@ export default function ReportStreetlightFaultAttendancePage() {
     setSubmitting(true);
     setError(null);
     try {
-      await reportFault(selectedLightId, notes.trim() || null, nonFunctionalSince || null, localSourceName.trim() || null);
+      const gps = await getCurrentGpsPosition();
+      await reportFault(selectedLightId, notes.trim() || null, nonFunctionalSince || null, localSourceName.trim() || null, gps?.lat ?? null, gps?.lng ?? null);
       setSuccess(true);
       setSelectedWard("");
       setSelectedSegmentId("");
@@ -74,6 +95,7 @@ export default function ReportStreetlightFaultAttendancePage() {
       setNotes("");
       setNonFunctionalSince("");
       setLocalSourceName("");
+      setRepairHistory(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not report this fault.");
     } finally {
@@ -150,6 +172,18 @@ export default function ReportStreetlightFaultAttendancePage() {
                 ))}
               </select>
             </>
+          )}
+
+          {repairHistory && (
+            <div className="mb-4 flex items-start gap-2 rounded-md border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
+              <History className="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-400" />
+              <span>
+                {repairHistory.hasPriorRepairs
+                  ? `Repaired ${repairHistory.repairedCount} time${repairHistory.repairedCount === 1 ? "" : "s"} before.`
+                  : "No prior repair history for this light."}
+                {repairHistory.openFaultCount > 0 && ` ${repairHistory.openFaultCount} open fault${repairHistory.openFaultCount === 1 ? "" : "s"} currently.`}
+              </span>
+            </div>
           )}
 
           <label className="mb-1 block text-xs font-medium text-slate-600">Notes (optional)</label>

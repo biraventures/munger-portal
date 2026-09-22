@@ -1,6 +1,6 @@
 import type { Request, Response } from "express";
 import { z } from "zod";
-import { reportFaultByAdmin } from "../services/lightFault.service";
+import { reportFaultByAdmin, getLightRepairHistorySummary } from "../services/lightFault.service";
 import { lightFaultRepository } from "../repositories/lightFault.repository";
 import { streetSegmentRepository } from "../repositories/streetSegment.repository";
 import { lightRepository } from "../repositories/light.repository";
@@ -37,6 +37,8 @@ const reportFaultSchema = z.object({
   notes: z.string().trim().nullish(),
   nonFunctionalSince: z.string().trim().nullish(),
   localSourceName: z.string().trim().nullish(),
+  gpsLat: z.coerce.number().min(-90).max(90).nullish(),
+  gpsLng: z.coerce.number().min(-180).max(180).nullish(),
 });
 
 export const reportStreetlightFaultHandler = asyncHandler(async (req: Request, res: Response) => {
@@ -47,6 +49,8 @@ export const reportStreetlightFaultHandler = asyncHandler(async (req: Request, r
     notes: parsed.data.notes ?? null,
     nonFunctionalSince: parsed.data.nonFunctionalSince ?? null,
     localSourceName: parsed.data.localSourceName ?? null,
+    gpsLat: parsed.data.gpsLat ?? null,
+    gpsLng: parsed.data.gpsLng ?? null,
   });
   res.status(200).json({ fault });
 });
@@ -56,4 +60,14 @@ export const listStreetlightFaultsHandler = asyncHandler(async (req: Request, re
   const status = req.query.status as "open" | "repaired" | undefined;
   const faults = await lightFaultRepository.listAllEnriched(status);
   res.status(200).json({ faults });
+});
+
+const lightIdParamSchemaRepairHistory = z.object({ id: z.coerce.number().int().positive() });
+
+/** GET /api/v1/admin/lights/:id/repair-history-summary - Commissioner only. Deliberately not exposed to JE/AE-Mechanical or other reporters. */
+export const getLightRepairHistorySummaryAdminHandler = asyncHandler(async (req: Request, res: Response) => {
+  const parsed = lightIdParamSchemaRepairHistory.safeParse(req.params);
+  if (!parsed.success) throw ApiError.badRequest("Invalid light id");
+  const summary = await getLightRepairHistorySummary(parsed.data.id);
+  res.status(200).json(summary);
 });

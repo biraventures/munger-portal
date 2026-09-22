@@ -11,6 +11,7 @@ import {
   assignContractorWardHandler,
   listFaultsHandler,
   reportFaultHandler,
+  getLightRepairHistorySummaryHandler,
   markFaultRepairedHandler,
   linkFaultToLightHandler,
   listFaultPenaltiesHandler,
@@ -122,6 +123,7 @@ streetlightRouter.post("/contractor-wards", requireAttendanceRole([...REGISTRY_M
 // --- Faults - any logged-in attendance role can report ("all staff"), per what was explicitly asked for ---
 streetlightRouter.get("/faults", requireAttendanceRole(), listFaultsHandler);
 streetlightRouter.post("/faults", requireAttendanceRole(), reportFaultHandler);
+streetlightRouter.get("/lights/:id/repair-history-summary", requireAttendanceRole(["municipal_commissioner", "attendance_admin"]), getLightRepairHistorySummaryHandler);
 streetlightRouter.patch(
   "/faults/:id/repaired",
   requireAttendanceRole(["streetlight_contractor", ...REGISTRY_MANAGE_ROLES]),
