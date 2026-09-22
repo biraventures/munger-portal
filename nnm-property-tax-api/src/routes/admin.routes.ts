@@ -204,7 +204,7 @@ adminRouter.get("/entry-revert-events/export", requireAdminRole("commissioner"),
 // asset management (attendance) login - see streetlightCommissioner.controller.ts
 // and streetlight.routes.ts - and are no longer duplicated here.
 // See streetlightAdmin.controller.ts.
-const requireStreetlightReporterRole = requireAdminRole("tax_daroga", "tax_surveyor", "tax_collector", "stall_prabhari", "je_mechanical", "ae_mechanical");
+const requireStreetlightReporterRole = requireAdminRole("tax_daroga", "tax_surveyor", "tax_collector", "stall_prabhari", "je_mechanical", "ae_mechanical", "commissioner", "deputy_commissioner", "city_manager");
 adminRouter.get("/street-segments", listStreetSegmentsHandler);
 adminRouter.get("/street-segments/:id/lights", requireStreetlightReporterRole, listLightsForSegmentHandler);
 adminRouter.post("/streetlight-faults", requireStreetlightReporterRole, reportStreetlightFaultHandler);

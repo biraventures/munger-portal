@@ -95,7 +95,8 @@ export default function AdminDashboardPage() {
   const showEmployeeDatabaseVerify = admin.role === "city_manager";
   const showEmployeeDatabaseProgress = isCommissioner;
   const isStreetlightReporterRole =
-    admin.role === "tax_daroga" || admin.role === "tax_surveyor" || admin.role === "tax_collector" || admin.role === "stall_prabhari" || admin.role === "je_mechanical" || admin.role === "ae_mechanical";
+    admin.role === "tax_daroga" || admin.role === "tax_surveyor" || admin.role === "tax_collector" || admin.role === "stall_prabhari" || admin.role === "je_mechanical" || admin.role === "ae_mechanical" ||
+    admin.role === "commissioner" || admin.role === "deputy_commissioner" || admin.role === "city_manager";
   const propertyGroupVisible =
     showMutationApprovals || showCancellationRequests || showTaxCollectors || showBulkDemandNotices || showAllPropertyChanges || showRenumberHolding || showBulkUploadProperties ||
     showMigratedHoldingsBulkUpload || showMigratedHoldingsAssign || showMigratedHoldingsSurveyor || showMigratedHoldingsMySurveys || showTaxCollectorPage || showResurveyFlags || showTaxCollectorAssignments || showRevertAuditTrail;

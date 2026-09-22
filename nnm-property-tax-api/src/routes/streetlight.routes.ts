@@ -18,6 +18,7 @@ import {
   myPenaltyTotalHandler,
   getWardStatusDashboardHandler,
   getStreetStatusDashboardHandler,
+  getSegmentLightStatusHandler,
 } from "../controllers/streetlight.controller";
 import {
   postRequestLightChangeHandler,
@@ -35,6 +36,7 @@ import {
   assignStreetlightCityManagerAttendanceHandler,
   getStreetlightDelayReportAttendanceHandler,
   exportStreetlightDelayReportAttendanceHandler,
+  deleteAllStreetlightDataHandler,
 } from "../controllers/streetlightCommissioner.controller";
 import { requireAttendanceRole } from "../middleware/requireAttendanceRole";
 
@@ -87,6 +89,7 @@ streetlightRouter.post("/light-change-requests/:id/reject", requireAttendanceRol
 // --- Status dashboard, ward-wise and street-wise - City Manager, DMC, Municipal Commissioner ---
 streetlightRouter.get("/status-dashboard/wards", requireAttendanceRole([...OVERSIGHT_ROLES]), getWardStatusDashboardHandler);
 streetlightRouter.get("/status-dashboard/streets", requireAttendanceRole([...OVERSIGHT_ROLES]), getStreetStatusDashboardHandler);
+streetlightRouter.get("/status-dashboard/segments/:id/lights", requireAttendanceRole([...OVERSIGHT_ROLES]), getSegmentLightStatusHandler);
 
 // --- Commissioner's tools, brought over from the admin login so
 // everything streetlight-related lives on this side (asset
@@ -104,6 +107,7 @@ streetlightRouter.get("/streetlight-city-manager-assignment", requireAttendanceR
 streetlightRouter.post("/streetlight-city-manager-assignment", requireAttendanceRole([...COMMISSIONER_ROLES]), assignStreetlightCityManagerAttendanceHandler);
 streetlightRouter.get("/streetlight-delay-report", requireAttendanceRole([...COMMISSIONER_ROLES]), getStreetlightDelayReportAttendanceHandler);
 streetlightRouter.get("/streetlight-delay-report/export", requireAttendanceRole([...COMMISSIONER_ROLES]), exportStreetlightDelayReportAttendanceHandler);
+streetlightRouter.delete("/all-data", requireAttendanceRole([...COMMISSIONER_ROLES]), deleteAllStreetlightDataHandler);
 
 // --- Contractor-ward assignment ---
 streetlightRouter.get("/contractor-wards", requireAttendanceRole(), listContractorWardsHandler);

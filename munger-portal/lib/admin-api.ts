@@ -1202,6 +1202,7 @@ export async function downloadEntryRevertEventsExport(): Promise<void> {
 export interface StreetSegment {
   id: number;
   ward_id: number;
+  ward_name: string;
   installation_agency_id: number;
   start_point: string;
   intermediate_point: string | null;

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { LayoutGrid, Truck, Droplet, Lightbulb, MapPin, ClipboardList, CheckCircle2, PlusCircle, BarChart3, Upload, Route as RouteIcon, UserCheck as UserCheckIcon, Clock as ClockIcon } from "lucide-react";
+import { LayoutGrid, Truck, Droplet, Lightbulb, MapPin, ClipboardList, CheckCircle2 } from "lucide-react";
 import { AttendanceHeader } from "@/components/attendance/attendance-header";
 import { useAttendanceGuard } from "@/lib/use-attendance-guard";
 
@@ -121,74 +121,13 @@ export default function AttendanceDashboardPage() {
             </Link>
           )}
 
-          {[
-            "streetlight_nodal_clerk",
-            "streetlight_ae",
-            "streetlight_je",
-            "streetlight_contractor",
-            "city_manager",
-            "municipal_commissioner",
-            "deputy_municipal_commissioner",
-            "attendance_admin",
-          ].includes(user.role) && (
-            <Link href="/attendance/light-change-requests" className="flex flex-col rounded-xl border border-slate-200 bg-white p-6 transition-shadow hover:shadow-md">
-              <span className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-blue-50 text-nnm-blue">
-                <PlusCircle className="h-6 w-6" strokeWidth={1.8} />
-              </span>
-              <h3 className="mb-1.5 text-base font-semibold text-slate-900">Light Change Requests</h3>
-              <p className="text-sm text-slate-500">Add, change status, deactivate, reactivate, or delete a light - City Manager, DMC, Commissioner approval.</p>
-            </Link>
-          )}
-
-          {["city_manager", "municipal_commissioner", "deputy_municipal_commissioner", "attendance_admin"].includes(user.role) && (
-            <Link href="/attendance/streetlight-status-dashboard" className="flex flex-col rounded-xl border border-slate-200 bg-white p-6 transition-shadow hover:shadow-md">
-              <span className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-blue-50 text-nnm-blue">
-                <BarChart3 className="h-6 w-6" strokeWidth={1.8} />
-              </span>
-              <h3 className="mb-1.5 text-base font-semibold text-slate-900">Streetlight Status Dashboard</h3>
-              <p className="text-sm text-slate-500">Working vs not working, ward-wise or street-wise.</p>
-            </Link>
-          )}
-
-          {["municipal_commissioner", "attendance_admin"].includes(user.role) && (
-            <Link href="/attendance/streetlights-bulk-upload" className="flex flex-col rounded-xl border border-slate-200 bg-white p-6 transition-shadow hover:shadow-md">
-              <span className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-blue-50 text-nnm-blue">
-                <Upload className="h-6 w-6" strokeWidth={1.8} />
-              </span>
-              <h3 className="mb-1.5 text-base font-semibold text-slate-900">Streetlight Bulk Upload</h3>
-              <p className="text-sm text-slate-500">Import street-wise light inventory from a Nagar Nigam or EESL CSV.</p>
-            </Link>
-          )}
-
-          {["municipal_commissioner", "attendance_admin"].includes(user.role) && (
-            <Link href="/attendance/street-segments" className="flex flex-col rounded-xl border border-slate-200 bg-white p-6 transition-shadow hover:shadow-md">
-              <span className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-blue-50 text-nnm-blue">
-                <RouteIcon className="h-6 w-6" strokeWidth={1.8} />
-              </span>
-              <h3 className="mb-1.5 text-base font-semibold text-slate-900">Street Segments</h3>
-              <p className="text-sm text-slate-500">Add or update GPS for each street&apos;s start and end points.</p>
-            </Link>
-          )}
-
-          {["municipal_commissioner", "attendance_admin"].includes(user.role) && (
-            <Link href="/attendance/streetlight-city-manager" className="flex flex-col rounded-xl border border-slate-200 bg-white p-6 transition-shadow hover:shadow-md">
-              <span className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-blue-50 text-nnm-blue">
-                <UserCheckIcon className="h-6 w-6" strokeWidth={1.8} />
-              </span>
-              <h3 className="mb-1.5 text-base font-semibold text-slate-900">Streetlight City Manager</h3>
-              <p className="text-sm text-slate-500">Choose which City Manager follows up on streetlight faults.</p>
-            </Link>
-          )}
-
-          {["municipal_commissioner", "attendance_admin"].includes(user.role) && (
-            <Link href="/attendance/streetlight-delay-report" className="flex flex-col rounded-xl border border-slate-200 bg-white p-6 transition-shadow hover:shadow-md">
-              <span className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-blue-50 text-nnm-blue">
-                <ClockIcon className="h-6 w-6" strokeWidth={1.8} />
-              </span>
-              <h3 className="mb-1.5 text-base font-semibold text-slate-900">Streetlight Delay Report</h3>
-              <p className="text-sm text-slate-500">How long streetlight repairs are taking against the 72-hour deadline.</p>
-            </Link>
-          )}
+          <Link href="/attendance/streetlights" className="flex flex-col rounded-xl border border-slate-200 bg-white p-6 transition-shadow hover:shadow-md">
+            <span className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-blue-50 text-nnm-blue">
+              <Lightbulb className="h-6 w-6" strokeWidth={1.8} />
+            </span>
+            <h3 className="mb-1.5 text-base font-semibold text-slate-900">Streetlights</h3>
+            <p className="text-sm text-slate-500">Report faults, manage the registry, and view status - everything in one place.</p>
+          </Link>
 
           {user.role === "attendance_admin" && (
             <Link href="/attendance/manage-wards" className="flex flex-col rounded-xl border border-slate-200 bg-white p-6 transition-shadow hover:shadow-md">

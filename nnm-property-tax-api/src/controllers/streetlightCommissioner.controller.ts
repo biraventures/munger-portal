@@ -3,6 +3,7 @@ import { z } from "zod";
 import ExcelJS from "exceljs";
 import { importStreetWiseLightsCsv } from "../services/streetWiseLightImport.service";
 import { buildStreetlightDelayReport } from "../services/streetlightDelayReport.service";
+import { deleteAllStreetlightData } from "../services/streetlightStatusDashboard.service";
 import { addSheetFromRows } from "../services/export.service";
 import { streetSegmentRepository } from "../repositories/streetSegment.repository";
 import { lightRepository } from "../repositories/light.repository";
@@ -106,4 +107,22 @@ export const exportStreetlightDelayReportAttendanceHandler = asyncHandler(async 
   res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
   await workbook.xlsx.write(res);
   res.end();
+});
+
+const CONFIRMATION_PHRASE = "DELETE ALL STREETLIGHT DATA";
+const deleteAllSchema = z.object({ confirm: z.string() });
+
+/**
+ * Wipes every light, street segment, fault, and change request -
+ * irreversible, so it requires the caller to send back an exact
+ * confirmation phrase (not just a checkbox) rather than a bare
+ * DELETE with no body. Commissioner-only.
+ */
+export const deleteAllStreetlightDataHandler = asyncHandler(async (req: Request, res: Response) => {
+  const parsed = deleteAllSchema.safeParse(req.body);
+  if (!parsed.success || parsed.data.confirm !== CONFIRMATION_PHRASE) {
+    throw ApiError.badRequest(`Type "${CONFIRMATION_PHRASE}" exactly to confirm.`);
+  }
+  const result = await deleteAllStreetlightData();
+  res.status(200).json(result);
 });

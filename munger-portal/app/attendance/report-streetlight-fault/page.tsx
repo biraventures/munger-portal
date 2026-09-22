@@ -2,20 +2,18 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { AlertCircle, AlertTriangle, CheckCircle2 } from "lucide-react";
-import { AdminHeader } from "@/components/admin-header";
-import { useAdminGuard } from "@/lib/use-admin-guard";
-import { fetchStreetSegments, fetchLightsForSegment, reportStreetlightFault, type StreetSegment, type StreetlightLight } from "@/lib/admin-api";
-import type { AdminRole } from "@/lib/admin-auth";
+import { AttendanceHeader } from "@/components/attendance/attendance-header";
+import { useAttendanceGuard } from "@/lib/use-attendance-guard";
+import { fetchStreetSegmentsList, fetchLightsForStreetSegment, reportFault, type StreetSegment, type StreetlightLightOption } from "@/lib/streetlight-api";
 
-const REPORTER_ROLES: AdminRole[] = ["tax_daroga", "tax_surveyor", "tax_collector", "stall_prabhari", "je_mechanical", "ae_mechanical", "commissioner", "deputy_commissioner", "city_manager"];
 const inputClass = "w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-nnm-blue focus:ring-offset-1";
 
-export default function ReportStreetlightFaultPage() {
-  const admin = useAdminGuard();
+export default function ReportStreetlightFaultAttendancePage() {
+  const attendance = useAttendanceGuard();
   const [segments, setSegments] = useState<StreetSegment[] | null>(null);
   const [selectedWard, setSelectedWard] = useState("");
   const [selectedSegmentId, setSelectedSegmentId] = useState<number | "">("");
-  const [lights, setLights] = useState<StreetlightLight[]>([]);
+  const [lights, setLights] = useState<StreetlightLightOption[]>([]);
   const [selectedLightId, setSelectedLightId] = useState<number | "">("");
   const [notes, setNotes] = useState("");
   const [nonFunctionalSince, setNonFunctionalSince] = useState("");
@@ -25,11 +23,11 @@ export default function ReportStreetlightFaultPage() {
   const [success, setSuccess] = useState(false);
 
   useEffect(() => {
-    if (!admin) return;
-    fetchStreetSegments()
+    if (!attendance) return;
+    fetchStreetSegmentsList()
       .then(setSegments)
       .catch((err) => setError(err instanceof Error ? err.message : "Could not load street segments."));
-  }, [admin]);
+  }, [attendance]);
 
   const wardNames = useMemo(() => {
     if (!segments) return [];
@@ -47,7 +45,7 @@ export default function ReportStreetlightFaultPage() {
       setSelectedLightId("");
       return;
     }
-    fetchLightsForSegment(selectedSegmentId)
+    fetchLightsForStreetSegment(selectedSegmentId)
       .then((l) => {
         setLights(l);
         setSelectedLightId("");
@@ -68,7 +66,7 @@ export default function ReportStreetlightFaultPage() {
     setSubmitting(true);
     setError(null);
     try {
-      await reportStreetlightFault(selectedLightId, notes.trim() || null, nonFunctionalSince || null, localSourceName.trim() || null);
+      await reportFault(selectedLightId, notes.trim() || null, nonFunctionalSince || null, localSourceName.trim() || null);
       setSuccess(true);
       setSelectedWard("");
       setSelectedSegmentId("");
@@ -83,27 +81,13 @@ export default function ReportStreetlightFaultPage() {
     }
   }
 
-  if (!admin) {
+  if (!attendance) {
     return <div className="flex min-h-screen items-center justify-center text-sm text-slate-400">Loading…</div>;
-  }
-
-  if (!REPORTER_ROLES.includes(admin.role)) {
-    return (
-      <div className="min-h-screen bg-slate-50">
-        <AdminHeader admin={admin} />
-        <main className="mx-auto max-w-2xl px-6 py-10">
-          <div role="alert" className="flex items-center gap-2 rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-            <AlertCircle className="h-4 w-4 shrink-0" />
-            This is restricted to Tax Daroga, Tax Surveyor, Tax Collector, Stall Prabhari, JE-Mechanical, AE-Mechanical, Commissioner, Deputy Commissioner, and City Manager.
-          </div>
-        </main>
-      </div>
-    );
   }
 
   return (
     <div className="min-h-screen bg-slate-50">
-      <AdminHeader admin={admin} />
+      <AttendanceHeader user={attendance} />
 
       <main className="mx-auto max-w-xl px-6 py-10">
         <h1 className="mb-1 flex items-center gap-2 text-2xl font-semibold text-slate-900">

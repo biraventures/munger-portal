@@ -7,6 +7,12 @@ export const lightFaultRepository = {
     return rows[0] ?? null;
   },
 
+  /** Every fault ever raised against one light, most recent first - the repair history shown on the status dashboard drill-down. */
+  async listByLight(lightId: number): Promise<LightFaultRow[]> {
+    const { rows } = await pool.query<LightFaultRow>(`SELECT * FROM light_faults WHERE light_id = $1 ORDER BY reported_at DESC`, [lightId]);
+    return rows;
+  },
+
   async listAll(status?: "open" | "repaired"): Promise<LightFaultRow[]> {
     if (status) {
       const { rows } = await pool.query<LightFaultRow>(`SELECT * FROM light_faults WHERE status = $1 ORDER BY reported_at DESC`, [status]);

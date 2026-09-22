@@ -434,6 +434,7 @@ export async function uploadStreetWiseLightsCsv(agency: "NN" | "EESL", csvConten
 export interface StreetSegment {
   id: number;
   ward_id: number;
+  ward_name: string;
   installation_agency_id: number;
   start_point: string;
   intermediate_point: string | null;
@@ -552,4 +553,73 @@ export async function downloadStreetlightDelayReportOnAttendance(): Promise<void
   a.click();
   a.remove();
   URL.revokeObjectURL(url);
+}
+
+// ---------------------------------------------------------------------------
+// Status dashboard drill-down - individual lights on one street, their
+// working/not-working status, and repair history.
+// ---------------------------------------------------------------------------
+
+export interface SegmentLightFaultHistoryEntry {
+  faultId: number;
+  reportedAt: string;
+  reportedByType: "staff" | "public" | "admin";
+  status: "open" | "repaired";
+  repairedAt: string | null;
+  reporterNotes: string | null;
+}
+
+export interface SegmentLightStatus {
+  lightId: number;
+  serialNumber: string;
+  active: boolean;
+  working: boolean;
+  faultHistory: SegmentLightFaultHistoryEntry[];
+}
+
+export async function fetchSegmentLightStatus(segmentId: number): Promise<SegmentLightStatus[]> {
+  const res = await fetch(`${API_BASE_URL}/streetlight/status-dashboard/segments/${segmentId}/lights`, { headers: authHeaders() });
+  if (!res.ok) throw new Error("Could not load lights for this street.");
+  const data: { lights: SegmentLightStatus[] } = await res.json();
+  return data.lights;
+}
+
+export interface StreetlightLightOption {
+  id: number;
+  serial_number: string;
+  light_serial_seq: number | null;
+  active: boolean;
+}
+
+export async function fetchLightsForStreetSegment(segmentId: number): Promise<StreetlightLightOption[]> {
+  const res = await fetch(`${API_BASE_URL}/streetlight/street-segments/${segmentId}/lights`, { headers: authHeaders() });
+  if (!res.ok) throw new Error("Could not load lights for this street.");
+  const data: { lights: StreetlightLightOption[] } = await res.json();
+  return data.lights;
+}
+
+// ---------------------------------------------------------------------------
+// Delete all streetlight data - every light, street segment, and
+// fault. Irreversible; requires an exact confirmation phrase.
+// ---------------------------------------------------------------------------
+
+export const DELETE_ALL_STREETLIGHT_DATA_CONFIRMATION_PHRASE = "DELETE ALL STREETLIGHT DATA";
+
+export interface DeleteAllStreetlightDataResult {
+  segmentsDeleted: number;
+  lightsDeleted: number;
+  faultsDeleted: number;
+}
+
+export async function deleteAllStreetlightData(confirm: string): Promise<DeleteAllStreetlightDataResult> {
+  const res = await fetch(`${API_BASE_URL}/streetlight/all-data`, {
+    method: "DELETE",
+    headers: authHeaders(),
+    body: JSON.stringify({ confirm }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || "Could not delete streetlight data.");
+  }
+  return res.json();
 }

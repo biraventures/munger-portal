@@ -8,7 +8,7 @@ import { lightFaultPenaltyRepository } from "../repositories/lightFaultPenalty.r
 import { reportFaultByStaff, markFaultRepaired, linkFaultToLight } from "../services/lightFault.service";
 import { accrueAllOverduePenalties, accruePenaltiesForFault } from "../services/penaltyAccrual.service";
 import { importLightsCsv } from "../services/lightCsvImport.service";
-import { buildWardStatusDashboard, buildStreetStatusDashboard } from "../services/streetlightStatusDashboard.service";
+import { buildWardStatusDashboard, buildStreetStatusDashboard, buildSegmentLightStatus } from "../services/streetlightStatusDashboard.service";
 import { asyncHandler } from "../middleware/asyncHandler";
 import { ApiError } from "../utils/ApiError";
 
@@ -271,4 +271,14 @@ export const getWardStatusDashboardHandler = asyncHandler(async (_req: Request, 
 export const getStreetStatusDashboardHandler = asyncHandler(async (_req: Request, res: Response) => {
   const streets = await buildStreetStatusDashboard();
   res.status(200).json({ streets });
+});
+
+const segmentIdParamSchema = z.object({ id: z.coerce.number().int().positive() });
+
+/** The status dashboard's drill-down - individual lights on one segment, their working/not-working status, and fault history. */
+export const getSegmentLightStatusHandler = asyncHandler(async (req: Request, res: Response) => {
+  const parsed = segmentIdParamSchema.safeParse(req.params);
+  if (!parsed.success) throw ApiError.badRequest("Invalid segment id");
+  const lights = await buildSegmentLightStatus(parsed.data.id);
+  res.status(200).json({ lights });
 });

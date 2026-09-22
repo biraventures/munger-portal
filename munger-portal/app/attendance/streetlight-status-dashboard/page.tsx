@@ -1,10 +1,17 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { AlertCircle, BarChart3 } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { AlertCircle, BarChart3, ChevronDown, ChevronRight, CheckCircle2, XCircle } from "lucide-react";
 import { AttendanceHeader } from "@/components/attendance/attendance-header";
 import { useAttendanceGuard } from "@/lib/use-attendance-guard";
-import { fetchWardStatusDashboard, fetchStreetStatusDashboard, type WardStatus, type StreetStatus } from "@/lib/streetlight-api";
+import {
+  fetchWardStatusDashboard,
+  fetchStreetStatusDashboard,
+  fetchSegmentLightStatus,
+  type WardStatus,
+  type StreetStatus,
+  type SegmentLightStatus,
+} from "@/lib/streetlight-api";
 
 const OVERSIGHT_ROLES = ["city_manager", "deputy_municipal_commissioner", "municipal_commissioner", "attendance_admin"];
 
@@ -14,6 +21,10 @@ export default function StreetlightStatusDashboardPage() {
   const [wards, setWards] = useState<WardStatus[] | null>(null);
   const [streets, setStreets] = useState<StreetStatus[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [wardFilter, setWardFilter] = useState("");
+  const [expandedSegmentId, setExpandedSegmentId] = useState<number | null>(null);
+  const [segmentLights, setSegmentLights] = useState<Record<number, SegmentLightStatus[]>>({});
+  const [loadingSegmentId, setLoadingSegmentId] = useState<number | null>(null);
 
   useEffect(() => {
     if (!attendance) return;
@@ -24,6 +35,45 @@ export default function StreetlightStatusDashboardPage() {
       })
       .catch((err) => setError(err instanceof Error ? err.message : "Could not load the status dashboard."));
   }, [attendance]);
+
+  const wardNames = useMemo(() => {
+    const names = new Set<string>();
+    wards?.forEach((w) => names.add(w.wardName));
+    streets?.forEach((s) => names.add(s.wardName ?? ""));
+    return Array.from(names).filter(Boolean).sort();
+  }, [wards, streets]);
+
+  const filteredWards = useMemo(() => (wardFilter ? wards?.filter((w) => w.wardName === wardFilter) : wards) ?? null, [wards, wardFilter]);
+  const filteredStreets = useMemo(() => (wardFilter ? streets?.filter((s) => s.wardName === wardFilter) : streets) ?? null, [streets, wardFilter]);
+
+  const wardTotals = useMemo(() => {
+    if (!filteredWards) return null;
+    return filteredWards.reduce((acc, w) => ({ total: acc.total + w.totalLights, working: acc.working + w.working, notWorking: acc.notWorking + w.notWorking }), { total: 0, working: 0, notWorking: 0 });
+  }, [filteredWards]);
+
+  const streetTotals = useMemo(() => {
+    if (!filteredStreets) return null;
+    return filteredStreets.reduce((acc, s) => ({ total: acc.total + s.totalLights, working: acc.working + s.working, notWorking: acc.notWorking + s.notWorking }), { total: 0, working: 0, notWorking: 0 });
+  }, [filteredStreets]);
+
+  async function toggleSegment(segmentId: number) {
+    if (expandedSegmentId === segmentId) {
+      setExpandedSegmentId(null);
+      return;
+    }
+    setExpandedSegmentId(segmentId);
+    if (!segmentLights[segmentId]) {
+      setLoadingSegmentId(segmentId);
+      try {
+        const lights = await fetchSegmentLightStatus(segmentId);
+        setSegmentLights((prev) => ({ ...prev, [segmentId]: lights }));
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Could not load lights for this street.");
+      } finally {
+        setLoadingSegmentId(null);
+      }
+    }
+  }
 
   if (!attendance) {
     return <div className="flex min-h-screen items-center justify-center text-sm text-slate-400">Loading…</div>;
@@ -52,21 +102,32 @@ export default function StreetlightStatusDashboardPage() {
           <BarChart3 className="h-6 w-6" />
           Streetlight Status Dashboard
         </h1>
-        <p className="mb-6 text-sm text-slate-500">Active lights, working vs not working, ward-wise or street-wise.</p>
+        <p className="mb-6 text-sm text-slate-500">Active lights, working vs not working, ward-wise or street-wise. Click a street to see individual lights.</p>
 
-        <div className="mb-5 flex gap-2">
-          <button
-            onClick={() => setView("ward")}
-            className={`rounded-md px-3 py-1.5 text-sm font-semibold ${view === "ward" ? "bg-nnm-blue text-white" : "border border-slate-200 text-slate-600 hover:bg-slate-100"}`}
-          >
-            Ward-wise
-          </button>
-          <button
-            onClick={() => setView("street")}
-            className={`rounded-md px-3 py-1.5 text-sm font-semibold ${view === "street" ? "bg-nnm-blue text-white" : "border border-slate-200 text-slate-600 hover:bg-slate-100"}`}
-          >
-            Street-wise
-          </button>
+        <div className="mb-5 flex flex-wrap items-center gap-3">
+          <div className="flex gap-2">
+            <button
+              onClick={() => setView("ward")}
+              className={`rounded-md px-3 py-1.5 text-sm font-semibold ${view === "ward" ? "bg-nnm-blue text-white" : "border border-slate-200 text-slate-600 hover:bg-slate-100"}`}
+            >
+              Ward-wise
+            </button>
+            <button
+              onClick={() => setView("street")}
+              className={`rounded-md px-3 py-1.5 text-sm font-semibold ${view === "street" ? "bg-nnm-blue text-white" : "border border-slate-200 text-slate-600 hover:bg-slate-100"}`}
+            >
+              Street-wise
+            </button>
+          </div>
+
+          <select value={wardFilter} onChange={(e) => setWardFilter(e.target.value)} className="rounded-md border border-slate-300 px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-nnm-blue focus:ring-offset-1">
+            <option value="">All wards</option>
+            {wardNames.map((w) => (
+              <option key={w} value={w}>
+                {w}
+              </option>
+            ))}
+          </select>
         </div>
 
         {error && (
@@ -77,9 +138,9 @@ export default function StreetlightStatusDashboardPage() {
         )}
 
         {view === "ward" ? (
-          !wards ? (
+          !filteredWards ? (
             <p className="text-sm text-slate-400">Loading…</p>
-          ) : wards.length === 0 ? (
+          ) : filteredWards.length === 0 ? (
             <div className="rounded-xl border border-slate-200 bg-white p-6 text-center text-sm text-slate-400">No lights registered yet.</div>
           ) : (
             <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
@@ -93,7 +154,7 @@ export default function StreetlightStatusDashboardPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {wards.map((w) => (
+                  {filteredWards.map((w) => (
                     <tr key={w.wardId} className="border-b border-slate-50 last:border-0">
                       <td className="px-4 py-2.5 font-semibold text-slate-800">{w.wardName}</td>
                       <td className="px-4 py-2.5">{w.totalLights}</td>
@@ -102,18 +163,29 @@ export default function StreetlightStatusDashboardPage() {
                     </tr>
                   ))}
                 </tbody>
+                {wardTotals && (
+                  <tfoot>
+                    <tr className="border-t-2 border-slate-200 bg-slate-50 font-semibold text-slate-800">
+                      <td className="px-4 py-2.5">Total</td>
+                      <td className="px-4 py-2.5">{wardTotals.total}</td>
+                      <td className="px-4 py-2.5 text-green-700">{wardTotals.working}</td>
+                      <td className="px-4 py-2.5 text-red-600">{wardTotals.notWorking}</td>
+                    </tr>
+                  </tfoot>
+                )}
               </table>
             </div>
           )
-        ) : !streets ? (
+        ) : !filteredStreets ? (
           <p className="text-sm text-slate-400">Loading…</p>
-        ) : streets.length === 0 ? (
+        ) : filteredStreets.length === 0 ? (
           <div className="rounded-xl border border-slate-200 bg-white p-6 text-center text-sm text-slate-400">No street segments uploaded yet.</div>
         ) : (
           <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-slate-100 text-left text-xs font-semibold uppercase text-slate-500">
+                  <th className="px-4 py-2.5"></th>
                   <th className="px-4 py-2.5">Ward</th>
                   <th className="px-4 py-2.5">Street</th>
                   <th className="px-4 py-2.5">Agency</th>
@@ -123,17 +195,83 @@ export default function StreetlightStatusDashboardPage() {
                 </tr>
               </thead>
               <tbody>
-                {streets.map((s) => (
-                  <tr key={s.segmentId} className="border-b border-slate-50 last:border-0">
-                    <td className="px-4 py-2.5">{s.wardName}</td>
-                    <td className="px-4 py-2.5 font-semibold text-slate-800">{s.endPoint ? `${s.startPoint} - ${s.endPoint}` : s.startPoint}</td>
-                    <td className="px-4 py-2.5">{s.agencyName}</td>
-                    <td className="px-4 py-2.5">{s.totalLights}</td>
-                    <td className="px-4 py-2.5 text-green-700">{s.working}</td>
-                    <td className="px-4 py-2.5">{s.notWorking > 0 ? <span className="font-semibold text-red-600">{s.notWorking}</span> : 0}</td>
-                  </tr>
+                {filteredStreets.map((s) => (
+                  <>
+                    <tr
+                      key={s.segmentId}
+                      onClick={() => s.segmentId && toggleSegment(s.segmentId)}
+                      className="cursor-pointer border-b border-slate-50 last:border-0 hover:bg-slate-50"
+                    >
+                      <td className="px-4 py-2.5 text-slate-400">
+                        {expandedSegmentId === s.segmentId ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                      </td>
+                      <td className="px-4 py-2.5">{s.wardName}</td>
+                      <td className="px-4 py-2.5 font-semibold text-slate-800">{s.endPoint ? `${s.startPoint} - ${s.endPoint}` : s.startPoint}</td>
+                      <td className="px-4 py-2.5">{s.agencyName}</td>
+                      <td className="px-4 py-2.5">{s.totalLights}</td>
+                      <td className="px-4 py-2.5 text-green-700">{s.working}</td>
+                      <td className="px-4 py-2.5">{s.notWorking > 0 ? <span className="font-semibold text-red-600">{s.notWorking}</span> : 0}</td>
+                    </tr>
+                    {expandedSegmentId === s.segmentId && (
+                      <tr key={`${s.segmentId}-detail`}>
+                        <td colSpan={7} className="border-b border-slate-100 bg-slate-50 p-4">
+                          {loadingSegmentId === s.segmentId ? (
+                            <p className="text-xs text-slate-400">Loading…</p>
+                          ) : !s.segmentId || !segmentLights[s.segmentId] || segmentLights[s.segmentId]!.length === 0 ? (
+                            <p className="text-xs text-slate-400">No lights on this street yet.</p>
+                          ) : (
+                            <div className="space-y-3">
+                              {segmentLights[s.segmentId]!.map((l) => (
+                                <div key={l.lightId} className="rounded-md border border-slate-200 bg-white p-3">
+                                  <div className="mb-1 flex items-center gap-2">
+                                    <span className="font-mono text-xs text-slate-700">{l.serialNumber}</span>
+                                    {l.working ? (
+                                      <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-semibold uppercase text-green-700">
+                                        <CheckCircle2 className="h-3 w-3" />
+                                        Working
+                                      </span>
+                                    ) : (
+                                      <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-semibold uppercase text-red-700">
+                                        <XCircle className="h-3 w-3" />
+                                        Not Working
+                                      </span>
+                                    )}
+                                    {!l.active && <span className="rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-semibold uppercase text-slate-600">Inactive</span>}
+                                  </div>
+                                  {l.faultHistory.length > 0 && (
+                                    <div className="mt-2 space-y-1 border-t border-slate-100 pt-2">
+                                      <p className="text-[10px] font-semibold uppercase text-slate-400">Repair history</p>
+                                      {l.faultHistory.map((f) => (
+                                        <p key={f.faultId} className="text-xs text-slate-600">
+                                          Reported {new Date(f.reportedAt).toLocaleDateString("en-IN")}
+                                          {f.status === "repaired" && f.repairedAt ? ` · Repaired ${new Date(f.repairedAt).toLocaleDateString("en-IN")}` : " · Still open"}
+                                          {f.reporterNotes ? ` - "${f.reporterNotes}"` : ""}
+                                        </p>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    )}
+                  </>
                 ))}
               </tbody>
+              {streetTotals && (
+                <tfoot>
+                  <tr className="border-t-2 border-slate-200 bg-slate-50 font-semibold text-slate-800">
+                    <td className="px-4 py-2.5" colSpan={4}>
+                      Total
+                    </td>
+                    <td className="px-4 py-2.5">{streetTotals.total}</td>
+                    <td className="px-4 py-2.5 text-green-700">{streetTotals.working}</td>
+                    <td className="px-4 py-2.5 text-red-600">{streetTotals.notWorking}</td>
+                  </tr>
+                </tfoot>
+              )}
             </table>
           </div>
         )}

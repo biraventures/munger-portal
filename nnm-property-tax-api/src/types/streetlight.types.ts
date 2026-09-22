@@ -8,6 +8,7 @@ export interface InstallationAgencyRow {
 export interface StreetSegmentRow {
   id: number;
   ward_id: number;
+  ward_name: string;
   installation_agency_id: number;
   start_point: string;
   intermediate_point: string | null;
@@ -83,9 +84,10 @@ export type StreetlightAgency = "NN" | "EESL";
  * agency/sequence-from-start/start-end/ward - with just the start
  * point alone (no dash) when there's no end point.
  */
+/** Serial number format: agency/ward/street/sequence, e.g. "NN/25/MG Road-Station Chowk/1". Applies to lights created from here on - existing serial numbers aren't retroactively changed. */
 export function formatLightSerialNo(agency: StreetlightAgency, seq: number, startPoint: string, endPoint: string | null, wardNo: string): string {
   const span = endPoint ? `${startPoint}-${endPoint}` : startPoint;
-  return `${agency}/${seq}/${span}/${wardNo}`;
+  return `${agency}/${wardNo}/${span}/${seq}`;
 }
 
 export type LightChangeActionType = "add" | "status_change" | "deactivate" | "reactivate" | "delete";
