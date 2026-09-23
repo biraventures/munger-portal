@@ -80,10 +80,21 @@ export const saveProperty = asyncHandler(async (req: Request, res: Response) => 
     throw ApiError.badRequest("Invalid property data", bodyParsed.error.flatten().fieldErrors);
   }
 
-  // requireOperator (run before this handler) guarantees req.operator is set.
-  const operatorDisplayName = req.operator!.displayName;
+  // requireOperatorOrAdmin (run before this handler) guarantees either
+  // req.operator or req.admin is set. An admin session here must be a
+  // Tax Surveyor initiating a survey/resurvey on a holding they
+  // searched for - every other admin role stays blocked, same as
+  // before this route accepted admin sessions at all.
+  let requesterDisplayName: string;
+  if (req.operator) {
+    requesterDisplayName = req.operator.displayName;
+  } else if (req.admin && req.admin.role === "tax_surveyor") {
+    requesterDisplayName = req.admin.displayName;
+  } else {
+    throw new ApiError(403, "Only an operator or a Tax Surveyor can save property details.");
+  }
 
-  const result = await savePropertyByHoldingNo(paramsParsed.data.holdingNo, bodyParsed.data, operatorDisplayName);
+  const result = await savePropertyByHoldingNo(paramsParsed.data.holdingNo, bodyParsed.data, requesterDisplayName);
   res.status(200).json(result);
 });
 const idParamSchema = z.object({ id: z.coerce.number().int().positive() });

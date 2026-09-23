@@ -86,6 +86,25 @@ export function nextShopApprovalStage(stage: AdminRole): AdminRole | null {
 }
 
 /**
+ * Fixed order a Tax Collector's field-discrepancy submission moves
+ * through - a Tax Surveyor first (who can verify the correction in
+ * the field), then Tax Daroga, City Manager, and finally Deputy
+ * Commissioner. Only once the DMC approves is the corrected property
+ * data actually applied - see propertyDiscrepancy.service.ts.
+ */
+export const PROPERTY_DISCREPANCY_APPROVAL_STAGE_ORDER: AdminRole[] = [
+  "tax_surveyor",
+  "tax_daroga",
+  "city_manager",
+  "deputy_commissioner",
+];
+
+export function nextPropertyDiscrepancyStage(stage: AdminRole): AdminRole | null {
+  const idx = PROPERTY_DISCREPANCY_APPROVAL_STAGE_ORDER.indexOf(stage);
+  return idx >= 0 && idx < PROPERTY_DISCREPANCY_APPROVAL_STAGE_ORDER.length - 1 ? PROPERTY_DISCREPANCY_APPROVAL_STAGE_ORDER[idx + 1]! : null;
+}
+
+/**
  * Fixed order a newly-entered shop moves through before it's publicly
  * listed as available - a separate, shorter chain from
  * SHOP_APPROVAL_STAGE_ORDER (which governs agreement/tenancy

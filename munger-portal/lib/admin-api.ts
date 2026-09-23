@@ -1464,3 +1464,164 @@ export async function fetchEmployeeDatabaseProgress(): Promise<EmployeeDatabaseP
   if (!res.ok) throw new Error("Could not load progress.");
   return res.json();
 }
+
+// ---------------------------------------------------------------------------
+// Property search/save for admin sessions - a Tax Surveyor initiating a
+// survey/resurvey on a holding they searched for. Mirrors the operator
+// side's fetchFullProperty/saveProperty in lib/operator-api.ts.
+// ---------------------------------------------------------------------------
+
+export interface AdminFullPropertyResult {
+  found: boolean;
+  message?: string;
+  property?: Record<string, unknown>;
+  floors?: {
+    floor_label: string;
+    buildup_sqft: string;
+    const_type: string;
+    usage_type: string;
+    occupancy: string;
+    year_built: string | null;
+    closing_year: string | null;
+  }[];
+}
+
+export async function fetchFullPropertyAdmin(holdingNo: string): Promise<AdminFullPropertyResult> {
+  const res = await fetch(`${API_BASE_URL}/properties/${encodeURIComponent(holdingNo)}`, { headers: authHeaders() });
+  if (res.status === 404) return { found: false };
+  if (!res.ok) throw new Error(`Search failed (${res.status})`);
+  return res.json();
+}
+
+export interface AdminSaveError {
+  message: string;
+  details?: Record<string, string[]>;
+}
+
+export type AdminSavePropertyApiResult =
+  | {
+      applied: true;
+      holdingNo: string;
+      isNew: true;
+      version: number;
+      taxCalc: { netTax: string; currentTax: string; arv: string };
+      solidWasteCharge: number;
+    }
+  | {
+      applied: false;
+      holdingNo: string;
+      changeRequestId: number;
+      status: "pending";
+      preview: { taxCalc: { netTax: string; currentTax: string; arv: string }; solidWasteCharge: number };
+    };
+
+/** Tax Surveyor only - saving as any other admin role is rejected server-side. */
+export async function savePropertyAdmin(holdingNo: string, payload: Record<string, unknown>): Promise<AdminSavePropertyApiResult> {
+  const res = await fetch(`${API_BASE_URL}/properties/${encodeURIComponent(holdingNo)}`, {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    const err: AdminSaveError = { message: body.error || "Save failed", details: body.details };
+    throw err;
+  }
+  return res.json();
+}
+
+// ---------------------------------------------------------------------------
+// Property discrepancy requests - a Tax Collector's field-found
+// correction, walking Tax Surveyor -> Tax Daroga -> City Manager ->
+// Deputy Commissioner before it's applied.
+// ---------------------------------------------------------------------------
+
+export interface PropertyDiscrepancyRequest {
+  id: number;
+  holding_no: string;
+  reported_by_username: string;
+  reported_by_display_name: string;
+  reported_at: string;
+  discrepancy_notes: string;
+  proposed_data: Record<string, unknown>;
+  status: "pending" | "approved" | "rejected";
+  current_stage: AdminRole;
+  final_decided_at: string | null;
+  reviewed_by: string | null;
+  reviewed_role: string | null;
+  reviewed_at: string | null;
+  review_notes: string | null;
+}
+
+export async function reportPropertyDiscrepancy(holdingNo: string, discrepancyNotes: string, proposedData: Record<string, unknown>): Promise<PropertyDiscrepancyRequest> {
+  const res = await fetch(`${API_BASE_URL}/properties/${encodeURIComponent(holdingNo)}/discrepancy`, {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify({ discrepancyNotes, proposedData }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || "Could not submit this discrepancy report.");
+  }
+  const data: { request: PropertyDiscrepancyRequest } = await res.json();
+  return data.request;
+}
+
+export async function fetchDiscrepancyRequests(filters: { status?: "pending" | "approved" | "rejected"; myStage?: boolean }): Promise<{ requests: PropertyDiscrepancyRequest[]; myRole: AdminRole }> {
+  const params = new URLSearchParams();
+  if (filters.status) params.set("status", filters.status);
+  if (filters.myStage) params.set("myStage", "true");
+  const res = await fetch(`${API_BASE_URL}/admin/property-discrepancy-requests?${params.toString()}`, { headers: authHeaders() });
+  if (!res.ok) throw new Error("Could not load discrepancy requests.");
+  return res.json();
+}
+
+export interface PropertyDiscrepancyApproval {
+  id: number;
+  discrepancy_request_id: number;
+  stage: AdminRole;
+  decision: "approved" | "rejected";
+  admin_username: string;
+  admin_display_name: string;
+  notes: string | null;
+  decided_at: string;
+}
+
+export async function fetchDiscrepancyRequestDetail(id: number): Promise<{
+  request: PropertyDiscrepancyRequest;
+  currentProperty: Record<string, unknown> | null;
+  currentFloors: Record<string, unknown>[];
+  approvalHistory: PropertyDiscrepancyApproval[];
+}> {
+  const res = await fetch(`${API_BASE_URL}/admin/property-discrepancy-requests/${id}`, { headers: authHeaders() });
+  if (!res.ok) throw new Error("Could not load this discrepancy request.");
+  return res.json();
+}
+
+export async function approveDiscrepancyRequest(id: number, notes?: string): Promise<PropertyDiscrepancyRequest> {
+  const res = await fetch(`${API_BASE_URL}/admin/property-discrepancy-requests/${id}/approve`, {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify({ notes }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || "Could not approve this request.");
+  }
+  const data: { request: PropertyDiscrepancyRequest } = await res.json();
+  return data.request;
+}
+
+export async function rejectDiscrepancyRequest(id: number, notes: string): Promise<PropertyDiscrepancyRequest> {
+  const res = await fetch(`${API_BASE_URL}/admin/property-discrepancy-requests/${id}/reject`, {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify({ notes }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || "Could not reject this request.");
+  }
+  const data: { request: PropertyDiscrepancyRequest } = await res.json();
+  return data.request;
+}

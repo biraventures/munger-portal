@@ -2,6 +2,7 @@ import { Router } from "express";
 import { getPropertyByHoldingNo, postPropertyLookup, postRecordPropertySurvey, getPropertySurveyList } from "../controllers/property.controller";
 import { listPendingOperatorEntryHandler, submitOperatorEntryHandler } from "../controllers/migratedHoldingSurvey.controller";
 import { postFlagForResurvey, listResurveyFlagsForHoldingHandler } from "../controllers/propertyResurveyFlag.controller";
+import { postReportPropertyDiscrepancy } from "../controllers/propertyDiscrepancy.controller";
 import { saveProperty, postResubmitChangeRequest } from "../controllers/propertySave.controller";
 import { getRevertedChangeRequests } from "../controllers/changeRequest.controller";
 import { postPayment, getPaymentHistory, getReceiptReprint } from "../controllers/payment.controller";
@@ -59,8 +60,8 @@ propertyRouter.post("/", requireOperator, createNewEntryProperty);
 // two-factor citizen search.
 propertyRouter.get("/:holdingNo", requireOperatorOrAdmin, getPropertyByHoldingNo);
 
-// POST /api/v1/properties/:holdingNo — create/update a KNOWN-number property (operator only)
-propertyRouter.post("/:holdingNo", requireOperator, saveProperty);
+// POST /api/v1/properties/:holdingNo - create/update a KNOWN-number property (operator, or a Tax Surveyor initiating a survey/resurvey they searched for)
+propertyRouter.post("/:holdingNo", requireOperatorOrAdmin, saveProperty);
 
 // GET /api/v1/properties/change-requests/reverted - operator's
 // worklist of mutations sent back for correction. Segment count (3
@@ -102,6 +103,9 @@ propertyRouter.get("/:holdingNo/demand-notices/history", requireOperatorOrAdmin,
 // POST /api/v1/properties/:holdingNo/resurvey-flag - a Tax Collector flags a holding for re-survey with remarks
 propertyRouter.post("/:holdingNo/resurvey-flag", requireOperatorOrAdmin, postFlagForResurvey);
 propertyRouter.get("/:holdingNo/resurvey-flags", requireOperatorOrAdmin, listResurveyFlagsForHoldingHandler);
+
+// POST /api/v1/properties/:holdingNo/discrepancy - a Tax Collector submits the complete corrected property details found during field collection
+propertyRouter.post("/:holdingNo/discrepancy", requireOperatorOrAdmin, postReportPropertyDiscrepancy);
 propertyRouter.get("/demand-notices/:demandNo/print", requireOperatorOrAdmin, getDemandNoticeReprint);
 propertyRouter.get("/:holdingNo/payments/history", requireOperatorOrAdmin, getPaymentHistory);
 propertyRouter.get("/payments/:receiptNo/print", requireOperatorOrAdmin, getReceiptReprint);

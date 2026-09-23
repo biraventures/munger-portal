@@ -16,6 +16,12 @@ import {
   postRevertChangeRequest,
 } from "../controllers/changeRequest.controller";
 import {
+  getDiscrepancyRequests,
+  getDiscrepancyRequestById,
+  postApproveDiscrepancyRequest,
+  postRejectDiscrepancyRequest,
+} from "../controllers/propertyDiscrepancy.controller";
+import {
   getCancellationRequests,
   postApproveCancellation,
   postRejectCancellation,
@@ -173,6 +179,17 @@ adminRouter.get("/change-requests/:id", requireMutationChainRole, getChangeReque
 adminRouter.post("/change-requests/:id/approve", requireMutationChainRole, postApproveChangeRequest);
 adminRouter.post("/change-requests/:id/reject", requireMutationChainRole, postRejectChangeRequest);
 adminRouter.post("/change-requests/:id/revert", requireMutationChainRole, postRevertChangeRequest);
+
+// Property discrepancy approval queue - a Tax Collector's field-found
+// correction, restricted to its own chain's roles (tax_surveyor ->
+// tax_daroga -> city_manager -> deputy_commissioner, per migration
+// 076) plus commissioner, who can see (but isn't a required stage
+// for) every approval queue in this system.
+const requireDiscrepancyChainRole = requireAdminRole("tax_surveyor", "tax_daroga", "city_manager", "deputy_commissioner", "commissioner");
+adminRouter.get("/property-discrepancy-requests", requireDiscrepancyChainRole, getDiscrepancyRequests);
+adminRouter.get("/property-discrepancy-requests/:id", requireDiscrepancyChainRole, getDiscrepancyRequestById);
+adminRouter.post("/property-discrepancy-requests/:id/approve", requireDiscrepancyChainRole, postApproveDiscrepancyRequest);
+adminRouter.post("/property-discrepancy-requests/:id/reject", requireDiscrepancyChainRole, postRejectDiscrepancyRequest);
 
 // Demand notice / receipt cancellation approval queue - viewable by
 // any admin role except Stall Prabhari. Approve/reject is tax_daroga
