@@ -1,5 +1,5 @@
 export type ReservationCategory = "scheduled_caste" | "scheduled_tribe" | "other_backward_class" | "extremely_backward_class" | "backward_class_women" | "divyang" | "general";
-export type EducationalQualification = "below_matric" | "matriculation" | "intermediate" | "diploma_degree";
+export type EducationalQualification = "no_formal_education" | "below_matric" | "matriculation" | "intermediate" | "diploma_degree";
 export type AppointingAuthority = "government_of_bihar" | "munger_municipal_corporation";
 export type EmploymentType = "permanent" | "contractual" | "daily_wage";
 export type EmployeeStatus = "pending_verification" | "verified";
@@ -15,6 +15,7 @@ export const RESERVATION_CATEGORY_LABELS: Record<ReservationCategory, string> = 
 };
 
 export const EDUCATIONAL_QUALIFICATION_LABELS: Record<EducationalQualification, string> = {
+  no_formal_education: "No Formal Education",
   below_matric: "Below Matric",
   matriculation: "Matriculation",
   intermediate: "Intermediate",
