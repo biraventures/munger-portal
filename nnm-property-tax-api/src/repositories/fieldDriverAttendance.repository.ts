@@ -85,4 +85,10 @@ export const fieldDriverAttendanceRepository = {
     );
     return rows;
   },
+
+  /** For the admin data-cleanup tool - old attendance rows strictly before a cutoff date. */
+  async deleteBeforeDate(cutoffDate: string): Promise<number> {
+    const { rowCount } = await pool.query(`DELETE FROM field_driver_attendance WHERE date < $1`, [cutoffDate]);
+    return rowCount ?? 0;
+  },
 };

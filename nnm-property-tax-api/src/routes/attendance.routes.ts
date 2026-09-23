@@ -26,7 +26,9 @@ import {
   getWardPhotoByDate,
   getAllWardsPhotoRoundup,
   getWardPhotoFile,
+  deleteWardPhotoHandler,
 } from "../controllers/fieldStaffDailyPhoto.controller";
+import { postAttendanceDataCleanup } from "../controllers/attendanceDataCleanup.controller";
 import { postStaffFeedback, getStaffFeedbackHandler } from "../controllers/fieldStaffFeedback.controller";
 import { getAttendanceStaffReport, getAttendanceDriverReport, getAttendanceAssistantReport } from "../controllers/attendanceReport.controller";
 import { downloadStaffMonthlyReport, downloadDriverMonthlyReport, downloadAssistantMonthlyReport } from "../controllers/attendanceMonthlyReport.controller";
@@ -191,6 +193,8 @@ attendanceRouter.get(
   requireAttendanceRole(["jamadar", ...OFFICER_ROLES]),
   getWardPhotoFile,
 );
+attendanceRouter.delete("/photos/ward/:wardId", requireAttendanceRole(["attendance_admin"]), deleteWardPhotoHandler);
+attendanceRouter.post("/data-cleanup", requireAttendanceRole(["attendance_admin"]), postAttendanceDataCleanup);
 
 // --- Feedback ---
 attendanceRouter.post("/staff/:staffId/feedback", requireAttendanceRole([...OFFICER_ROLES]), postStaffFeedback);

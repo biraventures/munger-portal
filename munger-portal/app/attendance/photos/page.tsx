@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AlertCircle, Camera, Loader2 } from "lucide-react";
+import { AlertCircle, Camera, Loader2, Trash2, X } from "lucide-react";
 import { AttendanceHeader } from "@/components/attendance/attendance-header";
 import { useAttendanceGuard } from "@/lib/use-attendance-guard";
-import { fetchAllWardPhotos, fetchWardPhotoBlobUrl, type WardPhotoInfo } from "@/lib/attendance-api";
+import { fetchAllWardPhotos, fetchWardPhotoBlobUrl, deleteWardPhoto, type WardPhotoInfo } from "@/lib/attendance-api";
 
 function todayIsoDate(): string {
   return new Date().toISOString().slice(0, 10);
@@ -16,8 +16,9 @@ export default function AttendancePhotosPage() {
   const [wards, setWards] = useState<WardPhotoInfo[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [openPhotoUrl, setOpenPhotoUrl] = useState<string | null>(null);
-  const [openPhotoWard, setOpenPhotoWard] = useState<string | null>(null);
+  const [openPhotoWard, setOpenPhotoWard] = useState<{ id: number; name: string } | null>(null);
   const [loadingPhotoWardId, setLoadingPhotoWardId] = useState<number | null>(null);
+  const [deletingWardId, setDeletingWardId] = useState<number | null>(null);
 
   async function loadWards() {
     setError(null);
@@ -42,13 +43,36 @@ export default function AttendancePhotosPage() {
     try {
       const url = await fetchWardPhotoBlobUrl(wardId, date);
       setOpenPhotoUrl(url);
-      setOpenPhotoWard(wardName);
+      setOpenPhotoWard({ id: wardId, name: wardName });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not load this photo.");
     } finally {
       setLoadingPhotoWardId(null);
     }
   }
+
+  function closeModal() {
+    if (openPhotoUrl) URL.revokeObjectURL(openPhotoUrl);
+    setOpenPhotoUrl(null);
+    setOpenPhotoWard(null);
+  }
+
+  async function handleDeletePhoto(wardId: number, wardName: string) {
+    if (!confirm(`Delete ${wardName}'s photo for ${date}? This can't be undone.`)) return;
+    setDeletingWardId(wardId);
+    setError(null);
+    try {
+      await deleteWardPhoto(wardId, date);
+      if (openPhotoWard?.id === wardId) closeModal();
+      await loadWards();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not delete this photo.");
+    } finally {
+      setDeletingWardId(null);
+    }
+  }
+
+  const canDelete = user?.role === "attendance_admin";
 
   if (!user) {
     return <div className="flex min-h-screen items-center justify-center text-sm text-slate-400">Loading...</div>;
@@ -87,19 +111,6 @@ export default function AttendancePhotosPage() {
           </div>
         )}
 
-        {openPhotoUrl && (
-          <div className="mb-6 rounded-xl border border-slate-200 bg-white p-4">
-            <div className="mb-2 flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-slate-700">{openPhotoWard}</h2>
-              <button onClick={() => setOpenPhotoUrl(null)} className="text-xs font-medium text-nnm-blue hover:underline">
-                Close
-              </button>
-            </div>
-            {/* eslint-disable-next-line @next/next/no-img-element -- object URL from an authenticated fetch, not a static asset next/image can optimize */}
-            <img src={openPhotoUrl} alt={`${openPhotoWard} group photo`} className="max-h-[500px] w-full rounded-md object-contain" />
-          </div>
-        )}
-
         {!wards ? (
           <div className="flex items-center gap-2 text-sm text-slate-400">
             <Loader2 className="h-4 w-4 animate-spin" />
@@ -119,19 +130,47 @@ export default function AttendancePhotosPage() {
                   </p>
                 </div>
                 {w.path && (
-                  <button
-                    onClick={() => handleViewPhoto(w.wardId, w.wardName)}
-                    disabled={loadingPhotoWardId === w.wardId}
-                    className="inline-flex items-center gap-1.5 rounded border border-nnm-blue px-2.5 py-1.5 text-xs font-semibold text-nnm-blue hover:bg-blue-50 disabled:opacity-60"
-                  >
-                    {loadingPhotoWardId === w.wardId ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "View"}
-                  </button>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <button
+                      onClick={() => handleViewPhoto(w.wardId, w.wardName)}
+                      disabled={loadingPhotoWardId === w.wardId}
+                      className="inline-flex items-center gap-1.5 rounded border border-nnm-blue px-2.5 py-1.5 text-xs font-semibold text-nnm-blue hover:bg-blue-50 disabled:opacity-60"
+                    >
+                      {loadingPhotoWardId === w.wardId ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "View"}
+                    </button>
+                    {canDelete && (
+                      <button
+                        onClick={() => handleDeletePhoto(w.wardId, w.wardName)}
+                        disabled={deletingWardId === w.wardId}
+                        className="inline-flex items-center gap-1.5 rounded border border-red-300 px-2.5 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:opacity-60"
+                      >
+                        {deletingWardId === w.wardId ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                      </button>
+                    )}
+                  </div>
                 )}
               </div>
             ))}
           </div>
         )}
       </main>
+
+      {openPhotoUrl && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={closeModal}>
+          <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl bg-white p-4" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-2 flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-slate-700">
+                {openPhotoWard?.name} - {date}
+              </h2>
+              <button onClick={closeModal} className="text-slate-400 hover:text-slate-600">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            {/* eslint-disable-next-line @next/next/no-img-element -- object URL from an authenticated fetch, not a static asset next/image can optimize */}
+            <img src={openPhotoUrl} alt={`${openPhotoWard?.name} group photo`} className="max-h-[75vh] w-full rounded-md object-contain" />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -312,6 +312,38 @@ export async function fetchWardPhotoBlobUrl(wardId: number, date?: string): Prom
   return URL.createObjectURL(blob);
 }
 
+export async function deleteWardPhoto(wardId: number, date?: string): Promise<void> {
+  const qs = date ? `?date=${date}` : "";
+  const res = await fetch(`${API_BASE_URL}/attendance/photos/ward/${wardId}${qs}`, { method: "DELETE", headers: authHeaders() });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || "Could not delete this photo.");
+  }
+}
+
+export const DATA_CLEANUP_CONFIRMATION_PHRASE = "DELETE OLD ATTENDANCE DATA";
+
+export interface DataCleanupResult {
+  staffAttendanceDeleted: number;
+  driverAttendanceDeleted: number;
+  assistantAttendanceDeleted: number;
+  photosDeleted: number;
+  photoFilesRemoved: number;
+}
+
+export async function cleanupOldAttendanceData(cutoffDate: string, confirm: string): Promise<DataCleanupResult> {
+  const res = await fetch(`${API_BASE_URL}/attendance/data-cleanup`, {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify({ cutoffDate, confirm }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || "Could not clean up old data.");
+  }
+  return res.json();
+}
+
 // ---------------------------------------------------------------------------
 // Feedback
 // ---------------------------------------------------------------------------

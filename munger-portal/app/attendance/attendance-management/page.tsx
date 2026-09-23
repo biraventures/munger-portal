@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { AlertCircle, BarChart3, Camera, Download, Loader2, MessageSquare, Users, UserCog, Truck } from "lucide-react";
+import { AlertCircle, BarChart3, Camera, Download, Loader2, MessageSquare, Users, UserCog, Truck, Trash2 } from "lucide-react";
 import { AttendanceHeader } from "@/components/attendance/attendance-header";
 import { useAttendanceGuard } from "@/lib/use-attendance-guard";
 import { fetchAttendanceDashboardSummary, type AttendanceDashboardSummary } from "@/lib/attendance-api";
@@ -96,6 +96,16 @@ export default function AttendanceManagementPage() {
             <h3 className="mb-1.5 text-base font-semibold text-slate-900">Daily Photos</h3>
             <p className="text-sm text-slate-500">See every ward&apos;s group photo status for any date.</p>
           </Link>
+
+          {user.role === "attendance_admin" && (
+            <Link href="/attendance/data-cleanup" className="flex flex-col rounded-xl border border-slate-200 bg-white p-6 transition-shadow hover:shadow-md">
+              <span className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-red-50 text-red-600">
+                <Trash2 className="h-6 w-6" strokeWidth={1.8} />
+              </span>
+              <h3 className="mb-1.5 text-base font-semibold text-slate-900">Clean Up Old Data</h3>
+              <p className="text-sm text-slate-500">Delete old attendance records and photo files to free up storage.</p>
+            </Link>
+          )}
 
           <Link href="/attendance/feedback" className="flex flex-col rounded-xl border border-slate-200 bg-white p-6 transition-shadow hover:shadow-md">
             <span className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-blue-50 text-nnm-blue">
