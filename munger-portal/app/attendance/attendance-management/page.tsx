@@ -69,6 +69,7 @@ export default function AttendanceManagementPage() {
               <StatBlock label="Wards" value={summary.wards.total} />
               <StatBlock label={`Staff (of ${summary.staff.total})`} value={summary.staff.today.present} className="text-green-600" />
               <StatBlock label={`Drivers (of ${summary.drivers.total})`} value={summary.drivers.today.present} className="text-green-600" />
+              <StatBlock label={`Assistants (of ${summary.assistants.total})`} value={summary.assistants.today.present} className="text-green-600" />
               <StatBlock label={`Photos (of ${summary.photos.totalWards})`} value={summary.photos.uploadedToday} />
 
               <StatBlock label="Staff Half Day" value={summary.staff.today.halfDay} className="text-amber-600" />

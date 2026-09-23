@@ -430,6 +430,38 @@ export async function fetchDriverReport(filters: ReportFilters): Promise<DriverR
   return res.json();
 }
 
+export interface AssistantReportRow {
+  staffId: number;
+  name: string;
+  wardId: number;
+  present: number;
+  halfDay: number;
+  absentInformed: number;
+  absentNotInformed: number;
+}
+
+export interface AssistantDailyLogEntry {
+  date: string;
+  staffId: number;
+  name: string;
+  wardId: number;
+  inTime: string | null;
+  outTime: string | null;
+  status: string;
+}
+
+export interface AssistantReportResult {
+  wardName: string;
+  rows: AssistantReportRow[];
+  dailyLog: AssistantDailyLogEntry[];
+}
+
+export async function fetchAssistantReport(filters: ReportFilters): Promise<AssistantReportResult> {
+  const res = await fetch(`${API_BASE_URL}/attendance/reports/assistants${buildQuery(filters)}`, { headers: authHeaders() });
+  if (!res.ok) throw new Error("Could not load the assistant report.");
+  return res.json();
+}
+
 // ---------------------------------------------------------------------------
 // Monthly report downloads
 // ---------------------------------------------------------------------------
@@ -466,6 +498,13 @@ export async function downloadMonthlyDriverReport(year: number, month: number): 
   await downloadFile(
     `/attendance/reports/monthly/drivers.csv?year=${year}&month=${month}`,
     `driver-attendance-${year}-${String(month).padStart(2, "0")}.csv`,
+  );
+}
+
+export async function downloadMonthlyAssistantReport(year: number, month: number): Promise<void> {
+  await downloadFile(
+    `/attendance/reports/monthly/assistants.csv?year=${year}&month=${month}`,
+    `assistant-attendance-${year}-${String(month).padStart(2, "0")}.csv`,
   );
 }
 
@@ -567,6 +606,7 @@ export interface AttendanceDashboardSummary {
   wards: { total: number };
   staff: { total: number; today: StatusBreakdown };
   drivers: { total: number; today: StatusBreakdown };
+  assistants: { total: number; today: StatusBreakdown };
   photos: { uploadedToday: number; totalWards: number };
 }
 

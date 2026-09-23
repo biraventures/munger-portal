@@ -28,8 +28,8 @@ import {
   getWardPhotoFile,
 } from "../controllers/fieldStaffDailyPhoto.controller";
 import { postStaffFeedback, getStaffFeedbackHandler } from "../controllers/fieldStaffFeedback.controller";
-import { getAttendanceStaffReport, getAttendanceDriverReport } from "../controllers/attendanceReport.controller";
-import { downloadStaffMonthlyReport, downloadDriverMonthlyReport } from "../controllers/attendanceMonthlyReport.controller";
+import { getAttendanceStaffReport, getAttendanceDriverReport, getAttendanceAssistantReport } from "../controllers/attendanceReport.controller";
+import { downloadStaffMonthlyReport, downloadDriverMonthlyReport, downloadAssistantMonthlyReport } from "../controllers/attendanceMonthlyReport.controller";
 import { requireAttendanceReportAccess } from "../middleware/requireAttendanceReportAccess";
 import {
   listAttendanceUsersHandler,
@@ -199,10 +199,12 @@ attendanceRouter.get("/staff/:staffId/feedback", requireAttendanceRole([...OFFIC
 // --- Reports ---
 attendanceRouter.get("/reports/staff", requireAttendanceRole([...OFFICER_ROLES]), getAttendanceStaffReport);
 attendanceRouter.get("/reports/drivers", requireAttendanceRole([...OFFICER_ROLES]), getAttendanceDriverReport);
+attendanceRouter.get("/reports/assistants", requireAttendanceRole([...OFFICER_ROLES]), getAttendanceAssistantReport);
 
 // --- Monthly report downloads (Sanitation Officer, Attendance Admin, or the property-tax Commissioner login) ---
 attendanceRouter.get("/reports/monthly/staff.csv", requireAttendanceReportAccess, downloadStaffMonthlyReport);
 attendanceRouter.get("/reports/monthly/drivers.csv", requireAttendanceReportAccess, downloadDriverMonthlyReport);
+attendanceRouter.get("/reports/monthly/assistants.csv", requireAttendanceReportAccess, downloadAssistantMonthlyReport);
 
 // --- User management (attendance_admin only) ---
 attendanceRouter.get("/users", requireAttendanceRole(["attendance_admin"]), listAttendanceUsersHandler);

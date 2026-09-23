@@ -4,7 +4,7 @@ import { useState } from "react";
 import { AlertCircle, Download, Loader2 } from "lucide-react";
 import { AttendanceHeader } from "@/components/attendance/attendance-header";
 import { useAttendanceGuard } from "@/lib/use-attendance-guard";
-import { downloadMonthlyStaffReport, downloadMonthlyDriverReport } from "@/lib/attendance-api";
+import { downloadMonthlyStaffReport, downloadMonthlyDriverReport, downloadMonthlyAssistantReport } from "@/lib/attendance-api";
 
 const MONTH_NAMES = [
   "January", "February", "March", "April", "May", "June",
@@ -16,15 +16,16 @@ export default function MonthlyReportPage() {
   const now = new Date();
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth() + 1);
-  const [downloading, setDownloading] = useState<"staff" | "drivers" | null>(null);
+  const [downloading, setDownloading] = useState<"staff" | "drivers" | "assistants" | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  async function handleDownload(kind: "staff" | "drivers") {
+  async function handleDownload(kind: "staff" | "drivers" | "assistants") {
     setDownloading(kind);
     setError(null);
     try {
       if (kind === "staff") await downloadMonthlyStaffReport(year, month);
-      else await downloadMonthlyDriverReport(year, month);
+      else if (kind === "drivers") await downloadMonthlyDriverReport(year, month);
+      else await downloadMonthlyAssistantReport(year, month);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Download failed.");
     } finally {
@@ -79,7 +80,7 @@ export default function MonthlyReportPage() {
           </div>
         )}
 
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <button
             onClick={() => handleDownload("staff")}
             disabled={downloading !== null}
@@ -102,6 +103,18 @@ export default function MonthlyReportPage() {
               <p className="text-xs text-slate-500">Vehicle drivers - {MONTH_NAMES[month - 1]} {year}</p>
             </div>
             {downloading === "drivers" ? <Loader2 className="h-4 w-4 animate-spin text-nnm-blue" /> : <Download className="h-4 w-4 text-nnm-blue" />}
+          </button>
+
+          <button
+            onClick={() => handleDownload("assistants")}
+            disabled={downloading !== null}
+            className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-5 text-left transition-shadow hover:shadow-md disabled:opacity-60"
+          >
+            <div>
+              <p className="text-sm font-semibold text-slate-900">Driver Assistant Report</p>
+              <p className="text-xs text-slate-500">Vehicle driver assistants - {MONTH_NAMES[month - 1]} {year}</p>
+            </div>
+            {downloading === "assistants" ? <Loader2 className="h-4 w-4 animate-spin text-nnm-blue" /> : <Download className="h-4 w-4 text-nnm-blue" />}
           </button>
         </div>
       </main>
