@@ -1,0 +1,13 @@
+-- old_pid is a legacy-system reference that should map to exactly one
+-- property. Partial unique index (allows multiple NULLs, since not
+-- every property has this filled in) as a database-level safety net
+-- underneath the application-level duplicate check added alongside
+-- this migration (see newEntry.service.ts and propertySave.service.ts).
+--
+-- NOTE: old_holding_no is deliberately NOT given the same treatment
+-- here - a check found 1,545 groups of existing duplicates in real
+-- data (e.g. "10" shared by 12 different holdings), strongly
+-- suggesting it was ward/locality-scoped in the legacy system rather
+-- than globally unique. Revisit once that's confirmed - see the
+-- corresponding discussion before this migration was finalized.
+CREATE UNIQUE INDEX idx_properties_old_pid ON properties (old_pid) WHERE old_pid IS NOT NULL;

@@ -1,0 +1,12 @@
+-- Freezes the full arrear-period breakdown (period label, years
+-- covered, average annual charge, amount) onto the transaction row,
+-- alongside the arv/tax/fine snapshot from migration 024. The
+-- immediate post-payment receipt already showed a full "Arrear
+-- Period(s) Cleared by This Payment" table with exact year ranges
+-- (e.g. "2018-2019 to 2020-2021"), but that detail was never captured
+-- anywhere - a later reprint could only show a lump-sum "Previous
+-- Years' Outstanding Demand" figure with no indication of which years
+-- it covered. Stored as JSONB (an array of {period, years,
+-- annualCharge, amount}) so the reprint can render the identical
+-- table, not just a text summary.
+ALTER TABLE transactions ADD COLUMN arrear_stages_paid JSONB;

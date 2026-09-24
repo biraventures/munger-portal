@@ -5,6 +5,7 @@ import rateLimit from "express-rate-limit";
 import pinoHttp from "pino-http";
 import { env } from "./config/env";
 import { apiRouter } from "./routes";
+import { mobileRouter } from "../mobile/index";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler";
 
 export function createApp() {
@@ -57,7 +58,15 @@ export function createApp() {
     }),
   );
 
+  app.get("/", (_req, res) => {
+    res.status(200).json({
+      status: "ok",
+      message: "NNM Property Tax API is running",
+    });
+  });
+
   app.use("/api/v1", apiRouter);
+  app.use("/api/mobile", mobileRouter);
 
   app.use(notFoundHandler);
   app.use(errorHandler);

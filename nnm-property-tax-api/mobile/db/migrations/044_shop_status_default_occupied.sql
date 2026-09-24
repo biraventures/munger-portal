@@ -1,0 +1,18 @@
+-- Flips the default for a newly-created shop's status from 'vacant'
+-- to 'occupied'. This was a real, live bug: the operator-facing shop
+-- entry form never actually asked whether a shop is vacant or
+-- occupied, so every shop silently defaulted to 'vacant' at the
+-- database level regardless of reality. Combined with the
+-- publication-approval gate (migration 040), which only controls
+-- whether a shop is publicly LISTED, not its underlying status, an
+-- occupied shop that was never explicitly marked as such could end up
+-- approved for public listing and shown as available to apply for -
+-- while someone was actually already renting it.
+--
+-- 'occupied' is the safer default precisely because it fails closed:
+-- a shop that's actually vacant but left at the default now simply
+-- doesn't show up publicly until someone corrects it, rather than a
+-- shop that's actually occupied wrongly inviting public applications.
+-- This does not change any EXISTING shop's status - only what a new
+-- row gets when status isn't explicitly provided.
+ALTER TABLE shops ALTER COLUMN status SET DEFAULT 'occupied';
