@@ -90,7 +90,7 @@ import {
   exportMigratedHoldingsHandler,
 } from "../controllers/migratedHoldingSurvey.controller";
 import { listResurveyFlagsHandler, reviewResurveyFlagHandler, exportResurveyFlagsHandler } from "../controllers/propertyResurveyFlag.controller";
-import { listTaxCollectorsWithAssignmentHandler, listCityManagersHandler, assignCityManagerHandler } from "../controllers/taxCollectorAssignment.controller";
+import { listTaxCollectorsWithAssignmentHandler, listCityManagersHandler, assignCityManagerHandler, setTaxCollectorWardsHandler } from "../controllers/taxCollectorAssignment.controller";
 import { listEntryRevertEventsHandler, exportEntryRevertEventsHandler } from "../controllers/entryRevertEvent.controller";
 import {
   postCreateEmployeeHandler,
@@ -301,6 +301,7 @@ adminRouter.get("/tax-surveyors", listTaxSurveyorsHandler);
 adminRouter.get("/tax-collectors-with-assignment", requireAdminRole("commissioner"), listTaxCollectorsWithAssignmentHandler);
 adminRouter.get("/city-managers", requireAdminRole("commissioner"), listCityManagersHandler);
 adminRouter.post("/tax-collectors/:username/assign-city-manager", requireAdminRole("commissioner"), assignCityManagerHandler);
+adminRouter.post("/tax-collectors/:username/wards", requireAdminRole("commissioner"), setTaxCollectorWardsHandler);
 adminRouter.post("/migrated-holdings/:holdingNo/assign", assignToSurveyorHandler);
 adminRouter.get("/migrated-holdings/my-assignments", listMyAssignmentsHandler);
 adminRouter.post("/migrated-holdings/:holdingNo/assign-surveyor", assignToTaxSurveyorHandler);

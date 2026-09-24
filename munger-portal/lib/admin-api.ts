@@ -1118,6 +1118,7 @@ export interface TaxCollectorWithAssignment {
   username: string;
   displayName: string;
   assignedCityManagerUsername: string | null;
+  wards: string[];
 }
 
 export async function fetchTaxCollectorsWithAssignment(): Promise<TaxCollectorWithAssignment[]> {
@@ -1125,6 +1126,20 @@ export async function fetchTaxCollectorsWithAssignment(): Promise<TaxCollectorWi
   if (!res.ok) throw new Error("Could not load Tax Collectors.");
   const data: { taxCollectors: TaxCollectorWithAssignment[] } = await res.json();
   return data.taxCollectors;
+}
+
+export async function setTaxCollectorWards(taxCollectorUsername: string, wards: string[]): Promise<string[]> {
+  const res = await fetch(`${API_BASE_URL}/admin/tax-collectors/${encodeURIComponent(taxCollectorUsername)}/wards`, {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify({ wards }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || "Could not save these wards.");
+  }
+  const data: { wards: string[] } = await res.json();
+  return data.wards;
 }
 
 export interface CityManagerOption {
