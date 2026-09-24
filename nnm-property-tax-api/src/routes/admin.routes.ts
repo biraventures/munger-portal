@@ -17,9 +17,13 @@ import {
 } from "../controllers/changeRequest.controller";
 import {
   getDiscrepancyRequests,
+  getMyDiscrepancyRequests,
   getDiscrepancyRequestById,
   postApproveDiscrepancyRequest,
   postRejectDiscrepancyRequest,
+  postRevertDiscrepancyRequest,
+  postResubmitDiscrepancyRequest,
+  getDiscrepancyPhoto,
 } from "../controllers/propertyDiscrepancy.controller";
 import {
   getCancellationRequests,
@@ -187,9 +191,13 @@ adminRouter.post("/change-requests/:id/revert", requireMutationChainRole, postRe
 // for) every approval queue in this system.
 const requireDiscrepancyChainRole = requireAdminRole("tax_surveyor", "tax_daroga", "city_manager", "deputy_commissioner", "commissioner");
 adminRouter.get("/property-discrepancy-requests", requireDiscrepancyChainRole, getDiscrepancyRequests);
+adminRouter.get("/property-discrepancy-requests/mine", requireAdminRole("tax_collector"), getMyDiscrepancyRequests);
 adminRouter.get("/property-discrepancy-requests/:id", requireDiscrepancyChainRole, getDiscrepancyRequestById);
+adminRouter.get("/property-discrepancy-requests/:id/photo", requireDiscrepancyChainRole, getDiscrepancyPhoto);
 adminRouter.post("/property-discrepancy-requests/:id/approve", requireDiscrepancyChainRole, postApproveDiscrepancyRequest);
 adminRouter.post("/property-discrepancy-requests/:id/reject", requireDiscrepancyChainRole, postRejectDiscrepancyRequest);
+adminRouter.post("/property-discrepancy-requests/:id/revert", requireDiscrepancyChainRole, postRevertDiscrepancyRequest);
+adminRouter.post("/property-discrepancy-requests/:id/resubmit", requireAdminRole("tax_collector"), postResubmitDiscrepancyRequest);
 
 // Demand notice / receipt cancellation approval queue - viewable by
 // any admin role except Stall Prabhari. Approve/reject is tax_daroga

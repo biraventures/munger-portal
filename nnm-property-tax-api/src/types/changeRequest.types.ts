@@ -41,7 +41,7 @@ export interface ChangeRequestApprovalRow {
 }
 export interface EntryRevertEventRow {
   id: number;
-  entry_type: "property_mutation" | "shop_agreement";
+  entry_type: "property_mutation" | "shop_agreement" | "property_discrepancy";
   entry_id: number;
   reference_no: string;
   originally_requested_by: string;

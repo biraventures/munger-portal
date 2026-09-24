@@ -986,6 +986,7 @@ export interface TaxCollectorPropertySearchResult {
     currentTax: string;
     arrears?: { totalPending: number; penalty: number; stagesConsidered: number; note: string };
   };
+  floors?: Record<string, unknown>[];
 }
 
 export async function fetchPropertyForCollector(holdingNo: string): Promise<TaxCollectorPropertySearchResult> {
@@ -1559,20 +1560,37 @@ export interface PropertyDiscrepancyRequest {
   reported_at: string;
   discrepancy_notes: string;
   proposed_data: Record<string, unknown>;
-  status: "pending" | "approved" | "rejected";
+  status: "pending" | "approved" | "rejected" | "reverted";
   current_stage: AdminRole;
   final_decided_at: string | null;
   reviewed_by: string | null;
   reviewed_role: string | null;
   reviewed_at: string | null;
   review_notes: string | null;
+  gps_lat: string | null;
+  gps_lng: string | null;
+  photo_path: string | null;
+  reverted_by: string | null;
+  reverted_by_role: string | null;
+  reverted_from_stage: string | null;
+  reverted_at: string | null;
+  revert_comment: string | null;
 }
 
-export async function reportPropertyDiscrepancy(holdingNo: string, discrepancyNotes: string, proposedData: Record<string, unknown>): Promise<PropertyDiscrepancyRequest> {
+export interface ReportDiscrepancyInput {
+  discrepancyNotes: string;
+  proposedData: Record<string, unknown>;
+  gpsLat?: number | null;
+  gpsLng?: number | null;
+  photoBase64Data?: string;
+  photoMimeType?: string;
+}
+
+export async function reportPropertyDiscrepancy(holdingNo: string, input: ReportDiscrepancyInput): Promise<PropertyDiscrepancyRequest> {
   const res = await fetch(`${API_BASE_URL}/properties/${encodeURIComponent(holdingNo)}/discrepancy`, {
     method: "POST",
     headers: authHeaders(),
-    body: JSON.stringify({ discrepancyNotes, proposedData }),
+    body: JSON.stringify(input),
   });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
@@ -1582,7 +1600,7 @@ export async function reportPropertyDiscrepancy(holdingNo: string, discrepancyNo
   return data.request;
 }
 
-export async function fetchDiscrepancyRequests(filters: { status?: "pending" | "approved" | "rejected"; myStage?: boolean }): Promise<{ requests: PropertyDiscrepancyRequest[]; myRole: AdminRole }> {
+export async function fetchDiscrepancyRequests(filters: { status?: "pending" | "approved" | "rejected" | "reverted"; myStage?: boolean }): Promise<{ requests: PropertyDiscrepancyRequest[]; myRole: AdminRole }> {
   const params = new URLSearchParams();
   if (filters.status) params.set("status", filters.status);
   if (filters.myStage) params.set("myStage", "true");
@@ -1591,15 +1609,32 @@ export async function fetchDiscrepancyRequests(filters: { status?: "pending" | "
   return res.json();
 }
 
+/** A Tax Collector's own worklist - their submissions, including any reverted back to them awaiting correction. */
+export async function fetchMyDiscrepancyRequests(): Promise<PropertyDiscrepancyRequest[]> {
+  const res = await fetch(`${API_BASE_URL}/admin/property-discrepancy-requests/mine`, { headers: authHeaders() });
+  if (!res.ok) throw new Error("Could not load your discrepancy reports.");
+  const data: { requests: PropertyDiscrepancyRequest[] } = await res.json();
+  return data.requests;
+}
+
 export interface PropertyDiscrepancyApproval {
   id: number;
   discrepancy_request_id: number;
   stage: AdminRole;
-  decision: "approved" | "rejected";
+  decision: "submitted" | "approved" | "edited_and_forwarded" | "rejected" | "reverted";
   admin_username: string;
   admin_display_name: string;
   notes: string | null;
   decided_at: string;
+  data_snapshot: Record<string, unknown> | null;
+}
+
+/** The holding photo the Tax Collector attached at submission. */
+export async function fetchDiscrepancyPhotoBlobUrl(id: number): Promise<string> {
+  const res = await fetch(`${API_BASE_URL}/admin/property-discrepancy-requests/${id}/photo`, { headers: authHeaders() });
+  if (!res.ok) throw new Error("Could not load this photo.");
+  const blob = await res.blob();
+  return URL.createObjectURL(blob);
 }
 
 export async function fetchDiscrepancyRequestDetail(id: number): Promise<{
@@ -1613,11 +1648,12 @@ export async function fetchDiscrepancyRequestDetail(id: number): Promise<{
   return res.json();
 }
 
-export async function approveDiscrepancyRequest(id: number, notes?: string): Promise<PropertyDiscrepancyRequest> {
+/** If editedData is given, this stage is correcting the entries before forwarding rather than approving as-is. */
+export async function approveDiscrepancyRequest(id: number, notes?: string, editedData?: Record<string, unknown>): Promise<PropertyDiscrepancyRequest> {
   const res = await fetch(`${API_BASE_URL}/admin/property-discrepancy-requests/${id}/approve`, {
     method: "POST",
     headers: authHeaders(),
-    body: JSON.stringify({ notes }),
+    body: JSON.stringify({ notes, editedData }),
   });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
@@ -1636,6 +1672,36 @@ export async function rejectDiscrepancyRequest(id: number, notes: string): Promi
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     throw new Error(body.error || "Could not reject this request.");
+  }
+  const data: { request: PropertyDiscrepancyRequest } = await res.json();
+  return data.request;
+}
+
+/** Sends the request back to the Tax Collector for correction instead of approving/rejecting/editing. */
+export async function revertDiscrepancyRequest(id: number, comment: string): Promise<PropertyDiscrepancyRequest> {
+  const res = await fetch(`${API_BASE_URL}/admin/property-discrepancy-requests/${id}/revert`, {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify({ comment }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || "Could not revert this request.");
+  }
+  const data: { request: PropertyDiscrepancyRequest } = await res.json();
+  return data.request;
+}
+
+/** The Tax Collector corrects and resubmits a request reverted back to them. */
+export async function resubmitDiscrepancyRequest(id: number, input: ReportDiscrepancyInput): Promise<PropertyDiscrepancyRequest> {
+  const res = await fetch(`${API_BASE_URL}/admin/property-discrepancy-requests/${id}/resubmit`, {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || "Could not resubmit this request.");
   }
   const data: { request: PropertyDiscrepancyRequest } = await res.json();
   return data.request;

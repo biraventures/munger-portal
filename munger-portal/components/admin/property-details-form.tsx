@@ -52,6 +52,33 @@ export function propertyFormToPayload(form: AdminPropertyFormState): Record<stri
 }
 
 /** Prefills from the shape GET /properties/:holdingNo returns (see AdminFullPropertyResult in lib/admin-api.ts). */
+/** Same as propertyFormFromExisting, but for data already in the PropertySaveInput shape (camelCase) - e.g. a discrepancy request's proposed_data, which was built by propertyFormToPayload in the first place. */
+export function propertyFormFromProposedData(data: Record<string, unknown>): AdminPropertyFormState {
+  const floors = (data.floors as Record<string, unknown>[] | undefined) ?? [];
+  return {
+    ownerName: String(data.ownerName ?? ""),
+    areaSqft: String(data.areaSqft ?? ""),
+    address: String(data.address ?? ""),
+    ward: String(data.ward ?? ""),
+    assessmentYear: String(data.assessmentYear ?? ""),
+    roadType: (data.roadType as "PMR" | "MR" | "OR") ?? "MR",
+    holdingCreationYear: String(data.holdingCreationYear ?? ""),
+    floors:
+      floors.length > 0
+        ? floors.map((f, i) => ({
+            key: `proposed-${i}`,
+            floorLabel: String(f.floorLabel ?? ""),
+            buildupSqft: String(f.buildupSqft ?? ""),
+            constType: (f.constType as "RCC" | "Asbestos" | "Other") ?? "RCC",
+            usageType: String(f.usageType ?? ""),
+            occupancy: (f.occupancy as "self" | "rented") ?? "self",
+            yearBuilt: String(f.yearBuilt ?? ""),
+            closingYear: String(f.closingYear ?? ""),
+          }))
+        : [makeBlankFloor(0)],
+  };
+}
+
 export function propertyFormFromExisting(property: Record<string, unknown>, floors: Record<string, unknown>[]): AdminPropertyFormState {
   return {
     ownerName: String(property.owner_name ?? ""),

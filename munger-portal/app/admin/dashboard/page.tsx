@@ -92,6 +92,7 @@ export default function AdminDashboardPage() {
   const showInitiateSurvey = admin.role === "tax_surveyor";
   const showTaxCollectorPage = admin.role === "tax_collector";
   const showReportPropertyDiscrepancy = admin.role === "tax_collector";
+  const showMyDiscrepancyReports = admin.role === "tax_collector";
   const DISCREPANCY_CHAIN_ROLES = ["tax_surveyor", "tax_daroga", "city_manager", "deputy_commissioner", "commissioner"];
   const showPropertyDiscrepancyRequests = DISCREPANCY_CHAIN_ROLES.includes(admin.role);
   const showResurveyFlags = admin.role === "tax_daroga" || admin.role === "commissioner";
@@ -107,7 +108,7 @@ export default function AdminDashboardPage() {
   const propertyGroupVisible =
     showMutationApprovals || showCancellationRequests || showTaxCollectors || showBulkDemandNotices || showAllPropertyChanges || showRenumberHolding || showBulkUploadProperties ||
     showMigratedHoldingsBulkUpload || showMigratedHoldingsAssign || showMigratedHoldingsSurveyor || showMigratedHoldingsMySurveys || showInitiateSurvey || showTaxCollectorPage ||
-    showReportPropertyDiscrepancy || showPropertyDiscrepancyRequests || showResurveyFlags || showTaxCollectorAssignments || showRevertAuditTrail;
+    showReportPropertyDiscrepancy || showMyDiscrepancyReports || showPropertyDiscrepancyRequests || showResurveyFlags || showTaxCollectorAssignments || showRevertAuditTrail;
 
   const showShopAgreementApprovals = !isTradeLicenseNodal && !isGisOnlyRole && !isNarrowlyScopedRole;
   const showShopRentalApplications = !isTradeLicenseNodal && !isGisOnlyRole && !isNarrowlyScopedRole;
@@ -315,6 +316,16 @@ export default function AdminDashboardPage() {
                   </span>
                   <h3 className="mb-1.5 text-base font-semibold text-slate-900">Report Property Discrepancy</h3>
                   <p className="text-sm text-slate-500">Found something that doesn&apos;t match the records? Submit the corrected details for review.</p>
+                </Link>
+              )}
+
+              {showMyDiscrepancyReports && (
+                <Link href="/admin/my-discrepancy-reports" className={cardClass}>
+                  <span className={iconWrapClass}>
+                    <ClipboardList className="h-6 w-6" strokeWidth={1.8} />
+                  </span>
+                  <h3 className="mb-1.5 text-base font-semibold text-slate-900">My Discrepancy Reports</h3>
+                  <p className="text-sm text-slate-500">See what you&apos;ve reported and its status - including any sent back for correction.</p>
                 </Link>
               )}
 
