@@ -9,7 +9,10 @@ export type AdminRole =
   | "city_manager"
   | "trade_license_nodal"
   | "assistant_town_planning_supervisor"
-  | "assistant_architect";
+  | "assistant_architect"
+  | "je_mechanical"
+  | "ae_mechanical"
+  | "establishment_clerk";
 
 export const ADMIN_ROLES: AdminRole[] = [
   "tax_daroga",
@@ -23,6 +26,9 @@ export const ADMIN_ROLES: AdminRole[] = [
   "trade_license_nodal",
   "assistant_town_planning_supervisor",
   "assistant_architect",
+  "je_mechanical",
+  "ae_mechanical",
+  "establishment_clerk",
 ];
 
 export const ADMIN_ROLE_LABELS: Record<AdminRole, string> = {
@@ -37,6 +43,9 @@ export const ADMIN_ROLE_LABELS: Record<AdminRole, string> = {
   trade_license_nodal: "Trade License Nodal",
   assistant_town_planning_supervisor: "Assistant Town Planning Supervisor",
   assistant_architect: "Assistant Architect",
+  je_mechanical: "JE - Mechanical",
+  ae_mechanical: "AE - Mechanical",
+  establishment_clerk: "Establishment Clerk",
 };
 
 /**
@@ -74,6 +83,25 @@ export const SHOP_APPROVAL_STAGE_ORDER: AdminRole[] = [
 export function nextShopApprovalStage(stage: AdminRole): AdminRole | null {
   const idx = SHOP_APPROVAL_STAGE_ORDER.indexOf(stage);
   return idx >= 0 && idx < SHOP_APPROVAL_STAGE_ORDER.length - 1 ? SHOP_APPROVAL_STAGE_ORDER[idx + 1]! : null;
+}
+
+/**
+ * Fixed order a Tax Collector's field-discrepancy submission moves
+ * through - a Tax Surveyor first (who can verify the correction in
+ * the field), then Tax Daroga, City Manager, and finally Deputy
+ * Commissioner. Only once the DMC approves is the corrected property
+ * data actually applied - see propertyDiscrepancy.service.ts.
+ */
+export const PROPERTY_DISCREPANCY_APPROVAL_STAGE_ORDER: AdminRole[] = [
+  "tax_surveyor",
+  "tax_daroga",
+  "city_manager",
+  "deputy_commissioner",
+];
+
+export function nextPropertyDiscrepancyStage(stage: AdminRole): AdminRole | null {
+  const idx = PROPERTY_DISCREPANCY_APPROVAL_STAGE_ORDER.indexOf(stage);
+  return idx >= 0 && idx < PROPERTY_DISCREPANCY_APPROVAL_STAGE_ORDER.length - 1 ? PROPERTY_DISCREPANCY_APPROVAL_STAGE_ORDER[idx + 1]! : null;
 }
 
 /**
@@ -117,6 +145,7 @@ export interface AdminRow {
   active: boolean;
   email: string | null;
   assigned_city_manager_username: string | null;
+  is_demo: boolean;
 }
 
 export interface AdminLoginResult {
@@ -126,6 +155,7 @@ export interface AdminLoginResult {
     username: string;
     displayName: string;
     role: AdminRole;
+    isDemo: boolean;
   };
 }
 
@@ -136,4 +166,5 @@ export interface AdminTokenPayload {
   username: string;
   displayName: string;
   role: AdminRole;
+  isDemo: boolean;
 }

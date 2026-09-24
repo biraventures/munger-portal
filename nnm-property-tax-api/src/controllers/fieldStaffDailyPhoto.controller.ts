@@ -7,6 +7,7 @@ import {
   getTodayWardPhoto,
   getWardPhotoForDate,
   getAllWardPhotosForDate,
+  deleteWardGroupPhoto,
 } from "../services/fieldStaffDailyPhoto.service";
 import { fieldStaffDailyPhotoRepository } from "../repositories/fieldStaffDailyPhoto.repository";
 import { istDateString } from "../utils/istDate";
@@ -79,4 +80,15 @@ export const getWardPhotoFile = asyncHandler(async (req: Request, res: Response)
   if (!fs.existsSync(fullPath)) throw ApiError.notFound("Photo file is missing from storage.");
 
   res.sendFile(path.resolve(fullPath));
+});
+
+/** DELETE /api/v1/attendance/photos/ward/:wardId?date=... - attendance_admin only, to free up storage. */
+export const deleteWardPhotoHandler = asyncHandler(async (req: Request, res: Response) => {
+  const parsed = filePathParamSchema.safeParse(req.params);
+  if (!parsed.success) throw ApiError.badRequest("Invalid ward id.");
+  const dateParsed = dateQuerySchema.safeParse(req.query);
+  const dateKey = (dateParsed.success ? dateParsed.data.date : null) || istDateString();
+
+  await deleteWardGroupPhoto(parsed.data.wardId, dateKey);
+  res.status(200).json({ success: true });
 });

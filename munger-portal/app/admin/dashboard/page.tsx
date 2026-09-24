@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Users, FileClock, FileWarning, LayoutGrid, ShoppingBag, Store, BarChart3, Award, Archive, Download, XCircle, ShieldCheck, Trash2, RefreshCw, Upload, MapPin, Map as MapIcon, ClipboardCheck, UserCheck, ClipboardList, Receipt, RotateCcw } from "lucide-react";
+import { Users, FileClock, FileWarning, LayoutGrid, ShoppingBag, Store, BarChart3, Award, Archive, Download, XCircle, ShieldCheck, Trash2, RefreshCw, Upload, MapPin, Map as MapIcon, ClipboardCheck, UserCheck, ClipboardList, Receipt, RotateCcw, AlertTriangle, List } from "lucide-react";
 import { AdminHeader } from "@/components/admin-header";
 import { DashboardSummaryWidget } from "@/components/dashboard-summary-widget";
 import { useAdminGuard } from "@/lib/use-admin-guard";
@@ -60,7 +60,16 @@ export default function AdminDashboardPage() {
   // a few cards within each, unlike Stall Prabhari/Trade License
   // Nodal who still see some cards in their own area.
   const isGisOnlyRole = isAtps || isAssistantArchitect;
-  const isRestrictedRole = isStallPrabhari || isTradeLicenseNodal || isGisOnlyRole;
+  const isRestrictedRole = isStallPrabhari || isTradeLicenseNodal || isGisOnlyRole || admin.role === "je_mechanical" || admin.role === "ae_mechanical" || admin.role === "establishment_clerk" || admin.role === "tax_surveyor";
+  // Roles whose whole job is one narrow task (streetlight mechanical
+  // engineers, the Establishment Clerk, the Tax Surveyor) - shouldn't
+  // see property/shop/trade-license sections at all, unlike the
+  // broader isRestrictedRole exclusions above (which still let e.g.
+  // Stall Prabhari see the shop section they're actually part of the
+  // approval chain for). Tax Surveyor still sees their own dedicated
+  // survey cards below - those are gated on the role directly, not
+  // on this exclusion.
+  const isNarrowlyScopedRole = admin.role === "je_mechanical" || admin.role === "ae_mechanical" || admin.role === "establishment_clerk" || admin.role === "tax_surveyor";
   const canApproveShopPublication = admin.role === "stall_prabhari" || admin.role === "city_manager" || admin.role === "deputy_commissioner";
   const canApproveDemandActions = admin.role === "stall_prabhari" || admin.role === "city_manager";
   const isCommissioner = admin.role === "commissioner";
@@ -80,18 +89,30 @@ export default function AdminDashboardPage() {
   const showMigratedHoldingsAssign = admin.role === "deputy_commissioner" || admin.role === "city_manager";
   const showMigratedHoldingsSurveyor = admin.role === "tax_daroga";
   const showMigratedHoldingsMySurveys = admin.role === "tax_surveyor";
+  const showInitiateSurvey = admin.role === "tax_surveyor";
   const showTaxCollectorPage = admin.role === "tax_collector";
+  const showReportPropertyDiscrepancy = admin.role === "tax_collector";
+  const DISCREPANCY_CHAIN_ROLES = ["tax_surveyor", "tax_daroga", "city_manager", "deputy_commissioner", "commissioner"];
+  const showPropertyDiscrepancyRequests = DISCREPANCY_CHAIN_ROLES.includes(admin.role);
   const showResurveyFlags = admin.role === "tax_daroga" || admin.role === "commissioner";
   const showTaxCollectorAssignments = isCommissioner;
   const showRevertAuditTrail = isCommissioner;
+  const showEmployeeDatabaseEntry = admin.role === "establishment_clerk";
+  const showEmployeeDatabaseList = admin.role === "establishment_clerk";
+  const showEmployeeDatabaseVerify = admin.role === "city_manager";
+  const showEmployeeDatabaseProgress = isCommissioner;
+  const isStreetlightReporterRole =
+    admin.role === "tax_daroga" || admin.role === "tax_surveyor" || admin.role === "tax_collector" || admin.role === "stall_prabhari" || admin.role === "je_mechanical" || admin.role === "ae_mechanical" ||
+    admin.role === "commissioner" || admin.role === "deputy_commissioner" || admin.role === "city_manager";
   const propertyGroupVisible =
     showMutationApprovals || showCancellationRequests || showTaxCollectors || showBulkDemandNotices || showAllPropertyChanges || showRenumberHolding || showBulkUploadProperties ||
-    showMigratedHoldingsBulkUpload || showMigratedHoldingsAssign || showMigratedHoldingsSurveyor || showMigratedHoldingsMySurveys || showTaxCollectorPage || showResurveyFlags || showTaxCollectorAssignments || showRevertAuditTrail;
+    showMigratedHoldingsBulkUpload || showMigratedHoldingsAssign || showMigratedHoldingsSurveyor || showMigratedHoldingsMySurveys || showInitiateSurvey || showTaxCollectorPage ||
+    showReportPropertyDiscrepancy || showPropertyDiscrepancyRequests || showResurveyFlags || showTaxCollectorAssignments || showRevertAuditTrail;
 
-  const showShopAgreementApprovals = !isTradeLicenseNodal && !isGisOnlyRole;
-  const showShopRentalApplications = !isTradeLicenseNodal && !isGisOnlyRole;
-  const showShopRentalPreferences = !isTradeLicenseNodal && !isGisOnlyRole;
-  const showShopRateReport = !isTradeLicenseNodal && !isGisOnlyRole;
+  const showShopAgreementApprovals = !isTradeLicenseNodal && !isGisOnlyRole && !isNarrowlyScopedRole;
+  const showShopRentalApplications = !isTradeLicenseNodal && !isGisOnlyRole && !isNarrowlyScopedRole;
+  const showShopRentalPreferences = !isTradeLicenseNodal && !isGisOnlyRole && !isNarrowlyScopedRole;
+  const showShopRateReport = !isTradeLicenseNodal && !isGisOnlyRole && !isNarrowlyScopedRole;
   const showShopsPendingPublication = canApproveShopPublication;
   const showShopEditApprovals = canApproveShopPublication;
   const showShopAgreementDocumentRequests = canApproveShopPublication;
@@ -112,8 +133,8 @@ export default function AdminDashboardPage() {
     showBulkUploadShops ||
     showManageShops;
 
-  const showTradeLicenseApplications = !isStallPrabhari && !isGisOnlyRole;
-  const showTradeLicenseReporting = !isStallPrabhari && !isGisOnlyRole;
+  const showTradeLicenseApplications = !isStallPrabhari && !isGisOnlyRole && !isNarrowlyScopedRole;
+  const showTradeLicenseReporting = !isStallPrabhari && !isGisOnlyRole && !isNarrowlyScopedRole;
   const tradeLicenseGroupVisible = showTradeLicenseApplications || showTradeLicenseReporting;
 
   const showOperators = !isRestrictedRole;
@@ -123,6 +144,8 @@ export default function AdminDashboardPage() {
   const showGisMap = isAtps || isAssistantArchitect || isCommissioner;
   const showBuildingMapApproval = isAssistantArchitect;
   const miscGroupVisible = showOperators || showDocumentArchive || showAttendanceReport || showAssignCoordinates || showGisMap || showBuildingMapApproval;
+  const employeeDatabaseGroupVisible = showEmployeeDatabaseEntry || showEmployeeDatabaseList || showEmployeeDatabaseVerify || showEmployeeDatabaseProgress;
+  const streetlightGroupVisible = isStreetlightReporterRole;
 
   const groupHeadingClass = "mb-4 mt-10 text-lg font-semibold text-slate-800 first:mt-0";
   const cardClass = "flex flex-col rounded-xl border border-slate-200 bg-white p-6 transition-shadow hover:shadow-md";
@@ -265,6 +288,16 @@ export default function AdminDashboardPage() {
                 </Link>
               )}
 
+              {showInitiateSurvey && (
+                <Link href="/admin/initiate-survey" className={cardClass}>
+                  <span className={iconWrapClass}>
+                    <ClipboardCheck className="h-6 w-6" strokeWidth={1.8} />
+                  </span>
+                  <h3 className="mb-1.5 text-base font-semibold text-slate-900">Initiate Survey / Resurvey</h3>
+                  <p className="text-sm text-slate-500">Search any holding number to start its survey or resurvey directly.</p>
+                </Link>
+              )}
+
               {showTaxCollectorPage && (
                 <Link href="/admin/tax-collector" className={cardClass}>
                   <span className={iconWrapClass}>
@@ -272,6 +305,26 @@ export default function AdminDashboardPage() {
                   </span>
                   <h3 className="mb-1.5 text-base font-semibold text-slate-900">Tax Collection</h3>
                   <p className="text-sm text-slate-500">Search a holding, view pendency, collect tax, issue a receipt.</p>
+                </Link>
+              )}
+
+              {showReportPropertyDiscrepancy && (
+                <Link href="/admin/report-property-discrepancy" className={cardClass}>
+                  <span className={iconWrapClass}>
+                    <AlertTriangle className="h-6 w-6" strokeWidth={1.8} />
+                  </span>
+                  <h3 className="mb-1.5 text-base font-semibold text-slate-900">Report Property Discrepancy</h3>
+                  <p className="text-sm text-slate-500">Found something that doesn&apos;t match the records? Submit the corrected details for review.</p>
+                </Link>
+              )}
+
+              {showPropertyDiscrepancyRequests && (
+                <Link href="/admin/property-discrepancy-requests" className={cardClass}>
+                  <span className={iconWrapClass}>
+                    <ClipboardCheck className="h-6 w-6" strokeWidth={1.8} />
+                  </span>
+                  <h3 className="mb-1.5 text-base font-semibold text-slate-900">Property Discrepancy Approvals</h3>
+                  <p className="text-sm text-slate-500">Review a Tax Collector&apos;s field-found correction at your stage.</p>
                 </Link>
               )}
 
@@ -458,6 +511,70 @@ export default function AdminDashboardPage() {
                   </span>
                   <h3 className="mb-1.5 text-base font-semibold text-slate-900">Trade License - Reporting</h3>
                   <p className="text-sm text-slate-500">Received, pendency, disposal rate, and anything overdue 2+ weeks.</p>
+                </Link>
+              )}
+            </div>
+          </>
+        )}
+
+        {streetlightGroupVisible && (
+          <>
+            <h2 className={groupHeadingClass}>Streetlights</h2>
+            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+              {isStreetlightReporterRole && (
+                <Link href="/admin/report-streetlight-fault" className={cardClass}>
+                  <span className={iconWrapClass}>
+                    <AlertTriangle className="h-6 w-6" strokeWidth={1.8} />
+                  </span>
+                  <h3 className="mb-1.5 text-base font-semibold text-slate-900">Report Streetlight Fault</h3>
+                  <p className="text-sm text-slate-500">Report a damaged or non-functional streetlight noticed in the field.</p>
+                </Link>
+              )}
+            </div>
+          </>
+        )}
+
+        {employeeDatabaseGroupVisible && (
+          <>
+            <h2 className={groupHeadingClass}>Employee Database</h2>
+            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+              {showEmployeeDatabaseEntry && (
+                <Link href="/admin/employee-database-entry" className={cardClass}>
+                  <span className={iconWrapClass}>
+                    <Users className="h-6 w-6" strokeWidth={1.8} />
+                  </span>
+                  <h3 className="mb-1.5 text-base font-semibold text-slate-900">Employee Database Entry</h3>
+                  <p className="text-sm text-slate-500">Search by Aadhaar to correct/delete a record, or add a new one.</p>
+                </Link>
+              )}
+
+              {showEmployeeDatabaseList && (
+                <Link href="/admin/employee-database-list" className={cardClass}>
+                  <span className={iconWrapClass}>
+                    <List className="h-6 w-6" strokeWidth={1.8} />
+                  </span>
+                  <h3 className="mb-1.5 text-base font-semibold text-slate-900">All Employee Records</h3>
+                  <p className="text-sm text-slate-500">Every record entered so far, with verification status.</p>
+                </Link>
+              )}
+
+              {showEmployeeDatabaseVerify && (
+                <Link href="/admin/employee-database-verify" className={cardClass}>
+                  <span className={iconWrapClass}>
+                    <UserCheck className="h-6 w-6" strokeWidth={1.8} />
+                  </span>
+                  <h3 className="mb-1.5 text-base font-semibold text-slate-900">Employee Records - Verification</h3>
+                  <p className="text-sm text-slate-500">Verify new employee database entries.</p>
+                </Link>
+              )}
+
+              {showEmployeeDatabaseProgress && (
+                <Link href="/admin/employee-database-progress" className={cardClass}>
+                  <span className={iconWrapClass}>
+                    <BarChart3 className="h-6 w-6" strokeWidth={1.8} />
+                  </span>
+                  <h3 className="mb-1.5 text-base font-semibold text-slate-900">Employee Database Progress</h3>
+                  <p className="text-sm text-slate-500">How the municipal employee database build-out is going.</p>
                 </Link>
               )}
             </div>

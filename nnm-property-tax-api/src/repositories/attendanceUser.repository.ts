@@ -4,7 +4,7 @@ import type { AttendanceUserRow, AttendanceRole } from "../types/attendance.type
 export const attendanceUserRepository = {
   async findByUsername(username: string): Promise<AttendanceUserRow | null> {
     const { rows } = await pool.query<AttendanceUserRow>(
-      `SELECT * FROM attendance_users WHERE username = $1 AND active = TRUE LIMIT 1`,
+      `SELECT * FROM attendance_users WHERE username = $1 AND active = TRUE AND deleted_at IS NULL LIMIT 1`,
       [username],
     );
     return rows[0] ?? null;
@@ -16,8 +16,32 @@ export const attendanceUserRepository = {
   },
 
   async listAll(): Promise<AttendanceUserRow[]> {
-    const { rows } = await pool.query<AttendanceUserRow>(`SELECT * FROM attendance_users ORDER BY display_name ASC`);
+    const { rows } = await pool.query<AttendanceUserRow>(`SELECT * FROM attendance_users WHERE deleted_at IS NULL ORDER BY display_name ASC`);
     return rows;
+  },
+
+  /** Deactivated (active=false) staff logins awaiting APSWMO field verification and deletion. */
+  async listDeactivated(): Promise<AttendanceUserRow[]> {
+    const { rows } = await pool.query<AttendanceUserRow>(`SELECT * FROM attendance_users WHERE active = FALSE AND deleted_at IS NULL ORDER BY display_name ASC`);
+    return rows;
+  },
+
+  /** Records APSWMO's field verification, before deletion is allowed. */
+  async verifyForDeletion(id: number, verifiedBy: string): Promise<AttendanceUserRow | null> {
+    const { rows } = await pool.query<AttendanceUserRow>(
+      `UPDATE attendance_users SET verified_for_deletion_by = $2, verified_for_deletion_at = now() WHERE id = $1 AND active = FALSE AND deleted_at IS NULL RETURNING *`,
+      [id, verifiedBy],
+    );
+    return rows[0] ?? null;
+  },
+
+  /** Soft delete - only allowed once field-verified. Keeps the row (and its attendance history) but removes it from every listing and blocks login. */
+  async softDelete(id: number): Promise<AttendanceUserRow | null> {
+    const { rows } = await pool.query<AttendanceUserRow>(
+      `UPDATE attendance_users SET deleted_at = now() WHERE id = $1 AND active = FALSE AND verified_for_deletion_at IS NOT NULL AND deleted_at IS NULL RETURNING *`,
+      [id],
+    );
+    return rows[0] ?? null;
   },
 
   /** Every active login holding a given role - used to find who currently holds a singular oversight role (e.g. city_manager, deputy_municipal_commissioner) for penalty attribution. If more than one person holds the role, all of them are returned - callers decide how to handle that. */

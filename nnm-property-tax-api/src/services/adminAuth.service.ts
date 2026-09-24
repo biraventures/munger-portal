@@ -25,6 +25,7 @@ export async function adminLogin(username: string, password: string): Promise<Ad
     username: admin.username,
     displayName: admin.display_name,
     role: admin.role,
+    isDemo: admin.is_demo,
   };
 
   const token = jwt.sign(payload, env.JWT_SECRET, { expiresIn: env.JWT_EXPIRES_IN as jwt.SignOptions["expiresIn"] });
@@ -36,6 +37,7 @@ export async function adminLogin(username: string, password: string): Promise<Ad
       username: admin.username,
       displayName: admin.display_name,
       role: admin.role,
+      isDemo: admin.is_demo,
     },
   };
 }

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { LogOut } from "lucide-react";
+import { LogOut, Eye } from "lucide-react";
 import { adminLogout, ADMIN_ROLE_LABELS, type AdminInfo } from "@/lib/admin-auth";
 import logoImg from '@/public/logo.png'
 
@@ -41,6 +41,12 @@ export function AdminHeader({ admin }: { admin: AdminInfo }) {
           </button>
         </div>
       </div>
+      {admin.isDemo && (
+        <div className="flex items-center justify-center gap-1.5 bg-amber-50 py-1.5 text-xs font-semibold text-amber-800">
+          <Eye className="h-3.5 w-3.5" />
+          Read-only demo account - you can view everything, but nothing can be saved.
+        </div>
+      )}
     </header>
   );
 }

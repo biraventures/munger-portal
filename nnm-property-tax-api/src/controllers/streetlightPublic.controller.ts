@@ -16,6 +16,8 @@ const grievanceSchema = z.object({
   gpsLng: z.coerce.number().min(-180).max(180),
   phone: z.string().trim().regex(/^[0-9]{10}$/, "Phone number must be exactly 10 digits."),
   notes: z.string().trim().max(2000).nullish(),
+  nonFunctionalSince: z.string().trim().nullish(),
+  localSourceName: z.string().trim().nullish(),
 });
 
 export const submitStreetlightGrievanceHandler = asyncHandler(async (req: Request, res: Response) => {
@@ -28,6 +30,8 @@ export const submitStreetlightGrievanceHandler = asyncHandler(async (req: Reques
     gpsLng: parsed.data.gpsLng,
     phone: parsed.data.phone,
     notes: parsed.data.notes ?? null,
+    nonFunctionalSince: parsed.data.nonFunctionalSince ?? null,
+    localSourceName: parsed.data.localSourceName ?? null,
   });
 
   res.status(200).json({

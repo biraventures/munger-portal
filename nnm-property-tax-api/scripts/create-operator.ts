@@ -6,20 +6,25 @@
  * will fail with a clear Postgres error if that limit is already hit.
  *
  * Usage:
- *   npm run create-operator -- <username> <password> "<Display Name>"
+ *   npm run create-operator -- <username> <password> "<Display Name>" [--demo]
+ *   --demo creates a read-only demo account: it can log in and view
+ *   everything, but every request that isn't a GET is blocked.
  *
  * Example:
  *   npm run create-operator -- Operator1KK "Opr234RT" "Operator Window 1"
+ *   npm run create-operator -- DemoOperator1 "TempPass123!" "Demo Operator" --demo
  */
 import "dotenv/config";
 import bcrypt from "bcrypt";
 import { Pool } from "pg";
 
-const [username, password, displayName] = process.argv.slice(2);
+const args = process.argv.slice(2);
+const isDemo = args.includes("--demo");
+const [username, password, displayName] = args.filter((a) => a !== "--demo");
 
 async function main() {
   if (!username || !password || !displayName) {
-    console.error('Usage: npm run create-operator -- <username> <password> "<Display Name>"');
+    console.error('Usage: npm run create-operator -- <username> <password> "<Display Name>" [--demo]');
     process.exit(1);
   }
   if (password.length < 8) {
@@ -32,11 +37,11 @@ async function main() {
 
   try {
     await pool.query(
-      `INSERT INTO operators (username, password_hash, display_name, active)
-       VALUES ($1, $2, $3, TRUE)`,
-      [username, passwordHash, displayName],
+      `INSERT INTO operators (username, password_hash, display_name, active, is_demo)
+       VALUES ($1, $2, $3, TRUE, $4)`,
+      [username, passwordHash, displayName, isDemo],
     );
-    console.log(`Created operator "${username}" (${displayName}).`);
+    console.log(`Created operator "${username}" (${displayName})${isDemo ? " [DEMO - read only]" : ""}.`);
   } catch (err) {
     console.error("Failed to create operator:", err);
     process.exit(1);

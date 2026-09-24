@@ -36,6 +36,13 @@ export const listAllAssetsHandler = asyncHandler(async (req: Request, res: Respo
       batteryStatus: a.battery_status,
       active: a.active,
       trackingType: a.tracking_type,
+      registrationNumber: a.registration_number,
+      engineNumber: a.engine_number,
+      manufacturer: a.manufacturer,
+      model: a.model,
+      variant: a.variant,
+      yearOfManufacture: a.year_of_manufacture,
+      owner: a.owner,
       wardIds: wardsByAsset.get(a.id) ?? [],
       lastServicedOn: lastServiced.get(a.id) ?? null,
       lastRepairedOn: lastRepaired.get(a.id) ?? null,
@@ -86,6 +93,44 @@ export const createAssetHandler = asyncHandler(async (req: Request, res: Respons
   });
 });
 
+const updateAssetDetailsSchema = z.object({
+  assetType: z.enum(ASSET_TYPES),
+  label: z.string().trim().min(1),
+  vehicleNumber: z.string().trim().nullish(),
+  chassisNumber: z.string().trim().nullish(),
+  registrationNumber: z.string().trim().nullish(),
+  engineNumber: z.string().trim().nullish(),
+  manufacturer: z.string().trim().nullish(),
+  model: z.string().trim().nullish(),
+  variant: z.string().trim().nullish(),
+  yearOfManufacture: z.coerce.number().int().min(1900).max(2100).nullish(),
+  owner: z.string().trim().nullish(),
+});
+
+/** PATCH /api/v1/attendance/assets/:id/details - corrects an asset's core identification details (label, vehicle number, etc.). */
+export const updateAssetDetailsHandler = asyncHandler(async (req: Request, res: Response) => {
+  const paramsParsed = assetIdParamSchema.safeParse(req.params);
+  if (!paramsParsed.success) throw ApiError.badRequest("Invalid asset id");
+  const bodyParsed = updateAssetDetailsSchema.safeParse(req.body);
+  if (!bodyParsed.success) throw ApiError.badRequest("Invalid input", bodyParsed.error.flatten().fieldErrors);
+
+  const updated = await assetRepository.updateDetails(paramsParsed.data.id, {
+    assetType: bodyParsed.data.assetType,
+    label: bodyParsed.data.label,
+    vehicleNumber: bodyParsed.data.vehicleNumber ?? null,
+    chassisNumber: bodyParsed.data.chassisNumber ?? null,
+    registrationNumber: bodyParsed.data.registrationNumber ?? null,
+    engineNumber: bodyParsed.data.engineNumber ?? null,
+    manufacturer: bodyParsed.data.manufacturer ?? null,
+    model: bodyParsed.data.model ?? null,
+    variant: bodyParsed.data.variant ?? null,
+    yearOfManufacture: bodyParsed.data.yearOfManufacture ?? null,
+    owner: bodyParsed.data.owner ?? null,
+  });
+  if (!updated) throw ApiError.notFound("Asset not found");
+  res.status(200).json({ asset: updated });
+});
+
 const assetIdParamSchema = z.object({ id: z.coerce.number().int().positive() });
 
 const setWardsSchema = z.object({ wardIds: z.array(z.coerce.number().int().positive()) });
@@ -114,6 +159,29 @@ export const setAssetActiveHandler = asyncHandler(async (req: Request, res: Resp
   const updated = await assetRepository.setActive(paramsParsed.data.id, bodyParsed.data.active);
   if (!updated) throw ApiError.notFound("Asset not found");
   res.status(200).json({ asset: { id: updated.id, active: updated.active } });
+});
+
+/** GET /api/v1/attendance/assets/deactivated - awaiting Junior Engineer field verification and deletion. */
+export const listDeactivatedAssetsHandler = asyncHandler(async (_req: Request, res: Response) => {
+  const assets = await assetRepository.listDeactivated();
+  res.status(200).json({ assets });
+});
+
+/** Junior Engineer's field verification, before deletion is allowed. */
+export const verifyAssetForDeletionHandler = asyncHandler(async (req: Request, res: Response) => {
+  const paramsParsed = assetIdParamSchema.safeParse(req.params);
+  if (!paramsParsed.success) throw ApiError.badRequest("Invalid asset id");
+  const updated = await assetRepository.verifyForDeletion(paramsParsed.data.id, req.attendanceUser!.displayName);
+  if (!updated) throw ApiError.badRequest("Asset not found, not deactivated, or already deleted.");
+  res.status(200).json({ asset: updated });
+});
+
+export const deleteAssetHandler = asyncHandler(async (req: Request, res: Response) => {
+  const paramsParsed = assetIdParamSchema.safeParse(req.params);
+  if (!paramsParsed.success) throw ApiError.badRequest("Invalid asset id");
+  const deleted = await assetRepository.softDelete(paramsParsed.data.id);
+  if (!deleted) throw ApiError.badRequest("Asset not found, not deactivated, or not yet field-verified.");
+  res.status(200).json({ success: true });
 });
 
 export const listAssetMaintenanceLogHandler = asyncHandler(async (req: Request, res: Response) => {

@@ -82,7 +82,7 @@ export function DemandNoticeReprintView({ notice, onClose }: { notice: Printable
           </thead>
           <tbody>
             <tr>
-              <td className="border border-slate-400 p-1.5">Annual Rateable Value (ARV)</td>
+              <td className="border border-slate-400 p-1.5">Annual Rental Value (ARV)</td>
               <td className="border border-slate-400 p-1.5 text-right">{money(notice.arv)}</td>
             </tr>
             <tr>

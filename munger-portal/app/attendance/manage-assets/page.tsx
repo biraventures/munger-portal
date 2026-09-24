@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AlertCircle, CheckCircle2, Loader2, PlusCircle, Wrench, BookOpen, X } from "lucide-react";
+import { AlertCircle, CheckCircle2, Loader2, PlusCircle, Wrench, BookOpen, X, Pencil } from "lucide-react";
 import { AttendanceHeader } from "@/components/attendance/attendance-header";
 import { useAttendanceGuard } from "@/lib/use-attendance-guard";
 import {
@@ -9,6 +9,7 @@ import {
   fetchAllAssets,
   createAsset,
   setAssetActive,
+  updateAssetDetails,
   fetchAssetMaintenanceLog,
   logAssetMaintenance,
   setAssetTrackingType,
@@ -63,6 +64,23 @@ export default function ManageAssetsPage() {
   const [logNotes, setLogNotes] = useState("");
   const [alsoUpdateStatus, setAlsoUpdateStatus] = useState(false);
   const [newStatus, setNewStatus] = useState<AssetSummary["currentStatus"]>("working");
+
+  const [editAssetId, setEditAssetId] = useState<number | null>(null);
+  const [editForm, setEditForm] = useState({
+    assetType: "vehicle" as AssetSummary["assetType"],
+    label: "",
+    vehicleNumber: "",
+    chassisNumber: "",
+    registrationNumber: "",
+    engineNumber: "",
+    manufacturer: "",
+    model: "",
+    variant: "",
+    yearOfManufacture: "",
+    owner: "",
+  });
+  const [editSaving, setEditSaving] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
   const [logSubmitting, setLogSubmitting] = useState(false);
   const [logError, setLogError] = useState<string | null>(null);
 
@@ -134,6 +152,52 @@ export default function ManageAssetsPage() {
       await loadAssets();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not update status.");
+    }
+  }
+
+  function openEdit(asset: AssetSummary) {
+    setEditAssetId(asset.id);
+    setEditForm({
+      assetType: asset.assetType,
+      label: asset.label,
+      vehicleNumber: asset.vehicleNumber ?? "",
+      chassisNumber: asset.chassisNumber ?? "",
+      registrationNumber: asset.registrationNumber ?? "",
+      engineNumber: asset.engineNumber ?? "",
+      manufacturer: asset.manufacturer ?? "",
+      model: asset.model ?? "",
+      variant: asset.variant ?? "",
+      yearOfManufacture: asset.yearOfManufacture ? String(asset.yearOfManufacture) : "",
+      owner: asset.owner ?? "",
+    });
+    setEditError(null);
+  }
+
+  async function handleEditSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (editAssetId === null) return;
+    setEditSaving(true);
+    setEditError(null);
+    try {
+      await updateAssetDetails(editAssetId, {
+        assetType: editForm.assetType,
+        label: editForm.label.trim(),
+        vehicleNumber: editForm.vehicleNumber.trim() || null,
+        chassisNumber: editForm.chassisNumber.trim() || null,
+        registrationNumber: editForm.registrationNumber.trim() || null,
+        engineNumber: editForm.engineNumber.trim() || null,
+        manufacturer: editForm.manufacturer.trim() || null,
+        model: editForm.model.trim() || null,
+        variant: editForm.variant.trim() || null,
+        yearOfManufacture: editForm.yearOfManufacture.trim() ? Number(editForm.yearOfManufacture) : null,
+        owner: editForm.owner.trim() || null,
+      });
+      setEditAssetId(null);
+      await loadAssets();
+    } catch (err) {
+      setEditError(err instanceof Error ? err.message : "Could not save these changes.");
+    } finally {
+      setEditSaving(false);
     }
   }
 
@@ -373,6 +437,12 @@ export default function ManageAssetsPage() {
                             Log
                           </button>
                           {canEdit && (
+                            <button onClick={() => openEdit(a)} className="inline-flex items-center gap-1 text-xs font-medium text-nnm-blue hover:underline">
+                              <Pencil className="h-3 w-3" />
+                              Edit
+                            </button>
+                          )}
+                          {canEdit && (
                             <button onClick={() => handleToggleActive(a.id, !a.active)} className="text-xs font-medium text-slate-500 hover:underline">
                               {a.active ? "Deactivate" : "Activate"}
                             </button>
@@ -585,6 +655,111 @@ export default function ManageAssetsPage() {
                 </form>
               </>
             )}
+          </div>
+        </div>
+      )}
+
+      {editAssetId !== null && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-xl bg-white p-6 shadow-lg">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-slate-800">Edit Vehicle/Machine Details</h2>
+              <button onClick={() => setEditAssetId(null)} className="text-slate-400 hover:text-slate-600">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            {editError && (
+              <div role="alert" className="mb-4 flex items-center gap-2 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+                <AlertCircle className="h-4 w-4 shrink-0" />
+                {editError}
+              </div>
+            )}
+
+            <form onSubmit={handleEditSubmit} className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className={labelClass}>Type</label>
+                  <select
+                    value={editForm.assetType}
+                    onChange={(e) => setEditForm((f) => ({ ...f, assetType: e.target.value as AssetSummary["assetType"] }))}
+                    className={inputClass}
+                  >
+                    <option value="vehicle">Vehicle</option>
+                    <option value="tricycle">Tricycle</option>
+                    <option value="hand_cart">Hand Cart</option>
+                  </select>
+                </div>
+                <div>
+                  <label className={labelClass}>Label / Name</label>
+                  <input required value={editForm.label} onChange={(e) => setEditForm((f) => ({ ...f, label: e.target.value }))} className={inputClass} />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className={labelClass}>Vehicle No</label>
+                  <input value={editForm.vehicleNumber} onChange={(e) => setEditForm((f) => ({ ...f, vehicleNumber: e.target.value }))} className={inputClass} />
+                </div>
+                <div>
+                  <label className={labelClass}>Chassis No</label>
+                  <input value={editForm.chassisNumber} onChange={(e) => setEditForm((f) => ({ ...f, chassisNumber: e.target.value }))} className={inputClass} />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className={labelClass}>Registration No</label>
+                  <input value={editForm.registrationNumber} onChange={(e) => setEditForm((f) => ({ ...f, registrationNumber: e.target.value }))} className={inputClass} />
+                </div>
+                <div>
+                  <label className={labelClass}>Engine No</label>
+                  <input value={editForm.engineNumber} onChange={(e) => setEditForm((f) => ({ ...f, engineNumber: e.target.value }))} className={inputClass} />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className={labelClass}>Manufacturer</label>
+                  <input value={editForm.manufacturer} onChange={(e) => setEditForm((f) => ({ ...f, manufacturer: e.target.value }))} className={inputClass} />
+                </div>
+                <div>
+                  <label className={labelClass}>Model</label>
+                  <input value={editForm.model} onChange={(e) => setEditForm((f) => ({ ...f, model: e.target.value }))} className={inputClass} />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className={labelClass}>Variant</label>
+                  <input value={editForm.variant} onChange={(e) => setEditForm((f) => ({ ...f, variant: e.target.value }))} className={inputClass} />
+                </div>
+                <div>
+                  <label className={labelClass}>Year of Manufacture</label>
+                  <input
+                    type="number"
+                    min="1900"
+                    max="2100"
+                    value={editForm.yearOfManufacture}
+                    onChange={(e) => setEditForm((f) => ({ ...f, yearOfManufacture: e.target.value }))}
+                    className={inputClass}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className={labelClass}>Owner</label>
+                <input value={editForm.owner} onChange={(e) => setEditForm((f) => ({ ...f, owner: e.target.value }))} className={inputClass} />
+              </div>
+
+              <button
+                type="submit"
+                disabled={editSaving}
+                className="w-full rounded-md bg-nnm-blue py-2.5 text-sm font-semibold text-white hover:bg-nnm-blue-dark disabled:opacity-60"
+              >
+                {editSaving ? "Saving..." : "Save Changes"}
+              </button>
+            </form>
           </div>
         </div>
       )}

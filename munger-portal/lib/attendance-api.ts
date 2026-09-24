@@ -312,6 +312,38 @@ export async function fetchWardPhotoBlobUrl(wardId: number, date?: string): Prom
   return URL.createObjectURL(blob);
 }
 
+export async function deleteWardPhoto(wardId: number, date?: string): Promise<void> {
+  const qs = date ? `?date=${date}` : "";
+  const res = await fetch(`${API_BASE_URL}/attendance/photos/ward/${wardId}${qs}`, { method: "DELETE", headers: authHeaders() });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || "Could not delete this photo.");
+  }
+}
+
+export const DATA_CLEANUP_CONFIRMATION_PHRASE = "DELETE OLD ATTENDANCE DATA";
+
+export interface DataCleanupResult {
+  staffAttendanceDeleted: number;
+  driverAttendanceDeleted: number;
+  assistantAttendanceDeleted: number;
+  photosDeleted: number;
+  photoFilesRemoved: number;
+}
+
+export async function cleanupOldAttendanceData(cutoffDate: string, confirm: string): Promise<DataCleanupResult> {
+  const res = await fetch(`${API_BASE_URL}/attendance/data-cleanup`, {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify({ cutoffDate, confirm }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || "Could not clean up old data.");
+  }
+  return res.json();
+}
+
 // ---------------------------------------------------------------------------
 // Feedback
 // ---------------------------------------------------------------------------
@@ -430,6 +462,38 @@ export async function fetchDriverReport(filters: ReportFilters): Promise<DriverR
   return res.json();
 }
 
+export interface AssistantReportRow {
+  staffId: number;
+  name: string;
+  wardId: number;
+  present: number;
+  halfDay: number;
+  absentInformed: number;
+  absentNotInformed: number;
+}
+
+export interface AssistantDailyLogEntry {
+  date: string;
+  staffId: number;
+  name: string;
+  wardId: number;
+  inTime: string | null;
+  outTime: string | null;
+  status: string;
+}
+
+export interface AssistantReportResult {
+  wardName: string;
+  rows: AssistantReportRow[];
+  dailyLog: AssistantDailyLogEntry[];
+}
+
+export async function fetchAssistantReport(filters: ReportFilters): Promise<AssistantReportResult> {
+  const res = await fetch(`${API_BASE_URL}/attendance/reports/assistants${buildQuery(filters)}`, { headers: authHeaders() });
+  if (!res.ok) throw new Error("Could not load the assistant report.");
+  return res.json();
+}
+
 // ---------------------------------------------------------------------------
 // Monthly report downloads
 // ---------------------------------------------------------------------------
@@ -466,6 +530,13 @@ export async function downloadMonthlyDriverReport(year: number, month: number): 
   await downloadFile(
     `/attendance/reports/monthly/drivers.csv?year=${year}&month=${month}`,
     `driver-attendance-${year}-${String(month).padStart(2, "0")}.csv`,
+  );
+}
+
+export async function downloadMonthlyAssistantReport(year: number, month: number): Promise<void> {
+  await downloadFile(
+    `/attendance/reports/monthly/assistants.csv?year=${year}&month=${month}`,
+    `assistant-attendance-${year}-${String(month).padStart(2, "0")}.csv`,
   );
 }
 
@@ -519,6 +590,38 @@ export async function setAttendanceUserActive(id: number, active: boolean): Prom
   if (!res.ok) throw new Error("Could not update user status.");
 }
 
+export interface DeactivatedAttendanceUser {
+  id: number;
+  username: string;
+  display_name: string;
+  role: string;
+  verified_for_deletion_by: string | null;
+  verified_for_deletion_at: string | null;
+}
+
+export async function fetchDeactivatedAttendanceUsers(): Promise<DeactivatedAttendanceUser[]> {
+  const res = await fetch(`${API_BASE_URL}/attendance/users/deactivated`, { headers: authHeaders() });
+  if (!res.ok) throw new Error("Could not load deactivated staff.");
+  const data: { users: DeactivatedAttendanceUser[] } = await res.json();
+  return data.users;
+}
+
+export async function verifyAttendanceUserForDeletion(id: number): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/attendance/users/${id}/verify-for-deletion`, { method: "POST", headers: authHeaders() });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || "Could not verify this staff account.");
+  }
+}
+
+export async function deleteAttendanceUser(id: number): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/attendance/users/${id}`, { method: "DELETE", headers: authHeaders() });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || "Could not delete this staff account.");
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Officer dashboard summary
 // ---------------------------------------------------------------------------
@@ -535,6 +638,7 @@ export interface AttendanceDashboardSummary {
   wards: { total: number };
   staff: { total: number; today: StatusBreakdown };
   drivers: { total: number; today: StatusBreakdown };
+  assistants: { total: number; today: StatusBreakdown };
   photos: { uploadedToday: number; totalWards: number };
 }
 
@@ -859,6 +963,13 @@ export interface AssetSummary {
   driverName: string | null;
   trackingType: "km" | "hours" | null;
   latestLogbookReading: { logDate: string; reading: string } | null;
+  registrationNumber: string | null;
+  engineNumber: string | null;
+  manufacturer: string | null;
+  model: string | null;
+  variant: string | null;
+  yearOfManufacture: number | null;
+  owner: string | null;
 }
 
 export async function fetchAllAssets(): Promise<AssetSummary[]> {
@@ -905,6 +1016,64 @@ export async function setAssetActive(id: number, active: boolean): Promise<void>
     body: JSON.stringify({ active }),
   });
   if (!res.ok) throw new Error("Could not update asset status.");
+}
+
+export interface UpdateAssetDetailsInput {
+  assetType: "vehicle" | "tricycle" | "hand_cart";
+  label: string;
+  vehicleNumber: string | null;
+  chassisNumber: string | null;
+  registrationNumber: string | null;
+  engineNumber: string | null;
+  manufacturer: string | null;
+  model: string | null;
+  variant: string | null;
+  yearOfManufacture: number | null;
+  owner: string | null;
+}
+
+export async function updateAssetDetails(id: number, input: UpdateAssetDetailsInput): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/attendance/assets/${id}/details`, {
+    method: "PATCH",
+    headers: authHeaders(),
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || "Could not save these changes.");
+  }
+}
+
+export interface DeactivatedAsset {
+  id: number;
+  asset_type: "vehicle" | "tricycle" | "hand_cart";
+  label: string;
+  vehicle_number: string | null;
+  verified_for_deletion_by: string | null;
+  verified_for_deletion_at: string | null;
+}
+
+export async function fetchDeactivatedAssets(): Promise<DeactivatedAsset[]> {
+  const res = await fetch(`${API_BASE_URL}/attendance/assets/deactivated`, { headers: authHeaders() });
+  if (!res.ok) throw new Error("Could not load deactivated assets.");
+  const data: { assets: DeactivatedAsset[] } = await res.json();
+  return data.assets;
+}
+
+export async function verifyAssetForDeletion(id: number): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/attendance/assets/${id}/verify-for-deletion`, { method: "POST", headers: authHeaders() });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || "Could not verify this asset.");
+  }
+}
+
+export async function deleteAsset(id: number): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/attendance/assets/${id}`, { method: "DELETE", headers: authHeaders() });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || "Could not delete this asset.");
+  }
 }
 
 export interface AssetMaintenanceLogEntry {

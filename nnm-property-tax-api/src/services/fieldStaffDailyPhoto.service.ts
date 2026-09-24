@@ -53,6 +53,20 @@ export async function uploadWardGroupPhoto(
   return { path: relativePath };
 }
 
+/** Removes both the DB row and the file on disk for one ward's photo on one date - admin cleanup, not part of the upload flow. */
+export async function deleteWardGroupPhoto(wardId: number, dateStr: string): Promise<void> {
+  const rec = await fieldStaffDailyPhotoRepository.findForWardOnDate(wardId, dateStr);
+  if (!rec) throw ApiError.notFound("No photo found for that ward/date.");
+
+  const fullPath = path.join(env.PHOTO_UPLOAD_DIR, rec.photo_path);
+  await fieldStaffDailyPhotoRepository.delete(wardId, dateStr);
+  try {
+    await fs.promises.unlink(fullPath);
+  } catch {
+    // File already missing from disk - the DB row is gone either way, which is what matters for "no longer shown".
+  }
+}
+
 export interface WardPhotoResult {
   wardId: number;
   wardName: string;

@@ -5,6 +5,7 @@ export interface OperatorRow {
   display_name: string;
   active: boolean;
   email: string | null;
+  is_demo: boolean;
 }
 
 export interface LoginResult {
@@ -13,6 +14,7 @@ export interface LoginResult {
     id: number;
     username: string;
     displayName: string;
+    isDemo: boolean;
   };
 }
 
@@ -22,4 +24,5 @@ export interface OperatorTokenPayload {
   sub: number; // operator id
   username: string;
   displayName: string;
+  isDemo: boolean;
 }

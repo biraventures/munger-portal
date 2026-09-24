@@ -16,6 +16,12 @@ import {
   postRevertChangeRequest,
 } from "../controllers/changeRequest.controller";
 import {
+  getDiscrepancyRequests,
+  getDiscrepancyRequestById,
+  postApproveDiscrepancyRequest,
+  postRejectDiscrepancyRequest,
+} from "../controllers/propertyDiscrepancy.controller";
+import {
   getCancellationRequests,
   postApproveCancellation,
   postRejectCancellation,
@@ -86,6 +92,22 @@ import {
 import { listResurveyFlagsHandler, reviewResurveyFlagHandler, exportResurveyFlagsHandler } from "../controllers/propertyResurveyFlag.controller";
 import { listTaxCollectorsWithAssignmentHandler, listCityManagersHandler, assignCityManagerHandler } from "../controllers/taxCollectorAssignment.controller";
 import { listEntryRevertEventsHandler, exportEntryRevertEventsHandler } from "../controllers/entryRevertEvent.controller";
+import {
+  postCreateEmployeeHandler,
+  searchEmployeeByAadhaarHandler,
+  listEmployeesHandler,
+  patchUpdateEmployeeHandler,
+  deleteEmployeeHandler,
+  postVerifyEmployeeHandler,
+  getEmployeeDatabaseProgressHandler,
+} from "../controllers/employee.controller";
+import {
+  listStreetSegmentsHandler,
+  listLightsForSegmentHandler,
+  reportStreetlightFaultHandler,
+  getLightRepairHistorySummaryAdminHandler,
+  listStreetlightFaultsHandler,
+} from "../controllers/streetlightAdmin.controller";
 import {
   getDemandActionRequests,
   getDemandActionRequestById,
@@ -158,6 +180,17 @@ adminRouter.post("/change-requests/:id/approve", requireMutationChainRole, postA
 adminRouter.post("/change-requests/:id/reject", requireMutationChainRole, postRejectChangeRequest);
 adminRouter.post("/change-requests/:id/revert", requireMutationChainRole, postRevertChangeRequest);
 
+// Property discrepancy approval queue - a Tax Collector's field-found
+// correction, restricted to its own chain's roles (tax_surveyor ->
+// tax_daroga -> city_manager -> deputy_commissioner, per migration
+// 076) plus commissioner, who can see (but isn't a required stage
+// for) every approval queue in this system.
+const requireDiscrepancyChainRole = requireAdminRole("tax_surveyor", "tax_daroga", "city_manager", "deputy_commissioner", "commissioner");
+adminRouter.get("/property-discrepancy-requests", requireDiscrepancyChainRole, getDiscrepancyRequests);
+adminRouter.get("/property-discrepancy-requests/:id", requireDiscrepancyChainRole, getDiscrepancyRequestById);
+adminRouter.post("/property-discrepancy-requests/:id/approve", requireDiscrepancyChainRole, postApproveDiscrepancyRequest);
+adminRouter.post("/property-discrepancy-requests/:id/reject", requireDiscrepancyChainRole, postRejectDiscrepancyRequest);
+
 // Demand notice / receipt cancellation approval queue - viewable by
 // any admin role except Stall Prabhari. Approve/reject is tax_daroga
 // or city_manager - which one applies to a given request is enforced
@@ -181,6 +214,33 @@ adminRouter.post("/shop-agreement-requests/:id/revert", postRevertShopAgreementR
 // entryRevertEvent.controller.ts.
 adminRouter.get("/entry-revert-events", requireAdminRole("commissioner"), listEntryRevertEventsHandler);
 adminRouter.get("/entry-revert-events/export", requireAdminRole("commissioner"), exportEntryRevertEventsHandler);
+
+// Streetlights - fault reporting is open to the six field roles who
+// notice damage during their regular work; fault viewing is open to
+// any admin for coordination. Street-wise bulk import, GPS entry,
+// City Manager assignment, and the delay report have shifted to the
+// asset management (attendance) login - see streetlightCommissioner.controller.ts
+// and streetlight.routes.ts - and are no longer duplicated here.
+// See streetlightAdmin.controller.ts.
+const requireStreetlightReporterRole = requireAdminRole("tax_daroga", "tax_surveyor", "tax_collector", "stall_prabhari", "je_mechanical", "ae_mechanical", "commissioner", "deputy_commissioner", "city_manager");
+adminRouter.get("/street-segments", listStreetSegmentsHandler);
+adminRouter.get("/street-segments/:id/lights", requireStreetlightReporterRole, listLightsForSegmentHandler);
+adminRouter.post("/streetlight-faults", requireStreetlightReporterRole, reportStreetlightFaultHandler);
+adminRouter.get("/lights/:id/repair-history-summary", requireAdminRole("commissioner"), getLightRepairHistorySummaryAdminHandler);
+adminRouter.get("/streetlight-faults", listStreetlightFaultsHandler);
+
+// Municipal employee database - Establishment Clerk enters records,
+// City Manager verifies, Commissioner sees overall progress. See
+// employee.controller.ts.
+const requireEmployeeViewRole = requireAdminRole("establishment_clerk", "city_manager", "commissioner");
+adminRouter.post("/employees", requireAdminRole("establishment_clerk"), postCreateEmployeeHandler);
+adminRouter.get("/employees/search", requireAdminRole("establishment_clerk"), searchEmployeeByAadhaarHandler);
+adminRouter.get("/employees", requireEmployeeViewRole, listEmployeesHandler);
+adminRouter.patch("/employees/:id", requireAdminRole("establishment_clerk"), patchUpdateEmployeeHandler);
+adminRouter.delete("/employees/:id", requireAdminRole("establishment_clerk"), deleteEmployeeHandler);
+adminRouter.post("/employees/:id/verify", requireAdminRole("city_manager"), postVerifyEmployeeHandler);
+adminRouter.get("/employees/progress", requireAdminRole("commissioner"), getEmployeeDatabaseProgressHandler);
+
 adminRouter.get("/shops", listAllShops);
 adminRouter.post("/shops/bulk-upload", requireAdminRole("commissioner"), uploadShopsCsvHandler);
 adminRouter.delete("/shops/:shopNo", requireAdminRole("commissioner"), deleteShopHandler);

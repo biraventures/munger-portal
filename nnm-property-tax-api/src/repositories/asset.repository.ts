@@ -41,6 +41,9 @@ export interface AssetRow {
   meter_functional: boolean | null;
   current_reading_date: string | null;
   current_reading_verified_by: string | null;
+  verified_for_deletion_by: string | null;
+  verified_for_deletion_at: string | null;
+  deleted_at: string | null;
 }
 
 export const assetRepository = {
@@ -49,11 +52,35 @@ export const assetRepository = {
     return rows[0] ?? null;
   },
 
-  /** includeArchived=false (default) hides active=false assets - archived is the everyday view; the toggle to see archived ones is explicit. */
+  /** includeArchived=false (default) hides active=false assets - archived is the everyday view; the toggle to see archived ones is explicit. Always excludes soft-deleted assets regardless. */
   async listAll(includeArchived = false): Promise<AssetRow[]> {
-    const where = includeArchived ? "" : "WHERE active = TRUE";
+    const where = includeArchived ? "WHERE deleted_at IS NULL" : "WHERE active = TRUE AND deleted_at IS NULL";
     const { rows } = await pool.query<AssetRow>(`SELECT * FROM assets ${where} ORDER BY label ASC`);
     return rows;
+  },
+
+  /** Deactivated (active=false) assets awaiting field verification and deletion. */
+  async listDeactivated(): Promise<AssetRow[]> {
+    const { rows } = await pool.query<AssetRow>(`SELECT * FROM assets WHERE active = FALSE AND deleted_at IS NULL ORDER BY label ASC`);
+    return rows;
+  },
+
+  /** Records the Junior Engineer's field verification, before deletion is allowed. */
+  async verifyForDeletion(id: number, verifiedBy: string): Promise<AssetRow | null> {
+    const { rows } = await pool.query<AssetRow>(
+      `UPDATE assets SET verified_for_deletion_by = $2, verified_for_deletion_at = now() WHERE id = $1 AND active = FALSE AND deleted_at IS NULL RETURNING *`,
+      [id, verifiedBy],
+    );
+    return rows[0] ?? null;
+  },
+
+  /** Soft delete - only allowed once field-verified. Keeps the row (and its maintenance/attendance history) but removes it from every listing. */
+  async softDelete(id: number): Promise<AssetRow | null> {
+    const { rows } = await pool.query<AssetRow>(
+      `UPDATE assets SET deleted_at = now() WHERE id = $1 AND active = FALSE AND verified_for_deletion_at IS NOT NULL AND deleted_at IS NULL RETURNING *`,
+      [id],
+    );
+    return rows[0] ?? null;
   },
 
   async create(input: {
@@ -68,6 +95,54 @@ export const assetRepository = {
       [input.assetType, input.label, input.vehicleNumber, input.chassisNumber, input.trackingType],
     );
     return rows[0]!;
+  },
+
+  /**
+   * Corrects an asset's core identification details - the fields
+   * that show up in the main registry and are most likely to need a
+   * fix (a typo in the label, a wrong vehicle number, etc.), as
+   * opposed to the fuller Module 01/02/03 baseline survey fields
+   * (updateBaselineDetails) which have their own dedicated flow.
+   */
+  async updateDetails(
+    id: number,
+    input: {
+      assetType: "vehicle" | "tricycle" | "hand_cart";
+      label: string;
+      vehicleNumber: string | null;
+      chassisNumber: string | null;
+      registrationNumber: string | null;
+      engineNumber: string | null;
+      manufacturer: string | null;
+      model: string | null;
+      variant: string | null;
+      yearOfManufacture: number | null;
+      owner: string | null;
+    },
+  ): Promise<AssetRow | null> {
+    const { rows } = await pool.query<AssetRow>(
+      `UPDATE assets SET
+        asset_type = $2, label = $3, vehicle_number = $4, chassis_number = $5,
+        registration_number = $6, engine_number = $7, manufacturer = $8, model = $9, variant = $10,
+        year_of_manufacture = $11, owner = $12
+       WHERE id = $1 AND deleted_at IS NULL
+       RETURNING *`,
+      [
+        id,
+        input.assetType,
+        input.label,
+        input.vehicleNumber,
+        input.chassisNumber,
+        input.registrationNumber,
+        input.engineNumber,
+        input.manufacturer,
+        input.model,
+        input.variant,
+        input.yearOfManufacture,
+        input.owner,
+      ],
+    );
+    return rows[0] ?? null;
   },
 
   async setTrackingType(id: number, trackingType: "km" | "hours" | null): Promise<AssetRow | null> {

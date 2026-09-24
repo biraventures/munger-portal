@@ -1191,3 +1191,437 @@ export async function downloadEntryRevertEventsExport(): Promise<void> {
   a.remove();
   URL.revokeObjectURL(url);
 }
+
+// ---------------------------------------------------------------------------
+// Streetlights - street-wise bulk import, GPS entry, admin-side fault
+// reporting (Tax Daroga, Tax Surveyor, Tax Collector, Stall Prabhari,
+// JE/AE-Mechanical), and the Commissioner's City Manager assignment +
+// delay report. See streetlightAdmin.controller.ts.
+// ---------------------------------------------------------------------------
+
+export interface StreetSegment {
+  id: number;
+  ward_id: number;
+  ward_name: string;
+  installation_agency_id: number;
+  start_point: string;
+  intermediate_point: string | null;
+  end_point: string | null;
+  light_count: number;
+  start_gps_lat: string | null;
+  start_gps_lng: string | null;
+  end_gps_lat: string | null;
+  end_gps_lng: string | null;
+  created_by: string;
+  created_at: string;
+}
+
+export async function fetchStreetSegments(): Promise<StreetSegment[]> {
+  const res = await fetch(`${API_BASE_URL}/admin/street-segments`, { headers: authHeaders() });
+  if (!res.ok) throw new Error("Could not load street segments.");
+  const data: { segments: StreetSegment[] } = await res.json();
+  return data.segments;
+}
+
+export interface StreetlightLight {
+  id: number;
+  serial_number: string;
+  light_serial_seq: number | null;
+  active: boolean;
+}
+
+export async function fetchLightsForSegment(segmentId: number): Promise<StreetlightLight[]> {
+  const res = await fetch(`${API_BASE_URL}/admin/street-segments/${segmentId}/lights`, { headers: authHeaders() });
+  if (!res.ok) throw new Error("Could not load lights for this segment.");
+  const data: { lights: StreetlightLight[] } = await res.json();
+  return data.lights;
+}
+
+export async function reportStreetlightFault(
+  lightId: number,
+  notes: string | null,
+  nonFunctionalSince?: string | null,
+  localSourceName?: string | null,
+  gpsLat?: number | null,
+  gpsLng?: number | null,
+): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/admin/streetlight-faults`, {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify({ lightId, notes, nonFunctionalSince, localSourceName, gpsLat, gpsLng }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || "Could not report this fault.");
+  }
+}
+
+export interface LightRepairHistorySummary {
+  hasPriorRepairs: boolean;
+  repairedCount: number;
+  openFaultCount: number;
+}
+
+/** Commissioner-only - deliberately not usable by JE-Mechanical/AE-Mechanical or other fault reporters. */
+export async function fetchLightRepairHistorySummary(lightId: number): Promise<LightRepairHistorySummary> {
+  const res = await fetch(`${API_BASE_URL}/admin/lights/${lightId}/repair-history-summary`, { headers: authHeaders() });
+  if (!res.ok) throw new Error("Could not load repair history.");
+  return res.json();
+}
+
+export interface StreetlightFaultEnriched {
+  id: number;
+  serial_number: string | null;
+  ward_name: string | null;
+  start_point: string | null;
+  end_point: string | null;
+  agency_name: string | null;
+  reported_by_type: "staff" | "public" | "admin";
+  reported_at: string;
+  status: "open" | "repaired";
+  repaired_at: string | null;
+  deadline_at: string;
+  reporter_notes: string | null;
+}
+
+export async function fetchStreetlightFaults(status?: "open" | "repaired"): Promise<StreetlightFaultEnriched[]> {
+  const params = status ? `?status=${status}` : "";
+  const res = await fetch(`${API_BASE_URL}/admin/streetlight-faults${params}`, { headers: authHeaders() });
+  if (!res.ok) throw new Error("Could not load streetlight faults.");
+  const data: { faults: StreetlightFaultEnriched[] } = await res.json();
+  return data.faults;
+}
+
+// ---------------------------------------------------------------------------
+// Municipal employee database - Establishment Clerk enters records,
+// City Manager verifies, Commissioner sees overall progress. See
+// employee.controller.ts.
+// ---------------------------------------------------------------------------
+
+export type ReservationCategory = "scheduled_caste" | "scheduled_tribe" | "other_backward_class" | "extremely_backward_class" | "backward_class_women" | "divyang" | "general";
+export type EducationalQualification = "no_formal_education" | "below_matric" | "matriculation" | "intermediate" | "diploma_degree";
+export type AppointingAuthority = "government_of_bihar" | "munger_municipal_corporation";
+export type EmploymentType = "permanent" | "contractual" | "daily_wage";
+export type EmployeeStatus = "pending_verification" | "verified";
+
+export const RESERVATION_CATEGORY_LABELS: Record<ReservationCategory, string> = {
+  scheduled_caste: "Scheduled Caste",
+  scheduled_tribe: "Scheduled Tribe",
+  other_backward_class: "Other Backward Class",
+  extremely_backward_class: "Extremely Backward Class",
+  backward_class_women: "Backward Class Women",
+  divyang: "Divyang",
+  general: "General",
+};
+
+export const EDUCATIONAL_QUALIFICATION_LABELS: Record<EducationalQualification, string> = {
+  no_formal_education: "No Formal Education",
+  below_matric: "Below Matric",
+  matriculation: "Matriculation",
+  intermediate: "Intermediate",
+  diploma_degree: "Diploma/Degree",
+};
+
+export const APPOINTING_AUTHORITY_LABELS: Record<AppointingAuthority, string> = {
+  government_of_bihar: "Government of Bihar",
+  munger_municipal_corporation: "Munger Municipal Corporation",
+};
+
+export const EMPLOYMENT_TYPE_LABELS: Record<EmploymentType, string> = {
+  permanent: "Permanent",
+  contractual: "Contractual",
+  daily_wage: "Daily Wage",
+};
+
+export interface Employee {
+  id: number;
+  name: string;
+  father_name: string | null;
+  husband_name: string | null;
+  home_district: string;
+  date_of_birth: string;
+  aadhaar_number: string;
+  pan_number: string | null;
+  reservation_category: ReservationCategory;
+  educational_qualification: EducationalQualification;
+  date_of_appointment: string;
+  appointment_order_number: string | null;
+  appointing_authority: AppointingAuthority;
+  employment_type: EmploymentType;
+  epf_uan: string | null;
+  unauthorised_absence_days: number;
+  municipal_board_recommendation: boolean;
+  proceeding_number: string | null;
+  proceeding_date: string | null;
+  status: EmployeeStatus;
+  created_by: string;
+  created_at: string;
+  verified_by: string | null;
+  verified_at: string | null;
+  deleted_at: string | null;
+  yearsOfService: { years: number; months: number };
+}
+
+export interface CreateEmployeeInput {
+  name: string;
+  fatherName?: string | null;
+  husbandName?: string | null;
+  homeDistrict: string;
+  dateOfBirth: string;
+  aadhaarNumber: string;
+  panNumber?: string | null;
+  reservationCategory: ReservationCategory;
+  educationalQualification: EducationalQualification;
+  dateOfAppointment: string;
+  appointmentOrderNumber?: string | null;
+  appointingAuthority: AppointingAuthority;
+  employmentType: EmploymentType;
+  epfUan?: string | null;
+  unauthorisedAbsenceDays?: number;
+  municipalBoardRecommendation?: boolean;
+  proceedingNumber?: string | null;
+  proceedingDate?: string | null;
+}
+
+export async function createEmployee(input: CreateEmployeeInput): Promise<Employee> {
+  const res = await fetch(`${API_BASE_URL}/admin/employees`, {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || "Could not save this employee record.");
+  }
+  const data: { employee: Employee } = await res.json();
+  return data.employee;
+}
+
+/** Fetches a record for correction/addition/deletion by Aadhaar number - null (not an error) when nothing matches yet. */
+export async function searchEmployeeByAadhaar(aadhaarNumber: string): Promise<Employee | null> {
+  const res = await fetch(`${API_BASE_URL}/admin/employees/search?aadhaar=${encodeURIComponent(aadhaarNumber)}`, { headers: authHeaders() });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || "Could not search for this Aadhaar number.");
+  }
+  const data: { employee: Employee | null } = await res.json();
+  return data.employee;
+}
+
+/** Corrects an existing record - resets it to pending_verification if it was already verified, since the corrected data hasn't been checked yet. */
+export async function updateEmployee(id: number, input: CreateEmployeeInput): Promise<Employee> {
+  const res = await fetch(`${API_BASE_URL}/admin/employees/${id}`, {
+    method: "PATCH",
+    headers: authHeaders(),
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || "Could not update this employee record.");
+  }
+  const data: { employee: Employee } = await res.json();
+  return data.employee;
+}
+
+export async function deleteEmployee(id: number): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/admin/employees/${id}`, { method: "DELETE", headers: authHeaders() });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || "Could not delete this employee record.");
+  }
+}
+
+export async function fetchEmployees(status?: EmployeeStatus): Promise<Employee[]> {
+  const params = status ? `?status=${status}` : "";
+  const res = await fetch(`${API_BASE_URL}/admin/employees${params}`, { headers: authHeaders() });
+  if (!res.ok) throw new Error("Could not load employee records.");
+  const data: { employees: Employee[] } = await res.json();
+  return data.employees;
+}
+
+export async function verifyEmployee(id: number): Promise<Employee> {
+  const res = await fetch(`${API_BASE_URL}/admin/employees/${id}/verify`, {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify({}),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || "Could not verify this record.");
+  }
+  const data: { employee: Employee } = await res.json();
+  return data.employee;
+}
+
+export interface EmployeeDatabaseProgress {
+  total: number;
+  verified: number;
+  pending: number;
+}
+
+export async function fetchEmployeeDatabaseProgress(): Promise<EmployeeDatabaseProgress> {
+  const res = await fetch(`${API_BASE_URL}/admin/employees/progress`, { headers: authHeaders() });
+  if (!res.ok) throw new Error("Could not load progress.");
+  return res.json();
+}
+
+// ---------------------------------------------------------------------------
+// Property search/save for admin sessions - a Tax Surveyor initiating a
+// survey/resurvey on a holding they searched for. Mirrors the operator
+// side's fetchFullProperty/saveProperty in lib/operator-api.ts.
+// ---------------------------------------------------------------------------
+
+export interface AdminFullPropertyResult {
+  found: boolean;
+  message?: string;
+  property?: Record<string, unknown>;
+  floors?: {
+    floor_label: string;
+    buildup_sqft: string;
+    const_type: string;
+    usage_type: string;
+    occupancy: string;
+    year_built: string | null;
+    closing_year: string | null;
+  }[];
+}
+
+export async function fetchFullPropertyAdmin(holdingNo: string): Promise<AdminFullPropertyResult> {
+  const res = await fetch(`${API_BASE_URL}/properties/${encodeURIComponent(holdingNo)}`, { headers: authHeaders() });
+  if (res.status === 404) return { found: false };
+  if (!res.ok) throw new Error(`Search failed (${res.status})`);
+  return res.json();
+}
+
+export interface AdminSaveError {
+  message: string;
+  details?: Record<string, string[]>;
+}
+
+export type AdminSavePropertyApiResult =
+  | {
+      applied: true;
+      holdingNo: string;
+      isNew: true;
+      version: number;
+      taxCalc: { netTax: string; currentTax: string; arv: string };
+      solidWasteCharge: number;
+    }
+  | {
+      applied: false;
+      holdingNo: string;
+      changeRequestId: number;
+      status: "pending";
+      preview: { taxCalc: { netTax: string; currentTax: string; arv: string }; solidWasteCharge: number };
+    };
+
+/** Tax Surveyor only - saving as any other admin role is rejected server-side. */
+export async function savePropertyAdmin(holdingNo: string, payload: Record<string, unknown>): Promise<AdminSavePropertyApiResult> {
+  const res = await fetch(`${API_BASE_URL}/properties/${encodeURIComponent(holdingNo)}`, {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    const err: AdminSaveError = { message: body.error || "Save failed", details: body.details };
+    throw err;
+  }
+  return res.json();
+}
+
+// ---------------------------------------------------------------------------
+// Property discrepancy requests - a Tax Collector's field-found
+// correction, walking Tax Surveyor -> Tax Daroga -> City Manager ->
+// Deputy Commissioner before it's applied.
+// ---------------------------------------------------------------------------
+
+export interface PropertyDiscrepancyRequest {
+  id: number;
+  holding_no: string;
+  reported_by_username: string;
+  reported_by_display_name: string;
+  reported_at: string;
+  discrepancy_notes: string;
+  proposed_data: Record<string, unknown>;
+  status: "pending" | "approved" | "rejected";
+  current_stage: AdminRole;
+  final_decided_at: string | null;
+  reviewed_by: string | null;
+  reviewed_role: string | null;
+  reviewed_at: string | null;
+  review_notes: string | null;
+}
+
+export async function reportPropertyDiscrepancy(holdingNo: string, discrepancyNotes: string, proposedData: Record<string, unknown>): Promise<PropertyDiscrepancyRequest> {
+  const res = await fetch(`${API_BASE_URL}/properties/${encodeURIComponent(holdingNo)}/discrepancy`, {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify({ discrepancyNotes, proposedData }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || "Could not submit this discrepancy report.");
+  }
+  const data: { request: PropertyDiscrepancyRequest } = await res.json();
+  return data.request;
+}
+
+export async function fetchDiscrepancyRequests(filters: { status?: "pending" | "approved" | "rejected"; myStage?: boolean }): Promise<{ requests: PropertyDiscrepancyRequest[]; myRole: AdminRole }> {
+  const params = new URLSearchParams();
+  if (filters.status) params.set("status", filters.status);
+  if (filters.myStage) params.set("myStage", "true");
+  const res = await fetch(`${API_BASE_URL}/admin/property-discrepancy-requests?${params.toString()}`, { headers: authHeaders() });
+  if (!res.ok) throw new Error("Could not load discrepancy requests.");
+  return res.json();
+}
+
+export interface PropertyDiscrepancyApproval {
+  id: number;
+  discrepancy_request_id: number;
+  stage: AdminRole;
+  decision: "approved" | "rejected";
+  admin_username: string;
+  admin_display_name: string;
+  notes: string | null;
+  decided_at: string;
+}
+
+export async function fetchDiscrepancyRequestDetail(id: number): Promise<{
+  request: PropertyDiscrepancyRequest;
+  currentProperty: Record<string, unknown> | null;
+  currentFloors: Record<string, unknown>[];
+  approvalHistory: PropertyDiscrepancyApproval[];
+}> {
+  const res = await fetch(`${API_BASE_URL}/admin/property-discrepancy-requests/${id}`, { headers: authHeaders() });
+  if (!res.ok) throw new Error("Could not load this discrepancy request.");
+  return res.json();
+}
+
+export async function approveDiscrepancyRequest(id: number, notes?: string): Promise<PropertyDiscrepancyRequest> {
+  const res = await fetch(`${API_BASE_URL}/admin/property-discrepancy-requests/${id}/approve`, {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify({ notes }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || "Could not approve this request.");
+  }
+  const data: { request: PropertyDiscrepancyRequest } = await res.json();
+  return data.request;
+}
+
+export async function rejectDiscrepancyRequest(id: number, notes: string): Promise<PropertyDiscrepancyRequest> {
+  const res = await fetch(`${API_BASE_URL}/admin/property-discrepancy-requests/${id}/reject`, {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify({ notes }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || "Could not reject this request.");
+  }
+  const data: { request: PropertyDiscrepancyRequest } = await res.json();
+  return data.request;
+}

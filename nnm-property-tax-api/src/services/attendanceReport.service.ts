@@ -2,6 +2,7 @@ import { fieldStaffAttendanceRepository } from "../repositories/fieldStaffAttend
 import { fieldStaffFeedbackRepository } from "../repositories/fieldStaffFeedback.repository";
 import { fieldDriverAttendanceRepository } from "../repositories/fieldDriverAttendance.repository";
 import { fieldDriverRepository } from "../repositories/fieldDriver.repository";
+import { fieldAssistantAttendanceRepository } from "../repositories/fieldAssistantAttendance.repository";
 import { attendanceWardRepository } from "../repositories/attendanceWard.repository";
 import { assetRepository } from "../repositories/asset.repository";
 import { istTimeString } from "../utils/istDate";
@@ -172,6 +173,72 @@ export async function getDriverReport(filters: ReportFilters): Promise<DriverRep
   return {
     wardName: ward ? ward.ward_name : "All Wards",
     rows: Array.from(byDriver.values()),
+    dailyLog,
+  };
+}
+
+export interface AssistantReportRow {
+  staffId: number;
+  name: string;
+  wardId: number;
+  present: number;
+  halfDay: number;
+  absentInformed: number;
+  absentNotInformed: number;
+}
+
+export interface AssistantDailyLogEntry {
+  date: string;
+  staffId: number;
+  name: string;
+  wardId: number;
+  inTime: string | null;
+  outTime: string | null;
+  status: string;
+}
+
+export interface AssistantReportResult {
+  wardName: string;
+  rows: AssistantReportRow[];
+  dailyLog: AssistantDailyLogEntry[];
+}
+
+/** Mirrors getDriverReport() - driver assistants were fully missing from every report, dashboard, and staff count until now. */
+export async function getAssistantReport(filters: ReportFilters): Promise<AssistantReportResult> {
+  const [attendance, ward] = await Promise.all([
+    fieldAssistantAttendanceRepository.listForReport(filters),
+    filters.wardId ? attendanceWardRepository.findById(filters.wardId) : Promise.resolve(null),
+  ]);
+
+  const byAssistant = new Map<number, AssistantReportRow>();
+  for (const a of attendance) {
+    let row = byAssistant.get(a.assistant_id);
+    if (!row) {
+      row = { staffId: a.assistant_id, name: a.assistant_name, wardId: a.ward_id, present: 0, halfDay: 0, absentInformed: 0, absentNotInformed: 0 };
+      byAssistant.set(a.assistant_id, row);
+    }
+    if (a.status === "present") row.present++;
+    else if (a.status === "half_day") row.halfDay++;
+    else if (a.status === "absent_informed") row.absentInformed++;
+    else if (a.status === "absent_not_informed" || a.status === "absent") row.absentNotInformed++;
+  }
+
+  const dailyLog: AssistantDailyLogEntry[] = attendance
+    .slice()
+    .sort((a, b) => (a.date < b.date ? 1 : -1))
+    .map((a) => ({
+      date: a.date,
+      staffId: a.assistant_id,
+      name: a.assistant_name,
+      wardId: a.ward_id,
+      inTime: a.in_time ? istTimeString(a.in_time) : null,
+      outTime: a.out_time ? istTimeString(a.out_time) : null,
+      status: a.status,
+    }));
+
+  return {
+    wardName: ward ? ward.ward_name : "All Wards",
+    rows: Array.from(byAssistant.values()),
     dailyLog,
   };
 }

@@ -15,11 +15,17 @@ export function ShopAgreementForm({
   isEditing,
   initial,
   onSubmitted,
+  onSubmit,
+  submitLabel,
 }: {
   shopNo: string;
   isEditing: boolean;
   initial?: Partial<AgreementInput>;
   onSubmitted: (changeRequestId: number) => void;
+  /** Overrides the default submitAgreementChange(shopNo, input) call - e.g. resubmitting a reverted request instead of creating a new one. Must return the same shape (changeRequestId, approvalTier). */
+  onSubmit?: (input: AgreementInput) => Promise<{ changeRequestId: number; approvalTier: "full" | "data_completion" }>;
+  /** Overrides the default submit button text. */
+  submitLabel?: string;
 }) {
   const [form, setForm] = useState<AgreementInput>({
     agreementNumber: initial?.agreementNumber ?? "",
@@ -101,7 +107,7 @@ export function ShopAgreementForm({
     }
     setSubmitting(true);
     try {
-      const res = await submitAgreementChange(shopNo, {
+      const cleaned: AgreementInput = {
         ...form,
         agreementNumber: form.agreementNumber || null,
         agreementHolderName: form.agreementHolderName || null,
@@ -126,7 +132,8 @@ export function ShopAgreementForm({
         presentOccupantAadhaar: hasPresentOccupant ? form.presentOccupantAadhaar || null : null,
         presentOccupantYearsApprox: hasPresentOccupant ? form.presentOccupantYearsApprox || null : null,
         notes: form.notes || null,
-      });
+      };
+      const res = onSubmit ? await onSubmit(cleaned) : await submitAgreementChange(shopNo, cleaned);
       setResult({ id: res.changeRequestId, tier: res.approvalTier });
       onSubmitted(res.changeRequestId);
     } catch (err) {
@@ -470,7 +477,7 @@ export function ShopAgreementForm({
         disabled={submitting}
         className="w-full rounded-md bg-nnm-blue py-3 text-sm font-semibold text-white hover:bg-nnm-blue-dark disabled:opacity-60 sm:w-auto sm:px-8"
       >
-        {submitting ? "Submitting…" : "Submit for Approval"}
+        {submitting ? "Submitting…" : submitLabel ?? "Submit for Approval"}
       </button>
     </form>
   );

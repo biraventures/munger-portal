@@ -8,9 +8,11 @@ import {
   fetchAttendanceWards,
   fetchStaffReport,
   fetchDriverReport,
+  fetchAssistantReport,
   type AttendanceWard,
   type StaffReportResult,
   type DriverReportResult,
+  type AssistantReportResult,
 } from "@/lib/attendance-api";
 
 const inputClass =
@@ -18,7 +20,7 @@ const inputClass =
 
 export default function AttendanceReportsPage() {
   const user = useAttendanceGuard(["sanitation_officer", "sanitation_prabhari", "attendance_admin"]);
-  const [tab, setTab] = useState<"staff" | "drivers">("staff");
+  const [tab, setTab] = useState<"staff" | "drivers" | "assistants">("staff");
   const [wards, setWards] = useState<AttendanceWard[]>([]);
   const [wardId, setWardId] = useState<string>("");
   const [fromDate, setFromDate] = useState("");
@@ -26,6 +28,7 @@ export default function AttendanceReportsPage() {
 
   const [staffReport, setStaffReport] = useState<StaffReportResult | null>(null);
   const [driverReport, setDriverReport] = useState<DriverReportResult | null>(null);
+  const [assistantReport, setAssistantReport] = useState<AssistantReportResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -43,8 +46,10 @@ export default function AttendanceReportsPage() {
     try {
       if (tab === "staff") {
         setStaffReport(await fetchStaffReport(filters));
-      } else {
+      } else if (tab === "drivers") {
         setDriverReport(await fetchDriverReport(filters));
+      } else {
+        setAssistantReport(await fetchAssistantReport(filters));
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not load the report.");
@@ -77,6 +82,12 @@ export default function AttendanceReportsPage() {
             className={`rounded-md px-4 py-2 text-sm font-semibold ${tab === "drivers" ? "bg-nnm-blue text-white" : "border border-slate-200 text-slate-600"}`}
           >
             Drivers
+          </button>
+          <button
+            onClick={() => setTab("assistants")}
+            className={`rounded-md px-4 py-2 text-sm font-semibold ${tab === "assistants" ? "bg-nnm-blue text-white" : "border border-slate-200 text-slate-600"}`}
+          >
+            Driver Assistants
           </button>
         </div>
 
@@ -184,6 +195,40 @@ export default function AttendanceReportsPage() {
                 {driverReport.rows.length === 0 && (
                   <tr>
                     <td colSpan={6} className="px-4 py-6 text-center text-slate-400">
+                      No records for this filter.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {tab === "assistants" && assistantReport && (
+          <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-slate-200 bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
+                  <th className="px-4 py-2.5 font-medium">Name</th>
+                  <th className="px-4 py-2.5 font-medium text-right">Present</th>
+                  <th className="px-4 py-2.5 font-medium text-right">Half Day</th>
+                  <th className="px-4 py-2.5 font-medium text-right">Absent (Informed)</th>
+                  <th className="px-4 py-2.5 font-medium text-right">Absent (Not Informed)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {assistantReport.rows.map((r) => (
+                  <tr key={r.staffId} className="border-b border-slate-100 last:border-0">
+                    <td className="px-4 py-2">{r.name}</td>
+                    <td className="px-4 py-2 text-right">{r.present}</td>
+                    <td className="px-4 py-2 text-right">{r.halfDay}</td>
+                    <td className="px-4 py-2 text-right">{r.absentInformed}</td>
+                    <td className="px-4 py-2 text-right">{r.absentNotInformed}</td>
+                  </tr>
+                ))}
+                {assistantReport.rows.length === 0 && (
+                  <tr>
+                    <td colSpan={5} className="px-4 py-6 text-center text-slate-400">
                       No records for this filter.
                     </td>
                   </tr>

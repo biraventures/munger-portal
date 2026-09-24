@@ -26,15 +26,20 @@ import {
   getWardPhotoByDate,
   getAllWardsPhotoRoundup,
   getWardPhotoFile,
+  deleteWardPhotoHandler,
 } from "../controllers/fieldStaffDailyPhoto.controller";
+import { postAttendanceDataCleanup } from "../controllers/attendanceDataCleanup.controller";
 import { postStaffFeedback, getStaffFeedbackHandler } from "../controllers/fieldStaffFeedback.controller";
-import { getAttendanceStaffReport, getAttendanceDriverReport } from "../controllers/attendanceReport.controller";
-import { downloadStaffMonthlyReport, downloadDriverMonthlyReport } from "../controllers/attendanceMonthlyReport.controller";
+import { getAttendanceStaffReport, getAttendanceDriverReport, getAttendanceAssistantReport } from "../controllers/attendanceReport.controller";
+import { downloadStaffMonthlyReport, downloadDriverMonthlyReport, downloadAssistantMonthlyReport } from "../controllers/attendanceMonthlyReport.controller";
 import { requireAttendanceReportAccess } from "../middleware/requireAttendanceReportAccess";
 import {
   listAttendanceUsersHandler,
   createAttendanceUserHandler,
   setAttendanceUserActiveHandler,
+  listDeactivatedAttendanceUsersHandler,
+  verifyAttendanceUserForDeletionHandler,
+  deleteAttendanceUserHandler,
 } from "../controllers/attendanceUserManagement.controller";
 import { getAttendanceDashboardSummaryHandler } from "../controllers/attendanceDashboardSummary.controller";
 import {
@@ -79,6 +84,10 @@ import {
   createAssetHandler,
   setAssetWardsHandler,
   setAssetActiveHandler,
+  updateAssetDetailsHandler,
+  listDeactivatedAssetsHandler,
+  verifyAssetForDeletionHandler,
+  deleteAssetHandler,
   listAssetMaintenanceLogHandler,
   logAssetMaintenanceHandler,
   setAssetTrackingTypeHandler,
@@ -184,6 +193,8 @@ attendanceRouter.get(
   requireAttendanceRole(["jamadar", ...OFFICER_ROLES]),
   getWardPhotoFile,
 );
+attendanceRouter.delete("/photos/ward/:wardId", requireAttendanceRole(["attendance_admin"]), deleteWardPhotoHandler);
+attendanceRouter.post("/data-cleanup", requireAttendanceRole(["attendance_admin"]), postAttendanceDataCleanup);
 
 // --- Feedback ---
 attendanceRouter.post("/staff/:staffId/feedback", requireAttendanceRole([...OFFICER_ROLES]), postStaffFeedback);
@@ -192,15 +203,20 @@ attendanceRouter.get("/staff/:staffId/feedback", requireAttendanceRole([...OFFIC
 // --- Reports ---
 attendanceRouter.get("/reports/staff", requireAttendanceRole([...OFFICER_ROLES]), getAttendanceStaffReport);
 attendanceRouter.get("/reports/drivers", requireAttendanceRole([...OFFICER_ROLES]), getAttendanceDriverReport);
+attendanceRouter.get("/reports/assistants", requireAttendanceRole([...OFFICER_ROLES]), getAttendanceAssistantReport);
 
 // --- Monthly report downloads (Sanitation Officer, Attendance Admin, or the property-tax Commissioner login) ---
 attendanceRouter.get("/reports/monthly/staff.csv", requireAttendanceReportAccess, downloadStaffMonthlyReport);
 attendanceRouter.get("/reports/monthly/drivers.csv", requireAttendanceReportAccess, downloadDriverMonthlyReport);
+attendanceRouter.get("/reports/monthly/assistants.csv", requireAttendanceReportAccess, downloadAssistantMonthlyReport);
 
 // --- User management (attendance_admin only) ---
 attendanceRouter.get("/users", requireAttendanceRole(["attendance_admin"]), listAttendanceUsersHandler);
 attendanceRouter.post("/users", requireAttendanceRole(["attendance_admin"]), createAttendanceUserHandler);
 attendanceRouter.patch("/users/:id/active", requireAttendanceRole(["attendance_admin"]), setAttendanceUserActiveHandler);
+attendanceRouter.get("/users/deactivated", requireAttendanceRole(["apswmo", "attendance_admin"]), listDeactivatedAttendanceUsersHandler);
+attendanceRouter.post("/users/:id/verify-for-deletion", requireAttendanceRole(["apswmo", "attendance_admin"]), verifyAttendanceUserForDeletionHandler);
+attendanceRouter.delete("/users/:id", requireAttendanceRole(["attendance_admin"]), deleteAttendanceUserHandler);
 
 // --- Field staff roster management ---
 // GET/transfer: attendance_admin OR sanitation_officer (an officer
@@ -256,6 +272,10 @@ attendanceRouter.get("/asset-photos/:photoId/file", requireAttendanceRole(), get
 attendanceRouter.delete("/asset-photos/:photoId", requireAttendanceRole([...FLEET_EDIT_ROLES]), deleteAssetPhotoHandler);
 attendanceRouter.patch("/assets/:id/wards", requireAttendanceRole([...FLEET_EDIT_ROLES]), setAssetWardsHandler);
 attendanceRouter.patch("/assets/:id/active", requireAttendanceRole([...FLEET_EDIT_ROLES]), setAssetActiveHandler);
+attendanceRouter.patch("/assets/:id/details", requireAttendanceRole([...FLEET_EDIT_ROLES]), updateAssetDetailsHandler);
+attendanceRouter.get("/assets/deactivated", requireAttendanceRole([...FLEET_EDIT_ROLES]), listDeactivatedAssetsHandler);
+attendanceRouter.post("/assets/:id/verify-for-deletion", requireAttendanceRole(["junior_engineer", "attendance_admin"]), verifyAssetForDeletionHandler);
+attendanceRouter.delete("/assets/:id", requireAttendanceRole([...FLEET_EDIT_ROLES]), deleteAssetHandler);
 attendanceRouter.get("/assets/:id/maintenance-log", requireAttendanceRole(), listAssetMaintenanceLogHandler);
 attendanceRouter.post("/assets/:id/maintenance-log", requireAttendanceRole([...FLEET_EDIT_ROLES]), logAssetMaintenanceHandler);
 attendanceRouter.patch("/assets/:id/tracking-type", requireAttendanceRole([...FLEET_EDIT_ROLES]), setAssetTrackingTypeHandler);

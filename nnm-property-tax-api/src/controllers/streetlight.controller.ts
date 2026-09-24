@@ -5,9 +5,10 @@ import { lightRepository } from "../repositories/light.repository";
 import { contractorWardRepository } from "../repositories/contractorWard.repository";
 import { lightFaultRepository } from "../repositories/lightFault.repository";
 import { lightFaultPenaltyRepository } from "../repositories/lightFaultPenalty.repository";
-import { reportFaultByStaff, markFaultRepaired, linkFaultToLight } from "../services/lightFault.service";
+import { reportFaultByStaff, markFaultRepaired, linkFaultToLight, getLightRepairHistorySummary } from "../services/lightFault.service";
 import { accrueAllOverduePenalties, accruePenaltiesForFault } from "../services/penaltyAccrual.service";
 import { importLightsCsv } from "../services/lightCsvImport.service";
+import { buildWardStatusDashboard, buildStreetStatusDashboard, buildSegmentLightStatus } from "../services/streetlightStatusDashboard.service";
 import { asyncHandler } from "../middleware/asyncHandler";
 import { ApiError } from "../utils/ApiError";
 
@@ -178,12 +179,26 @@ export const listFaultsHandler = asyncHandler(async (req: Request, res: Response
   });
 });
 
-const reportFaultSchema = z.object({ lightId: z.coerce.number().int().positive(), notes: z.string().trim().nullish() });
+const reportFaultSchema = z.object({
+  lightId: z.coerce.number().int().positive(),
+  notes: z.string().trim().nullish(),
+  nonFunctionalSince: z.string().trim().nullish(),
+  localSourceName: z.string().trim().nullish(),
+  gpsLat: z.coerce.number().min(-90).max(90).nullish(),
+  gpsLng: z.coerce.number().min(-180).max(180).nullish(),
+});
 
 export const reportFaultHandler = asyncHandler(async (req: Request, res: Response) => {
   const parsed = reportFaultSchema.safeParse(req.body);
   if (!parsed.success) throw ApiError.badRequest("Invalid input", parsed.error.flatten().fieldErrors);
-  const fault = await reportFaultByStaff(req.attendanceUser!, { lightId: parsed.data.lightId, notes: parsed.data.notes ?? null });
+  const fault = await reportFaultByStaff(req.attendanceUser!, {
+    lightId: parsed.data.lightId,
+    notes: parsed.data.notes ?? null,
+    nonFunctionalSince: parsed.data.nonFunctionalSince ?? null,
+    localSourceName: parsed.data.localSourceName ?? null,
+    gpsLat: parsed.data.gpsLat ?? null,
+    gpsLng: parsed.data.gpsLng ?? null,
+  });
   res.status(200).json({ fault: { id: fault.id, lightId: fault.light_id, deadlineAt: fault.deadline_at, assignedContractorId: fault.assigned_contractor_id } });
 });
 
@@ -245,4 +260,39 @@ export const myPenaltyTotalHandler = asyncHandler(async (req: Request, res: Resp
   await accrueAllOverduePenalties();
   const total = await lightFaultPenaltyRepository.totalForUser(req.attendanceUser!.sub);
   res.status(200).json({ total });
+});
+
+// ---------------------------------------------------------------------------
+// Status dashboard - ward-wise and street-wise, for City Manager,
+// Deputy Municipal Commissioner, and Municipal Commissioner.
+// ---------------------------------------------------------------------------
+
+export const getWardStatusDashboardHandler = asyncHandler(async (_req: Request, res: Response) => {
+  const wards = await buildWardStatusDashboard();
+  res.status(200).json({ wards });
+});
+
+export const getStreetStatusDashboardHandler = asyncHandler(async (_req: Request, res: Response) => {
+  const streets = await buildStreetStatusDashboard();
+  res.status(200).json({ streets });
+});
+
+const segmentIdParamSchema = z.object({ id: z.coerce.number().int().positive() });
+
+/** The status dashboard's drill-down - individual lights on one segment, their working/not-working status, and fault history. */
+export const getSegmentLightStatusHandler = asyncHandler(async (req: Request, res: Response) => {
+  const parsed = segmentIdParamSchema.safeParse(req.params);
+  if (!parsed.success) throw ApiError.badRequest("Invalid segment id");
+  const lights = await buildSegmentLightStatus(parsed.data.id);
+  res.status(200).json({ lights });
+});
+
+const lightIdParamSchemaRepairHistory = z.object({ id: z.coerce.number().int().positive() });
+
+/** GET /api/v1/streetlight/lights/:id/repair-history-summary - Commissioner only. Deliberately not exposed to AE/JE reporting a fault. */
+export const getLightRepairHistorySummaryHandler = asyncHandler(async (req: Request, res: Response) => {
+  const parsed = lightIdParamSchemaRepairHistory.safeParse(req.params);
+  if (!parsed.success) throw ApiError.badRequest("Invalid light id");
+  const summary = await getLightRepairHistorySummary(parsed.data.id);
+  res.status(200).json(summary);
 });

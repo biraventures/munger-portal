@@ -16,7 +16,8 @@ export type AttendanceRole =
   | "municipal_commissioner"
   | "pyau_je"
   | "pyau_ae"
-  | "pyau_contractor";
+  | "pyau_contractor"
+  | "apswmo";
 
 export const ATTENDANCE_ROLES: AttendanceRole[] = [
   "jamadar",
@@ -37,6 +38,7 @@ export const ATTENDANCE_ROLES: AttendanceRole[] = [
   "pyau_je",
   "pyau_ae",
   "pyau_contractor",
+  "apswmo",
 ];
 
 export const ATTENDANCE_ROLE_LABELS: Record<AttendanceRole, string> = {
@@ -58,6 +60,7 @@ export const ATTENDANCE_ROLE_LABELS: Record<AttendanceRole, string> = {
   pyau_je: "Junior Engineer (Pyau)",
   pyau_ae: "Assistant Engineer (Pyau)",
   pyau_contractor: "Maintenance Contractor (Pyau)",
+  apswmo: "APSWMO",
 };
 
 /** Ward-scoped roles must have a ward_id; cross-ward roles never do. The 3 fleet roles are cross-ward - they oversee the whole vehicle/asset registry, not one ward's workers.
@@ -80,6 +83,7 @@ export const CROSS_WARD_ROLES: AttendanceRole[] = [
   "pyau_je",
   "pyau_ae",
   "pyau_contractor",
+  "apswmo",
 ];
 
 export interface AttendanceUserRow {
@@ -90,6 +94,9 @@ export interface AttendanceUserRow {
   role: AttendanceRole;
   ward_id: number | null;
   active: boolean;
+  verified_for_deletion_by: string | null;
+  verified_for_deletion_at: string | null;
+  deleted_at: string | null;
 }
 
 export interface AttendanceLoginResult {
