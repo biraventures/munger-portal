@@ -28,7 +28,7 @@ import {
   getWardPhotoFile,
   deleteWardPhotoHandler,
 } from "../controllers/fieldStaffDailyPhoto.controller";
-import { postAttendanceDataCleanup } from "../controllers/attendanceDataCleanup.controller";
+import { postAttendanceDataCleanup, postClearAllAttendanceData, searchAttendanceRecords, deleteAttendanceRecord } from "../controllers/attendanceDataCleanup.controller";
 import { postStaffFeedback, getStaffFeedbackHandler } from "../controllers/fieldStaffFeedback.controller";
 import { getAttendanceStaffReport, getAttendanceDriverReport, getAttendanceAssistantReport } from "../controllers/attendanceReport.controller";
 import { downloadStaffMonthlyReport, downloadDriverMonthlyReport, downloadAssistantMonthlyReport } from "../controllers/attendanceMonthlyReport.controller";
@@ -195,6 +195,9 @@ attendanceRouter.get(
 );
 attendanceRouter.delete("/photos/ward/:wardId", requireAttendanceRole(["attendance_admin"]), deleteWardPhotoHandler);
 attendanceRouter.post("/data-cleanup", requireAttendanceRole(["attendance_admin"]), postAttendanceDataCleanup);
+attendanceRouter.post("/data-clear-all", requireAttendanceRole(["attendance_admin"]), postClearAllAttendanceData);
+attendanceRouter.get("/records", requireAttendanceRole(["attendance_admin"]), searchAttendanceRecords);
+attendanceRouter.delete("/records/:category/:id", requireAttendanceRole(["attendance_admin"]), deleteAttendanceRecord);
 
 // --- Feedback ---
 attendanceRouter.post("/staff/:staffId/feedback", requireAttendanceRole([...OFFICER_ROLES]), postStaffFeedback);

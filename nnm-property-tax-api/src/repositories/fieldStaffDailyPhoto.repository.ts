@@ -39,4 +39,15 @@ export const fieldStaffDailyPhotoRepository = {
     const { rowCount } = await pool.query(`DELETE FROM field_staff_daily_photo WHERE date < $1`, [cutoffDate]);
     return rowCount ?? 0;
   },
+
+  /** For clear-all: every photo row, so their files can be removed too before the rows themselves are deleted. */
+  async listAll(): Promise<FieldStaffDailyPhotoRow[]> {
+    const { rows } = await pool.query<FieldStaffDailyPhotoRow>(`SELECT * FROM field_staff_daily_photo`);
+    return rows;
+  },
+
+  async deleteAll(): Promise<number> {
+    const { rowCount } = await pool.query(`DELETE FROM field_staff_daily_photo`);
+    return rowCount ?? 0;
+  },
 };

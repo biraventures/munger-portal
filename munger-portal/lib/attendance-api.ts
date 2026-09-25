@@ -344,6 +344,59 @@ export async function cleanupOldAttendanceData(cutoffDate: string, confirm: stri
   return res.json();
 }
 
+export const CLEAR_ALL_CONFIRMATION_PHRASE = "CLEAR ALL ATTENDANCE DATA";
+
+export async function clearAllAttendanceData(confirm: string): Promise<DataCleanupResult> {
+  const res = await fetch(`${API_BASE_URL}/attendance/data-clear-all`, {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify({ confirm }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || "Could not clear all attendance data.");
+  }
+  return res.json();
+}
+
+export type AttendanceRecordCategory = "staff" | "driver" | "assistant";
+
+export interface AttendanceRecord {
+  id: number;
+  date: string;
+  staff_id?: number;
+  driver_id?: number;
+  assistant_id?: number;
+  staff_name?: string;
+  driver_name?: string;
+  assistant_name?: string;
+  ward_id: number;
+  in_time: string | null;
+  out_time: string | null;
+  status: string;
+  marked_by: string;
+  remarks: string | null;
+}
+
+export async function searchAttendanceRecords(category: AttendanceRecordCategory, filters: { fromDate?: string; toDate?: string; wardId?: number }): Promise<AttendanceRecord[]> {
+  const params = new URLSearchParams({ category });
+  if (filters.fromDate) params.set("fromDate", filters.fromDate);
+  if (filters.toDate) params.set("toDate", filters.toDate);
+  if (filters.wardId) params.set("wardId", String(filters.wardId));
+  const res = await fetch(`${API_BASE_URL}/attendance/records?${params.toString()}`, { headers: authHeaders() });
+  if (!res.ok) throw new Error("Could not search attendance records.");
+  const data: { records: AttendanceRecord[] } = await res.json();
+  return data.records;
+}
+
+export async function deleteAttendanceRecord(category: AttendanceRecordCategory, id: number): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/attendance/records/${category}/${id}`, { method: "DELETE", headers: authHeaders() });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || "Could not delete this record.");
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Feedback
 // ---------------------------------------------------------------------------

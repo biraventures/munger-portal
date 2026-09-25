@@ -66,8 +66,10 @@ export const listLightsHandler = asyncHandler(async (req: Request, res: Response
   });
 });
 
+// This entry system is High Mast light entry only - street lights are
+// added exclusively through the street-wise system.
 const createLightSchema = z.object({
-  lightType: z.enum(["streetlight", "high_mast"]),
+  lightType: z.literal("high_mast"),
   wardId: z.coerce.number().int().positive(),
   localityName: z.string().trim().min(1),
   serialNumber: z.string().trim().min(1),
@@ -267,13 +269,20 @@ export const myPenaltyTotalHandler = asyncHandler(async (req: Request, res: Resp
 // Deputy Municipal Commissioner, and Municipal Commissioner.
 // ---------------------------------------------------------------------------
 
-export const getWardStatusDashboardHandler = asyncHandler(async (_req: Request, res: Response) => {
-  const wards = await buildWardStatusDashboard();
+const statusDashboardQuerySchema = z.object({ agency: z.enum(["NN", "EESL"]).optional() });
+const AGENCY_NAME_BY_CODE: Record<"NN" | "EESL", string> = { NN: "Nagar Nigam", EESL: "EESL" };
+
+export const getWardStatusDashboardHandler = asyncHandler(async (req: Request, res: Response) => {
+  const parsed = statusDashboardQuerySchema.safeParse(req.query);
+  if (!parsed.success) throw ApiError.badRequest("Invalid query", parsed.error.flatten().fieldErrors);
+  const wards = await buildWardStatusDashboard(parsed.data.agency ? AGENCY_NAME_BY_CODE[parsed.data.agency] : undefined);
   res.status(200).json({ wards });
 });
 
-export const getStreetStatusDashboardHandler = asyncHandler(async (_req: Request, res: Response) => {
-  const streets = await buildStreetStatusDashboard();
+export const getStreetStatusDashboardHandler = asyncHandler(async (req: Request, res: Response) => {
+  const parsed = statusDashboardQuerySchema.safeParse(req.query);
+  if (!parsed.success) throw ApiError.badRequest("Invalid query", parsed.error.flatten().fieldErrors);
+  const streets = await buildStreetStatusDashboard(parsed.data.agency ? AGENCY_NAME_BY_CODE[parsed.data.agency] : undefined);
   res.status(200).json({ streets });
 });
 
