@@ -6,32 +6,47 @@ import { PROPERTY_DISCREPANCY_APPROVAL_STAGE_ORDER } from "../types/admin.types"
 
 export const propertyDiscrepancyRepository = {
   /** Creates the request AND logs the Tax Collector's own submission as the first audit trail entry (stage 'tax_collector', decision 'submitted') - the chain's full history lives in one table from the start. */
-  async create(
-    holdingNo: string,
-    reportedByUsername: string,
-    reportedByDisplayName: string,
-    discrepancyNotes: string,
-    proposedData: PropertySaveInput,
-    gpsLat: number | null,
-    gpsLng: number | null,
-    photoPath: string | null,
-  ): Promise<PropertyDiscrepancyRequestRow> {
+  async create(input: {
+    holdingNo: string;
+    reportedByUsername: string;
+    reportedByDisplayName: string;
+    discrepancyNotes: string;
+    proposedData: PropertySaveInput;
+    gpsLat: number | null;
+    gpsLng: number | null;
+    photoPath: string | null;
+    previousReceiptPhotoPath: string | null;
+    aadhaarPhotoPath: string | null;
+  }): Promise<PropertyDiscrepancyRequestRow> {
     const client = await pool.connect();
     try {
       await client.query("BEGIN");
       const { rows } = await client.query<PropertyDiscrepancyRequestRow>(
         `INSERT INTO property_discrepancy_requests (
-          holding_no, reported_by_username, reported_by_display_name, discrepancy_notes, proposed_data, current_stage, gps_lat, gps_lng, photo_path
-        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+          holding_no, reported_by_username, reported_by_display_name, discrepancy_notes, proposed_data, current_stage,
+          gps_lat, gps_lng, photo_path, previous_receipt_photo_path, aadhaar_photo_path
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
         RETURNING *`,
-        [holdingNo, reportedByUsername, reportedByDisplayName, discrepancyNotes, JSON.stringify(proposedData), PROPERTY_DISCREPANCY_APPROVAL_STAGE_ORDER[0], gpsLat, gpsLng, photoPath],
+        [
+          input.holdingNo,
+          input.reportedByUsername,
+          input.reportedByDisplayName,
+          input.discrepancyNotes,
+          JSON.stringify(input.proposedData),
+          PROPERTY_DISCREPANCY_APPROVAL_STAGE_ORDER[0],
+          input.gpsLat,
+          input.gpsLng,
+          input.photoPath,
+          input.previousReceiptPhotoPath,
+          input.aadhaarPhotoPath,
+        ],
       );
       const request = rows[0]!;
       await client.query(
         `INSERT INTO property_discrepancy_approvals (
           discrepancy_request_id, stage, decision, admin_username, admin_display_name, notes, data_snapshot
         ) VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-        [request.id, "tax_collector", "submitted", reportedByUsername, reportedByDisplayName, discrepancyNotes, JSON.stringify(proposedData)],
+        [request.id, "tax_collector", "submitted", input.reportedByUsername, input.reportedByDisplayName, input.discrepancyNotes, JSON.stringify(input.proposedData)],
       );
       await client.query("COMMIT");
       return request;
@@ -189,19 +204,34 @@ export const propertyDiscrepancyRepository = {
   /** The Tax Collector corrects and resubmits a request that was reverted back to them - re-enters the approval chain from Tax Surveyor. Same request record, updated in place, so its full history stays on the one id. */
   async resubmitWithCorrections(
     id: number,
-    discrepancyNotes: string,
-    proposedData: PropertySaveInput,
-    gpsLat: number | null,
-    gpsLng: number | null,
-    photoPath: string | null,
+    input: {
+      discrepancyNotes: string;
+      proposedData: PropertySaveInput;
+      gpsLat: number | null;
+      gpsLng: number | null;
+      photoPath: string | null;
+      previousReceiptPhotoPath: string | null;
+      aadhaarPhotoPath: string | null;
+    },
   ): Promise<PropertyDiscrepancyRequestRow | null> {
     const { rows } = await pool.query<PropertyDiscrepancyRequestRow>(
       `UPDATE property_discrepancy_requests
        SET status = 'pending', current_stage = $3, discrepancy_notes = $2, proposed_data = $4, gps_lat = $5, gps_lng = $6, photo_path = $7,
+           previous_receipt_photo_path = $8, aadhaar_photo_path = $9,
            reverted_by = NULL, reverted_by_role = NULL, reverted_from_stage = NULL, reverted_at = NULL, revert_comment = NULL
        WHERE id = $1 AND status = 'reverted'
        RETURNING *`,
-      [id, discrepancyNotes, PROPERTY_DISCREPANCY_APPROVAL_STAGE_ORDER[0], JSON.stringify(proposedData), gpsLat, gpsLng, photoPath],
+      [
+        id,
+        input.discrepancyNotes,
+        PROPERTY_DISCREPANCY_APPROVAL_STAGE_ORDER[0],
+        JSON.stringify(input.proposedData),
+        input.gpsLat,
+        input.gpsLng,
+        input.photoPath,
+        input.previousReceiptPhotoPath,
+        input.aadhaarPhotoPath,
+      ],
     );
     return rows[0] ?? null;
   },

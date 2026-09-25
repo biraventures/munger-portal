@@ -19,8 +19,8 @@ const ALLOWED_PHOTO_MIME_TO_EXT: Record<string, string> = {
   "image/png": "png",
 };
 
-/** Saves a holding photo to PHOTO_UPLOAD_DIR (same shared storage as the Jamadar daily-photo flow), returns the relative path to store. Returns null when no photo was given. */
-async function saveDiscrepancyPhoto(holdingNo: string, base64Data: string | undefined, mimeType: string | undefined): Promise<string | null> {
+/** Saves a photo to PHOTO_UPLOAD_DIR (same shared storage as the Jamadar daily-photo flow), returns the relative path to store. Returns null when no photo was given. `kind` (holding/receipt/aadhaar) keeps the three photos on one request distinct on disk. */
+async function saveDiscrepancyPhoto(holdingNo: string, kind: string, base64Data: string | undefined, mimeType: string | undefined): Promise<string | null> {
   if (!base64Data || !mimeType) return null;
   const ext = ALLOWED_PHOTO_MIME_TO_EXT[mimeType];
   if (!ext) throw ApiError.badRequest("Only JPEG or PNG photos are accepted.");
@@ -31,11 +31,30 @@ async function saveDiscrepancyPhoto(holdingNo: string, base64Data: string | unde
     throw ApiError.badRequest("Photo must be a non-empty file under 8MB.");
   }
 
-  const relativePath = path.join("discrepancy-photos", `${holdingNo}-${Date.now()}.${ext}`);
+  const relativePath = path.join("discrepancy-photos", `${holdingNo}-${kind}-${Date.now()}.${ext}`);
   const fullPath = path.join(env.PHOTO_UPLOAD_DIR, relativePath);
   await fs.promises.mkdir(path.dirname(fullPath), { recursive: true });
   await fs.promises.writeFile(fullPath, buffer);
   return relativePath;
+}
+
+export interface DiscrepancyPhotoInputs {
+  gpsLat: number | null;
+  gpsLng: number | null;
+  photoBase64Data: string | undefined;
+  photoMimeType: string | undefined;
+  previousReceiptPhotoBase64Data: string | undefined;
+  previousReceiptPhotoMimeType: string | undefined;
+  aadhaarPhotoBase64Data: string | undefined;
+  aadhaarPhotoMimeType: string | undefined;
+}
+
+async function saveAllDiscrepancyPhotos(holdingNo: string, photos: DiscrepancyPhotoInputs) {
+  return {
+    photoPath: await saveDiscrepancyPhoto(holdingNo, "holding", photos.photoBase64Data, photos.photoMimeType),
+    previousReceiptPhotoPath: await saveDiscrepancyPhoto(holdingNo, "receipt", photos.previousReceiptPhotoBase64Data, photos.previousReceiptPhotoMimeType),
+    aadhaarPhotoPath: await saveDiscrepancyPhoto(holdingNo, "aadhaar", photos.aadhaarPhotoBase64Data, photos.aadhaarPhotoMimeType),
+  };
 }
 
 /**
@@ -52,20 +71,27 @@ export async function reportPropertyDiscrepancy(
   admin: AdminTokenPayload,
   discrepancyNotes: string,
   proposedData: PropertySaveInput,
-  gpsLat: number | null,
-  gpsLng: number | null,
-  photoBase64Data: string | undefined,
-  photoMimeType: string | undefined,
+  photos: DiscrepancyPhotoInputs,
 ): Promise<PropertyDiscrepancyRequestRow> {
   const property = await propertyRepository.findByHoldingNo(holdingNo);
   if (!property) throw ApiError.notFound("Holding not found.");
+  if (!proposedData.aadhaarNumber?.trim()) throw ApiError.badRequest("The holding owner's Aadhaar number is required.");
 
   const existingPending = await propertyDiscrepancyRepository.findPendingForHolding(holdingNo);
   if (existingPending) throw ApiError.badRequest("This holding already has a discrepancy report pending review.");
 
-  const photoPath = await saveDiscrepancyPhoto(holdingNo, photoBase64Data, photoMimeType);
+  const savedPhotos = await saveAllDiscrepancyPhotos(holdingNo, photos);
 
-  return propertyDiscrepancyRepository.create(holdingNo, admin.username, admin.displayName, discrepancyNotes.trim(), proposedData, gpsLat, gpsLng, photoPath);
+  return propertyDiscrepancyRepository.create({
+    holdingNo,
+    reportedByUsername: admin.username,
+    reportedByDisplayName: admin.displayName,
+    discrepancyNotes: discrepancyNotes.trim(),
+    proposedData,
+    gpsLat: photos.gpsLat,
+    gpsLng: photos.gpsLng,
+    ...savedPhotos,
+  });
 }
 
 export async function listDiscrepancyRequests(status?: PropertyDiscrepancyStatus, myStageOnly?: AdminRole) {
@@ -217,19 +243,29 @@ export async function resubmitDiscrepancyAfterRevert(
   admin: AdminTokenPayload,
   discrepancyNotes: string,
   proposedData: PropertySaveInput,
-  gpsLat: number | null,
-  gpsLng: number | null,
-  photoBase64Data: string | undefined,
-  photoMimeType: string | undefined,
+  photos: DiscrepancyPhotoInputs,
 ): Promise<PropertyDiscrepancyRequestRow> {
   const request = await propertyDiscrepancyRepository.findById(id);
   if (!request) throw ApiError.notFound("Discrepancy request not found");
   if (request.status !== "reverted") throw ApiError.badRequest("This request isn't currently awaiting correction.");
   if (request.reported_by_username !== admin.username) throw new ApiError(403, "Only the Tax Collector who originally reported this can resubmit it.");
+  if (!proposedData.aadhaarNumber?.trim()) throw ApiError.badRequest("The holding owner's Aadhaar number is required.");
 
-  const photoPath = photoBase64Data ? await saveDiscrepancyPhoto(request.holding_no, photoBase64Data, photoMimeType) : request.photo_path;
+  // A photo not re-attached on resubmission keeps whatever was on file from the original submission.
+  const savedPhotos = await saveAllDiscrepancyPhotos(request.holding_no, photos);
+  const photoPath = savedPhotos.photoPath ?? request.photo_path;
+  const previousReceiptPhotoPath = savedPhotos.previousReceiptPhotoPath ?? request.previous_receipt_photo_path;
+  const aadhaarPhotoPath = savedPhotos.aadhaarPhotoPath ?? request.aadhaar_photo_path;
 
-  const resubmitted = await propertyDiscrepancyRepository.resubmitWithCorrections(id, discrepancyNotes.trim(), proposedData, gpsLat, gpsLng, photoPath);
+  const resubmitted = await propertyDiscrepancyRepository.resubmitWithCorrections(id, {
+    discrepancyNotes: discrepancyNotes.trim(),
+    proposedData,
+    gpsLat: photos.gpsLat,
+    gpsLng: photos.gpsLng,
+    photoPath,
+    previousReceiptPhotoPath,
+    aadhaarPhotoPath,
+  });
   if (!resubmitted) throw ApiError.badRequest("This request is no longer awaiting correction.");
 
   await propertyDiscrepancyRepository.recordApprovalLogEntry(id, "tax_collector", "submitted", admin.username, admin.displayName, discrepancyNotes.trim(), proposedData);

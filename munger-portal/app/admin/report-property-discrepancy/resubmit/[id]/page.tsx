@@ -2,24 +2,15 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { AlertCircle, Camera, Loader2, MapPin, RotateCcw } from "lucide-react";
+import { AlertCircle, Loader2, RotateCcw } from "lucide-react";
 import { AdminHeader } from "@/components/admin-header";
 import { useAdminGuard } from "@/lib/use-admin-guard";
 import { fetchDiscrepancyRequestDetail, resubmitDiscrepancyRequest } from "@/lib/admin-api";
 import { fetchFormOptions, type FormOptions } from "@/lib/operator-api";
-import { getCurrentGpsPosition } from "@/lib/geolocation";
 import { AdminPropertyDetailsForm, propertyFormFromProposedData, propertyFormToPayload, type AdminPropertyFormState } from "@/components/admin/property-details-form";
+import { DiscrepancyCaptureSection, blankCaptureState, fileToBase64, type CaptureState } from "@/components/admin/discrepancy-capture-section";
 
 const inputClass = "w-full rounded-md border border-slate-300 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-nnm-blue focus:ring-offset-1";
-
-function fileToBase64(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result).split(",")[1] ?? "");
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
-}
 
 export default function ResubmitDiscrepancyPage() {
   const admin = useAdminGuard();
@@ -32,8 +23,7 @@ export default function ResubmitDiscrepancyPage() {
   const [discrepancyNotes, setDiscrepancyNotes] = useState("");
   const [form, setForm] = useState<AdminPropertyFormState | null>(null);
   const [formOptions, setFormOptions] = useState<FormOptions | null>(null);
-  const [photoFile, setPhotoFile] = useState<File | null>(null);
-  const [photoPreviewUrl, setPhotoPreviewUrl] = useState<string | null>(null);
+  const [capture, setCapture] = useState<CaptureState>(blankCaptureState());
   const [loadError, setLoadError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -55,35 +45,34 @@ export default function ResubmitDiscrepancyPage() {
       .catch((err) => setLoadError(err instanceof Error ? err.message : "Could not load this request."));
   }, [admin, id]);
 
-  function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setPhotoFile(file);
-    setPhotoPreviewUrl(URL.createObjectURL(file));
-  }
-
   async function handleSubmit() {
     if (!form || !discrepancyNotes.trim()) {
       setSubmitError("Describe what you found that doesn't match the records.");
       return;
     }
+    if (!form.aadhaarNumber.trim()) {
+      setSubmitError("The holding owner's Aadhaar number is required.");
+      return;
+    }
     setSubmitting(true);
     setSubmitError(null);
     try {
-      const gps = await getCurrentGpsPosition();
-      let photoBase64Data: string | undefined;
-      let photoMimeType: string | undefined;
-      if (photoFile) {
-        photoBase64Data = await fileToBase64(photoFile);
-        photoMimeType = photoFile.type;
-      }
+      const [photoBase64Data, previousReceiptPhotoBase64Data, aadhaarPhotoBase64Data] = await Promise.all([
+        capture.photoFile ? fileToBase64(capture.photoFile) : undefined,
+        capture.previousReceiptFile ? fileToBase64(capture.previousReceiptFile) : undefined,
+        capture.aadhaarFile ? fileToBase64(capture.aadhaarFile) : undefined,
+      ]);
       await resubmitDiscrepancyRequest(id, {
         discrepancyNotes: discrepancyNotes.trim(),
         proposedData: propertyFormToPayload(form),
-        gpsLat: gps?.lat ?? null,
-        gpsLng: gps?.lng ?? null,
+        gpsLat: capture.gpsLat,
+        gpsLng: capture.gpsLng,
         photoBase64Data,
-        photoMimeType,
+        photoMimeType: capture.photoFile?.type,
+        previousReceiptPhotoBase64Data,
+        previousReceiptPhotoMimeType: capture.previousReceiptFile?.type,
+        aadhaarPhotoBase64Data,
+        aadhaarPhotoMimeType: capture.aadhaarFile?.type,
       });
       router.push("/admin/my-discrepancy-reports");
     } catch (err) {
@@ -156,25 +145,11 @@ export default function ResubmitDiscrepancyPage() {
 
             <div className="rounded-xl border border-slate-200 bg-white p-6">
               <h2 className="mb-4 text-sm font-semibold text-slate-800">Corrected details</h2>
-              <AdminPropertyDetailsForm form={form} onChange={setForm} usageTypes={formOptions?.usageTypes ?? []} />
+              <AdminPropertyDetailsForm form={form} onChange={setForm} usageTypes={formOptions?.usageTypes ?? []} solidWasteChargeTypes={formOptions?.solidWasteChargeTypes ?? []} />
             </div>
 
-            <div className="rounded-xl border border-slate-200 bg-white p-6">
-              <h2 className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-slate-800">
-                <Camera className="h-4 w-4" />
-                Photo of the holding
-              </h2>
-              <p className="mb-3 text-xs text-slate-500">Optional - re-attach a new photo if needed, or leave blank to keep the original.</p>
-              <input type="file" accept="image/jpeg,image/png" capture="environment" onChange={handlePhotoChange} className="text-sm" />
-              {photoPreviewUrl && (
-                // eslint-disable-next-line @next/next/no-img-element -- local file preview, not a static asset
-                <img src={photoPreviewUrl} alt="Holding preview" className="mt-3 max-h-48 rounded-md border border-slate-200 object-contain" />
-              )}
-              <p className="mt-3 flex items-center gap-1.5 text-xs text-slate-400">
-                <MapPin className="h-3.5 w-3.5" />
-                Your current location will be captured automatically when you resubmit.
-              </p>
-            </div>
+            <DiscrepancyCaptureSection state={capture} onChange={setCapture} />
+            <p className="-mt-4 text-xs text-slate-400">Leaving a photo slot empty on resubmission keeps the one already on file from your original report.</p>
 
             {submitError && (
               <div role="alert" className="flex items-center gap-2 rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-700">

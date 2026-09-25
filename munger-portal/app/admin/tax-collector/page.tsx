@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { AlertCircle, AlertTriangle, CheckCircle2, FileWarning, Receipt, Search } from "lucide-react";
+import { AlertCircle, AlertTriangle, CheckCircle2, FileWarning, Receipt, Search, ShieldAlert } from "lucide-react";
+import { sanitizeHoldingNoInput } from "@/lib/holding-no";
 import { AdminHeader } from "@/components/admin-header";
 import { useAdminGuard } from "@/lib/use-admin-guard";
 import {
@@ -10,8 +11,11 @@ import {
   fetchUnsettledDemandNoticesAdmin,
   submitPaymentAdmin,
   requestCancellationAdmin,
+  reportCollectionIssue,
+  COLLECTION_ISSUE_TYPE_LABELS,
   type TaxCollectorPropertySearchResult,
   type UnsettledDemandNoticeAdmin,
+  type CollectionIssueType,
 } from "@/lib/admin-api";
 
 const inputClass = "w-full rounded-md border border-slate-300 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-nnm-blue focus:ring-offset-1";
@@ -40,6 +44,11 @@ export default function TaxCollectorPage() {
   const [cancelSubmitting, setCancelSubmitting] = useState(false);
   const [cancelSuccess, setCancelSuccess] = useState(false);
 
+  const [issueType, setIssueType] = useState<CollectionIssueType>("refused_to_pay");
+  const [issueNotes, setIssueNotes] = useState("");
+  const [reportingIssue, setReportingIssue] = useState(false);
+  const [issueSuccess, setIssueSuccess] = useState(false);
+
   function resetForNewSearch() {
     setResult(null);
     setNotices(null);
@@ -47,7 +56,24 @@ export default function TaxCollectorPage() {
     setRequestingCancel(false);
     setCancelReason("");
     setCancelSuccess(false);
+    setIssueSuccess(false);
+    setIssueNotes("");
     setError(null);
+  }
+
+  async function handleReportIssue() {
+    if (!result?.property) return;
+    setReportingIssue(true);
+    setError(null);
+    try {
+      await reportCollectionIssue(result.property.holding_no, issueType, issueNotes.trim() || undefined);
+      setIssueSuccess(true);
+      setIssueNotes("");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not submit this report.");
+    } finally {
+      setReportingIssue(false);
+    }
   }
 
   async function handleSearch(e: React.FormEvent) {
@@ -140,7 +166,7 @@ export default function TaxCollectorPage() {
 
         <form onSubmit={handleSearch} className="mb-6 flex items-center gap-2 rounded-md border border-slate-300 bg-white px-3 py-2.5">
           <Search className="h-4 w-4 text-slate-400" />
-          <input value={holdingNoInput} onChange={(e) => setHoldingNoInput(e.target.value)} placeholder="Holding number" className="flex-1 text-sm outline-none" autoFocus />
+          <input value={holdingNoInput} onChange={(e) => setHoldingNoInput(sanitizeHoldingNoInput(e.target.value))} placeholder="Holding number" className="flex-1 text-sm outline-none" autoFocus />
           <button type="submit" disabled={searching} className="rounded-md bg-nnm-blue px-3 py-1.5 text-xs font-semibold text-white hover:bg-nnm-blue-dark disabled:opacity-60">
             {searching ? "Searching…" : "Search"}
           </button>
@@ -325,6 +351,48 @@ export default function TaxCollectorPage() {
                 </p>
               </div>
             </Link>
+
+            <div className="rounded-xl border border-red-200 bg-white p-5">
+              <div className="mb-3 flex items-center gap-3">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-red-50 text-red-600">
+                  <ShieldAlert className="h-5 w-5" />
+                </span>
+                <div>
+                  <h3 className="text-sm font-semibold text-slate-800">Taxpayer creating a problem?</h3>
+                  <p className="text-xs text-slate-500">Log what happened - visible to Tax Daroga and the Commissioner.</p>
+                </div>
+              </div>
+
+              {issueSuccess && (
+                <p className="mb-3 flex items-center gap-1.5 text-sm text-green-700">
+                  <CheckCircle2 className="h-4 w-4" />
+                  Reported.
+                </p>
+              )}
+
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                <select value={issueType} onChange={(e) => setIssueType(e.target.value as CollectionIssueType)} className={inputClass}>
+                  {(Object.keys(COLLECTION_ISSUE_TYPE_LABELS) as CollectionIssueType[]).map((t) => (
+                    <option key={t} value={t}>
+                      {COLLECTION_ISSUE_TYPE_LABELS[t]}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  onClick={handleReportIssue}
+                  disabled={reportingIssue}
+                  className="rounded-md border border-red-300 px-4 py-2.5 text-sm font-semibold text-red-700 hover:bg-red-50 disabled:opacity-60"
+                >
+                  {reportingIssue ? "Reporting…" : "Report Issue"}
+                </button>
+              </div>
+              <input
+                value={issueNotes}
+                onChange={(e) => setIssueNotes(e.target.value)}
+                placeholder="Notes (optional)"
+                className={`${inputClass} mt-2`}
+              />
+            </div>
           </div>
         )}
       </main>

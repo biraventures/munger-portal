@@ -24,12 +24,15 @@ import { fetchFormOptions, type FormOptions } from "@/lib/operator-api";
 
 const FIELD_DIFF_ROWS: { label: string; currentKey: string; proposedKey: string }[] = [
   { label: "Owner Name", currentKey: "owner_name", proposedKey: "ownerName" },
+  { label: "Mobile Number", currentKey: "mobile_no", proposedKey: "mobileNo" },
+  { label: "Aadhaar Number", currentKey: "aadhaar_number", proposedKey: "aadhaarNumber" },
   { label: "Address", currentKey: "address", proposedKey: "address" },
   { label: "Ward", currentKey: "ward", proposedKey: "ward" },
   { label: "Assessment Year", currentKey: "assessment_year", proposedKey: "assessmentYear" },
   { label: "Road Type", currentKey: "road_type", proposedKey: "roadType" },
   { label: "Plot Area (sqft)", currentKey: "area_sqft", proposedKey: "areaSqft" },
   { label: "Holding Creation Year", currentKey: "holding_creation_year", proposedKey: "holdingCreationYear" },
+  { label: "Solid Waste Charge Type", currentKey: "solid_waste_charge_type", proposedKey: "solidWasteChargeType" },
 ];
 
 const DECISION_LABELS: Record<string, string> = {
@@ -239,7 +242,7 @@ export default function PropertyDiscrepancyRequestDetailPage() {
               </div>
 
               {editing && editForm ? (
-                <AdminPropertyDetailsForm form={editForm} onChange={setEditForm} usageTypes={formOptions?.usageTypes ?? []} />
+                <AdminPropertyDetailsForm form={editForm} onChange={setEditForm} usageTypes={formOptions?.usageTypes ?? []} solidWasteChargeTypes={formOptions?.solidWasteChargeTypes ?? []} />
               ) : (
                 <>
                   <div className="overflow-hidden rounded-lg border border-slate-200">

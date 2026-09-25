@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { AlertCircle, CheckCircle2, Search, ClipboardCheck } from "lucide-react";
+import { sanitizeHoldingNoInput } from "@/lib/holding-no";
 import { AdminHeader } from "@/components/admin-header";
 import { useAdminGuard } from "@/lib/use-admin-guard";
 import { fetchFullPropertyAdmin, savePropertyAdmin, type AdminSaveError } from "@/lib/admin-api";
@@ -123,7 +124,7 @@ export default function InitiateSurveyPage() {
             <label className="mb-1 block text-xs font-medium text-slate-500">Holding number</label>
             <input
               value={holdingNo}
-              onChange={(e) => setHoldingNo(e.target.value)}
+              onChange={(e) => setHoldingNo(sanitizeHoldingNoInput(e.target.value))}
               onKeyDown={(e) => e.key === "Enter" && handleSearch()}
               className={inputClass}
               placeholder="e.g. MUNG-00123"
@@ -172,7 +173,7 @@ export default function InitiateSurveyPage() {
 
             <div className="rounded-xl border border-slate-200 bg-white p-6">
               <h2 className="mb-4 text-sm font-semibold text-slate-800">Property details</h2>
-              <AdminPropertyDetailsForm form={form} onChange={setForm} usageTypes={formOptions?.usageTypes ?? []} />
+              <AdminPropertyDetailsForm form={form} onChange={setForm} usageTypes={formOptions?.usageTypes ?? []} solidWasteChargeTypes={formOptions?.solidWasteChargeTypes ?? []} />
             </div>
 
             {submitError && (

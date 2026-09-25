@@ -8,24 +8,32 @@ const labelClass = "mb-1.5 block text-sm font-medium text-slate-700";
 
 export interface AdminPropertyFormState {
   ownerName: string;
+  mobileNo: string;
+  aadhaarNumber: string;
   areaSqft: string;
   address: string;
   ward: string;
   assessmentYear: string;
   roadType: "PMR" | "MR" | "OR";
   holdingCreationYear: string;
+  solidWasteChargeType: string;
+  solidWasteMonths: string;
   floors: FloorFormState[];
 }
 
 export function blankAdminPropertyForm(): AdminPropertyFormState {
   return {
     ownerName: "",
+    mobileNo: "",
+    aadhaarNumber: "",
     areaSqft: "",
     address: "",
     ward: "",
     assessmentYear: "",
     roadType: "MR",
     holdingCreationYear: "",
+    solidWasteChargeType: "",
+    solidWasteMonths: "12",
     floors: [makeBlankFloor(0)],
   };
 }
@@ -33,12 +41,16 @@ export function blankAdminPropertyForm(): AdminPropertyFormState {
 export function propertyFormToPayload(form: AdminPropertyFormState): Record<string, unknown> {
   return {
     ownerName: form.ownerName.trim(),
+    mobileNo: form.mobileNo.trim() || null,
+    aadhaarNumber: form.aadhaarNumber.trim() || null,
     areaSqft: Number(form.areaSqft) || 0,
     address: form.address.trim(),
     ward: form.ward.trim() || null,
     assessmentYear: form.assessmentYear.trim(),
     roadType: form.roadType,
     holdingCreationYear: form.holdingCreationYear.trim(),
+    solidWasteChargeType: form.solidWasteChargeType || null,
+    solidWasteMonths: Number(form.solidWasteMonths) || 12,
     floors: form.floors.map((f) => ({
       floorLabel: f.floorLabel,
       buildupSqft: Number(f.buildupSqft) || 0,
@@ -57,12 +69,16 @@ export function propertyFormFromProposedData(data: Record<string, unknown>): Adm
   const floors = (data.floors as Record<string, unknown>[] | undefined) ?? [];
   return {
     ownerName: String(data.ownerName ?? ""),
+    mobileNo: String(data.mobileNo ?? ""),
+    aadhaarNumber: String(data.aadhaarNumber ?? ""),
     areaSqft: String(data.areaSqft ?? ""),
     address: String(data.address ?? ""),
     ward: String(data.ward ?? ""),
     assessmentYear: String(data.assessmentYear ?? ""),
     roadType: (data.roadType as "PMR" | "MR" | "OR") ?? "MR",
     holdingCreationYear: String(data.holdingCreationYear ?? ""),
+    solidWasteChargeType: String(data.solidWasteChargeType ?? ""),
+    solidWasteMonths: String(data.solidWasteMonths ?? "12"),
     floors:
       floors.length > 0
         ? floors.map((f, i) => ({
@@ -82,12 +98,16 @@ export function propertyFormFromProposedData(data: Record<string, unknown>): Adm
 export function propertyFormFromExisting(property: Record<string, unknown>, floors: Record<string, unknown>[]): AdminPropertyFormState {
   return {
     ownerName: String(property.owner_name ?? ""),
+    mobileNo: String(property.mobile_no ?? ""),
+    aadhaarNumber: String(property.aadhaar_number ?? ""),
     areaSqft: String(property.area_sqft ?? ""),
     address: String(property.address ?? ""),
     ward: String(property.ward ?? ""),
     assessmentYear: String(property.assessment_year ?? ""),
     roadType: (property.road_type as "PMR" | "MR" | "OR") ?? "MR",
     holdingCreationYear: String(property.holding_creation_year ?? ""),
+    solidWasteChargeType: String(property.solid_waste_charge_type ?? ""),
+    solidWasteMonths: String(property.solid_waste_months ?? "12"),
     floors:
       floors.length > 0
         ? floors.map((f, i) => ({
@@ -108,10 +128,12 @@ export function AdminPropertyDetailsForm({
   form,
   onChange,
   usageTypes,
+  solidWasteChargeTypes,
 }: {
   form: AdminPropertyFormState;
   onChange: (next: AdminPropertyFormState) => void;
   usageTypes: string[];
+  solidWasteChargeTypes: string[];
 }) {
   function updateField<K extends keyof AdminPropertyFormState>(key: K, value: AdminPropertyFormState[K]) {
     onChange({ ...form, [key]: value });
@@ -144,6 +166,17 @@ export function AdminPropertyDetailsForm({
         </div>
       </div>
 
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div>
+          <label className={labelClass}>Mobile number</label>
+          <input value={form.mobileNo} onChange={(e) => updateField("mobileNo", e.target.value)} maxLength={15} className={inputClass} />
+        </div>
+        <div>
+          <label className={labelClass}>Aadhaar number</label>
+          <input value={form.aadhaarNumber} onChange={(e) => updateField("aadhaarNumber", e.target.value.replace(/\D/g, ""))} maxLength={12} placeholder="12-digit number" className={inputClass} />
+        </div>
+      </div>
+
       <div>
         <label className={labelClass}>Address</label>
         <input value={form.address} onChange={(e) => updateField("address", e.target.value)} className={inputClass} />
@@ -172,6 +205,27 @@ export function AdminPropertyDetailsForm({
         <div>
           <label className={labelClass}>Holding creation year (YYYY-YYYY)</label>
           <input value={form.holdingCreationYear} onChange={(e) => updateField("holdingCreationYear", e.target.value)} placeholder="2020-2021" className={inputClass} />
+        </div>
+      </div>
+
+      <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+        <h3 className="mb-3 text-sm font-semibold text-slate-800">Solid waste user charge</h3>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div>
+            <label className={labelClass}>Charge type</label>
+            <select value={form.solidWasteChargeType} onChange={(e) => updateField("solidWasteChargeType", e.target.value)} className={inputClass}>
+              <option value="">-</option>
+              {solidWasteChargeTypes.map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className={labelClass}>Months applicable</label>
+            <input type="number" min="1" max="12" value={form.solidWasteMonths} onChange={(e) => updateField("solidWasteMonths", e.target.value)} className={inputClass} />
+          </div>
         </div>
       </div>
 

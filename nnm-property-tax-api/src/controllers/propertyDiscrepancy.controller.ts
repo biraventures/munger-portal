@@ -25,6 +25,10 @@ const gpsAndPhotoFields = {
   gpsLng: z.coerce.number().min(-180).max(180).nullish(),
   photoBase64Data: z.string().min(1).optional(),
   photoMimeType: z.string().min(1).optional(),
+  previousReceiptPhotoBase64Data: z.string().min(1).optional(),
+  previousReceiptPhotoMimeType: z.string().min(1).optional(),
+  aadhaarPhotoBase64Data: z.string().min(1).optional(),
+  aadhaarPhotoMimeType: z.string().min(1).optional(),
 };
 
 const reportDiscrepancySchema = z.object({
@@ -49,16 +53,16 @@ export const postReportPropertyDiscrepancy = asyncHandler(async (req: Request, r
   if (!bodyParsed.success) throw ApiError.badRequest("Invalid input", bodyParsed.error.flatten().fieldErrors);
   if (!req.admin || req.admin.role !== "tax_collector") throw new ApiError(403, "Only a Tax Collector can report a property discrepancy.");
 
-  const request = await reportPropertyDiscrepancy(
-    paramsParsed.data.holdingNo,
-    req.admin,
-    bodyParsed.data.discrepancyNotes,
-    bodyParsed.data.proposedData,
-    bodyParsed.data.gpsLat ?? null,
-    bodyParsed.data.gpsLng ?? null,
-    bodyParsed.data.photoBase64Data,
-    bodyParsed.data.photoMimeType,
-  );
+  const request = await reportPropertyDiscrepancy(paramsParsed.data.holdingNo, req.admin, bodyParsed.data.discrepancyNotes, bodyParsed.data.proposedData, {
+    gpsLat: bodyParsed.data.gpsLat ?? null,
+    gpsLng: bodyParsed.data.gpsLng ?? null,
+    photoBase64Data: bodyParsed.data.photoBase64Data,
+    photoMimeType: bodyParsed.data.photoMimeType,
+    previousReceiptPhotoBase64Data: bodyParsed.data.previousReceiptPhotoBase64Data,
+    previousReceiptPhotoMimeType: bodyParsed.data.previousReceiptPhotoMimeType,
+    aadhaarPhotoBase64Data: bodyParsed.data.aadhaarPhotoBase64Data,
+    aadhaarPhotoMimeType: bodyParsed.data.aadhaarPhotoMimeType,
+  });
   res.status(200).json({ request });
 });
 
@@ -157,27 +161,35 @@ export const postResubmitDiscrepancyRequest = asyncHandler(async (req: Request, 
   if (!bodyParsed.success) throw ApiError.badRequest("Invalid input", bodyParsed.error.flatten().fieldErrors);
   if (!req.admin || req.admin.role !== "tax_collector") throw new ApiError(403, "Only a Tax Collector can resubmit a discrepancy report.");
 
-  const result = await resubmitDiscrepancyAfterRevert(
-    paramsParsed.data.id,
-    req.admin,
-    bodyParsed.data.discrepancyNotes,
-    bodyParsed.data.proposedData,
-    bodyParsed.data.gpsLat ?? null,
-    bodyParsed.data.gpsLng ?? null,
-    bodyParsed.data.photoBase64Data,
-    bodyParsed.data.photoMimeType,
-  );
+  const result = await resubmitDiscrepancyAfterRevert(paramsParsed.data.id, req.admin, bodyParsed.data.discrepancyNotes, bodyParsed.data.proposedData, {
+    gpsLat: bodyParsed.data.gpsLat ?? null,
+    gpsLng: bodyParsed.data.gpsLng ?? null,
+    photoBase64Data: bodyParsed.data.photoBase64Data,
+    photoMimeType: bodyParsed.data.photoMimeType,
+    previousReceiptPhotoBase64Data: bodyParsed.data.previousReceiptPhotoBase64Data,
+    previousReceiptPhotoMimeType: bodyParsed.data.previousReceiptPhotoMimeType,
+    aadhaarPhotoBase64Data: bodyParsed.data.aadhaarPhotoBase64Data,
+    aadhaarPhotoMimeType: bodyParsed.data.aadhaarPhotoMimeType,
+  });
   res.status(200).json({ request: result });
 });
 
-/** GET /api/v1/admin/property-discrepancy-requests/:id/photo - the holding photo the Tax Collector attached at submission. */
-export const getDiscrepancyPhoto = asyncHandler(async (req: Request, res: Response) => {
-  const parsed = idParamSchema.safeParse(req.params);
-  if (!parsed.success) throw ApiError.badRequest("Invalid discrepancy request id");
-  const { request } = await getDiscrepancyRequestDetail(parsed.data.id);
-  if (!request.photo_path) throw ApiError.notFound("No photo was attached to this report.");
+const photoKindParamSchema = z.object({ id: z.coerce.number().int().positive(), kind: z.enum(["holding", "receipt", "aadhaar"]) });
+const PHOTO_KIND_FIELD: Record<"holding" | "receipt" | "aadhaar", "photo_path" | "previous_receipt_photo_path" | "aadhaar_photo_path"> = {
+  holding: "photo_path",
+  receipt: "previous_receipt_photo_path",
+  aadhaar: "aadhaar_photo_path",
+};
 
-  const fullPath = path.join(env.PHOTO_UPLOAD_DIR, request.photo_path);
+/** GET /api/v1/admin/property-discrepancy-requests/:id/photo/:kind - kind is holding, receipt (previous year's tax receipt), or aadhaar. */
+export const getDiscrepancyPhoto = asyncHandler(async (req: Request, res: Response) => {
+  const parsed = photoKindParamSchema.safeParse(req.params);
+  if (!parsed.success) throw ApiError.badRequest("Invalid discrepancy request id or photo kind");
+  const { request } = await getDiscrepancyRequestDetail(parsed.data.id);
+  const photoPath = request[PHOTO_KIND_FIELD[parsed.data.kind]];
+  if (!photoPath) throw ApiError.notFound("No photo of that kind was attached to this report.");
+
+  const fullPath = path.join(env.PHOTO_UPLOAD_DIR, photoPath);
   if (!fs.existsSync(fullPath)) throw ApiError.notFound("Photo file is missing from storage.");
 
   res.sendFile(path.resolve(fullPath));

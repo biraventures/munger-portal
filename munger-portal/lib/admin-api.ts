@@ -1584,6 +1584,10 @@ export interface ReportDiscrepancyInput {
   gpsLng?: number | null;
   photoBase64Data?: string;
   photoMimeType?: string;
+  previousReceiptPhotoBase64Data?: string;
+  previousReceiptPhotoMimeType?: string;
+  aadhaarPhotoBase64Data?: string;
+  aadhaarPhotoMimeType?: string;
 }
 
 export async function reportPropertyDiscrepancy(holdingNo: string, input: ReportDiscrepancyInput): Promise<PropertyDiscrepancyRequest> {
@@ -1705,4 +1709,59 @@ export async function resubmitDiscrepancyRequest(id: number, input: ReportDiscre
   }
   const data: { request: PropertyDiscrepancyRequest } = await res.json();
   return data.request;
+}
+
+// ---------------------------------------------------------------------------
+// Collection issues - a Tax Collector reports the taxpayer is creating a
+// problem during collection (refusing to pay, disputing an amount, etc).
+// ---------------------------------------------------------------------------
+
+export type CollectionIssueType = "refused_to_pay" | "disputes_tax_amount" | "disputes_solid_waste_amount" | "absent_door_locked" | "under_construction" | "disputes_measurement";
+
+export const COLLECTION_ISSUE_TYPE_LABELS: Record<CollectionIssueType, string> = {
+  refused_to_pay: "Taxpayer refused to pay",
+  disputes_tax_amount: "Taxpayer disputes the tax amount",
+  disputes_solid_waste_amount: "Taxpayer disputes the solid waste user charge amount",
+  absent_door_locked: "Taxpayer absent / door locked",
+  under_construction: "Building under construction",
+  disputes_measurement: "Taxpayer disputes the measurement details",
+};
+
+export interface CollectionIssue {
+  id: number;
+  holding_no: string;
+  issue_type: CollectionIssueType;
+  notes: string | null;
+  reported_by_username: string;
+  reported_by_display_name: string;
+  reported_at: string;
+}
+
+export async function reportCollectionIssue(holdingNo: string, issueType: CollectionIssueType, notes?: string): Promise<CollectionIssue> {
+  const res = await fetch(`${API_BASE_URL}/properties/${encodeURIComponent(holdingNo)}/collection-issue`, {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify({ issueType, notes }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || "Could not submit this report.");
+  }
+  const data: { issue: CollectionIssue } = await res.json();
+  return data.issue;
+}
+
+export async function fetchCollectionIssuesForHolding(holdingNo: string): Promise<CollectionIssue[]> {
+  const res = await fetch(`${API_BASE_URL}/properties/${encodeURIComponent(holdingNo)}/collection-issues`, { headers: authHeaders() });
+  if (!res.ok) throw new Error("Could not load collection issues.");
+  const data: { issues: CollectionIssue[] } = await res.json();
+  return data.issues;
+}
+
+/** Oversight worklist - Tax Daroga, Commissioner. */
+export async function fetchAllCollectionIssues(): Promise<CollectionIssue[]> {
+  const res = await fetch(`${API_BASE_URL}/admin/collection-issues`, { headers: authHeaders() });
+  if (!res.ok) throw new Error("Could not load collection issues.");
+  const data: { issues: CollectionIssue[] } = await res.json();
+  return data.issues;
 }
