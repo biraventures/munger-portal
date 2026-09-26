@@ -1,17 +1,29 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { AlertCircle, CheckCircle2, Search, AlertTriangle } from "lucide-react";
+import { sanitizeHoldingNoInput } from "@/lib/holding-no";
 import { AdminHeader } from "@/components/admin-header";
 import { useAdminGuard } from "@/lib/use-admin-guard";
 import { fetchFullPropertyAdmin, reportPropertyDiscrepancy } from "@/lib/admin-api";
 import { fetchFormOptions, type FormOptions } from "@/lib/operator-api";
 import { AdminPropertyDetailsForm, blankAdminPropertyForm, propertyFormFromExisting, propertyFormToPayload, type AdminPropertyFormState } from "@/components/admin/property-details-form";
+import { DiscrepancyCaptureSection, blankCaptureState, fileToBase64, type CaptureState } from "@/components/admin/discrepancy-capture-section";
 
 const inputClass = "w-full rounded-md border border-slate-300 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-nnm-blue focus:ring-offset-1";
 
 export default function ReportPropertyDiscrepancyPage() {
+  return (
+    <Suspense fallback={<div className="flex min-h-screen items-center justify-center text-sm text-slate-400">Loading…</div>}>
+      <ReportPropertyDiscrepancyContent />
+    </Suspense>
+  );
+}
+
+function ReportPropertyDiscrepancyContent() {
   const admin = useAdminGuard();
+  const searchParams = useSearchParams();
   const [holdingNo, setHoldingNo] = useState("");
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
@@ -20,6 +32,7 @@ export default function ReportPropertyDiscrepancyPage() {
   const [formOptions, setFormOptions] = useState<FormOptions | null>(null);
   const [form, setForm] = useState<AdminPropertyFormState>(blankAdminPropertyForm());
   const [discrepancyNotes, setDiscrepancyNotes] = useState("");
+  const [capture, setCapture] = useState<CaptureState>(blankCaptureState());
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
@@ -28,14 +41,14 @@ export default function ReportPropertyDiscrepancyPage() {
     fetchFormOptions().then(setFormOptions).catch(() => setFormOptions(null));
   }, []);
 
-  async function handleSearch() {
-    if (!holdingNo.trim()) return;
+  async function runSearch(value: string) {
+    if (!value.trim()) return;
     setSearching(true);
     setSearchError(null);
     setFound(false);
     setSuccess(false);
     try {
-      const result = await fetchFullPropertyAdmin(holdingNo.trim());
+      const result = await fetchFullPropertyAdmin(value.trim());
       if (!result.found || !result.property) {
         setSearchError("No holding found with that number.");
         return;
@@ -50,19 +63,48 @@ export default function ReportPropertyDiscrepancyPage() {
     }
   }
 
+  useEffect(() => {
+    const preset = searchParams.get("holding");
+    if (preset) {
+      setHoldingNo(preset);
+      runSearch(preset);
+    }
+  }, [searchParams]);
+
   async function handleSubmit() {
     if (!discrepancyNotes.trim()) {
       setSubmitError("Describe what you found that doesn't match the records.");
       return;
     }
+    if (!form.aadhaarNumber.trim()) {
+      setSubmitError("The holding owner's Aadhaar number is required.");
+      return;
+    }
     setSubmitting(true);
     setSubmitError(null);
     try {
-      await reportPropertyDiscrepancy(holdingNo.trim(), discrepancyNotes.trim(), propertyFormToPayload(form));
+      const [photoBase64Data, previousReceiptPhotoBase64Data, aadhaarPhotoBase64Data] = await Promise.all([
+        capture.photoFile ? fileToBase64(capture.photoFile) : undefined,
+        capture.previousReceiptFile ? fileToBase64(capture.previousReceiptFile) : undefined,
+        capture.aadhaarFile ? fileToBase64(capture.aadhaarFile) : undefined,
+      ]);
+      await reportPropertyDiscrepancy(holdingNo.trim(), {
+        discrepancyNotes: discrepancyNotes.trim(),
+        proposedData: propertyFormToPayload(form),
+        gpsLat: capture.gpsLat,
+        gpsLng: capture.gpsLng,
+        photoBase64Data,
+        photoMimeType: capture.photoFile?.type,
+        previousReceiptPhotoBase64Data,
+        previousReceiptPhotoMimeType: capture.previousReceiptFile?.type,
+        aadhaarPhotoBase64Data,
+        aadhaarPhotoMimeType: capture.aadhaarFile?.type,
+      });
       setSuccess(true);
       setFound(false);
       setHoldingNo("");
       setDiscrepancyNotes("");
+      setCapture(blankCaptureState());
     } catch (err) {
       setSubmitError(err instanceof Error ? err.message : "Could not submit this discrepancy report.");
     } finally {
@@ -114,14 +156,14 @@ export default function ReportPropertyDiscrepancyPage() {
             <label className="mb-1 block text-xs font-medium text-slate-500">Holding number</label>
             <input
               value={holdingNo}
-              onChange={(e) => setHoldingNo(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+              onChange={(e) => setHoldingNo(sanitizeHoldingNoInput(e.target.value))}
+              onKeyDown={(e) => e.key === "Enter" && runSearch(holdingNo)}
               className={inputClass}
               placeholder="e.g. MUNG-00123"
             />
           </div>
           <button
-            onClick={handleSearch}
+            onClick={() => runSearch(holdingNo)}
             disabled={searching || !holdingNo.trim()}
             className="inline-flex items-center gap-1.5 rounded-md bg-nnm-blue px-5 py-2.5 text-sm font-semibold text-white hover:bg-nnm-blue-dark disabled:opacity-60"
           >
@@ -155,8 +197,10 @@ export default function ReportPropertyDiscrepancyPage() {
 
             <div className="rounded-xl border border-slate-200 bg-white p-6">
               <h2 className="mb-4 text-sm font-semibold text-slate-800">Complete corrected details</h2>
-              <AdminPropertyDetailsForm form={form} onChange={setForm} usageTypes={formOptions?.usageTypes ?? []} />
+              <AdminPropertyDetailsForm form={form} onChange={setForm} usageTypes={formOptions?.usageTypes ?? []} solidWasteChargeTypes={formOptions?.solidWasteChargeTypes ?? []} />
             </div>
+
+            <DiscrepancyCaptureSection state={capture} onChange={setCapture} />
 
             {submitError && (
               <div role="alert" className="flex items-center gap-2 rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-700">

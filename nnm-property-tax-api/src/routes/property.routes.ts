@@ -3,6 +3,7 @@ import { getPropertyByHoldingNo, postPropertyLookup, postRecordPropertySurvey, g
 import { listPendingOperatorEntryHandler, submitOperatorEntryHandler } from "../controllers/migratedHoldingSurvey.controller";
 import { postFlagForResurvey, listResurveyFlagsForHoldingHandler } from "../controllers/propertyResurveyFlag.controller";
 import { postReportPropertyDiscrepancy } from "../controllers/propertyDiscrepancy.controller";
+import { postReportCollectionIssue, listCollectionIssuesForHolding } from "../controllers/collectionIssue.controller";
 import { saveProperty, postResubmitChangeRequest } from "../controllers/propertySave.controller";
 import { getRevertedChangeRequests } from "../controllers/changeRequest.controller";
 import { postPayment, getPaymentHistory, getReceiptReprint } from "../controllers/payment.controller";
@@ -106,6 +107,10 @@ propertyRouter.get("/:holdingNo/resurvey-flags", requireOperatorOrAdmin, listRes
 
 // POST /api/v1/properties/:holdingNo/discrepancy - a Tax Collector submits the complete corrected property details found during field collection
 propertyRouter.post("/:holdingNo/discrepancy", requireOperatorOrAdmin, postReportPropertyDiscrepancy);
+
+// POST /api/v1/properties/:holdingNo/collection-issue - a Tax Collector reports the taxpayer is creating a problem during collection
+propertyRouter.post("/:holdingNo/collection-issue", requireOperatorOrAdmin, postReportCollectionIssue);
+propertyRouter.get("/:holdingNo/collection-issues", requireOperatorOrAdmin, listCollectionIssuesForHolding);
 propertyRouter.get("/demand-notices/:demandNo/print", requireOperatorOrAdmin, getDemandNoticeReprint);
 propertyRouter.get("/:holdingNo/payments/history", requireOperatorOrAdmin, getPaymentHistory);
 propertyRouter.get("/payments/:receiptNo/print", requireOperatorOrAdmin, getReceiptReprint);

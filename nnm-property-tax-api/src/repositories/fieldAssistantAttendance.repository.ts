@@ -91,4 +91,15 @@ export const fieldAssistantAttendanceRepository = {
     const { rowCount } = await pool.query(`DELETE FROM field_assistant_attendance WHERE date < $1`, [cutoffDate]);
     return rowCount ?? 0;
   },
+
+  /** One wrongly-entered record - correcting a mistake, not routine cleanup. */
+  async deleteById(id: number): Promise<boolean> {
+    const { rowCount } = await pool.query(`DELETE FROM field_assistant_attendance WHERE id = $1`, [id]);
+    return (rowCount ?? 0) > 0;
+  },
+
+  async deleteAll(): Promise<number> {
+    const { rowCount } = await pool.query(`DELETE FROM field_assistant_attendance`);
+    return rowCount ?? 0;
+  },
 };

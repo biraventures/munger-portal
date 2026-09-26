@@ -60,7 +60,7 @@ export const lightRepository = {
 
   /** Every light on one street segment, in order from the start point. */
   async listBySegment(segmentId: number): Promise<LightRow[]> {
-    const { rows } = await pool.query<LightRow>(`SELECT * FROM lights WHERE segment_id = $1 ORDER BY light_serial_seq ASC`, [segmentId]);
+    const { rows } = await pool.query<LightRow>(`SELECT * FROM lights WHERE segment_id = $1 ORDER BY light_serial_seq ASC, light_serial_suffix ASC NULLS FIRST`, [segmentId]);
     return rows;
   },
 

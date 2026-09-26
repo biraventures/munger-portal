@@ -395,8 +395,9 @@ export interface WardStatus {
   working: number;
 }
 
-export async function fetchWardStatusDashboard(): Promise<WardStatus[]> {
-  const res = await fetch(`${API_BASE_URL}/streetlight/status-dashboard/wards`, { headers: authHeaders() });
+export async function fetchWardStatusDashboard(agency?: "NN" | "EESL"): Promise<WardStatus[]> {
+  const qs = agency ? `?agency=${agency}` : "";
+  const res = await fetch(`${API_BASE_URL}/streetlight/status-dashboard/wards${qs}`, { headers: authHeaders() });
   if (!res.ok) throw new Error("Could not load the ward status dashboard.");
   const data: { wards: WardStatus[] } = await res.json();
   return data.wards;
@@ -413,8 +414,9 @@ export interface StreetStatus {
   working: number;
 }
 
-export async function fetchStreetStatusDashboard(): Promise<StreetStatus[]> {
-  const res = await fetch(`${API_BASE_URL}/streetlight/status-dashboard/streets`, { headers: authHeaders() });
+export async function fetchStreetStatusDashboard(agency?: "NN" | "EESL"): Promise<StreetStatus[]> {
+  const qs = agency ? `?agency=${agency}` : "";
+  const res = await fetch(`${API_BASE_URL}/streetlight/status-dashboard/streets${qs}`, { headers: authHeaders() });
   if (!res.ok) throw new Error("Could not load the street status dashboard.");
   const data: { streets: StreetStatus[] } = await res.json();
   return data.streets;

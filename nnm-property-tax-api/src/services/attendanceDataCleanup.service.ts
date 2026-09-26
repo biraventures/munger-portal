@@ -47,3 +47,43 @@ export async function cleanupOldAttendanceData(cutoffDate: string): Promise<Clea
 
   return { staffAttendanceDeleted, driverAttendanceDeleted, assistantAttendanceDeleted, photosDeleted, photoFilesRemoved };
 }
+
+/**
+ * Deletes EVERY attendance record (staff/driver/assistant) and daily
+ * group photo - both the DB rows and the actual photo files on disk -
+ * with no date cutoff. For clearing out data entered entirely by
+ * mistake (e.g. a bulk upload gone wrong), not routine housekeeping.
+ * Admin-only, irreversible; the caller is responsible for requiring
+ * explicit confirmation before calling this.
+ */
+export async function clearAllAttendanceData(): Promise<CleanupResult> {
+  const allPhotos = await fieldStaffDailyPhotoRepository.listAll();
+  let photoFilesRemoved = 0;
+  for (const rec of allPhotos) {
+    const fullPath = path.join(env.PHOTO_UPLOAD_DIR, rec.photo_path);
+    try {
+      await fs.promises.unlink(fullPath);
+      photoFilesRemoved++;
+    } catch {
+      // Already missing from disk - fine, the DB row is still cleaned up below.
+    }
+  }
+
+  const [staffAttendanceDeleted, driverAttendanceDeleted, assistantAttendanceDeleted, photosDeleted] = await Promise.all([
+    fieldStaffAttendanceRepository.deleteAll(),
+    fieldDriverAttendanceRepository.deleteAll(),
+    fieldAssistantAttendanceRepository.deleteAll(),
+    fieldStaffDailyPhotoRepository.deleteAll(),
+  ]);
+
+  return { staffAttendanceDeleted, driverAttendanceDeleted, assistantAttendanceDeleted, photosDeleted, photoFilesRemoved };
+}
+
+export type AttendanceCategory = "staff" | "driver" | "assistant";
+
+/** Deletes one wrongly-entered attendance record by id - correcting a mistake, not routine cleanup. */
+export async function deleteIndividualAttendanceRecord(category: AttendanceCategory, id: number): Promise<void> {
+  const repo = category === "staff" ? fieldStaffAttendanceRepository : category === "driver" ? fieldDriverAttendanceRepository : fieldAssistantAttendanceRepository;
+  const deleted = await repo.deleteById(id);
+  if (!deleted) throw ApiError.notFound("No attendance record found with that id.");
+}

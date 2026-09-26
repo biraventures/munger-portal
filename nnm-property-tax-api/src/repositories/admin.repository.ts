@@ -48,4 +48,44 @@ export const adminRepository = {
     );
     return rows[0] ?? null;
   },
+
+  /** Every ward currently tagged to a Tax Collector login account, for their field collection work. */
+  async listTaxCollectorWards(taxCollectorUsername: string): Promise<string[]> {
+    const { rows } = await pool.query<{ ward: string }>(
+      `SELECT ward FROM tax_collector_login_wards WHERE tax_collector_username = $1 ORDER BY ward ASC`,
+      [taxCollectorUsername],
+    );
+    return rows.map((r) => r.ward);
+  },
+
+  /** Every Tax Collector's tagged wards at once, for the assignments page - avoids one query per collector. */
+  async listAllTaxCollectorWards(): Promise<Record<string, string[]>> {
+    const { rows } = await pool.query<{ tax_collector_username: string; ward: string }>(
+      `SELECT tax_collector_username, ward FROM tax_collector_login_wards ORDER BY ward ASC`,
+    );
+    const result: Record<string, string[]> = {};
+    for (const row of rows) {
+      (result[row.tax_collector_username] ??= []).push(row.ward);
+    }
+    return result;
+  },
+
+  /** Replaces a Tax Collector's whole tagged-ward set with the given list, in one transaction. */
+  async setTaxCollectorWards(taxCollectorUsername: string, wards: string[]): Promise<string[]> {
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      await client.query(`DELETE FROM tax_collector_login_wards WHERE tax_collector_username = $1`, [taxCollectorUsername]);
+      for (const ward of wards) {
+        await client.query(`INSERT INTO tax_collector_login_wards (tax_collector_username, ward) VALUES ($1,$2)`, [taxCollectorUsername, ward]);
+      }
+      await client.query("COMMIT");
+    } catch (err) {
+      await client.query("ROLLBACK");
+      throw err;
+    } finally {
+      client.release();
+    }
+    return this.listTaxCollectorWards(taxCollectorUsername);
+  },
 };

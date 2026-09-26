@@ -3,7 +3,7 @@ import type { EntryRevertEventRow } from "../types/changeRequest.types";
 
 export const entryRevertEventRepository = {
   async create(input: {
-    entryType: "property_mutation" | "shop_agreement";
+    entryType: "property_mutation" | "shop_agreement" | "property_discrepancy";
     entryId: number;
     referenceNo: string;
     originallyRequestedBy: string;
@@ -22,7 +22,7 @@ export const entryRevertEventRepository = {
   },
 
   /** Marks the most recent open revert event for an entry as resubmitted, once the operator corrects and resubmits it. */
-  async markResubmitted(entryType: "property_mutation" | "shop_agreement", entryId: number): Promise<void> {
+  async markResubmitted(entryType: "property_mutation" | "shop_agreement" | "property_discrepancy", entryId: number): Promise<void> {
     await pool.query(
       `UPDATE entry_revert_events SET resubmitted_at = now()
        WHERE entry_type = $1 AND entry_id = $2 AND resubmitted_at IS NULL`,

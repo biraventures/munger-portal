@@ -4,14 +4,15 @@ import { adminRepository } from "../repositories/admin.repository";
 import { asyncHandler } from "../middleware/asyncHandler";
 import { ApiError } from "../utils/ApiError";
 
-/** GET /api/v1/admin/tax-collectors-with-assignment - Commissioner only. Every Tax Collector account with which City Manager (if any) currently reviews their cancellation requests. */
+/** GET /api/v1/admin/tax-collectors-with-assignment - Commissioner only. Every Tax Collector account with which City Manager (if any) currently reviews their cancellation requests, and which wards they're tagged for. */
 export const listTaxCollectorsWithAssignmentHandler = asyncHandler(async (_req: Request, res: Response) => {
-  const collectors = await adminRepository.listByRole("tax_collector");
+  const [collectors, wardsByCollector] = await Promise.all([adminRepository.listByRole("tax_collector"), adminRepository.listAllTaxCollectorWards()]);
   res.status(200).json({
     taxCollectors: collectors.map((c) => ({
       username: c.username,
       displayName: c.display_name,
       assignedCityManagerUsername: c.assigned_city_manager_username,
+      wards: wardsByCollector[c.username] ?? [],
     })),
   });
 });
@@ -39,4 +40,20 @@ export const assignCityManagerHandler = asyncHandler(async (req: Request, res: R
   res.status(200).json({
     taxCollector: { username: updated.username, displayName: updated.display_name, assignedCityManagerUsername: updated.assigned_city_manager_username },
   });
+});
+
+const setWardsSchema = z.object({ wards: z.array(z.string().trim().min(1)).max(100) });
+
+/** POST /api/v1/admin/tax-collectors/:username/wards - Commissioner only. Replaces the Tax Collector's whole tagged-ward set. */
+export const setTaxCollectorWardsHandler = asyncHandler(async (req: Request, res: Response) => {
+  const paramsParsed = z.object({ username: z.string().trim().min(1) }).safeParse(req.params);
+  if (!paramsParsed.success) throw ApiError.badRequest("Invalid username");
+  const bodyParsed = setWardsSchema.safeParse(req.body);
+  if (!bodyParsed.success) throw ApiError.badRequest("Invalid input", bodyParsed.error.flatten().fieldErrors);
+
+  const collector = await adminRepository.findByUsername(paramsParsed.data.username);
+  if (!collector || collector.role !== "tax_collector") throw ApiError.badRequest("Not a valid Tax Collector account.");
+
+  const wards = await adminRepository.setTaxCollectorWards(paramsParsed.data.username, [...new Set(bodyParsed.data.wards)]);
+  res.status(200).json({ username: paramsParsed.data.username, wards });
 });

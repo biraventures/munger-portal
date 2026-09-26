@@ -1,7 +1,11 @@
+import fs from "node:fs";
+import path from "node:path";
 import { propertyDiscrepancyRepository } from "../repositories/propertyDiscrepancy.repository";
 import { propertyRepository } from "../repositories/property.repository";
 import { applyPropertySave } from "./propertySave.service";
+import { entryRevertEventRepository } from "../repositories/entryRevertEvent.repository";
 import { nextPropertyDiscrepancyStage, PROPERTY_DISCREPANCY_APPROVAL_STAGE_ORDER } from "../types/admin.types";
+import { env } from "../config/env";
 import { ApiError } from "../utils/ApiError";
 import type { PropertyDiscrepancyRequestRow, PropertyDiscrepancyStatus } from "../types/propertyDiscrepancy.types";
 import type { PropertySaveInput } from "../types/propertySave.types";
@@ -9,29 +13,94 @@ import type { AdminRole, AdminTokenPayload } from "../types/admin.types";
 
 const FINAL_STAGE: AdminRole = PROPERTY_DISCREPANCY_APPROVAL_STAGE_ORDER[PROPERTY_DISCREPANCY_APPROVAL_STAGE_ORDER.length - 1]!;
 
+const ALLOWED_PHOTO_MIME_TO_EXT: Record<string, string> = {
+  "image/jpeg": "jpg",
+  "image/jpg": "jpg",
+  "image/png": "png",
+};
+
+/** Saves a photo to PHOTO_UPLOAD_DIR (same shared storage as the Jamadar daily-photo flow), returns the relative path to store. Returns null when no photo was given. `kind` (holding/receipt/aadhaar) keeps the three photos on one request distinct on disk. */
+async function saveDiscrepancyPhoto(holdingNo: string, kind: string, base64Data: string | undefined, mimeType: string | undefined): Promise<string | null> {
+  if (!base64Data || !mimeType) return null;
+  const ext = ALLOWED_PHOTO_MIME_TO_EXT[mimeType];
+  if (!ext) throw ApiError.badRequest("Only JPEG or PNG photos are accepted.");
+
+  const buffer = Buffer.from(base64Data, "base64");
+  const MAX_BYTES = 8 * 1024 * 1024;
+  if (buffer.length === 0 || buffer.length > MAX_BYTES) {
+    throw ApiError.badRequest("Photo must be a non-empty file under 8MB.");
+  }
+
+  const relativePath = path.join("discrepancy-photos", `${holdingNo}-${kind}-${Date.now()}.${ext}`);
+  const fullPath = path.join(env.PHOTO_UPLOAD_DIR, relativePath);
+  await fs.promises.mkdir(path.dirname(fullPath), { recursive: true });
+  await fs.promises.writeFile(fullPath, buffer);
+  return relativePath;
+}
+
+export interface DiscrepancyPhotoInputs {
+  gpsLat: number | null;
+  gpsLng: number | null;
+  photoBase64Data: string | undefined;
+  photoMimeType: string | undefined;
+  previousReceiptPhotoBase64Data: string | undefined;
+  previousReceiptPhotoMimeType: string | undefined;
+  aadhaarPhotoBase64Data: string | undefined;
+  aadhaarPhotoMimeType: string | undefined;
+}
+
+async function saveAllDiscrepancyPhotos(holdingNo: string, photos: DiscrepancyPhotoInputs) {
+  return {
+    photoPath: await saveDiscrepancyPhoto(holdingNo, "holding", photos.photoBase64Data, photos.photoMimeType),
+    previousReceiptPhotoPath: await saveDiscrepancyPhoto(holdingNo, "receipt", photos.previousReceiptPhotoBase64Data, photos.previousReceiptPhotoMimeType),
+    aadhaarPhotoPath: await saveDiscrepancyPhoto(holdingNo, "aadhaar", photos.aadhaarPhotoBase64Data, photos.aadhaarPhotoMimeType),
+  };
+}
+
 /**
  * A Tax Collector, during field collection, submits the complete
  * corrected property details for a holding whose recorded details
- * don't match what they found. Only one pending discrepancy request
- * per holding at a time, same as the mutation change-request chain.
+ * don't match what they found, along with the holding's GPS
+ * coordinates and a photo. Only one pending discrepancy request per
+ * holding at a time, same as the mutation change-request chain. The
+ * submission itself becomes the first entry in the audit trail (see
+ * propertyDiscrepancyRepository.create).
  */
 export async function reportPropertyDiscrepancy(
   holdingNo: string,
   admin: AdminTokenPayload,
   discrepancyNotes: string,
   proposedData: PropertySaveInput,
+  photos: DiscrepancyPhotoInputs,
 ): Promise<PropertyDiscrepancyRequestRow> {
   const property = await propertyRepository.findByHoldingNo(holdingNo);
   if (!property) throw ApiError.notFound("Holding not found.");
+  if (!proposedData.aadhaarNumber?.trim()) throw ApiError.badRequest("The holding owner's Aadhaar number is required.");
 
   const existingPending = await propertyDiscrepancyRepository.findPendingForHolding(holdingNo);
   if (existingPending) throw ApiError.badRequest("This holding already has a discrepancy report pending review.");
 
-  return propertyDiscrepancyRepository.create(holdingNo, admin.username, admin.displayName, discrepancyNotes.trim(), proposedData);
+  const savedPhotos = await saveAllDiscrepancyPhotos(holdingNo, photos);
+
+  return propertyDiscrepancyRepository.create({
+    holdingNo,
+    reportedByUsername: admin.username,
+    reportedByDisplayName: admin.displayName,
+    discrepancyNotes: discrepancyNotes.trim(),
+    proposedData,
+    gpsLat: photos.gpsLat,
+    gpsLng: photos.gpsLng,
+    ...savedPhotos,
+  });
 }
 
 export async function listDiscrepancyRequests(status?: PropertyDiscrepancyStatus, myStageOnly?: AdminRole) {
   return propertyDiscrepancyRepository.list({ status, stage: myStageOnly });
+}
+
+/** A Tax Collector's own worklist - their submissions, including any reverted back to them awaiting correction. */
+export async function listMyReportedDiscrepancies(username: string) {
+  return propertyDiscrepancyRepository.listReportedBy(username);
 }
 
 export async function getDiscrepancyRequestDetail(id: number) {
@@ -45,28 +114,41 @@ export async function getDiscrepancyRequestDetail(id: number) {
   return { request, currentProperty, currentFloors, approvalHistory };
 }
 
-/**
- * Approves the request at whatever stage it's currently sitting at.
- * Every request walks the same fixed chain (Tax Surveyor -> Tax
- * Daroga -> City Manager -> Deputy Commissioner) - only the approval
- * that lands on the final stage (Deputy Commissioner) actually
- * applies the corrected data to the property.
- */
-export async function approveDiscrepancyAtCurrentStage(
-  id: number,
-  admin: AdminTokenPayload,
-  notes: string | undefined,
-): Promise<PropertyDiscrepancyRequestRow> {
-  const request = await propertyDiscrepancyRepository.findById(id);
-  if (!request) throw ApiError.notFound("Discrepancy request not found");
+function assertActionable(request: PropertyDiscrepancyRequestRow, admin: AdminTokenPayload) {
   if (request.status !== "pending") {
     throw ApiError.badRequest(`This request has already been ${request.status}.`);
   }
   if (admin.role !== request.current_stage) {
     throw new ApiError(403, `This request is currently with ${request.current_stage.replace(/_/g, " ")} - it isn't at your stage.`);
   }
+}
 
-  await propertyDiscrepancyRepository.recordApprovalLogEntry(id, request.current_stage, "approved", admin.username, admin.displayName, notes ?? null);
+/**
+ * Approves the request at whatever stage it's currently sitting at -
+ * every request walks the same fixed chain (Tax Surveyor -> Tax
+ * Daroga -> City Manager -> Deputy Commissioner). If `editedData` is
+ * given, the stage corrected something before forwarding it (logged
+ * as 'edited_and_forwarded' rather than a plain 'approved', and the
+ * request's proposed_data is updated to match what was actually
+ * forwarded) - this is how a Tax Surveyor rectifies a Tax Collector's
+ * entries directly rather than reverting for a full redo. Only the
+ * approval that lands on the final stage (Deputy Commissioner)
+ * actually applies the corrected data to the property.
+ */
+export async function approveDiscrepancyAtCurrentStage(
+  id: number,
+  admin: AdminTokenPayload,
+  notes: string | undefined,
+  editedData: PropertySaveInput | undefined,
+): Promise<PropertyDiscrepancyRequestRow> {
+  const request = await propertyDiscrepancyRepository.findById(id);
+  if (!request) throw ApiError.notFound("Discrepancy request not found");
+  assertActionable(request, admin);
+
+  const dataForwarded = editedData ?? request.proposed_data;
+  const decision = editedData ? "edited_and_forwarded" : "approved";
+
+  await propertyDiscrepancyRepository.recordApprovalLogEntry(id, request.current_stage, decision, admin.username, admin.displayName, notes ?? null, dataForwarded);
 
   const atFinalStage = request.current_stage === FINAL_STAGE;
 
@@ -75,7 +157,9 @@ export async function approveDiscrepancyAtCurrentStage(
     if (!next) {
       throw ApiError.badRequest("This request has no further stage to advance to - please contact support.");
     }
-    const advanced = await propertyDiscrepancyRepository.advanceStage(id, request.current_stage, next);
+    const advanced = editedData
+      ? await propertyDiscrepancyRepository.updateProposedDataAndAdvance(id, request.current_stage, next, editedData)
+      : await propertyDiscrepancyRepository.advanceStage(id, request.current_stage, next);
     if (!advanced) {
       throw ApiError.badRequest("This request moved on before your approval could be recorded - please refresh.");
     }
@@ -85,10 +169,13 @@ export async function approveDiscrepancyAtCurrentStage(
   // Deputy Commissioner's approval - apply the corrected data, under
   // the ORIGINAL TAX COLLECTOR's name, so property_history's audit
   // trail correctly shows who made the change; this request's own
-  // log separately records the full approval chain actually used.
-  await applyPropertySave(request.holding_no, request.proposed_data, request.reported_by_display_name, false);
+  // log separately records the full approval chain actually used,
+  // including every edit along the way.
+  await applyPropertySave(request.holding_no, dataForwarded, request.reported_by_display_name, false);
 
-  const finalized = await propertyDiscrepancyRepository.finalize(id, request.current_stage, "approved");
+  const finalized = editedData
+    ? await propertyDiscrepancyRepository.updateProposedDataAndFinalize(id, request.current_stage, editedData)
+    : await propertyDiscrepancyRepository.finalize(id, request.current_stage, "approved");
   if (!finalized) {
     throw ApiError.badRequest("This request was already finalized by someone else, but the change was applied.");
   }
@@ -99,18 +186,90 @@ export async function approveDiscrepancyAtCurrentStage(
 export async function rejectDiscrepancyAtCurrentStage(id: number, admin: AdminTokenPayload, notes: string): Promise<PropertyDiscrepancyRequestRow> {
   const request = await propertyDiscrepancyRepository.findById(id);
   if (!request) throw ApiError.notFound("Discrepancy request not found");
-  if (request.status !== "pending") {
-    throw ApiError.badRequest(`This request has already been ${request.status}.`);
-  }
-  if (admin.role !== request.current_stage) {
-    throw new ApiError(403, `This request is currently with ${request.current_stage.replace(/_/g, " ")} - it isn't at your stage.`);
-  }
+  assertActionable(request, admin);
 
-  await propertyDiscrepancyRepository.recordApprovalLogEntry(id, request.current_stage, "rejected", admin.username, admin.displayName, notes);
+  await propertyDiscrepancyRepository.recordApprovalLogEntry(id, request.current_stage, "rejected", admin.username, admin.displayName, notes, request.proposed_data);
 
   const finalized = await propertyDiscrepancyRepository.finalize(id, request.current_stage, "rejected");
   if (!finalized) {
     throw ApiError.badRequest("This request was already reviewed by someone else.");
   }
   return finalized;
+}
+
+/**
+ * Any stage may send the request back to the Tax Collector for
+ * correction instead of approving, rejecting, or editing it
+ * themselves - for errors substantial enough that the Collector
+ * should redo the field visit rather than have someone else patch
+ * their entries. Logged both in this request's own audit trail and
+ * in the unified entry_revert_events table (Commissioner's
+ * cross-workflow revert log).
+ */
+export async function revertDiscrepancyToCollector(id: number, admin: AdminTokenPayload, comment: string): Promise<PropertyDiscrepancyRequestRow> {
+  const request = await propertyDiscrepancyRepository.findById(id);
+  if (!request) throw ApiError.notFound("Discrepancy request not found");
+  assertActionable(request, admin);
+  if (!comment.trim()) throw ApiError.badRequest("A comment is required explaining what needs to be corrected.");
+
+  await propertyDiscrepancyRepository.recordApprovalLogEntry(id, request.current_stage, "reverted", admin.username, admin.displayName, comment.trim(), request.proposed_data);
+
+  const reverted = await propertyDiscrepancyRepository.revert(id, request.current_stage, admin.displayName, admin.role, comment.trim());
+  if (!reverted) throw ApiError.badRequest("This request moved on before it could be reverted - please refresh.");
+
+  await entryRevertEventRepository.create({
+    entryType: "property_discrepancy",
+    entryId: id,
+    referenceNo: request.holding_no,
+    originallyRequestedBy: request.reported_by_display_name,
+    revertedBy: admin.displayName,
+    revertedByRole: admin.role,
+    revertedFromStage: request.current_stage,
+    comment: comment.trim(),
+  });
+
+  return reverted;
+}
+
+/**
+ * The Tax Collector corrects and resubmits a request that was
+ * reverted back to them - re-enters the chain from Tax Surveyor.
+ * Same request id throughout, so its full history (including the
+ * original submission and whatever got it reverted) stays on one
+ * audit trail.
+ */
+export async function resubmitDiscrepancyAfterRevert(
+  id: number,
+  admin: AdminTokenPayload,
+  discrepancyNotes: string,
+  proposedData: PropertySaveInput,
+  photos: DiscrepancyPhotoInputs,
+): Promise<PropertyDiscrepancyRequestRow> {
+  const request = await propertyDiscrepancyRepository.findById(id);
+  if (!request) throw ApiError.notFound("Discrepancy request not found");
+  if (request.status !== "reverted") throw ApiError.badRequest("This request isn't currently awaiting correction.");
+  if (request.reported_by_username !== admin.username) throw new ApiError(403, "Only the Tax Collector who originally reported this can resubmit it.");
+  if (!proposedData.aadhaarNumber?.trim()) throw ApiError.badRequest("The holding owner's Aadhaar number is required.");
+
+  // A photo not re-attached on resubmission keeps whatever was on file from the original submission.
+  const savedPhotos = await saveAllDiscrepancyPhotos(request.holding_no, photos);
+  const photoPath = savedPhotos.photoPath ?? request.photo_path;
+  const previousReceiptPhotoPath = savedPhotos.previousReceiptPhotoPath ?? request.previous_receipt_photo_path;
+  const aadhaarPhotoPath = savedPhotos.aadhaarPhotoPath ?? request.aadhaar_photo_path;
+
+  const resubmitted = await propertyDiscrepancyRepository.resubmitWithCorrections(id, {
+    discrepancyNotes: discrepancyNotes.trim(),
+    proposedData,
+    gpsLat: photos.gpsLat,
+    gpsLng: photos.gpsLng,
+    photoPath,
+    previousReceiptPhotoPath,
+    aadhaarPhotoPath,
+  });
+  if (!resubmitted) throw ApiError.badRequest("This request is no longer awaiting correction.");
+
+  await propertyDiscrepancyRepository.recordApprovalLogEntry(id, "tax_collector", "submitted", admin.username, admin.displayName, discrepancyNotes.trim(), proposedData);
+  await entryRevertEventRepository.markResubmitted("property_discrepancy", id);
+
+  return resubmitted;
 }

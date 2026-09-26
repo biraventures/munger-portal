@@ -45,8 +45,11 @@ export default function StreetlightStatusDashboardPage() {
   const [changingStatusLightId, setChangingStatusLightId] = useState<number | null>(null);
   const [insertingSeq, setInsertingSeq] = useState<number | null>(null);
 
+  const [agencyFilter, setAgencyFilter] = useState<"" | "NN" | "EESL">("");
+
   function load() {
-    Promise.all([fetchWardStatusDashboard(), fetchStreetStatusDashboard()])
+    const agency = agencyFilter || undefined;
+    Promise.all([fetchWardStatusDashboard(agency), fetchStreetStatusDashboard(agency)])
       .then(([w, s]) => {
         setWards(w);
         setStreets(s);
@@ -57,7 +60,8 @@ export default function StreetlightStatusDashboardPage() {
   useEffect(() => {
     if (!attendance) return;
     load();
-  }, [attendance]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [attendance, agencyFilter]);
 
   const wardTotals = useMemo(() => {
     if (!wards) return null;
@@ -228,9 +232,28 @@ export default function StreetlightStatusDashboardPage() {
           <BarChart3 className="h-6 w-6" />
           Streetlight Status Dashboard
         </h1>
-        <p className="mb-6 text-sm text-slate-500">
+        <p className="mb-4 text-sm text-slate-500">
           {openWard ? "Streets in this ward. Click a street to see individual lights." : "Click a ward to see its streets."}
         </p>
+
+        <div className="mb-6 flex items-center gap-2">
+          <span className="text-xs font-medium text-slate-500">Agency:</span>
+          {(
+            [
+              ["", "Both"],
+              ["NN", "Nagar Nigam"],
+              ["EESL", "EESL"],
+            ] as const
+          ).map(([value, label]) => (
+            <button
+              key={value}
+              onClick={() => setAgencyFilter(value)}
+              className={`rounded-md px-3 py-1.5 text-xs font-semibold ${agencyFilter === value ? "bg-nnm-blue text-white" : "border border-slate-200 text-slate-600 hover:bg-slate-100"}`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
 
         {error && (
           <div role="alert" className="mb-5 flex items-center gap-2 rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-700">
