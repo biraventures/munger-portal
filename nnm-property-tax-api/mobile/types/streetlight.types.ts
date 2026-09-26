@@ -36,6 +36,7 @@ export interface LightRow {
   created_at: string;
   segment_id: number | null;
   light_serial_seq: number | null;
+  light_serial_suffix: string | null;
   deleted_at: string | null;
   verified_for_deletion_by: string | null;
   verified_for_deletion_at: string | null;
@@ -87,9 +88,9 @@ export type StreetlightAgency = "NN" | "EESL";
  * point alone (no dash) when there's no end point.
  */
 /** Serial number format: agency/ward/street/sequence, e.g. "NN/25/MG Road-Station Chowk/1". Applies to lights created from here on - existing serial numbers aren't retroactively changed. */
-export function formatLightSerialNo(agency: StreetlightAgency, seq: number, startPoint: string, endPoint: string | null, wardNo: string): string {
+export function formatLightSerialNo(agency: StreetlightAgency, seq: number, startPoint: string, endPoint: string | null, wardNo: string, suffix?: string | null): string {
   const span = endPoint ? `${startPoint}-${endPoint}` : startPoint;
-  return `${agency}/${wardNo}/${span}/${seq}`;
+  return `${agency}/${wardNo}/${span}/${seq}${suffix ?? ""}`;
 }
 
 export type LightChangeActionType = "add" | "status_change" | "deactivate" | "reactivate" | "delete";

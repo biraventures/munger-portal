@@ -78,8 +78,11 @@ export async function importLightsCsv(csvContent: string): Promise<LightImportRe
         continue;
       }
 
-      const typeRaw = pick(row, ["type( high mast/ street light)", "type", "Type"]).toLowerCase();
-      const lightType: "streetlight" | "high_mast" = typeRaw.includes("high") ? "high_mast" : "streetlight";
+      // This entry system is High Mast light entry only - street lights
+      // are added exclusively through the street-wise system (survey
+      // import, or inserting into a street segment on the status
+      // dashboard). Any "type" column in the CSV is ignored.
+      const lightType: "streetlight" | "high_mast" = "high_mast";
 
       let latStr = pick(row, LAT_HEADERS);
       let lngStr = pick(row, LNG_HEADERS);

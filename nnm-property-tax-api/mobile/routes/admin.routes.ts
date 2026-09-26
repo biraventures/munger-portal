@@ -17,9 +17,13 @@ import {
 } from "../controllers/changeRequest.controller";
 import {
   getDiscrepancyRequests,
+  getMyDiscrepancyRequests,
   getDiscrepancyRequestById,
   postApproveDiscrepancyRequest,
   postRejectDiscrepancyRequest,
+  postRevertDiscrepancyRequest,
+  postResubmitDiscrepancyRequest,
+  getDiscrepancyPhoto,
 } from "../controllers/propertyDiscrepancy.controller";
 import {
   getCancellationRequests,
@@ -90,7 +94,8 @@ import {
   exportMigratedHoldingsHandler,
 } from "../controllers/migratedHoldingSurvey.controller";
 import { listResurveyFlagsHandler, reviewResurveyFlagHandler, exportResurveyFlagsHandler } from "../controllers/propertyResurveyFlag.controller";
-import { listTaxCollectorsWithAssignmentHandler, listCityManagersHandler, assignCityManagerHandler } from "../controllers/taxCollectorAssignment.controller";
+import { listAllCollectionIssues } from "../controllers/collectionIssue.controller";
+import { listTaxCollectorsWithAssignmentHandler, listCityManagersHandler, assignCityManagerHandler, setTaxCollectorWardsHandler } from "../controllers/taxCollectorAssignment.controller";
 import { listEntryRevertEventsHandler, exportEntryRevertEventsHandler } from "../controllers/entryRevertEvent.controller";
 import {
   postCreateEmployeeHandler,
@@ -187,9 +192,13 @@ adminRouter.post("/change-requests/:id/revert", requireMutationChainRole, postRe
 // for) every approval queue in this system.
 const requireDiscrepancyChainRole = requireAdminRole("tax_surveyor", "tax_daroga", "city_manager", "deputy_commissioner", "commissioner");
 adminRouter.get("/property-discrepancy-requests", requireDiscrepancyChainRole, getDiscrepancyRequests);
+adminRouter.get("/property-discrepancy-requests/mine", requireAdminRole("tax_collector"), getMyDiscrepancyRequests);
 adminRouter.get("/property-discrepancy-requests/:id", requireDiscrepancyChainRole, getDiscrepancyRequestById);
+adminRouter.get("/property-discrepancy-requests/:id/photo/:kind", requireDiscrepancyChainRole, getDiscrepancyPhoto);
 adminRouter.post("/property-discrepancy-requests/:id/approve", requireDiscrepancyChainRole, postApproveDiscrepancyRequest);
 adminRouter.post("/property-discrepancy-requests/:id/reject", requireDiscrepancyChainRole, postRejectDiscrepancyRequest);
+adminRouter.post("/property-discrepancy-requests/:id/revert", requireDiscrepancyChainRole, postRevertDiscrepancyRequest);
+adminRouter.post("/property-discrepancy-requests/:id/resubmit", requireAdminRole("tax_collector"), postResubmitDiscrepancyRequest);
 
 // Demand notice / receipt cancellation approval queue - viewable by
 // any admin role except Stall Prabhari. Approve/reject is tax_daroga
@@ -301,6 +310,7 @@ adminRouter.get("/tax-surveyors", listTaxSurveyorsHandler);
 adminRouter.get("/tax-collectors-with-assignment", requireAdminRole("commissioner"), listTaxCollectorsWithAssignmentHandler);
 adminRouter.get("/city-managers", requireAdminRole("commissioner"), listCityManagersHandler);
 adminRouter.post("/tax-collectors/:username/assign-city-manager", requireAdminRole("commissioner"), assignCityManagerHandler);
+adminRouter.post("/tax-collectors/:username/wards", requireAdminRole("commissioner"), setTaxCollectorWardsHandler);
 adminRouter.post("/migrated-holdings/:holdingNo/assign", assignToSurveyorHandler);
 adminRouter.get("/migrated-holdings/my-assignments", listMyAssignmentsHandler);
 adminRouter.post("/migrated-holdings/:holdingNo/assign-surveyor", assignToTaxSurveyorHandler);
@@ -319,6 +329,9 @@ adminRouter.get("/migrated-holdings/:holdingNo/events", listEventsForHoldingHand
 // migrated-holdings export pattern.
 const requireResurveyFlagReviewRole = requireAdminRole("tax_daroga", "commissioner");
 adminRouter.get("/property-resurvey-flags", requireResurveyFlagReviewRole, listResurveyFlagsHandler);
+
+// Collection issues oversight - same reviewer roles as resurvey flags.
+adminRouter.get("/collection-issues", requireResurveyFlagReviewRole, listAllCollectionIssues);
 adminRouter.post("/property-resurvey-flags/:id/review", requireResurveyFlagReviewRole, reviewResurveyFlagHandler);
 adminRouter.get("/property-resurvey-flags/export", requireAdminRole("commissioner"), exportResurveyFlagsHandler);
 

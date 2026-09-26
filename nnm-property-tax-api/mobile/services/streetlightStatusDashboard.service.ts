@@ -25,7 +25,7 @@ export interface StreetStatusRow {
  * module's existing fault-driven definition of functional status,
  * not a separately-tracked field) versus none.
  */
-export async function buildWardStatusDashboard(): Promise<WardStatusRow[]> {
+export async function buildWardStatusDashboard(agencyName?: string): Promise<WardStatusRow[]> {
   const { rows } = await pool.query<WardStatusRow>(
     `SELECT
        w.id AS "wardId", w.ward_name AS "wardName",
@@ -34,16 +34,19 @@ export async function buildWardStatusDashboard(): Promise<WardStatusRow[]> {
        (COUNT(l.id) - COUNT(DISTINCT lf.light_id))::int AS "working"
      FROM attendance_wards w
      LEFT JOIN lights l ON l.ward_id = w.id AND l.active = TRUE AND l.deleted_at IS NULL
+     LEFT JOIN installation_agencies ia ON ia.id = l.installation_agency_id
      LEFT JOIN light_faults lf ON lf.light_id = l.id AND lf.status = 'open'
+     WHERE $1::text IS NULL OR ia.agency_name = $1
      GROUP BY w.id, w.ward_name
      HAVING COUNT(l.id) > 0
      ORDER BY w.ward_name ASC`,
+    [agencyName ?? null],
   );
   return rows;
 }
 
-/** Street-wise streetlight status - same breakdown, per street segment. */
-export async function buildStreetStatusDashboard(): Promise<StreetStatusRow[]> {
+/** Street-wise streetlight status - same breakdown, per street segment. `agencyName` narrows to one installation agency, same as buildWardStatusDashboard - omit for both. */
+export async function buildStreetStatusDashboard(agencyName?: string): Promise<StreetStatusRow[]> {
   const { rows } = await pool.query<StreetStatusRow>(
     `SELECT
        ss.id AS "segmentId", w.ward_name AS "wardName", ss.start_point AS "startPoint", ss.end_point AS "endPoint", ia.agency_name AS "agencyName",
@@ -55,8 +58,10 @@ export async function buildStreetStatusDashboard(): Promise<StreetStatusRow[]> {
      LEFT JOIN installation_agencies ia ON ia.id = ss.installation_agency_id
      LEFT JOIN lights l ON l.segment_id = ss.id AND l.active = TRUE AND l.deleted_at IS NULL
      LEFT JOIN light_faults lf ON lf.light_id = l.id AND lf.status = 'open'
+     WHERE $1::text IS NULL OR ia.agency_name = $1
      GROUP BY ss.id, w.ward_name, ss.start_point, ss.end_point, ia.agency_name
      ORDER BY w.ward_name ASC, ss.start_point ASC`,
+    [agencyName ?? null],
   );
   return rows;
 }
@@ -88,7 +93,7 @@ export interface SegmentLightStatusRow {
  */
 export async function buildSegmentLightStatus(segmentId: number): Promise<SegmentLightStatusRow[]> {
   const { rows: lights } = await pool.query<{ id: number; serial_number: string; active: boolean; light_serial_seq: number | null; switch_status: "working" | "not_working" | "automatic" | "joint" | null }>(
-    `SELECT id, serial_number, active, light_serial_seq, switch_status FROM lights WHERE segment_id = $1 AND deleted_at IS NULL ORDER BY light_serial_seq ASC`,
+    `SELECT id, serial_number, active, light_serial_seq, switch_status FROM lights WHERE segment_id = $1 AND deleted_at IS NULL ORDER BY light_serial_seq ASC, light_serial_suffix ASC NULLS FIRST`,
     [segmentId],
   );
   if (lights.length === 0) return [];
