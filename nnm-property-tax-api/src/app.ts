@@ -66,7 +66,7 @@ export function createApp() {
   });
 
   app.use("/api/v1", apiRouter);
-  app.use("/api/mobile", mobileRouter);
+  app.use("/api/v1/mobile", mobileRouter);
 
   app.use(notFoundHandler);
   app.use(errorHandler);
