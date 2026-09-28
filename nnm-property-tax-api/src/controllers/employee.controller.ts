@@ -1,9 +1,17 @@
 import type { Request, Response } from "express";
 import { z } from "zod";
+import ExcelJS from "exceljs";
 import { createEmployee, findEmployeeByAadhaar, updateEmployee, deleteEmployee, verifyEmployee } from "../services/employee.service";
 import { employeeRepository } from "../repositories/employee.repository";
-import { calculateYearsOfService } from "../types/employee.types";
+import {
+  calculateYearsOfService,
+  RESERVATION_CATEGORY_LABELS,
+  EDUCATIONAL_QUALIFICATION_LABELS,
+  APPOINTING_AUTHORITY_LABELS,
+  EMPLOYMENT_TYPE_LABELS,
+} from "../types/employee.types";
 import { asyncHandler } from "../middleware/asyncHandler";
+import { addSheetFromRows } from "../services/export.service";
 import { ApiError } from "../utils/ApiError";
 import type { EmployeeRow } from "../types/employee.types";
 
@@ -81,6 +89,69 @@ export const listEmployeesHandler = asyncHandler(async (req: Request, res: Respo
   if (!parsed.success) throw ApiError.badRequest("Invalid query");
   const employees = await employeeRepository.listAll(parsed.data.status);
   res.status(200).json({ employees: employees.map(withYearsOfService) });
+});
+
+const STATUS_LABELS: Record<"pending_verification" | "verified", string> = {
+  pending_verification: "Pending Verification",
+  verified: "Verified",
+};
+
+/**
+ * GET /api/v1/admin/employees/export - the full staff list as .xlsx,
+ * with every record's verification status/who-verified-it/when visible
+ * in one sheet. Open to the same three roles that can view the list at
+ * all (Establishment Clerk, City Manager, Commissioner - see
+ * requireEmployeeViewRole in admin.routes.ts) - there's only ONE
+ * verification stage in this schema (the City Manager's), not a
+ * separate per-role sign-off, so all three download the same sheet
+ * rather than three different filtered ones. An optional ?status=
+ * filter narrows it to just pending or just verified, for whoever
+ * wants that instead of the full list.
+ */
+export const exportEmployeesHandler = asyncHandler(async (req: Request, res: Response) => {
+  const parsed = listQuerySchema.safeParse(req.query);
+  if (!parsed.success) throw ApiError.badRequest("Invalid query");
+  const employees = await employeeRepository.listAll(parsed.data.status);
+
+  const rows = employees.map((e) => {
+    const yearsOfService = calculateYearsOfService(e.date_of_appointment, e.unauthorised_absence_days);
+    return {
+      "Name": e.name,
+      "Father Name": e.father_name ?? "",
+      "Husband Name": e.husband_name ?? "",
+      "Home District": e.home_district,
+      "Date of Birth": e.date_of_birth,
+      "Aadhaar Number": e.aadhaar_number,
+      "PAN Number": e.pan_number ?? "",
+      "Reservation Category": RESERVATION_CATEGORY_LABELS[e.reservation_category],
+      "Educational Qualification": EDUCATIONAL_QUALIFICATION_LABELS[e.educational_qualification],
+      "Date of Appointment": e.date_of_appointment,
+      "Appointment Order Number": e.appointment_order_number ?? "",
+      "Appointing Authority": APPOINTING_AUTHORITY_LABELS[e.appointing_authority],
+      "Employment Type": EMPLOYMENT_TYPE_LABELS[e.employment_type],
+      "EPF/UAN": e.epf_uan ?? "",
+      "Unauthorised Absence (days)": e.unauthorised_absence_days,
+      "Years of Service": `${yearsOfService.years}y ${yearsOfService.months}m`,
+      "Municipal Board Recommendation": e.municipal_board_recommendation ? "Yes" : "No",
+      "Proceeding Number": e.proceeding_number ?? "",
+      "Proceeding Date": e.proceeding_date ?? "",
+      "Status": STATUS_LABELS[e.status],
+      "Entered By (Establishment Clerk)": e.created_by,
+      "Entered On": e.created_at,
+      "Verified By (City Manager)": e.verified_by ?? "",
+      "Verified On": e.verified_at ?? "",
+    };
+  });
+
+  const workbook = new ExcelJS.Workbook();
+  addSheetFromRows(workbook, "Employee Database", rows);
+
+  const suffix = parsed.data.status ? `-${parsed.data.status}` : "";
+  const filename = `employee-database${suffix}-${new Date().toISOString().slice(0, 10)}.xlsx`;
+  res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+  res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+  await workbook.xlsx.write(res);
+  res.end();
 });
 
 const idParamSchema = z.object({ id: z.coerce.number().int().positive() });

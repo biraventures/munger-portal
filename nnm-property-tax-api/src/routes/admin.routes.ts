@@ -107,6 +107,7 @@ import {
   deleteEmployeeHandler,
   postVerifyEmployeeHandler,
   getEmployeeDatabaseProgressHandler,
+  exportEmployeesHandler,
 } from "../controllers/employee.controller";
 import {
   listStreetSegmentsHandler,
@@ -254,6 +255,7 @@ const requireEmployeeViewRole = requireAdminRole("establishment_clerk", "city_ma
 adminRouter.post("/employees", requireAdminRole("establishment_clerk"), postCreateEmployeeHandler);
 adminRouter.get("/employees/search", requireAdminRole("establishment_clerk"), searchEmployeeByAadhaarHandler);
 adminRouter.get("/employees", requireEmployeeViewRole, listEmployeesHandler);
+adminRouter.get("/employees/export", requireEmployeeViewRole, exportEmployeesHandler);
 adminRouter.patch("/employees/:id", requireAdminRole("establishment_clerk"), patchUpdateEmployeeHandler);
 adminRouter.delete("/employees/:id", requireAdminRole("establishment_clerk"), deleteEmployeeHandler);
 adminRouter.post("/employees/:id/verify", requireAdminRole("city_manager"), postVerifyEmployeeHandler);

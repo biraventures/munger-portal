@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AlertCircle, CheckCircle2, Clock, List } from "lucide-react";
+import { AlertCircle, CheckCircle2, Clock, Download, List } from "lucide-react";
 import { AdminHeader } from "@/components/admin-header";
 import { useAdminGuard } from "@/lib/use-admin-guard";
 import {
   fetchEmployees,
+  downloadEmployeesExport,
   RESERVATION_CATEGORY_LABELS,
   EDUCATIONAL_QUALIFICATION_LABELS,
   EMPLOYMENT_TYPE_LABELS,
@@ -16,6 +17,7 @@ export default function EmployeeDatabaseListPage() {
   const admin = useAdminGuard();
   const [employees, setEmployees] = useState<Employee[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
     if (!admin) return;
@@ -23,6 +25,18 @@ export default function EmployeeDatabaseListPage() {
       .then(setEmployees)
       .catch((err) => setError(err instanceof Error ? err.message : "Could not load employee records."));
   }, [admin]);
+
+  async function handleExport() {
+    setExporting(true);
+    setError(null);
+    try {
+      await downloadEmployeesExport();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not download the staff list.");
+    } finally {
+      setExporting(false);
+    }
+  }
 
   if (!admin) {
     return <div className="flex min-h-screen items-center justify-center text-sm text-slate-400">Loading…</div>;
@@ -47,10 +61,20 @@ export default function EmployeeDatabaseListPage() {
       <AdminHeader admin={admin} />
 
       <main className="mx-auto max-w-4xl px-6 py-10">
-        <h1 className="mb-1 flex items-center gap-2 text-2xl font-semibold text-slate-900">
-          <List className="h-6 w-6" />
-          All Employee Records
-        </h1>
+        <div className="mb-1 flex items-center justify-between">
+          <h1 className="flex items-center gap-2 text-2xl font-semibold text-slate-900">
+            <List className="h-6 w-6" />
+            All Employee Records
+          </h1>
+          <button
+            onClick={handleExport}
+            disabled={exporting}
+            className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+          >
+            <Download className="h-3.5 w-3.5" />
+            {exporting ? "Downloading…" : "Download Staff List (.xlsx)"}
+          </button>
+        </div>
         <p className="mb-6 text-sm text-slate-500">Every record entered so far - use this to keep checking the data is correct.</p>
 
         {error && (
