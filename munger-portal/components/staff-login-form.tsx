@@ -7,6 +7,7 @@ import { Eye, EyeOff, Loader2 } from "lucide-react";
 export interface StaffLoginValues {
   username: string;
   password: string;
+  rememberMe: boolean;
 }
 
 export interface StaffLoginFormProps {
@@ -27,11 +28,13 @@ export function StaffLoginForm({
 }: StaffLoginFormProps) {
   const usernameId = useId();
   const passwordId = useId();
+  const rememberMeId = useId();
   const usernameErrorId = `${usernameId}-error`;
   const passwordErrorId = `${passwordId}-error`;
 
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [rememberMe, setRememberMe] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<{
@@ -66,7 +69,7 @@ export function StaffLoginForm({
     setSubmitting(true);
     try {
       if (onSubmit) {
-        await onSubmit({ username: username.trim(), password });
+        await onSubmit({ username: username.trim(), password, rememberMe });
       } else {
         // Placeholder behaviour until an auth endpoint is wired up.
         await new Promise((resolve) => setTimeout(resolve, 700));
@@ -127,7 +130,7 @@ export function StaffLoginForm({
         )}
       </div>
 
-      <div className="mb-2">
+      <div className="mb-4">
         <label
           htmlFor={passwordId}
           className="mb-1.5 block text-sm font-medium text-slate-700"
@@ -169,7 +172,17 @@ export function StaffLoginForm({
         )}
       </div>
 
-      <div className="text-right">
+      <div className="mb-4 flex items-center justify-between">
+        <label htmlFor={rememberMeId} className="flex cursor-pointer items-center gap-2 text-xs font-medium text-slate-600 select-none">
+          <input
+            id={rememberMeId}
+            type="checkbox"
+            checked={rememberMe}
+            onChange={(e) => setRememberMe(e.target.checked)}
+            className="h-4 w-4 rounded border-slate-300 text-nnm-blue accent-nnm-blue focus:ring-nnm-blue"
+          />
+          Remember me
+        </label>
         <Link href={`/portal-login/${role}/forgot-password`} className="text-xs font-medium text-nnm-blue hover:underline">
           Forgot password?
         </Link>

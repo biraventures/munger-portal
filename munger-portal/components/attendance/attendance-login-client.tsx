@@ -8,7 +8,7 @@ export function AttendanceLoginClient() {
   const router = useRouter();
 
   async function handleSubmit(values: AttendanceLoginValues) {
-    const user = await attendanceLogin(values.username, values.password); // throws on failure - AttendanceLoginForm shows the error
+    const user = await attendanceLogin(values.username, values.password, values.rememberMe); // throws on failure - AttendanceLoginForm shows the error
 
     if (user.role === "jamadar") {
       router.push("/attendance/jamadar");
