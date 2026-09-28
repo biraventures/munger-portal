@@ -7,6 +7,7 @@ import { useAttendanceGuard } from "@/lib/use-attendance-guard";
 import {
   fetchHighMastWardStatusDashboard,
   fetchHighMastLightsForWard,
+  markFaultRepaired,
   type WardStatus,
   type HighMastLightStatus,
 } from "@/lib/streetlight-api";
@@ -20,6 +21,7 @@ export default function HighMastStatusDashboardPage() {
   const [openWard, setOpenWard] = useState<{ id: number; name: string } | null>(null);
   const [wardLights, setWardLights] = useState<HighMastLightStatus[] | null>(null);
   const [loadingLights, setLoadingLights] = useState(false);
+  const [markingRepairedLightId, setMarkingRepairedLightId] = useState<number | null>(null);
 
   useEffect(() => {
     if (!attendance) return;
@@ -45,6 +47,26 @@ export default function HighMastStatusDashboardPage() {
   function backToWards() {
     setOpenWard(null);
     setWardLights(null);
+  }
+
+  /** Same fix as the streetlight status dashboard: closes every open fault on this light (there's nothing stopping more than one), then reloads this ward's list so the badge actually flips to Working. */
+  async function handleMarkRepaired(light: HighMastLightStatus) {
+    if (!openWard) return;
+    const openFaultIds = light.faultHistory.filter((f) => f.status === "open").map((f) => f.faultId);
+    if (openFaultIds.length === 0) return;
+    setMarkingRepairedLightId(light.lightId);
+    setError(null);
+    try {
+      for (const faultId of openFaultIds) {
+        await markFaultRepaired(faultId, null);
+      }
+      setWardLights(await fetchHighMastLightsForWard(openWard.id));
+      fetchHighMastWardStatusDashboard().then(setWards).catch(() => {});
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not mark this light repaired.");
+    } finally {
+      setMarkingRepairedLightId(null);
+    }
   }
 
   if (!attendance) {
@@ -136,17 +158,29 @@ export default function HighMastStatusDashboardPage() {
                         <p className="font-mono text-sm font-semibold text-slate-900">{l.serialNumber}</p>
                         <p className="text-xs text-slate-500">{l.localityName}</p>
                       </div>
-                      {l.working ? (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2.5 py-1 text-xs font-semibold text-green-700">
-                          <CheckCircle2 className="h-3.5 w-3.5" />
-                          Working
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2.5 py-1 text-xs font-semibold text-red-700">
-                          <XCircle className="h-3.5 w-3.5" />
-                          Not Working
-                        </span>
-                      )}
+                      <div className="flex items-center gap-2">
+                        {l.working ? (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2.5 py-1 text-xs font-semibold text-green-700">
+                            <CheckCircle2 className="h-3.5 w-3.5" />
+                            Working
+                          </span>
+                        ) : (
+                          <>
+                            <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2.5 py-1 text-xs font-semibold text-red-700">
+                              <XCircle className="h-3.5 w-3.5" />
+                              Not Working
+                            </span>
+                            <button
+                              onClick={() => handleMarkRepaired(l)}
+                              disabled={markingRepairedLightId === l.lightId}
+                              className="inline-flex items-center gap-1 rounded-full bg-green-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-green-700 disabled:opacity-60"
+                            >
+                              <CheckCircle2 className="h-3.5 w-3.5" />
+                              {markingRepairedLightId === l.lightId ? "Marking…" : "Mark Repaired"}
+                            </button>
+                          </>
+                        )}
+                      </div>
                     </div>
                     {l.faultHistory.length > 0 && (
                       <details className="mt-2 text-xs text-slate-500">

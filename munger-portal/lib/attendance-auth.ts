@@ -20,7 +20,10 @@ export type AttendanceRole =
   | "pyau_je"
   | "pyau_ae"
   | "pyau_contractor"
-  | "apswmo";
+  | "apswmo"
+  | "ward_parshad"
+  | "mayor"
+  | "deputy_mayor";
 
 export const ATTENDANCE_ROLE_LABELS: Record<AttendanceRole, string> = {
   jamadar: "Jamadar",
@@ -42,9 +45,12 @@ export const ATTENDANCE_ROLE_LABELS: Record<AttendanceRole, string> = {
   pyau_ae: "Assistant Engineer (Pyau)",
   pyau_contractor: "Maintenance Contractor (Pyau)",
   apswmo: "APSWMO",
+  ward_parshad: "Ward Parshad",
+  mayor: "Mayor",
+  deputy_mayor: "Deputy Mayor",
 };
 
-export const WARD_SCOPED_ROLES: AttendanceRole[] = ["jamadar", "driver_supervisor"];
+export const WARD_SCOPED_ROLES: AttendanceRole[] = ["jamadar", "driver_supervisor", "ward_parshad"];
 export const OFFICER_ROLES: AttendanceRole[] = ["sanitation_officer", "sanitation_prabhari", "attendance_admin"];
 
 export interface AttendanceUserInfo {

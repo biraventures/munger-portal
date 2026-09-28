@@ -14,8 +14,16 @@ export function AttendanceLoginClient() {
       router.push("/attendance/jamadar");
     } else if (user.role === "driver_supervisor") {
       router.push("/attendance/drivers");
+    } else if (user.role === "ward_parshad" || user.role === "mayor" || user.role === "deputy_mayor") {
+      // These three only ever report a streetlight/high-mast fault - own
+      // ward for ward_parshad, any ward for mayor/deputy_mayor (the page
+      // already locks the ward field when wardName is set and otherwise
+      // offers every ward) - so they go straight there, skipping the
+      // general dashboard they have no other use for.
+      router.push("/attendance/report-streetlight-fault");
     } else {
-      // sanitation_officer, sanitation_prabhari, attendance_admin
+      // sanitation_officer, sanitation_prabhari, attendance_admin, and
+      // every other role with its own set of dashboard cards.
       router.push("/attendance/dashboard");
     }
   }

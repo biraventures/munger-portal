@@ -18,7 +18,16 @@ const inputClass =
   "w-full rounded-md border border-slate-300 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-nnm-blue focus:ring-offset-1";
 const labelClass = "mb-1.5 block text-sm font-medium text-slate-700";
 
-const ALL_ROLES: AttendanceRole[] = ["jamadar", "driver_supervisor", "sanitation_officer", "sanitation_prabhari", "attendance_admin"];
+const ALL_ROLES: AttendanceRole[] = [
+  "jamadar",
+  "driver_supervisor",
+  "sanitation_officer",
+  "sanitation_prabhari",
+  "attendance_admin",
+  "ward_parshad",
+  "mayor",
+  "deputy_mayor",
+];
 
 export default function AttendanceUsersPage() {
   const user = useAttendanceGuard(["attendance_admin"]);

@@ -9,6 +9,7 @@ import {
   fetchStreetStatusDashboard,
   fetchSegmentLightStatus,
   setLightSwitchStatus,
+  markFaultRepaired,
   insertLight,
   createStreetSegment,
   updateStreetSegment,
@@ -44,6 +45,7 @@ export default function StreetlightStatusDashboardPage() {
 
   const [changingStatusLightId, setChangingStatusLightId] = useState<number | null>(null);
   const [insertingSeq, setInsertingSeq] = useState<number | null>(null);
+  const [markingRepairedLightId, setMarkingRepairedLightId] = useState<number | null>(null);
 
   const [agencyFilter, setAgencyFilter] = useState<"" | "NN" | "EESL">("");
 
@@ -185,6 +187,35 @@ export default function StreetlightStatusDashboardPage() {
       setError(err instanceof Error ? err.message : "Could not update the functional status.");
     } finally {
       setChangingStatusLightId(null);
+    }
+  }
+
+  /**
+   * Actually closes out a light's open fault(s) - separate from
+   * handleChangeStatus above, which only touches the unrelated
+   * switch_status field and was never enough on its own to turn a
+   * light's Working/Not Working badge green (that badge is driven
+   * solely by light_faults.status, see buildSegmentLightStatus). A
+   * light can in principle have more than one open fault (nothing
+   * stops a second staff/public report while one is already open), so
+   * this closes every open one found in its fault history rather than
+   * just the most recent.
+   */
+  async function handleMarkRepaired(segmentId: number, light: SegmentLightStatus) {
+    const openFaultIds = light.faultHistory.filter((f) => f.status === "open").map((f) => f.faultId);
+    if (openFaultIds.length === 0) return;
+    setMarkingRepairedLightId(light.lightId);
+    setError(null);
+    try {
+      for (const faultId of openFaultIds) {
+        await markFaultRepaired(faultId, null);
+      }
+      await refreshSegmentLights(segmentId);
+      load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not mark this light repaired.");
+    } finally {
+      setMarkingRepairedLightId(null);
     }
   }
 
@@ -445,6 +476,17 @@ export default function StreetlightStatusDashboardPage() {
                                           )}
                                           {!l.active && <span className="rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-semibold uppercase text-slate-600">Inactive</span>}
 
+                                          {canEditLights && !l.working && (
+                                            <button
+                                              onClick={() => handleMarkRepaired(s.segmentId!, l)}
+                                              disabled={markingRepairedLightId === l.lightId}
+                                              className="inline-flex items-center gap-1 rounded-full bg-green-600 px-2 py-0.5 text-[10px] font-semibold uppercase text-white hover:bg-green-700 disabled:opacity-60"
+                                            >
+                                              <CheckCircle2 className="h-3 w-3" />
+                                              {markingRepairedLightId === l.lightId ? "Marking…" : "Mark Repaired"}
+                                            </button>
+                                          )}
+
                                           {canEditLights && (
                                             <select
                                               value={l.switchStatus ?? ""}
@@ -453,7 +495,7 @@ export default function StreetlightStatusDashboardPage() {
                                               className="ml-auto rounded-md border border-slate-300 px-2 py-1 text-[11px] outline-none focus:ring-1 focus:ring-nnm-blue"
                                             >
                                               <option value="" disabled>
-                                                Functional status…
+                                                Switch status…
                                               </option>
                                               {(Object.keys(SWITCH_STATUS_LABELS) as LightSwitchStatus[]).map((k) => (
                                                 <option key={k} value={k}>
