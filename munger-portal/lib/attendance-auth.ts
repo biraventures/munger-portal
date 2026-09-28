@@ -59,7 +59,7 @@ export interface AttendanceUserInfo {
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_PROPERTY_TAX_API_URL || "http://localhost:4000/api/v1";
 
-export async function attendanceLogin(username: string, password: string): Promise<AttendanceUserInfo> {
+export async function attendanceLogin(username: string, password: string, rememberMe: boolean = false): Promise<AttendanceUserInfo> {
   const res = await fetch(`${API_BASE_URL}/attendance/auth/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -73,27 +73,45 @@ export async function attendanceLogin(username: string, password: string): Promi
 
   const data: { token: string; user: AttendanceUserInfo } = await res.json();
 
-  // Session storage - cleared automatically when the browser tab closes,
-  // same reasoning as the operator/admin logins: this is a shared
-  // ward-office terminal, not a personal device.
   sessionStorage.setItem(TOKEN_KEY, data.token);
   sessionStorage.setItem(USER_KEY, JSON.stringify(data.user));
+
+  if (rememberMe) {
+    localStorage.setItem(TOKEN_KEY, data.token);
+    localStorage.setItem(USER_KEY, JSON.stringify(data.user));
+  } else {
+    localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(USER_KEY);
+  }
 
   return data.user;
 }
 
 export function getAttendanceToken(): string | null {
   if (typeof window === "undefined") return null;
-  return sessionStorage.getItem(TOKEN_KEY);
+  const token = sessionStorage.getItem(TOKEN_KEY) || localStorage.getItem(TOKEN_KEY);
+  if (token && !sessionStorage.getItem(TOKEN_KEY)) {
+    try {
+      sessionStorage.setItem(TOKEN_KEY, token);
+    } catch {}
+  }
+  return token;
 }
 
 export function getAttendanceUserInfo(): AttendanceUserInfo | null {
   if (typeof window === "undefined") return null;
-  const raw = sessionStorage.getItem(USER_KEY);
+  const raw = sessionStorage.getItem(USER_KEY) || localStorage.getItem(USER_KEY);
+  if (raw && !sessionStorage.getItem(USER_KEY)) {
+    try {
+      sessionStorage.setItem(USER_KEY, raw);
+    } catch {}
+  }
   return raw ? (JSON.parse(raw) as AttendanceUserInfo) : null;
 }
 
 export function attendanceLogout(): void {
   sessionStorage.removeItem(TOKEN_KEY);
   sessionStorage.removeItem(USER_KEY);
+  localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(USER_KEY);
 }

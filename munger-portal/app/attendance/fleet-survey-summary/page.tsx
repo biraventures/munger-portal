@@ -92,7 +92,7 @@ export default function FleetSurveySummaryPage() {
         ) : filtered && filtered.length === 0 ? (
           <p className="text-sm text-slate-400">No assets match.</p>
         ) : (
-          <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+          <div className="overflow-auto rounded-xl border border-slate-200 bg-white">
             <table className="w-full text-sm">
               <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-400">
                 <tr>
