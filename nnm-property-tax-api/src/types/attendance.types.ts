@@ -17,7 +17,10 @@ export type AttendanceRole =
   | "pyau_je"
   | "pyau_ae"
   | "pyau_contractor"
-  | "apswmo";
+  | "apswmo"
+  | "ward_parshad"
+  | "mayor"
+  | "deputy_mayor";
 
 export const ATTENDANCE_ROLES: AttendanceRole[] = [
   "jamadar",
@@ -39,6 +42,9 @@ export const ATTENDANCE_ROLES: AttendanceRole[] = [
   "pyau_ae",
   "pyau_contractor",
   "apswmo",
+  "ward_parshad",
+  "mayor",
+  "deputy_mayor",
 ];
 
 export const ATTENDANCE_ROLE_LABELS: Record<AttendanceRole, string> = {
@@ -61,11 +67,15 @@ export const ATTENDANCE_ROLE_LABELS: Record<AttendanceRole, string> = {
   pyau_ae: "Assistant Engineer (Pyau)",
   pyau_contractor: "Maintenance Contractor (Pyau)",
   apswmo: "APSWMO",
+  ward_parshad: "Ward Parshad",
+  mayor: "Mayor",
+  deputy_mayor: "Deputy Mayor",
 };
 
 /** Ward-scoped roles must have a ward_id; cross-ward roles never do. The 3 fleet roles are cross-ward - they oversee the whole vehicle/asset registry, not one ward's workers.
- * The street light roles are all cross-ward too, including streetlight_contractor - a contractor covers a SET of wards, tracked separately via contractor_wards, not the single ward_id used by jamadar/driver_supervisor. */
-export const WARD_SCOPED_ROLES: AttendanceRole[] = ["jamadar", "driver_supervisor"];
+ * The street light roles are all cross-ward too, including streetlight_contractor - a contractor covers a SET of wards, tracked separately via contractor_wards, not the single ward_id used by jamadar/driver_supervisor.
+ * ward_parshad is ward-scoped - they only report faults for their own ward. mayor/deputy_mayor are cross-ward - they report for any ward, same as the other oversight-style roles. */
+export const WARD_SCOPED_ROLES: AttendanceRole[] = ["jamadar", "driver_supervisor", "ward_parshad"];
 export const CROSS_WARD_ROLES: AttendanceRole[] = [
   "sanitation_officer",
   "sanitation_prabhari",
@@ -84,6 +94,8 @@ export const CROSS_WARD_ROLES: AttendanceRole[] = [
   "pyau_ae",
   "pyau_contractor",
   "apswmo",
+  "mayor",
+  "deputy_mayor",
 ];
 
 export interface AttendanceUserRow {

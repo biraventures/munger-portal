@@ -19,6 +19,9 @@ import logoImg from '@/public/logo.png'
 const HOME_PATH_BY_ROLE: Partial<Record<AttendanceRole, string>> = {
   jamadar: "/attendance/jamadar",
   driver_supervisor: "/attendance/drivers",
+  ward_parshad: "/attendance/report-streetlight-fault",
+  mayor: "/attendance/report-streetlight-fault",
+  deputy_mayor: "/attendance/report-streetlight-fault",
 };
 
 function homePathFor(role: AttendanceRole): string {

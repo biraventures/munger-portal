@@ -9,6 +9,8 @@ import {
   fetchStreetStatusDashboard,
   fetchSegmentLightStatus,
   setLightSwitchStatus,
+  markFaultRepaired,
+  reportFault,
   insertLight,
   createStreetSegment,
   updateStreetSegment,
@@ -23,6 +25,15 @@ const SWITCH_STATUS_LABELS: Record<LightSwitchStatus, string> = { working: "Work
 const inputClass = "w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-nnm-blue focus:ring-offset-1";
 
 const emptyStreetForm = { agency: "NN" as "NN" | "EESL", startPoint: "", intermediatePoint: "", endPoint: "", lightCount: "0" };
+
+/** Local (not UTC) today, so the date input's default doesn't drift a day off around midnight IST. */
+function todayLocalDateString(): string {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
 
 export default function StreetlightStatusDashboardPage() {
   const attendance = useAttendanceGuard();
@@ -44,6 +55,13 @@ export default function StreetlightStatusDashboardPage() {
 
   const [changingStatusLightId, setChangingStatusLightId] = useState<number | null>(null);
   const [insertingSeq, setInsertingSeq] = useState<number | null>(null);
+  const [markingRepairedLightId, setMarkingRepairedLightId] = useState<number | null>(null);
+  const [markingFaultyLightId, setMarkingFaultyLightId] = useState<number | null>(null);
+  const [faultyFormLightId, setFaultyFormLightId] = useState<number | null>(null);
+  const [faultyFormNotes, setFaultyFormNotes] = useState("");
+  const [faultyFormDate, setFaultyFormDate] = useState(todayLocalDateString());
+  const [repairFormLightId, setRepairFormLightId] = useState<number | null>(null);
+  const [repairFormNotes, setRepairFormNotes] = useState("");
 
   const [agencyFilter, setAgencyFilter] = useState<"" | "NN" | "EESL">("");
 
@@ -185,6 +203,87 @@ export default function StreetlightStatusDashboardPage() {
       setError(err instanceof Error ? err.message : "Could not update the functional status.");
     } finally {
       setChangingStatusLightId(null);
+    }
+  }
+
+  /**
+   * Actually closes out a light's open fault(s) - separate from
+   * handleChangeStatus above, which only touches the unrelated
+   * switch_status field and was never enough on its own to turn a
+   * light's Working/Not Working badge green (that badge is driven
+   * solely by light_faults.status, see buildSegmentLightStatus). A
+   * light can in principle have more than one open fault (nothing
+   * stops a second staff/public report while one is already open), so
+   * this closes every one found in its fault history rather than just
+   * the most recent - all of them get the same repair comment. Opens a
+   * small inline form (comments, optional) rather than repairing
+   * immediately, so the delay report's Comments column has something
+   * to show for the repair side too, not just how the fault was raised.
+   */
+  function openRepairForm(light: SegmentLightStatus) {
+    setRepairFormLightId(light.lightId);
+    setRepairFormNotes("");
+    setError(null);
+  }
+
+  function cancelRepairForm() {
+    setRepairFormLightId(null);
+  }
+
+  async function submitMarkRepaired(segmentId: number, light: SegmentLightStatus) {
+    const openFaultIds = light.faultHistory.filter((f) => f.status === "open").map((f) => f.faultId);
+    if (openFaultIds.length === 0) {
+      setRepairFormLightId(null);
+      return;
+    }
+    setMarkingRepairedLightId(light.lightId);
+    setError(null);
+    try {
+      for (const faultId of openFaultIds) {
+        await markFaultRepaired(faultId, repairFormNotes.trim() || null);
+      }
+      setRepairFormLightId(null);
+      await refreshSegmentLights(segmentId);
+      load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not mark this light repaired.");
+    } finally {
+      setMarkingRepairedLightId(null);
+    }
+  }
+
+  /**
+   * The reverse of handleMarkRepaired - a working light noticed faulty
+   * during oversight (not caught by staff/public reporting yet) can be
+   * flagged straight from here, reusing the same POST /faults any
+   * attendance role already has, instead of sending the City Manager
+   * off to the separate "Report Streetlight Fault" page to look the
+   * light back up. Opens a small inline form (comments + non-functional-
+   * since date, defaulted to today) rather than reporting immediately.
+   */
+  function openMarkFaultyForm(light: SegmentLightStatus) {
+    setFaultyFormLightId(light.lightId);
+    setFaultyFormNotes("");
+    setFaultyFormDate(todayLocalDateString());
+    setError(null);
+  }
+
+  function cancelMarkFaultyForm() {
+    setFaultyFormLightId(null);
+  }
+
+  async function submitMarkFaulty(segmentId: number, lightId: number) {
+    setMarkingFaultyLightId(lightId);
+    setError(null);
+    try {
+      await reportFault(lightId, faultyFormNotes.trim() || null, faultyFormDate || null);
+      setFaultyFormLightId(null);
+      await refreshSegmentLights(segmentId);
+      load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not report this light as faulty.");
+    } finally {
+      setMarkingFaultyLightId(null);
     }
   }
 
@@ -445,6 +544,26 @@ export default function StreetlightStatusDashboardPage() {
                                           )}
                                           {!l.active && <span className="rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-semibold uppercase text-slate-600">Inactive</span>}
 
+                                          {canEditLights && !l.working && repairFormLightId !== l.lightId && (
+                                            <button
+                                              onClick={() => openRepairForm(l)}
+                                              className="inline-flex items-center gap-1 rounded-full bg-green-600 px-2 py-0.5 text-[10px] font-semibold uppercase text-white hover:bg-green-700"
+                                            >
+                                              <CheckCircle2 className="h-3 w-3" />
+                                              Mark Repaired
+                                            </button>
+                                          )}
+
+                                          {canEditLights && l.working && faultyFormLightId !== l.lightId && (
+                                            <button
+                                              onClick={() => openMarkFaultyForm(l)}
+                                              className="inline-flex items-center gap-1 rounded-full bg-red-600 px-2 py-0.5 text-[10px] font-semibold uppercase text-white hover:bg-red-700"
+                                            >
+                                              <XCircle className="h-3 w-3" />
+                                              Mark Faulty
+                                            </button>
+                                          )}
+
                                           {canEditLights && (
                                             <select
                                               value={l.switchStatus ?? ""}
@@ -453,7 +572,7 @@ export default function StreetlightStatusDashboardPage() {
                                               className="ml-auto rounded-md border border-slate-300 px-2 py-1 text-[11px] outline-none focus:ring-1 focus:ring-nnm-blue"
                                             >
                                               <option value="" disabled>
-                                                Functional status…
+                                                Switch status…
                                               </option>
                                               {(Object.keys(SWITCH_STATUS_LABELS) as LightSwitchStatus[]).map((k) => (
                                                 <option key={k} value={k}>
@@ -463,6 +582,68 @@ export default function StreetlightStatusDashboardPage() {
                                             </select>
                                           )}
                                         </div>
+                                        {repairFormLightId === l.lightId && (
+                                          <div className="mt-2 space-y-2 rounded-md border border-green-200 bg-green-50 p-3">
+                                            <div>
+                                              <label className="mb-1 block text-[10px] font-semibold uppercase text-slate-500">Repair comments</label>
+                                              <textarea
+                                                value={repairFormNotes}
+                                                onChange={(e) => setRepairFormNotes(e.target.value)}
+                                                rows={2}
+                                                placeholder="What was fixed… (optional)"
+                                                className="w-full rounded-md border border-slate-300 px-2 py-1.5 text-xs outline-none focus:ring-1 focus:ring-nnm-blue"
+                                              />
+                                            </div>
+                                            <div className="flex gap-2">
+                                              <button
+                                                onClick={() => submitMarkRepaired(s.segmentId!, l)}
+                                                disabled={markingRepairedLightId === l.lightId}
+                                                className="rounded-md bg-green-600 px-3 py-1 text-xs font-semibold text-white hover:bg-green-700 disabled:opacity-60"
+                                              >
+                                                {markingRepairedLightId === l.lightId ? "Marking…" : "Mark Repaired"}
+                                              </button>
+                                              <button onClick={cancelRepairForm} className="rounded-md border border-slate-300 px-3 py-1 text-xs font-medium text-slate-600 hover:bg-slate-100">
+                                                Cancel
+                                              </button>
+                                            </div>
+                                          </div>
+                                        )}
+                                        {faultyFormLightId === l.lightId && (
+                                          <div className="mt-2 space-y-2 rounded-md border border-red-200 bg-red-50 p-3">
+                                            <div>
+                                              <label className="mb-1 block text-[10px] font-semibold uppercase text-slate-500">Non-functional since</label>
+                                              <input
+                                                type="date"
+                                                value={faultyFormDate}
+                                                max={todayLocalDateString()}
+                                                onChange={(e) => setFaultyFormDate(e.target.value)}
+                                                className="rounded-md border border-slate-300 px-2 py-1 text-xs outline-none focus:ring-1 focus:ring-nnm-blue"
+                                              />
+                                            </div>
+                                            <div>
+                                              <label className="mb-1 block text-[10px] font-semibold uppercase text-slate-500">Comments</label>
+                                              <textarea
+                                                value={faultyFormNotes}
+                                                onChange={(e) => setFaultyFormNotes(e.target.value)}
+                                                rows={2}
+                                                placeholder="What's wrong with this light… (optional)"
+                                                className="w-full rounded-md border border-slate-300 px-2 py-1.5 text-xs outline-none focus:ring-1 focus:ring-nnm-blue"
+                                              />
+                                            </div>
+                                            <div className="flex gap-2">
+                                              <button
+                                                onClick={() => submitMarkFaulty(s.segmentId!, l.lightId)}
+                                                disabled={markingFaultyLightId === l.lightId}
+                                                className="rounded-md bg-red-600 px-3 py-1 text-xs font-semibold text-white hover:bg-red-700 disabled:opacity-60"
+                                              >
+                                                {markingFaultyLightId === l.lightId ? "Reporting…" : "Report Faulty"}
+                                              </button>
+                                              <button onClick={cancelMarkFaultyForm} className="rounded-md border border-slate-300 px-3 py-1 text-xs font-medium text-slate-600 hover:bg-slate-100">
+                                                Cancel
+                                              </button>
+                                            </div>
+                                          </div>
+                                        )}
                                         {l.faultHistory.length > 0 && (
                                           <div className="mt-2 space-y-1 border-t border-slate-100 pt-2">
                                             <p className="text-[10px] font-semibold uppercase text-slate-400">Repair history</p>

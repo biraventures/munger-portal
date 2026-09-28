@@ -13,11 +13,15 @@ export interface StreetlightDelayReportRow {
   reportedAt: string;
   nonFunctionalSince: string | null;
   localSourceName: string | null;
+  reporterNotes: string | null;
   status: "open" | "repaired";
   repairedAt: string | null;
+  repairNotes: string | null;
   deadlineAt: string;
   hoursTaken: number | null;
   hoursOverdue: number | null;
+  daysTaken: number | null;
+  daysOverdue: number | null;
   pastDeadline: boolean;
 }
 
@@ -41,6 +45,11 @@ export async function buildStreetlightDelayReport(): Promise<StreetlightDelayRep
     const referenceNow = repairedAt ?? now;
     const pastDeadline = referenceNow > deadlineAt;
     const hoursOverdue = pastDeadline ? Math.round(((referenceNow - deadlineAt) / 3600_000) * 10) / 10 : null;
+    // Days alongside hours - "hours taken/overdue" is precise but the
+    // Commissioner's actual read of this report is in days, per what
+    // was explicitly asked for.
+    const daysTaken = hoursTaken !== null ? Math.round((hoursTaken / 24) * 10) / 10 : null;
+    const daysOverdue = hoursOverdue !== null ? Math.round((hoursOverdue / 24) * 10) / 10 : null;
 
     return {
       faultId: f.id,
@@ -53,11 +62,15 @@ export async function buildStreetlightDelayReport(): Promise<StreetlightDelayRep
       reportedAt: f.reported_at,
       nonFunctionalSince: f.non_functional_since,
       localSourceName: f.local_source_name,
+      reporterNotes: f.reporter_notes,
       status: f.status,
       repairedAt: f.repaired_at,
+      repairNotes: f.repair_notes,
       deadlineAt: f.deadline_at,
       hoursTaken,
       hoursOverdue,
+      daysTaken,
+      daysOverdue,
       pastDeadline,
     };
   });

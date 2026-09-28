@@ -90,8 +90,9 @@ export default function StreetlightDelayReportPage() {
                   <th className="px-4 py-2.5">Ward / Street</th>
                   <th className="px-4 py-2.5">Reported</th>
                   <th className="px-4 py-2.5">Status</th>
-                  <th className="px-4 py-2.5">Hours taken</th>
+                  <th className="px-4 py-2.5">Days taken</th>
                   <th className="px-4 py-2.5">Overdue</th>
+                  <th className="px-4 py-2.5">Comments</th>
                 </tr>
               </thead>
               <tbody>
@@ -116,9 +117,14 @@ export default function StreetlightDelayReportPage() {
                         {r.status}
                       </span>
                     </td>
-                    <td className="px-4 py-2.5">{r.hoursTaken ?? "-"}</td>
+                    <td className="px-4 py-2.5">{r.daysTaken ?? "-"}</td>
                     <td className="px-4 py-2.5">
-                      {r.pastDeadline ? <span className="font-semibold text-red-600">{r.hoursOverdue}h overdue</span> : <span className="text-slate-400">On time</span>}
+                      {r.pastDeadline ? <span className="font-semibold text-red-600">{r.daysOverdue}d overdue</span> : <span className="text-slate-400">On time</span>}
+                    </td>
+                    <td className="max-w-xs px-4 py-2.5 text-xs text-slate-600">
+                      {r.reporterNotes && <div>Reported: &quot;{r.reporterNotes}&quot;</div>}
+                      {r.repairNotes && <div className="mt-0.5 text-green-700">Repaired: &quot;{r.repairNotes}&quot;</div>}
+                      {!r.reporterNotes && !r.repairNotes && <span className="text-slate-300">-</span>}
                     </td>
                   </tr>
                 ))}
