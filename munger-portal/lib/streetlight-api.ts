@@ -540,11 +540,15 @@ export interface StreetlightDelayReportRow {
   reportedAt: string;
   nonFunctionalSince: string | null;
   localSourceName: string | null;
+  reporterNotes: string | null;
   status: "open" | "repaired";
   repairedAt: string | null;
+  repairNotes: string | null;
   deadlineAt: string;
   hoursTaken: number | null;
   hoursOverdue: number | null;
+  daysTaken: number | null;
+  daysOverdue: number | null;
   pastDeadline: boolean;
 }
 

@@ -60,6 +60,8 @@ export default function StreetlightStatusDashboardPage() {
   const [faultyFormLightId, setFaultyFormLightId] = useState<number | null>(null);
   const [faultyFormNotes, setFaultyFormNotes] = useState("");
   const [faultyFormDate, setFaultyFormDate] = useState(todayLocalDateString());
+  const [repairFormLightId, setRepairFormLightId] = useState<number | null>(null);
+  const [repairFormNotes, setRepairFormNotes] = useState("");
 
   const [agencyFilter, setAgencyFilter] = useState<"" | "NN" | "EESL">("");
 
@@ -212,18 +214,35 @@ export default function StreetlightStatusDashboardPage() {
    * solely by light_faults.status, see buildSegmentLightStatus). A
    * light can in principle have more than one open fault (nothing
    * stops a second staff/public report while one is already open), so
-   * this closes every open one found in its fault history rather than
-   * just the most recent.
+   * this closes every one found in its fault history rather than just
+   * the most recent - all of them get the same repair comment. Opens a
+   * small inline form (comments, optional) rather than repairing
+   * immediately, so the delay report's Comments column has something
+   * to show for the repair side too, not just how the fault was raised.
    */
-  async function handleMarkRepaired(segmentId: number, light: SegmentLightStatus) {
+  function openRepairForm(light: SegmentLightStatus) {
+    setRepairFormLightId(light.lightId);
+    setRepairFormNotes("");
+    setError(null);
+  }
+
+  function cancelRepairForm() {
+    setRepairFormLightId(null);
+  }
+
+  async function submitMarkRepaired(segmentId: number, light: SegmentLightStatus) {
     const openFaultIds = light.faultHistory.filter((f) => f.status === "open").map((f) => f.faultId);
-    if (openFaultIds.length === 0) return;
+    if (openFaultIds.length === 0) {
+      setRepairFormLightId(null);
+      return;
+    }
     setMarkingRepairedLightId(light.lightId);
     setError(null);
     try {
       for (const faultId of openFaultIds) {
-        await markFaultRepaired(faultId, null);
+        await markFaultRepaired(faultId, repairFormNotes.trim() || null);
       }
+      setRepairFormLightId(null);
       await refreshSegmentLights(segmentId);
       load();
     } catch (err) {
@@ -525,14 +544,13 @@ export default function StreetlightStatusDashboardPage() {
                                           )}
                                           {!l.active && <span className="rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-semibold uppercase text-slate-600">Inactive</span>}
 
-                                          {canEditLights && !l.working && (
+                                          {canEditLights && !l.working && repairFormLightId !== l.lightId && (
                                             <button
-                                              onClick={() => handleMarkRepaired(s.segmentId!, l)}
-                                              disabled={markingRepairedLightId === l.lightId}
-                                              className="inline-flex items-center gap-1 rounded-full bg-green-600 px-2 py-0.5 text-[10px] font-semibold uppercase text-white hover:bg-green-700 disabled:opacity-60"
+                                              onClick={() => openRepairForm(l)}
+                                              className="inline-flex items-center gap-1 rounded-full bg-green-600 px-2 py-0.5 text-[10px] font-semibold uppercase text-white hover:bg-green-700"
                                             >
                                               <CheckCircle2 className="h-3 w-3" />
-                                              {markingRepairedLightId === l.lightId ? "Marking…" : "Mark Repaired"}
+                                              Mark Repaired
                                             </button>
                                           )}
 
@@ -564,6 +582,32 @@ export default function StreetlightStatusDashboardPage() {
                                             </select>
                                           )}
                                         </div>
+                                        {repairFormLightId === l.lightId && (
+                                          <div className="mt-2 space-y-2 rounded-md border border-green-200 bg-green-50 p-3">
+                                            <div>
+                                              <label className="mb-1 block text-[10px] font-semibold uppercase text-slate-500">Repair comments</label>
+                                              <textarea
+                                                value={repairFormNotes}
+                                                onChange={(e) => setRepairFormNotes(e.target.value)}
+                                                rows={2}
+                                                placeholder="What was fixed… (optional)"
+                                                className="w-full rounded-md border border-slate-300 px-2 py-1.5 text-xs outline-none focus:ring-1 focus:ring-nnm-blue"
+                                              />
+                                            </div>
+                                            <div className="flex gap-2">
+                                              <button
+                                                onClick={() => submitMarkRepaired(s.segmentId!, l)}
+                                                disabled={markingRepairedLightId === l.lightId}
+                                                className="rounded-md bg-green-600 px-3 py-1 text-xs font-semibold text-white hover:bg-green-700 disabled:opacity-60"
+                                              >
+                                                {markingRepairedLightId === l.lightId ? "Marking…" : "Mark Repaired"}
+                                              </button>
+                                              <button onClick={cancelRepairForm} className="rounded-md border border-slate-300 px-3 py-1 text-xs font-medium text-slate-600 hover:bg-slate-100">
+                                                Cancel
+                                              </button>
+                                            </div>
+                                          </div>
+                                        )}
                                         {faultyFormLightId === l.lightId && (
                                           <div className="mt-2 space-y-2 rounded-md border border-red-200 bg-red-50 p-3">
                                             <div>

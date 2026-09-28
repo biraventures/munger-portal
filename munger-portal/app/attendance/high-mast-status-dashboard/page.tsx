@@ -36,6 +36,8 @@ export default function HighMastStatusDashboardPage() {
   const [faultyFormLightId, setFaultyFormLightId] = useState<number | null>(null);
   const [faultyFormNotes, setFaultyFormNotes] = useState("");
   const [faultyFormDate, setFaultyFormDate] = useState(todayLocalDateString());
+  const [repairFormLightId, setRepairFormLightId] = useState<number | null>(null);
+  const [repairFormNotes, setRepairFormNotes] = useState("");
 
   useEffect(() => {
     if (!attendance) return;
@@ -63,17 +65,37 @@ export default function HighMastStatusDashboardPage() {
     setWardLights(null);
   }
 
-  /** Same fix as the streetlight status dashboard: closes every open fault on this light (there's nothing stopping more than one), then reloads this ward's list so the badge actually flips to Working. */
-  async function handleMarkRepaired(light: HighMastLightStatus) {
+  /**
+   * Same fix as the streetlight status dashboard: closes every open
+   * fault on this light (there's nothing stopping more than one), then
+   * reloads this ward's list so the badge actually flips to Working.
+   * Opens a small inline form (comments, optional) first, so a repair
+   * comment lands in the delay report's Comments column too.
+   */
+  function openRepairForm(light: HighMastLightStatus) {
+    setRepairFormLightId(light.lightId);
+    setRepairFormNotes("");
+    setError(null);
+  }
+
+  function cancelRepairForm() {
+    setRepairFormLightId(null);
+  }
+
+  async function submitMarkRepaired(light: HighMastLightStatus) {
     if (!openWard) return;
     const openFaultIds = light.faultHistory.filter((f) => f.status === "open").map((f) => f.faultId);
-    if (openFaultIds.length === 0) return;
+    if (openFaultIds.length === 0) {
+      setRepairFormLightId(null);
+      return;
+    }
     setMarkingRepairedLightId(light.lightId);
     setError(null);
     try {
       for (const faultId of openFaultIds) {
-        await markFaultRepaired(faultId, null);
+        await markFaultRepaired(faultId, repairFormNotes.trim() || null);
       }
+      setRepairFormLightId(null);
       setWardLights(await fetchHighMastLightsForWard(openWard.id));
       fetchHighMastWardStatusDashboard().then(setWards).catch(() => {});
     } catch (err) {
@@ -228,18 +250,45 @@ export default function HighMastStatusDashboardPage() {
                               <XCircle className="h-3.5 w-3.5" />
                               Not Working
                             </span>
-                            <button
-                              onClick={() => handleMarkRepaired(l)}
-                              disabled={markingRepairedLightId === l.lightId}
-                              className="inline-flex items-center gap-1 rounded-full bg-green-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-green-700 disabled:opacity-60"
-                            >
-                              <CheckCircle2 className="h-3.5 w-3.5" />
-                              {markingRepairedLightId === l.lightId ? "Marking…" : "Mark Repaired"}
-                            </button>
+                            {repairFormLightId !== l.lightId && (
+                              <button
+                                onClick={() => openRepairForm(l)}
+                                className="inline-flex items-center gap-1 rounded-full bg-green-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-green-700"
+                              >
+                                <CheckCircle2 className="h-3.5 w-3.5" />
+                                Mark Repaired
+                              </button>
+                            )}
                           </>
                         )}
                       </div>
                     </div>
+                    {repairFormLightId === l.lightId && (
+                      <div className="mt-3 space-y-2 rounded-md border border-green-200 bg-green-50 p-3">
+                        <div>
+                          <label className="mb-1 block text-[10px] font-semibold uppercase text-slate-500">Repair comments</label>
+                          <textarea
+                            value={repairFormNotes}
+                            onChange={(e) => setRepairFormNotes(e.target.value)}
+                            rows={2}
+                            placeholder="What was fixed… (optional)"
+                            className="w-full rounded-md border border-slate-300 px-2 py-1.5 text-xs outline-none focus:ring-1 focus:ring-nnm-blue"
+                          />
+                        </div>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => submitMarkRepaired(l)}
+                            disabled={markingRepairedLightId === l.lightId}
+                            className="rounded-md bg-green-600 px-3 py-1 text-xs font-semibold text-white hover:bg-green-700 disabled:opacity-60"
+                          >
+                            {markingRepairedLightId === l.lightId ? "Marking…" : "Mark Repaired"}
+                          </button>
+                          <button onClick={cancelRepairForm} className="rounded-md border border-slate-300 px-3 py-1 text-xs font-medium text-slate-600 hover:bg-slate-100">
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    )}
                     {faultyFormLightId === l.lightId && (
                       <div className="mt-3 space-y-2 rounded-md border border-red-200 bg-red-50 p-3">
                         <div>
