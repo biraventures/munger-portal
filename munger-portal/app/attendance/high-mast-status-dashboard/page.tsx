@@ -8,11 +8,21 @@ import {
   fetchHighMastWardStatusDashboard,
   fetchHighMastLightsForWard,
   markFaultRepaired,
+  reportFault,
   type WardStatus,
   type HighMastLightStatus,
 } from "@/lib/streetlight-api";
 
 const OVERSIGHT_ROLES = ["city_manager", "deputy_municipal_commissioner", "municipal_commissioner", "attendance_admin"];
+
+/** Local (not UTC) today, so the date input's default doesn't drift a day off around midnight IST. */
+function todayLocalDateString(): string {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
 
 export default function HighMastStatusDashboardPage() {
   const attendance = useAttendanceGuard();
@@ -22,6 +32,10 @@ export default function HighMastStatusDashboardPage() {
   const [wardLights, setWardLights] = useState<HighMastLightStatus[] | null>(null);
   const [loadingLights, setLoadingLights] = useState(false);
   const [markingRepairedLightId, setMarkingRepairedLightId] = useState<number | null>(null);
+  const [markingFaultyLightId, setMarkingFaultyLightId] = useState<number | null>(null);
+  const [faultyFormLightId, setFaultyFormLightId] = useState<number | null>(null);
+  const [faultyFormNotes, setFaultyFormNotes] = useState("");
+  const [faultyFormDate, setFaultyFormDate] = useState(todayLocalDateString());
 
   useEffect(() => {
     if (!attendance) return;
@@ -66,6 +80,39 @@ export default function HighMastStatusDashboardPage() {
       setError(err instanceof Error ? err.message : "Could not mark this light repaired.");
     } finally {
       setMarkingRepairedLightId(null);
+    }
+  }
+
+  /**
+   * The reverse of handleMarkRepaired - flags a currently-working light
+   * faulty right from here. Opens a small inline form (comments +
+   * non-functional-since date, defaulted to today) rather than
+   * reporting immediately.
+   */
+  function openMarkFaultyForm(light: HighMastLightStatus) {
+    setFaultyFormLightId(light.lightId);
+    setFaultyFormNotes("");
+    setFaultyFormDate(todayLocalDateString());
+    setError(null);
+  }
+
+  function cancelMarkFaultyForm() {
+    setFaultyFormLightId(null);
+  }
+
+  async function submitMarkFaulty(lightId: number) {
+    if (!openWard) return;
+    setMarkingFaultyLightId(lightId);
+    setError(null);
+    try {
+      await reportFault(lightId, faultyFormNotes.trim() || null, faultyFormDate || null);
+      setFaultyFormLightId(null);
+      setWardLights(await fetchHighMastLightsForWard(openWard.id));
+      fetchHighMastWardStatusDashboard().then(setWards).catch(() => {});
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not report this light as faulty.");
+    } finally {
+      setMarkingFaultyLightId(null);
     }
   }
 
@@ -160,10 +207,21 @@ export default function HighMastStatusDashboardPage() {
                       </div>
                       <div className="flex items-center gap-2">
                         {l.working ? (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2.5 py-1 text-xs font-semibold text-green-700">
-                            <CheckCircle2 className="h-3.5 w-3.5" />
-                            Working
-                          </span>
+                          <>
+                            <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2.5 py-1 text-xs font-semibold text-green-700">
+                              <CheckCircle2 className="h-3.5 w-3.5" />
+                              Working
+                            </span>
+                            {faultyFormLightId !== l.lightId && (
+                              <button
+                                onClick={() => openMarkFaultyForm(l)}
+                                className="inline-flex items-center gap-1 rounded-full bg-red-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-red-700"
+                              >
+                                <XCircle className="h-3.5 w-3.5" />
+                                Mark Faulty
+                              </button>
+                            )}
+                          </>
                         ) : (
                           <>
                             <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2.5 py-1 text-xs font-semibold text-red-700">
@@ -182,6 +240,42 @@ export default function HighMastStatusDashboardPage() {
                         )}
                       </div>
                     </div>
+                    {faultyFormLightId === l.lightId && (
+                      <div className="mt-3 space-y-2 rounded-md border border-red-200 bg-red-50 p-3">
+                        <div>
+                          <label className="mb-1 block text-[10px] font-semibold uppercase text-slate-500">Non-functional since</label>
+                          <input
+                            type="date"
+                            value={faultyFormDate}
+                            max={todayLocalDateString()}
+                            onChange={(e) => setFaultyFormDate(e.target.value)}
+                            className="rounded-md border border-slate-300 px-2 py-1 text-xs outline-none focus:ring-1 focus:ring-nnm-blue"
+                          />
+                        </div>
+                        <div>
+                          <label className="mb-1 block text-[10px] font-semibold uppercase text-slate-500">Comments</label>
+                          <textarea
+                            value={faultyFormNotes}
+                            onChange={(e) => setFaultyFormNotes(e.target.value)}
+                            rows={2}
+                            placeholder="What's wrong with this light… (optional)"
+                            className="w-full rounded-md border border-slate-300 px-2 py-1.5 text-xs outline-none focus:ring-1 focus:ring-nnm-blue"
+                          />
+                        </div>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => submitMarkFaulty(l.lightId)}
+                            disabled={markingFaultyLightId === l.lightId}
+                            className="rounded-md bg-red-600 px-3 py-1 text-xs font-semibold text-white hover:bg-red-700 disabled:opacity-60"
+                          >
+                            {markingFaultyLightId === l.lightId ? "Reporting…" : "Report Faulty"}
+                          </button>
+                          <button onClick={cancelMarkFaultyForm} className="rounded-md border border-slate-300 px-3 py-1 text-xs font-medium text-slate-600 hover:bg-slate-100">
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    )}
                     {l.faultHistory.length > 0 && (
                       <details className="mt-2 text-xs text-slate-500">
                         <summary className="cursor-pointer font-medium text-slate-600">Fault history ({l.faultHistory.length})</summary>
