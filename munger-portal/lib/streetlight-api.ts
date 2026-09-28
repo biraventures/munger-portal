@@ -603,6 +603,36 @@ export async function fetchSegmentLightStatus(segmentId: number): Promise<Segmen
   return data.lights;
 }
 
+// ---------------------------------------------------------------------------
+// High Mast status dashboard - separate from the streetlight one above,
+// since High Mast lights are standalone (ward -> lights directly, no
+// street level).
+// ---------------------------------------------------------------------------
+
+export async function fetchHighMastWardStatusDashboard(): Promise<WardStatus[]> {
+  const res = await fetch(`${API_BASE_URL}/streetlight/high-mast-status-dashboard/wards`, { headers: authHeaders() });
+  if (!res.ok) throw new Error("Could not load the High Mast status dashboard.");
+  const data: { wards: WardStatus[] } = await res.json();
+  return data.wards;
+}
+
+export interface HighMastLightStatus {
+  lightId: number;
+  serialNumber: string;
+  localityName: string;
+  active: boolean;
+  working: boolean;
+  faultHistory: SegmentLightFaultHistoryEntry[];
+  switchStatus: "working" | "not_working" | "automatic" | "joint" | null;
+}
+
+export async function fetchHighMastLightsForWard(wardId: number): Promise<HighMastLightStatus[]> {
+  const res = await fetch(`${API_BASE_URL}/streetlight/high-mast-status-dashboard/wards/${wardId}/lights`, { headers: authHeaders() });
+  if (!res.ok) throw new Error("Could not load High Mast lights for this ward.");
+  const data: { lights: HighMastLightStatus[] } = await res.json();
+  return data.lights;
+}
+
 export interface StreetlightLightOption {
   id: number;
   serial_number: string;

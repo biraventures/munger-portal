@@ -166,3 +166,91 @@ export async function deleteAllStreetlightData(): Promise<{ segmentsDeleted: num
     client.release();
   }
 }
+
+// ---------------------------------------------------------------------------
+// High Mast status dashboard - a separate drill-down from the streetlight
+// one, since High Mast lights are standalone (not part of a street
+// segment): ward -> individual lights directly, no street level.
+// ---------------------------------------------------------------------------
+
+/** Ward-wise High Mast light status - same shape as buildWardStatusDashboard, filtered to light_type = 'high_mast'. */
+export async function buildHighMastWardStatusDashboard(): Promise<WardStatusRow[]> {
+  const { rows } = await pool.query<WardStatusRow>(
+    `SELECT
+       w.id AS "wardId", w.ward_name AS "wardName",
+       COUNT(l.id)::int AS "totalLights",
+       COUNT(DISTINCT lf.light_id)::int AS "notWorking",
+       (COUNT(l.id) - COUNT(DISTINCT lf.light_id))::int AS "working"
+     FROM attendance_wards w
+     LEFT JOIN lights l ON l.ward_id = w.id AND l.light_type = 'high_mast' AND l.active = TRUE AND l.deleted_at IS NULL
+     LEFT JOIN light_faults lf ON lf.light_id = l.id AND lf.status = 'open'
+     GROUP BY w.id, w.ward_name
+     HAVING COUNT(l.id) > 0
+     ORDER BY w.ward_name ASC`,
+  );
+  return rows;
+}
+
+export interface HighMastLightStatusRow {
+  lightId: number;
+  serialNumber: string;
+  localityName: string;
+  active: boolean;
+  working: boolean;
+  faultHistory: SegmentLightFaultHistoryRow[];
+  switchStatus: "working" | "not_working" | "automatic" | "joint" | null;
+}
+
+/** Every High Mast light in one ward, its working/not-working status, and full fault history - the drill-down from buildHighMastWardStatusDashboard. */
+export async function buildHighMastLightsForWard(wardId: number): Promise<HighMastLightStatusRow[]> {
+  const { rows: lights } = await pool.query<{
+    id: number;
+    serial_number: string;
+    locality_name: string;
+    active: boolean;
+    switch_status: "working" | "not_working" | "automatic" | "joint" | null;
+  }>(
+    `SELECT id, serial_number, locality_name, active, switch_status FROM lights WHERE ward_id = $1 AND light_type = 'high_mast' AND deleted_at IS NULL ORDER BY serial_number ASC`,
+    [wardId],
+  );
+  if (lights.length === 0) return [];
+
+  const lightIds = lights.map((l) => l.id);
+  const { rows: faults } = await pool.query<{
+    id: number;
+    light_id: number;
+    reported_at: string;
+    reported_by_type: "staff" | "public" | "admin";
+    status: "open" | "repaired";
+    repaired_at: string | null;
+    reporter_notes: string | null;
+  }>(`SELECT id, light_id, reported_at, reported_by_type, status, repaired_at, reporter_notes FROM light_faults WHERE light_id = ANY($1) ORDER BY reported_at DESC`, [lightIds]);
+
+  const faultsByLight = new Map<number, SegmentLightFaultHistoryRow[]>();
+  for (const f of faults) {
+    const entry: SegmentLightFaultHistoryRow = {
+      faultId: f.id,
+      reportedAt: f.reported_at,
+      reportedByType: f.reported_by_type,
+      status: f.status,
+      repairedAt: f.repaired_at,
+      reporterNotes: f.reporter_notes,
+    };
+    const existing = faultsByLight.get(f.light_id);
+    if (existing) existing.push(entry);
+    else faultsByLight.set(f.light_id, [entry]);
+  }
+
+  return lights.map((l) => {
+    const history = faultsByLight.get(l.id) ?? [];
+    return {
+      lightId: l.id,
+      serialNumber: l.serial_number,
+      localityName: l.locality_name,
+      active: l.active,
+      working: !history.some((h) => h.status === "open"),
+      faultHistory: history,
+      switchStatus: l.switch_status,
+    };
+  });
+}

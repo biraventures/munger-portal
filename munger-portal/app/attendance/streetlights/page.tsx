@@ -63,6 +63,16 @@ export default function StreetlightsHubPage() {
             </Link>
           )}
 
+          {isOversight && (
+            <Link href="/attendance/high-mast-status-dashboard" className={cardClass}>
+              <span className={iconWrapClass}>
+                <BarChart3 className="h-6 w-6" strokeWidth={1.8} />
+              </span>
+              <h3 className="mb-1.5 text-base font-semibold text-slate-900">High Mast Status Dashboard</h3>
+              <p className="text-sm text-slate-500">Working vs not working for High Mast lights, ward-wise, separate from street lights.</p>
+            </Link>
+          )}
+
           {isCommissioner && (
             <Link href="/attendance/streetlights-bulk-upload" className={cardClass}>
               <span className={iconWrapClass}>

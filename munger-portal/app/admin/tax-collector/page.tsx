@@ -6,6 +6,7 @@ import { AlertCircle, AlertTriangle, CheckCircle2, FileWarning, Receipt, Search,
 import { sanitizeHoldingNoInput } from "@/lib/holding-no";
 import { AdminHeader } from "@/components/admin-header";
 import { useAdminGuard } from "@/lib/use-admin-guard";
+import { FieldVerificationCapture } from "@/components/admin/field-verification-capture";
 import {
   fetchPropertyForCollector,
   fetchUnsettledDemandNoticesAdmin,
@@ -210,6 +211,9 @@ export default function TaxCollectorPage() {
                   <span className="text-slate-500">Assessment year:</span> {displayVal(property.assessment_year)}
                 </p>
                 <p>
+                  <span className="text-slate-500">Tax paid till year:</span> {displayVal(property.tax_paid_till_year)}
+                </p>
+                <p>
                   <span className="text-slate-500">Current annual tax:</span> ₹{displayVal(property.currentTax)}
                 </p>
                 {property.arrears && (
@@ -221,6 +225,8 @@ export default function TaxCollectorPage() {
                 )}
               </div>
             </div>
+
+            <FieldVerificationCapture holdingNo={property.holding_no} />
 
             <div className="rounded-xl border border-slate-200 bg-white p-5">
               <h3 className="mb-3 text-sm font-semibold text-slate-700">Floors on record</h3>

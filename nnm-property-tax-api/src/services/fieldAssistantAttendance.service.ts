@@ -1,9 +1,15 @@
 import { fieldAssistantRepository } from "../repositories/fieldAssistant.repository";
+import type { FieldAssistantRow } from "../repositories/fieldAssistant.repository";
 import { fieldAssistantAttendanceRepository } from "../repositories/fieldAssistantAttendance.repository";
+import { fieldDriverRepository } from "../repositories/fieldDriver.repository";
 import { attendanceShiftRepository } from "../repositories/attendanceWard.repository";
+import { assetRepository } from "../repositories/asset.repository";
 import { istDateString, istTimeString, istShiftStartToday } from "../utils/istDate";
+import { isTotoLabel } from "../utils/totoVehicle";
 import { ApiError } from "../utils/ApiError";
 import type { AttendanceTokenPayload } from "../types/attendance.types";
+
+export type AssistantWardFilter = "all" | "excludeToto" | "totoOnly";
 
 export interface WardAssistantToday {
   assistantId: number;
@@ -15,8 +21,13 @@ export interface WardAssistantToday {
   status: string | null;
 }
 
-export async function getWardAssistantsToday(wardId: number): Promise<WardAssistantToday[]> {
-  const assistants = await fieldAssistantRepository.listByWard(wardId);
+export async function getWardAssistantsToday(wardId: number, filter: AssistantWardFilter = "all"): Promise<WardAssistantToday[]> {
+  const assistants =
+    filter === "excludeToto"
+      ? await fieldAssistantRepository.listByWardExcludingToto(wardId)
+      : filter === "totoOnly"
+        ? await fieldAssistantRepository.listTotoByWard(wardId)
+        : await fieldAssistantRepository.listByWard(wardId);
   const today = istDateString();
   const todaysAttendance = await fieldAssistantAttendanceRepository.listForWardOnDate(wardId, today);
   const byAssistantId = new Map(todaysAttendance.map((a) => [a.assistant_id, a]));
@@ -39,16 +50,44 @@ export async function getWardAssistantsToday(wardId: number): Promise<WardAssist
   });
 }
 
-function assertWardAccess(user: AttendanceTokenPayload, assistantWardId: number): void {
-  if (user.role === "driver_supervisor" && user.wardId !== assistantWardId) {
-    throw ApiError.badRequest("This assistant is not in your ward.");
+/** Whether an assistant's driver is tied to a Toto vehicle (see isTotoLabel) - assistants have no asset_id of their own, so this goes through their driver's linked asset. */
+async function isAssistantToto(assistant: FieldAssistantRow): Promise<boolean> {
+  const driver = await fieldDriverRepository.findById(assistant.driver_id);
+  if (!driver?.asset_id) return false;
+  const asset = await assetRepository.findById(driver.asset_id);
+  return isTotoLabel(asset?.label ?? null);
+}
+
+/**
+ * Mirrors fieldDriverAttendance.service.ts's assertWardAccess: Toto
+ * vehicle assistants are the ward Jamadar's responsibility only; every
+ * other assistant stays with the driver_supervisor. attendance_admin is
+ * unrestricted, matching the pre-existing behavior for that role.
+ */
+async function assertWardAccess(user: AttendanceTokenPayload, assistant: FieldAssistantRow): Promise<void> {
+  if (user.role === "attendance_admin") return;
+
+  const toto = await isAssistantToto(assistant);
+
+  if (user.role === "jamadar") {
+    if (!toto) throw ApiError.badRequest("Only Toto vehicle assistants are marked by the Jamadar.");
+    if (user.wardId !== assistant.ward_id) throw ApiError.badRequest("This assistant is not in your ward.");
+    return;
   }
+
+  if (user.role === "driver_supervisor") {
+    if (toto) throw ApiError.badRequest("Toto vehicle assistants are marked by the ward Jamadar, not the Driver Supervisor.");
+    if (user.wardId !== assistant.ward_id) throw ApiError.badRequest("This assistant is not in your ward.");
+    return;
+  }
+
+  throw ApiError.badRequest("You are not authorized to mark this assistant's attendance.");
 }
 
 export async function markAssistantIn(user: AttendanceTokenPayload, assistantId: number): Promise<{ inTime: string; status: string }> {
   const assistant = await fieldAssistantRepository.findById(assistantId);
   if (!assistant) throw ApiError.notFound("Assistant not found.");
-  assertWardAccess(user, assistant.ward_id);
+  await assertWardAccess(user, assistant);
 
   if (!assistant.shift_id) throw ApiError.badRequest("No shift configured for this assistant.");
   const shift = await attendanceShiftRepository.findById(assistant.shift_id);
@@ -84,7 +123,7 @@ export async function markAssistantAbsent(
 ): Promise<{ status: string }> {
   const assistant = await fieldAssistantRepository.findById(assistantId);
   if (!assistant) throw ApiError.notFound("Assistant not found.");
-  assertWardAccess(user, assistant.ward_id);
+  await assertWardAccess(user, assistant);
 
   const today = istDateString();
   const existing = await fieldAssistantAttendanceRepository.findForAssistantOnDate(assistantId, today);
@@ -106,7 +145,7 @@ export async function markAssistantAbsent(
 export async function markAssistantOut(user: AttendanceTokenPayload, assistantId: number): Promise<{ outTime: string }> {
   const assistant = await fieldAssistantRepository.findById(assistantId);
   if (!assistant) throw ApiError.notFound("Assistant not found.");
-  assertWardAccess(user, assistant.ward_id);
+  await assertWardAccess(user, assistant);
 
   const now = new Date();
   const today = istDateString(now);

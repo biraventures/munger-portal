@@ -25,6 +25,7 @@ import {
   postResubmitDiscrepancyRequest,
   getDiscrepancyPhoto,
 } from "../controllers/propertyDiscrepancy.controller";
+import { getFieldVerificationPhoto } from "../controllers/propertyFieldVerification.controller";
 import {
   getCancellationRequests,
   postApproveCancellation,
@@ -95,6 +96,7 @@ import {
 } from "../controllers/migratedHoldingSurvey.controller";
 import { listResurveyFlagsHandler, reviewResurveyFlagHandler, exportResurveyFlagsHandler } from "../controllers/propertyResurveyFlag.controller";
 import { listAllCollectionIssues } from "../controllers/collectionIssue.controller";
+import { postGenerateCollectionIssueNotice, getCollectionIssueNotices } from "../controllers/collectionIssueNotice.controller";
 import { listTaxCollectorsWithAssignmentHandler, listCityManagersHandler, assignCityManagerHandler, setTaxCollectorWardsHandler } from "../controllers/taxCollectorAssignment.controller";
 import { listEntryRevertEventsHandler, exportEntryRevertEventsHandler } from "../controllers/entryRevertEvent.controller";
 import {
@@ -199,6 +201,13 @@ adminRouter.post("/property-discrepancy-requests/:id/approve", requireDiscrepanc
 adminRouter.post("/property-discrepancy-requests/:id/reject", requireDiscrepancyChainRole, postRejectDiscrepancyRequest);
 adminRouter.post("/property-discrepancy-requests/:id/revert", requireDiscrepancyChainRole, postRevertDiscrepancyRequest);
 adminRouter.post("/property-discrepancy-requests/:id/resubmit", requireAdminRole("tax_collector"), postResubmitDiscrepancyRequest);
+
+// Field verification photo retrieval - viewable by the two roles who capture them plus the oversight chain.
+adminRouter.get(
+  "/field-verifications/:id/photo/:kind",
+  requireAdminRole("tax_collector", "tax_surveyor", "tax_daroga", "city_manager", "deputy_commissioner", "commissioner"),
+  getFieldVerificationPhoto,
+);
 
 // Demand notice / receipt cancellation approval queue - viewable by
 // any admin role except Stall Prabhari. Approve/reject is tax_daroga
@@ -331,7 +340,9 @@ const requireResurveyFlagReviewRole = requireAdminRole("tax_daroga", "commission
 adminRouter.get("/property-resurvey-flags", requireResurveyFlagReviewRole, listResurveyFlagsHandler);
 
 // Collection issues oversight - same reviewer roles as resurvey flags.
-adminRouter.get("/collection-issues", requireResurveyFlagReviewRole, listAllCollectionIssues);
+adminRouter.get("/collection-issues", requireAdminRole("tax_daroga", "commissioner", "city_manager"), listAllCollectionIssues);
+adminRouter.post("/collection-issues/:id/generate-notice", requireAdminRole("city_manager"), postGenerateCollectionIssueNotice);
+adminRouter.get("/collection-issues/:id/notices", requireAdminRole("tax_daroga", "commissioner", "city_manager"), getCollectionIssueNotices);
 adminRouter.post("/property-resurvey-flags/:id/review", requireResurveyFlagReviewRole, reviewResurveyFlagHandler);
 adminRouter.get("/property-resurvey-flags/export", requireAdminRole("commissioner"), exportResurveyFlagsHandler);
 

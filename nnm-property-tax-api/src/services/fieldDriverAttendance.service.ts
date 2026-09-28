@@ -3,8 +3,11 @@ import { fieldDriverAttendanceRepository } from "../repositories/fieldDriverAtte
 import { attendanceShiftRepository } from "../repositories/attendanceWard.repository";
 import { assetRepository } from "../repositories/asset.repository";
 import { istDateString, istTimeString, istShiftStartToday } from "../utils/istDate";
+import { isTotoLabel } from "../utils/totoVehicle";
 import { ApiError } from "../utils/ApiError";
-import type { AttendanceTokenPayload } from "../types/attendance.types";
+import type { AttendanceTokenPayload, FieldDriverRow } from "../types/attendance.types";
+
+export type DriverWardFilter = "all" | "excludeToto" | "totoOnly";
 
 export interface WardDriverToday {
   driverId: number;
@@ -16,8 +19,13 @@ export interface WardDriverToday {
   status: string | null;
 }
 
-export async function getWardDriversToday(wardId: number): Promise<WardDriverToday[]> {
-  const drivers = await fieldDriverRepository.listByWard(wardId);
+export async function getWardDriversToday(wardId: number, filter: DriverWardFilter = "all"): Promise<WardDriverToday[]> {
+  const drivers =
+    filter === "excludeToto"
+      ? await fieldDriverRepository.listByWardExcludingToto(wardId)
+      : filter === "totoOnly"
+        ? await fieldDriverRepository.listTotoByWard(wardId)
+        : await fieldDriverRepository.listByWard(wardId);
   const today = istDateString();
   const todaysAttendance = await fieldDriverAttendanceRepository.listForWardOnDate(wardId, today);
   const byDriverId = new Map(todaysAttendance.map((a) => [a.driver_id, a]));
@@ -45,16 +53,43 @@ export async function getWardDriversToday(wardId: number): Promise<WardDriverTod
   });
 }
 
-function assertWardAccess(user: AttendanceTokenPayload, driverWardId: number): void {
-  if (user.role === "driver_supervisor" && user.wardId !== driverWardId) {
-    throw ApiError.badRequest("This driver is not in your ward.");
+/** Whether a driver's linked vehicle is a Toto (see isTotoLabel) - resolved via their linked asset, since Toto-ness isn't a structured column on field_drivers. */
+async function isDriverToto(driver: FieldDriverRow): Promise<boolean> {
+  if (!driver.asset_id) return false;
+  const asset = await assetRepository.findById(driver.asset_id);
+  return isTotoLabel(asset?.label ?? null);
+}
+
+/**
+ * Toto vehicle drivers/assistants are the ward Jamadar's responsibility
+ * only; every other vehicle stays with the driver_supervisor - see the
+ * repository's listByWardExcludingToto/listTotoByWard. attendance_admin
+ * is unrestricted, matching the pre-existing behavior for that role.
+ */
+async function assertWardAccess(user: AttendanceTokenPayload, driver: FieldDriverRow): Promise<void> {
+  if (user.role === "attendance_admin") return;
+
+  const toto = await isDriverToto(driver);
+
+  if (user.role === "jamadar") {
+    if (!toto) throw ApiError.badRequest("Only Toto vehicle drivers are marked by the Jamadar.");
+    if (user.wardId !== driver.ward_id) throw ApiError.badRequest("This driver is not in your ward.");
+    return;
   }
+
+  if (user.role === "driver_supervisor") {
+    if (toto) throw ApiError.badRequest("Toto vehicle drivers are marked by the ward Jamadar, not the Driver Supervisor.");
+    if (user.wardId !== driver.ward_id) throw ApiError.badRequest("This driver is not in your ward.");
+    return;
+  }
+
+  throw ApiError.badRequest("You are not authorized to mark this driver's attendance.");
 }
 
 export async function markDriverIn(user: AttendanceTokenPayload, driverId: number): Promise<{ inTime: string; status: string }> {
   const driver = await fieldDriverRepository.findById(driverId);
   if (!driver) throw ApiError.notFound("Driver not found.");
-  assertWardAccess(user, driver.ward_id);
+  await assertWardAccess(user, driver);
 
   if (!driver.shift_id) throw ApiError.badRequest("No shift configured for this driver.");
   const shift = await attendanceShiftRepository.findById(driver.shift_id);
@@ -90,7 +125,7 @@ export async function markDriverAbsent(
 ): Promise<{ status: string }> {
   const driver = await fieldDriverRepository.findById(driverId);
   if (!driver) throw ApiError.notFound("Driver not found.");
-  assertWardAccess(user, driver.ward_id);
+  await assertWardAccess(user, driver);
 
   const today = istDateString();
   const existing = await fieldDriverAttendanceRepository.findForDriverOnDate(driverId, today);
@@ -112,7 +147,7 @@ export async function markDriverAbsent(
 export async function markDriverOut(user: AttendanceTokenPayload, driverId: number): Promise<{ outTime: string }> {
   const driver = await fieldDriverRepository.findById(driverId);
   if (!driver) throw ApiError.notFound("Driver not found.");
-  assertWardAccess(user, driver.ward_id);
+  await assertWardAccess(user, driver);
 
   const now = new Date();
   const today = istDateString(now);

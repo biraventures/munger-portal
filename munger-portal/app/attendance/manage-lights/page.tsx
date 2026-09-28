@@ -42,12 +42,11 @@ export default function ManageLightsPage() {
   const [wards, setWards] = useState<AttendanceWard[]>([]);
   const [agencies, setAgencies] = useState<InstallationAgency[]>([]);
   const [lights, setLights] = useState<StreetLight[] | null>(null);
-  const [typeFilter, setTypeFilter] = useState<"" | "streetlight" | "high_mast">("");
   const [wardFilter, setWardFilter] = useState("");
   const [error, setError] = useState<string | null>(null);
 
-  // Create form
-  const [lightType, setLightType] = useState<"streetlight" | "high_mast">("streetlight");
+  // Create form - this entry system is High Mast only; street lights are added exclusively through the street-wise system.
+  const lightType = "high_mast" as const;
   const [wardId, setWardId] = useState("");
   const [localityName, setLocalityName] = useState("");
   const [serialNumber, setSerialNumber] = useState("");
@@ -179,7 +178,7 @@ export default function ManageLightsPage() {
   }
 
   const visibleLights = (lights ?? [])
-    .filter((l) => !typeFilter || l.lightType === typeFilter)
+    .filter((l) => l.lightType === "high_mast")
     .filter((l) => !wardFilter || l.wardId === Number(wardFilter));
 
   return (
@@ -187,8 +186,11 @@ export default function ManageLightsPage() {
       <AttendanceHeader user={user} />
 
       <main className="mx-auto max-w-5xl px-6 py-10">
-        <h1 className="mb-1 text-2xl font-semibold text-slate-900">Street Light & High Mast Registry</h1>
-        <p className="mb-6 text-sm text-slate-500">Ward-wise light inventory - serial number, location, and installation agency.</p>
+        <h1 className="mb-1 text-2xl font-semibold text-slate-900">High Mast Light Entry</h1>
+        <p className="mb-6 text-sm text-slate-500">
+          Ward-wise High Mast light inventory - serial number, location, and installation agency. Street lights are added through the street-wise
+          system instead.
+        </p>
 
         {error && (
           <div role="alert" className="mb-5 flex items-center gap-2 rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-700">
@@ -236,7 +238,7 @@ export default function ManageLightsPage() {
           <section className="mb-8 rounded-xl border border-slate-200 bg-white p-6">
             <h2 className="mb-4 flex items-center gap-2 text-sm font-semibold text-slate-700">
               <PlusCircle className="h-4 w-4" />
-              Add One Light
+              Add One High Mast Light
             </h2>
             {createError && (
               <div role="alert" className="mb-4 flex items-center gap-2 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
@@ -251,13 +253,6 @@ export default function ManageLightsPage() {
               </div>
             )}
             <form onSubmit={handleCreate} className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-              <div>
-                <label className={labelClass}>Type</label>
-                <select value={lightType} onChange={(e) => setLightType(e.target.value as "streetlight" | "high_mast")} className={inputClass}>
-                  <option value="streetlight">Street Light</option>
-                  <option value="high_mast">High Mast</option>
-                </select>
-              </div>
               <div>
                 <label className={labelClass}>Ward</label>
                 <select required value={wardId} onChange={(e) => setWardId(e.target.value)} className={inputClass}>
@@ -316,10 +311,11 @@ export default function ManageLightsPage() {
               Bulk Upload (CSV)
             </h2>
             <p className="mb-3 text-xs text-slate-500">
-              Upload the ward-wise field inventory CSV (streetlights or high-mast). Wards and installation agencies not already on
-              file are created automatically. Lights whose functional status is marked as not working in the file are logged with
-              an open fault immediately. This adds to the registry - it does not replace or deactivate existing entries, and rows
-              with a serial number that already exists are skipped.
+              Upload the ward-wise High Mast light inventory CSV - every row is entered as a High Mast light regardless of any
+              type column in the file. Wards and installation agencies not already on file are created automatically. Lights
+              whose functional status is marked as not working in the file are logged with an open fault immediately. This adds
+              to the registry - it does not replace or deactivate existing entries, and rows with a serial number that already
+              exists are skipped.
             </p>
             <details className="mb-4 rounded-md border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
               <summary className="cursor-pointer font-semibold text-slate-700">Expected CSV columns (matched by header name)</summary>
@@ -328,7 +324,6 @@ export default function ManageLightsPage() {
                 <li>Lane/ locality</li>
                 <li>Street light serial number - must be unique</li>
                 <li>functional status - &quot;Working&quot; or &quot;Not Working&quot;</li>
-                <li>type( high mast/ street light)</li>
                 <li>Established by ( EESL / Nagar nigam) - the installation agency</li>
                 <li>Switch status( working/ not working/automatic/joint )</li>
                 <li>Latitude / Longitude (or a single combined GPS/Location column with &quot;lat, lng&quot;)</li>
@@ -381,14 +376,9 @@ export default function ManageLightsPage() {
           <div className="mb-4 flex items-center justify-between gap-3">
             <h2 className="text-sm font-semibold text-slate-700">
               <Lightbulb className="mr-1 inline h-4 w-4" />
-              All Lights ({visibleLights.length})
+              High Mast Lights ({visibleLights.length})
             </h2>
             <div className="flex gap-2">
-              <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value as typeof typeFilter)} className="rounded-md border border-slate-300 px-2 py-1.5 text-xs">
-                <option value="">All types</option>
-                <option value="streetlight">Street Light</option>
-                <option value="high_mast">High Mast</option>
-              </select>
               <select value={wardFilter} onChange={(e) => setWardFilter(e.target.value)} className="rounded-md border border-slate-300 px-2 py-1.5 text-xs">
                 <option value="">All wards</option>
                 {wards.map((w) => (

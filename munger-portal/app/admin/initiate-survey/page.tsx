@@ -5,6 +5,7 @@ import { AlertCircle, CheckCircle2, Search, ClipboardCheck } from "lucide-react"
 import { sanitizeHoldingNoInput } from "@/lib/holding-no";
 import { AdminHeader } from "@/components/admin-header";
 import { useAdminGuard } from "@/lib/use-admin-guard";
+import { FieldVerificationCapture } from "@/components/admin/field-verification-capture";
 import { fetchFullPropertyAdmin, savePropertyAdmin, type AdminSaveError } from "@/lib/admin-api";
 import { fetchFormOptions, type FormOptions } from "@/lib/operator-api";
 import { AdminPropertyDetailsForm, blankAdminPropertyForm, propertyFormFromExisting, propertyFormToPayload, type AdminPropertyFormState } from "@/components/admin/property-details-form";
@@ -18,6 +19,7 @@ export default function InitiateSurveyPage() {
   const [searchError, setSearchError] = useState<string | null>(null);
   const [found, setFound] = useState(false);
   const [isNewHolding, setIsNewHolding] = useState(false);
+  const [taxPaidTillYear, setTaxPaidTillYear] = useState<string | null>(null);
   const [formOptions, setFormOptions] = useState<FormOptions | null>(null);
   const [form, setForm] = useState<AdminPropertyFormState>(blankAdminPropertyForm());
   const [changeReference, setChangeReference] = useState("");
@@ -40,11 +42,13 @@ export default function InitiateSurveyPage() {
       if (!result.found || !result.property) {
         // No existing holding under this number - the survey creates it fresh.
         setIsNewHolding(true);
+        setTaxPaidTillYear(null);
         setForm(blankAdminPropertyForm());
         setFound(true);
         return;
       }
       setIsNewHolding(false);
+      setTaxPaidTillYear((result.property.tax_paid_till_year as string | null) ?? null);
       setForm(propertyFormFromExisting(result.property, result.floors ?? []));
       setFound(true);
     } catch (err) {
@@ -159,6 +163,7 @@ export default function InitiateSurveyPage() {
               </p>
               {!isNewHolding && (
                 <>
+                  <p className="mb-4 text-xs text-slate-500">Tax paid till year: {taxPaidTillYear ?? "-"}</p>
                   <label className="mb-1 block text-xs font-medium text-slate-600">Resurvey notes (required)</label>
                   <textarea
                     value={changeReference}
@@ -170,6 +175,8 @@ export default function InitiateSurveyPage() {
                 </>
               )}
             </div>
+
+            {!isNewHolding && <FieldVerificationCapture holdingNo={holdingNo.trim()} />}
 
             <div className="rounded-xl border border-slate-200 bg-white p-6">
               <h2 className="mb-4 text-sm font-semibold text-slate-800">Property details</h2>
