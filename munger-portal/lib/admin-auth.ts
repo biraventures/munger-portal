@@ -62,7 +62,7 @@ export interface AdminInfo {
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_PROPERTY_TAX_API_URL || "http://localhost:4000/api/v1";
 
-export async function adminLogin(username: string, password: string): Promise<AdminInfo> {
+export async function adminLogin(username: string, password: string, rememberMe: boolean = false): Promise<AdminInfo> {
   const res = await fetch(`${API_BASE_URL}/admin/auth/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -77,21 +77,43 @@ export async function adminLogin(username: string, password: string): Promise<Ad
   const data: { token: string; admin: AdminInfo } = await res.json();
   sessionStorage.setItem(TOKEN_KEY, data.token);
   sessionStorage.setItem(ADMIN_KEY, JSON.stringify(data.admin));
+
+  if (rememberMe) {
+    localStorage.setItem(TOKEN_KEY, data.token);
+    localStorage.setItem(ADMIN_KEY, JSON.stringify(data.admin));
+  } else {
+    localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(ADMIN_KEY);
+  }
+
   return data.admin;
 }
 
 export function getAdminToken(): string | null {
   if (typeof window === "undefined") return null;
-  return sessionStorage.getItem(TOKEN_KEY);
+  const token = sessionStorage.getItem(TOKEN_KEY) || localStorage.getItem(TOKEN_KEY);
+  if (token && !sessionStorage.getItem(TOKEN_KEY)) {
+    try {
+      sessionStorage.setItem(TOKEN_KEY, token);
+    } catch {}
+  }
+  return token;
 }
 
 export function getAdminInfo(): AdminInfo | null {
   if (typeof window === "undefined") return null;
-  const raw = sessionStorage.getItem(ADMIN_KEY);
+  const raw = sessionStorage.getItem(ADMIN_KEY) || localStorage.getItem(ADMIN_KEY);
+  if (raw && !sessionStorage.getItem(ADMIN_KEY)) {
+    try {
+      sessionStorage.setItem(ADMIN_KEY, raw);
+    } catch {}
+  }
   return raw ? (JSON.parse(raw) as AdminInfo) : null;
 }
 
 export function adminLogout(): void {
   sessionStorage.removeItem(TOKEN_KEY);
   sessionStorage.removeItem(ADMIN_KEY);
+  localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(ADMIN_KEY);
 }

@@ -11,7 +11,7 @@ export interface OperatorInfo {
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_PROPERTY_TAX_API_URL || "http://localhost:4000/api/v1";
 
-export async function operatorLogin(username: string, password: string): Promise<OperatorInfo> {
+export async function operatorLogin(username: string, password: string, rememberMe: boolean = false): Promise<OperatorInfo> {
   const res = await fetch(`${API_BASE_URL}/auth/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -27,26 +27,45 @@ export async function operatorLogin(username: string, password: string): Promise
 
   const data: { token: string; operator: OperatorInfo } = await res.json();
 
-  // Session storage — cleared automatically when the browser tab closes.
-  // A shared operator terminal shouldn't stay logged in indefinitely.
   sessionStorage.setItem(TOKEN_KEY, data.token);
   sessionStorage.setItem(OPERATOR_KEY, JSON.stringify(data.operator));
+
+  if (rememberMe) {
+    localStorage.setItem(TOKEN_KEY, data.token);
+    localStorage.setItem(OPERATOR_KEY, JSON.stringify(data.operator));
+  } else {
+    localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(OPERATOR_KEY);
+  }
 
   return data.operator;
 }
 
 export function getOperatorToken(): string | null {
   if (typeof window === "undefined") return null;
-  return sessionStorage.getItem(TOKEN_KEY);
+  const token = sessionStorage.getItem(TOKEN_KEY) || localStorage.getItem(TOKEN_KEY);
+  if (token && !sessionStorage.getItem(TOKEN_KEY)) {
+    try {
+      sessionStorage.setItem(TOKEN_KEY, token);
+    } catch {}
+  }
+  return token;
 }
 
 export function getOperatorInfo(): OperatorInfo | null {
   if (typeof window === "undefined") return null;
-  const raw = sessionStorage.getItem(OPERATOR_KEY);
+  const raw = sessionStorage.getItem(OPERATOR_KEY) || localStorage.getItem(OPERATOR_KEY);
+  if (raw && !sessionStorage.getItem(OPERATOR_KEY)) {
+    try {
+      sessionStorage.setItem(OPERATOR_KEY, raw);
+    } catch {}
+  }
   return raw ? (JSON.parse(raw) as OperatorInfo) : null;
 }
 
 export function operatorLogout(): void {
   sessionStorage.removeItem(TOKEN_KEY);
   sessionStorage.removeItem(OPERATOR_KEY);
+  localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(OPERATOR_KEY);
 }
