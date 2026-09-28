@@ -1,6 +1,6 @@
 import type { Request, Response } from "express";
 import { z } from "zod";
-import { tcLogin } from "../services/tcAuth.service";
+import { tcLogin } from "../services/taxCollectorAuth.service";
 import { asyncHandler } from "../middleware/asyncHandler";
 import { ApiError } from "../utils/ApiError";
 

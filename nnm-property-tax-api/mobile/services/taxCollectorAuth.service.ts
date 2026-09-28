@@ -2,14 +2,14 @@ import type { tcLoginResult, TCTokenPayload } from "../types/tcauth.types";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import { env } from "../config/env";
-import { tcRepository } from "../repositories/tc.repository";
+import { taxCollectorRepository } from "../repositories/taxCollector.repository";
 import { ApiError } from "../utils/ApiError";
 
 export async function tcLogin(
   username: string,
   password: string,
 ): Promise<tcLoginResult> {
-  const tc = await tcRepository.findByUsername(username);
+  const tc = await taxCollectorRepository.findByUsername(username);
   if (!tc) {
     throw new ApiError(401, "Invalid username or password");
   }
