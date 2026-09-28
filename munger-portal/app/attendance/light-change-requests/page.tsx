@@ -21,6 +21,8 @@ import {
 const inputClass = "w-full rounded-md border border-slate-300 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-nnm-blue focus:ring-offset-1";
 const REQUESTER_ROLES = ["streetlight_je", "streetlight_ae", "streetlight_nodal_clerk", "streetlight_contractor"];
 const APPROVER_ROLES = ["city_manager", "deputy_municipal_commissioner", "municipal_commissioner"];
+// Read-only visibility into streetlight change activity - can't propose or approve/reject, just see what's happening.
+const VIEWER_ONLY_ROLES = ["attendance_admin"];
 const ACTION_LABELS: Record<LightChangeActionType, string> = {
   add: "Add new light",
   status_change: "Change functionality status",
@@ -35,6 +37,7 @@ export default function LightChangeRequestsPage() {
   const [error, setError] = useState<string | null>(null);
   const [acting, setActing] = useState<number | null>(null);
   const [notesById, setNotesById] = useState<Record<number, string>>({});
+  const [statusFilter, setStatusFilter] = useState<"pending" | "approved" | "rejected">("pending");
 
   // --- propose form ---
   const [proposing, setProposing] = useState(false);
@@ -53,7 +56,7 @@ export default function LightChangeRequestsPage() {
   const [success, setSuccess] = useState(false);
 
   function load() {
-    fetchLightChangeRequests("pending")
+    fetchLightChangeRequests(statusFilter)
       .then(setRequests)
       .catch((err) => setError(err instanceof Error ? err.message : "Could not load requests."));
   }
@@ -66,7 +69,8 @@ export default function LightChangeRequestsPage() {
       fetchAttendanceWards().then(setWards).catch(() => setWards([]));
       fetchInstallationAgencies().then(setAgencies).catch(() => setAgencies([]));
     }
-  }, [attendance]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [attendance, statusFilter]);
 
   async function handlePropose() {
     if (!reason.trim()) {
@@ -148,8 +152,9 @@ export default function LightChangeRequestsPage() {
 
   const canPropose = REQUESTER_ROLES.includes(attendance.role);
   const canApprove = APPROVER_ROLES.includes(attendance.role);
+  const canView = canPropose || canApprove || VIEWER_ONLY_ROLES.includes(attendance.role);
 
-  if (!canPropose && !canApprove) {
+  if (!canView) {
     return (
       <div className="min-h-screen bg-slate-50">
         <AttendanceHeader user={attendance} />
@@ -269,6 +274,18 @@ export default function LightChangeRequestsPage() {
             </div>
           </div>
         )}
+
+        <div className="mb-4 flex gap-2">
+          {(["pending", "approved", "rejected"] as const).map((s) => (
+            <button
+              key={s}
+              onClick={() => setStatusFilter(s)}
+              className={`rounded-md px-3 py-1.5 text-xs font-semibold capitalize ${statusFilter === s ? "bg-nnm-blue text-white" : "border border-slate-200 text-slate-600 hover:bg-slate-100"}`}
+            >
+              {s}
+            </button>
+          ))}
+        </div>
 
         {!requests ? (
           <p className="text-sm text-slate-400">Loading…</p>

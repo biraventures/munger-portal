@@ -135,47 +135,49 @@ attendanceRouter.post(
   postMarkStaffAbsentByOfficer,
 );
 
-// --- Drivers (Driver Supervisor, own ward - any officer role can pass a wardId in the URL) ---
+// --- Drivers (Driver Supervisor for non-Toto vehicles, Jamadar for Toto
+// vehicles in their own ward - any officer role can pass a wardId in the
+// URL for unrestricted oversight of every driver) ---
 attendanceRouter.get(
   "/drivers/ward/:wardId/today",
-  requireAttendanceRole(["driver_supervisor", ...OFFICER_ROLES]),
+  requireAttendanceRole(["driver_supervisor", "jamadar", ...OFFICER_ROLES]),
   getMyWardDriversToday,
 );
 attendanceRouter.post(
   "/drivers/:driverId/mark-in",
-  requireAttendanceRole(["driver_supervisor", "attendance_admin"]),
+  requireAttendanceRole(["driver_supervisor", "jamadar", "attendance_admin"]),
   postMarkDriverIn,
 );
 attendanceRouter.post(
   "/drivers/:driverId/mark-absent",
-  requireAttendanceRole(["driver_supervisor", "attendance_admin"]),
+  requireAttendanceRole(["driver_supervisor", "jamadar", "attendance_admin"]),
   postMarkDriverAbsent,
 );
 attendanceRouter.post(
   "/drivers/:driverId/mark-out",
-  requireAttendanceRole(["driver_supervisor", "attendance_admin"]),
+  requireAttendanceRole(["driver_supervisor", "jamadar", "attendance_admin"]),
   postMarkDriverOut,
 );
 
 // --- Assistants (same access pattern as Drivers above) ---
 attendanceRouter.get(
   "/assistants/ward/:wardId/today",
-  requireAttendanceRole(["driver_supervisor", ...OFFICER_ROLES]),
+  requireAttendanceRole(["driver_supervisor", "jamadar", ...OFFICER_ROLES]),
   getMyWardAssistantsToday,
 );
 attendanceRouter.post(
   "/assistants/:assistantId/mark-in",
-  requireAttendanceRole(["driver_supervisor", "attendance_admin"]),
+  requireAttendanceRole(["driver_supervisor", "jamadar", "attendance_admin"]),
   postMarkAssistantIn,
 );
 attendanceRouter.post(
   "/assistants/:assistantId/mark-absent",
-  requireAttendanceRole(["driver_supervisor", "attendance_admin"]),
+  requireAttendanceRole(["driver_supervisor", "jamadar", "attendance_admin"]),
   postMarkAssistantAbsent,
 );
 attendanceRouter.post(
   "/assistants/:assistantId/mark-out",
-  requireAttendanceRole(["driver_supervisor", "attendance_admin"]),
+  requireAttendanceRole(["driver_supervisor", "jamadar", "attendance_admin"]),
   postMarkAssistantOut,
 );
 

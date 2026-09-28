@@ -126,8 +126,8 @@ export default function AttendanceDashboardPage() {
               <span className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-blue-50 text-nnm-blue">
                 <Lightbulb className="h-6 w-6" strokeWidth={1.8} />
               </span>
-              <h3 className="mb-1.5 text-base font-semibold text-slate-900">Street Light & High Mast Registry</h3>
-              <p className="text-sm text-slate-500">Ward-wise light inventory, faults, and installation agencies.</p>
+              <h3 className="mb-1.5 text-base font-semibold text-slate-900">High Mast Light Entry</h3>
+              <p className="text-sm text-slate-500">Ward-wise High Mast light inventory and installation agencies.</p>
             </Link>
           )}
 

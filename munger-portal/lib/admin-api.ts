@@ -1758,10 +1758,126 @@ export async function fetchCollectionIssuesForHolding(holdingNo: string): Promis
   return data.issues;
 }
 
-/** Oversight worklist - Tax Daroga, Commissioner. */
+// ---------------------------------------------------------------------------
+// Field verification - a Tax Collector or Tax Surveyor, during an ORDINARY
+// visit (not only when flagging a discrepancy), captures GPS + photos +
+// Aadhaar number found at the holding. Purely an evidence log - it never
+// changes the property record.
+// ---------------------------------------------------------------------------
+
+export interface PropertyFieldVerification {
+  id: number;
+  holding_no: string;
+  gps_lat: string | null;
+  gps_lng: string | null;
+  holding_photo_path: string | null;
+  aadhaar_number: string | null;
+  aadhaar_photo_path: string | null;
+  previous_receipt_photo_path: string | null;
+  land_document_photo_path: string | null;
+  captured_by_username: string;
+  captured_by_display_name: string;
+  captured_by_role: string;
+  captured_at: string;
+}
+
+export interface RecordFieldVerificationInput {
+  gpsLat?: number | null;
+  gpsLng?: number | null;
+  aadhaarNumber?: string | null;
+  holdingPhotoBase64Data?: string;
+  holdingPhotoMimeType?: string;
+  aadhaarPhotoBase64Data?: string;
+  aadhaarPhotoMimeType?: string;
+  previousReceiptPhotoBase64Data?: string;
+  previousReceiptPhotoMimeType?: string;
+  landDocumentPhotoBase64Data?: string;
+  landDocumentPhotoMimeType?: string;
+}
+
+export async function recordFieldVerification(holdingNo: string, input: RecordFieldVerificationInput): Promise<PropertyFieldVerification> {
+  const res = await fetch(`${API_BASE_URL}/properties/${encodeURIComponent(holdingNo)}/field-verification`, {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || "Could not save this field verification.");
+  }
+  const data: { record: PropertyFieldVerification } = await res.json();
+  return data.record;
+}
+
+export async function fetchFieldVerificationsForHolding(holdingNo: string): Promise<PropertyFieldVerification[]> {
+  const res = await fetch(`${API_BASE_URL}/properties/${encodeURIComponent(holdingNo)}/field-verifications`, { headers: authHeaders() });
+  if (!res.ok) throw new Error("Could not load field verifications.");
+  const data: { records: PropertyFieldVerification[] } = await res.json();
+  return data.records;
+}
+
+/** Oversight worklist - Tax Daroga, Commissioner, and City Manager (who also generates notices from here). */
 export async function fetchAllCollectionIssues(): Promise<CollectionIssue[]> {
   const res = await fetch(`${API_BASE_URL}/admin/collection-issues`, { headers: authHeaders() });
   if (!res.ok) throw new Error("Could not load collection issues.");
   const data: { issues: CollectionIssue[] } = await res.json();
   return data.issues;
+}
+
+// ---------------------------------------------------------------------------
+// Collection issue notices - one of six standard legal notice formats the
+// City Manager generates from a Tax Collector's reported collection issue.
+// ---------------------------------------------------------------------------
+
+export type NoticeLanguage = "en" | "hi";
+
+export const NOTICE_LANGUAGE_LABELS: Record<NoticeLanguage, string> = {
+  en: "English",
+  hi: "हिन्दी (Hindi)",
+};
+
+export interface CollectionIssueNotice {
+  id: number;
+  collection_issue_id: number;
+  notice_no: string;
+  holding_no: string;
+  demand_no: string | null;
+  issue_type: CollectionIssueType;
+  language: NoticeLanguage;
+  generated_by_username: string;
+  generated_by_display_name: string;
+  generated_at: string;
+}
+
+export interface GeneratedCollectionIssueNotice {
+  record: CollectionIssueNotice;
+  property: Record<string, unknown>;
+  issue: CollectionIssue;
+  demandNotice: Record<string, unknown> | null;
+  title: string;
+  legalBasis: string;
+  bodyText: string;
+  noticeDate: string;
+  complianceDays: number;
+  language: NoticeLanguage;
+}
+
+export async function generateCollectionIssueNotice(collectionIssueId: number, language: NoticeLanguage = "en"): Promise<GeneratedCollectionIssueNotice> {
+  const res = await fetch(`${API_BASE_URL}/admin/collection-issues/${collectionIssueId}/generate-notice`, {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify({ language }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || "Could not generate this notice.");
+  }
+  return res.json();
+}
+
+export async function fetchCollectionIssueNotices(collectionIssueId: number): Promise<CollectionIssueNotice[]> {
+  const res = await fetch(`${API_BASE_URL}/admin/collection-issues/${collectionIssueId}/notices`, { headers: authHeaders() });
+  if (!res.ok) throw new Error("Could not load notices for this issue.");
+  const data: { notices: CollectionIssueNotice[] } = await res.json();
+  return data.notices;
 }

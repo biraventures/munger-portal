@@ -12,6 +12,11 @@ export const collectionIssueRepository = {
     return rows[0]!;
   },
 
+  async findById(id: number): Promise<CollectionIssueRow | null> {
+    const { rows } = await pool.query<CollectionIssueRow>(`SELECT * FROM collection_issues WHERE id = $1`, [id]);
+    return rows[0] ?? null;
+  },
+
   async listForHolding(holdingNo: string): Promise<CollectionIssueRow[]> {
     const { rows } = await pool.query<CollectionIssueRow>(`SELECT * FROM collection_issues WHERE holding_no = $1 ORDER BY reported_at DESC`, [holdingNo]);
     return rows;

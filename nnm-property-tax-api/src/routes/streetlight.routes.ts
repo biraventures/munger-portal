@@ -20,6 +20,8 @@ import {
   getWardStatusDashboardHandler,
   getStreetStatusDashboardHandler,
   getSegmentLightStatusHandler,
+  getHighMastWardStatusDashboardHandler,
+  getHighMastLightsForWardHandler,
 } from "../controllers/streetlight.controller";
 import {
   postRequestLightChangeHandler,
@@ -98,6 +100,8 @@ streetlightRouter.post("/light-change-requests/:id/reject", requireAttendanceRol
 streetlightRouter.get("/status-dashboard/wards", requireAttendanceRole([...OVERSIGHT_ROLES]), getWardStatusDashboardHandler);
 streetlightRouter.get("/status-dashboard/streets", requireAttendanceRole([...OVERSIGHT_ROLES]), getStreetStatusDashboardHandler);
 streetlightRouter.get("/status-dashboard/segments/:id/lights", requireAttendanceRole([...OVERSIGHT_ROLES]), getSegmentLightStatusHandler);
+streetlightRouter.get("/high-mast-status-dashboard/wards", requireAttendanceRole([...OVERSIGHT_ROLES]), getHighMastWardStatusDashboardHandler);
+streetlightRouter.get("/high-mast-status-dashboard/wards/:id/lights", requireAttendanceRole([...OVERSIGHT_ROLES]), getHighMastLightsForWardHandler);
 streetlightRouter.patch("/lights/:id/switch-status", requireAttendanceRole([...OVERSIGHT_ROLES]), setLightSwitchStatusHandler);
 streetlightRouter.post("/lights/insert", requireAttendanceRole([...OVERSIGHT_ROLES]), insertLightHandler);
 

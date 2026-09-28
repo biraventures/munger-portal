@@ -4,11 +4,27 @@ import { getWardAssistantsToday, markAssistantIn, markAssistantAbsent, markAssis
 import { asyncHandler } from "../middleware/asyncHandler";
 import { ApiError } from "../utils/ApiError";
 
+/**
+ * GET /api/v1/attendance/assistants/ward/:wardId/today - mirrors
+ * getMyWardDriversToday: driver_supervisor's own ward (non-Toto only) or
+ * jamadar's own ward (Toto only); officers/admin pass an explicit
+ * wardId and see everything, for unrestricted oversight.
+ */
 export const getMyWardAssistantsToday = asyncHandler(async (req: Request, res: Response) => {
   const user = req.attendanceUser!;
-  const wardId = user.role === "driver_supervisor" ? user.wardId : Number(req.params.wardId);
+  if (user.role === "driver_supervisor") {
+    if (!user.wardId) throw ApiError.badRequest("No ward specified.");
+    const assistants = await getWardAssistantsToday(user.wardId, "excludeToto");
+    return res.status(200).json({ assistants });
+  }
+  if (user.role === "jamadar") {
+    if (!user.wardId) throw ApiError.badRequest("No ward specified.");
+    const assistants = await getWardAssistantsToday(user.wardId, "totoOnly");
+    return res.status(200).json({ assistants });
+  }
+  const wardId = Number(req.params.wardId);
   if (!wardId) throw ApiError.badRequest("No ward specified.");
-  const assistants = await getWardAssistantsToday(wardId);
+  const assistants = await getWardAssistantsToday(wardId, "all");
   res.status(200).json({ assistants });
 });
 

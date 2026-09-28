@@ -8,7 +8,7 @@ import { lightFaultPenaltyRepository } from "../repositories/lightFaultPenalty.r
 import { reportFaultByStaff, markFaultRepaired, linkFaultToLight, getLightRepairHistorySummary } from "../services/lightFault.service";
 import { accrueAllOverduePenalties, accruePenaltiesForFault } from "../services/penaltyAccrual.service";
 import { importLightsCsv } from "../services/lightCsvImport.service";
-import { buildWardStatusDashboard, buildStreetStatusDashboard, buildSegmentLightStatus } from "../services/streetlightStatusDashboard.service";
+import { buildWardStatusDashboard, buildStreetStatusDashboard, buildSegmentLightStatus, buildHighMastWardStatusDashboard, buildHighMastLightsForWard } from "../services/streetlightStatusDashboard.service";
 import { asyncHandler } from "../middleware/asyncHandler";
 import { ApiError } from "../utils/ApiError";
 
@@ -293,6 +293,26 @@ export const getSegmentLightStatusHandler = asyncHandler(async (req: Request, re
   const parsed = segmentIdParamSchema.safeParse(req.params);
   if (!parsed.success) throw ApiError.badRequest("Invalid segment id");
   const lights = await buildSegmentLightStatus(parsed.data.id);
+  res.status(200).json({ lights });
+});
+
+// ---------------------------------------------------------------------------
+// High Mast status dashboard - separate from the streetlight one above,
+// since High Mast lights are standalone (ward -> lights directly, no
+// street level).
+// ---------------------------------------------------------------------------
+
+export const getHighMastWardStatusDashboardHandler = asyncHandler(async (_req: Request, res: Response) => {
+  const wards = await buildHighMastWardStatusDashboard();
+  res.status(200).json({ wards });
+});
+
+const wardIdParamSchema = z.object({ id: z.coerce.number().int().positive() });
+
+export const getHighMastLightsForWardHandler = asyncHandler(async (req: Request, res: Response) => {
+  const parsed = wardIdParamSchema.safeParse(req.params);
+  if (!parsed.success) throw ApiError.badRequest("Invalid ward id");
+  const lights = await buildHighMastLightsForWard(parsed.data.id);
   res.status(200).json({ lights });
 });
 

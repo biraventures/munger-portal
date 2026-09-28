@@ -4,12 +4,26 @@ import { getWardDriversToday, markDriverIn, markDriverAbsent, markDriverOut } fr
 import { asyncHandler } from "../middleware/asyncHandler";
 import { ApiError } from "../utils/ApiError";
 
-/** GET /api/v1/attendance/drivers/ward/:wardId/today - driver supervisor's own ward or admin. */
+/**
+ * GET /api/v1/attendance/drivers/ward/:wardId/today - driver_supervisor's
+ * own ward (non-Toto only) or jamadar's own ward (Toto only); officers/admin
+ * pass an explicit wardId and see everything, for unrestricted oversight.
+ */
 export const getMyWardDriversToday = asyncHandler(async (req: Request, res: Response) => {
   const user = req.attendanceUser!;
-  const wardId = user.role === "driver_supervisor" ? user.wardId : Number(req.params.wardId);
+  if (user.role === "driver_supervisor") {
+    if (!user.wardId) throw ApiError.badRequest("No ward specified.");
+    const drivers = await getWardDriversToday(user.wardId, "excludeToto");
+    return res.status(200).json({ drivers });
+  }
+  if (user.role === "jamadar") {
+    if (!user.wardId) throw ApiError.badRequest("No ward specified.");
+    const drivers = await getWardDriversToday(user.wardId, "totoOnly");
+    return res.status(200).json({ drivers });
+  }
+  const wardId = Number(req.params.wardId);
   if (!wardId) throw ApiError.badRequest("No ward specified.");
-  const drivers = await getWardDriversToday(wardId);
+  const drivers = await getWardDriversToday(wardId, "all");
   res.status(200).json({ drivers });
 });
 

@@ -30,6 +30,32 @@ export const fieldAssistantRepository = {
     return rows;
   },
 
+  /** Every active assistant in the ward whose driver's linked asset is NOT a Toto vehicle - the driver_supervisor's own-ward view (assistants have no asset_id of their own, so Toto-ness is resolved through their driver - see isTotoLabel). */
+  async listByWardExcludingToto(wardId: number): Promise<FieldAssistantRow[]> {
+    const { rows } = await pool.query<FieldAssistantRow>(
+      `SELECT fa.* FROM field_assistants fa
+       LEFT JOIN field_drivers fd ON fd.id = fa.driver_id
+       LEFT JOIN assets a ON a.id = fd.asset_id
+       WHERE fa.ward_id = $1 AND fa.active = TRUE AND (a.label IS NULL OR a.label !~* '^toto')
+       ORDER BY fa.name ASC`,
+      [wardId],
+    );
+    return rows;
+  },
+
+  /** Every active assistant in the ward whose driver's linked asset IS a Toto vehicle - the ward Jamadar's view (see isTotoLabel). */
+  async listTotoByWard(wardId: number): Promise<FieldAssistantRow[]> {
+    const { rows } = await pool.query<FieldAssistantRow>(
+      `SELECT fa.* FROM field_assistants fa
+       JOIN field_drivers fd ON fd.id = fa.driver_id
+       JOIN assets a ON a.id = fd.asset_id
+       WHERE fa.ward_id = $1 AND fa.active = TRUE AND a.label ~* '^toto'
+       ORDER BY fa.name ASC`,
+      [wardId],
+    );
+    return rows;
+  },
+
   /** Every assistant currently tied to a given driver - used to cascade a supervisor change down automatically. */
   async listByDriver(driverId: number): Promise<FieldAssistantRow[]> {
     const { rows } = await pool.query<FieldAssistantRow>(`SELECT * FROM field_assistants WHERE driver_id = $1`, [driverId]);

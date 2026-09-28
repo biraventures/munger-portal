@@ -20,6 +20,30 @@ export const fieldDriverRepository = {
     return rows;
   },
 
+  /** Every active driver in the ward whose linked asset is NOT a Toto vehicle - the driver_supervisor's own-ward view, now that Toto drivers are the ward Jamadar's responsibility instead (see isTotoLabel). */
+  async listByWardExcludingToto(wardId: number): Promise<FieldDriverRow[]> {
+    const { rows } = await pool.query<FieldDriverRow>(
+      `SELECT fd.* FROM field_drivers fd
+       LEFT JOIN assets a ON a.id = fd.asset_id
+       WHERE fd.ward_id = $1 AND fd.active = TRUE AND (a.label IS NULL OR a.label !~* '^toto')
+       ORDER BY fd.name ASC`,
+      [wardId],
+    );
+    return rows;
+  },
+
+  /** Every active driver in the ward whose linked asset IS a Toto vehicle - the ward Jamadar's view (see isTotoLabel). */
+  async listTotoByWard(wardId: number): Promise<FieldDriverRow[]> {
+    const { rows } = await pool.query<FieldDriverRow>(
+      `SELECT fd.* FROM field_drivers fd
+       JOIN assets a ON a.id = fd.asset_id
+       WHERE fd.ward_id = $1 AND fd.active = TRUE AND a.label ~* '^toto'
+       ORDER BY fd.name ASC`,
+      [wardId],
+    );
+    return rows;
+  },
+
   /** Every driver currently supervised by a given driver_supervisor - the individual assignment model (not ward-based), per how this was described. */
   async listBySupervisor(supervisorId: number): Promise<FieldDriverRow[]> {
     const { rows } = await pool.query<FieldDriverRow>(

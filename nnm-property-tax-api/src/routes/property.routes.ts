@@ -4,6 +4,7 @@ import { listPendingOperatorEntryHandler, submitOperatorEntryHandler } from "../
 import { postFlagForResurvey, listResurveyFlagsForHoldingHandler } from "../controllers/propertyResurveyFlag.controller";
 import { postReportPropertyDiscrepancy } from "../controllers/propertyDiscrepancy.controller";
 import { postReportCollectionIssue, listCollectionIssuesForHolding } from "../controllers/collectionIssue.controller";
+import { postRecordFieldVerification, listFieldVerifications } from "../controllers/propertyFieldVerification.controller";
 import { saveProperty, postResubmitChangeRequest } from "../controllers/propertySave.controller";
 import { getRevertedChangeRequests } from "../controllers/changeRequest.controller";
 import { postPayment, getPaymentHistory, getReceiptReprint } from "../controllers/payment.controller";
@@ -111,6 +112,12 @@ propertyRouter.post("/:holdingNo/discrepancy", requireOperatorOrAdmin, postRepor
 // POST /api/v1/properties/:holdingNo/collection-issue - a Tax Collector reports the taxpayer is creating a problem during collection
 propertyRouter.post("/:holdingNo/collection-issue", requireOperatorOrAdmin, postReportCollectionIssue);
 propertyRouter.get("/:holdingNo/collection-issues", requireOperatorOrAdmin, listCollectionIssuesForHolding);
+
+// POST /api/v1/properties/:holdingNo/field-verification - a Tax Collector or Tax Surveyor
+// records GPS + photos + Aadhaar number found during an ORDINARY visit, available on every
+// visit, not only when flagging a discrepancy. Pure evidence log; never changes the property.
+propertyRouter.post("/:holdingNo/field-verification", requireOperatorOrAdmin, postRecordFieldVerification);
+propertyRouter.get("/:holdingNo/field-verifications", requireOperatorOrAdmin, listFieldVerifications);
 propertyRouter.get("/demand-notices/:demandNo/print", requireOperatorOrAdmin, getDemandNoticeReprint);
 propertyRouter.get("/:holdingNo/payments/history", requireOperatorOrAdmin, getPaymentHistory);
 propertyRouter.get("/payments/:receiptNo/print", requireOperatorOrAdmin, getReceiptReprint);

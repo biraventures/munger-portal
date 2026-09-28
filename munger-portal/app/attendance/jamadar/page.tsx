@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { AlertCircle, Camera, CheckCircle2, Loader2, LogIn, LogOut, UserX, Lightbulb } from "lucide-react";
+import { AlertCircle, Camera, CheckCircle2, Loader2, LogIn, LogOut, UserX, Lightbulb, Truck } from "lucide-react";
 import { AttendanceHeader } from "@/components/attendance/attendance-header";
 import { useAttendanceGuard } from "@/lib/use-attendance-guard";
 import {
@@ -12,7 +12,17 @@ import {
   markStaffOut,
   uploadWardPhoto,
   fetchWardPhotoToday,
+  fetchWardDriversToday,
+  markDriverIn,
+  markDriverAbsent,
+  markDriverOut,
+  fetchWardAssistantsToday,
+  markAssistantIn,
+  markAssistantAbsent,
+  markAssistantOut,
   type WardWorkerToday,
+  type WardDriverToday,
+  type WardAssistantToday,
 } from "@/lib/attendance-api";
 
 function statusBadge(status: string | null) {
@@ -39,6 +49,14 @@ export default function JamadarAttendancePage() {
   const [error, setError] = useState<string | null>(null);
   const [actingId, setActingId] = useState<number | null>(null);
 
+  // Toto vehicle drivers/assistants - marked by the ward Jamadar only (every
+  // other vehicle type stays with the Driver Supervisor).
+  const [totoDrivers, setTotoDrivers] = useState<WardDriverToday[] | null>(null);
+  const [totoAssistants, setTotoAssistants] = useState<WardAssistantToday[] | null>(null);
+  const [totoError, setTotoError] = useState<string | null>(null);
+  const [totoActingDriverId, setTotoActingDriverId] = useState<number | null>(null);
+  const [totoActingAssistantId, setTotoActingAssistantId] = useState<number | null>(null);
+
   const [photoUploaded, setPhotoUploaded] = useState<boolean | null>(null);
   const [photoUploading, setPhotoUploading] = useState(false);
   const [photoError, setPhotoError] = useState<string | null>(null);
@@ -58,6 +76,26 @@ export default function JamadarAttendancePage() {
     }
   }
 
+  async function loadTotoDrivers() {
+    if (!user?.wardId) return;
+    try {
+      const list = await fetchWardDriversToday(user.wardId);
+      setTotoDrivers(list);
+    } catch (err) {
+      setTotoError(err instanceof Error ? err.message : "Could not load the Toto driver list.");
+    }
+  }
+
+  async function loadTotoAssistants() {
+    if (!user?.wardId) return;
+    try {
+      const list = await fetchWardAssistantsToday(user.wardId);
+      setTotoAssistants(list);
+    } catch (err) {
+      setTotoError(err instanceof Error ? err.message : "Could not load the Toto assistant list.");
+    }
+  }
+
   async function loadPhotoStatus() {
     if (!user?.wardId) return;
     try {
@@ -72,6 +110,8 @@ export default function JamadarAttendancePage() {
     if (!user) return;
     loadWorkers();
     loadPhotoStatus();
+    loadTotoDrivers();
+    loadTotoAssistants();
     // user is stable after the guard resolves - intentionally not re-running on every render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
@@ -112,6 +152,84 @@ export default function JamadarAttendancePage() {
       setError(err instanceof Error ? err.message : "Could not mark out-time.");
     } finally {
       setActingId(null);
+    }
+  }
+
+  async function handleMarkTotoDriverIn(driverId: number) {
+    setTotoActingDriverId(driverId);
+    setTotoError(null);
+    try {
+      await markDriverIn(driverId);
+      await loadTotoDrivers();
+    } catch (err) {
+      setTotoError(err instanceof Error ? err.message : "Could not mark in-time.");
+    } finally {
+      setTotoActingDriverId(null);
+    }
+  }
+
+  async function handleMarkTotoDriverAbsent(driverId: number, informed: boolean) {
+    setTotoActingDriverId(driverId);
+    setTotoError(null);
+    try {
+      await markDriverAbsent(driverId, informed);
+      await loadTotoDrivers();
+    } catch (err) {
+      setTotoError(err instanceof Error ? err.message : "Could not mark absence.");
+    } finally {
+      setTotoActingDriverId(null);
+    }
+  }
+
+  async function handleMarkTotoDriverOut(driverId: number) {
+    setTotoActingDriverId(driverId);
+    setTotoError(null);
+    try {
+      await markDriverOut(driverId);
+      await loadTotoDrivers();
+    } catch (err) {
+      setTotoError(err instanceof Error ? err.message : "Could not mark out-time.");
+    } finally {
+      setTotoActingDriverId(null);
+    }
+  }
+
+  async function handleMarkTotoAssistantIn(assistantId: number) {
+    setTotoActingAssistantId(assistantId);
+    setTotoError(null);
+    try {
+      await markAssistantIn(assistantId);
+      await loadTotoAssistants();
+    } catch (err) {
+      setTotoError(err instanceof Error ? err.message : "Could not mark in-time.");
+    } finally {
+      setTotoActingAssistantId(null);
+    }
+  }
+
+  async function handleMarkTotoAssistantAbsent(assistantId: number, informed: boolean) {
+    setTotoActingAssistantId(assistantId);
+    setTotoError(null);
+    try {
+      await markAssistantAbsent(assistantId, informed);
+      await loadTotoAssistants();
+    } catch (err) {
+      setTotoError(err instanceof Error ? err.message : "Could not mark absence.");
+    } finally {
+      setTotoActingAssistantId(null);
+    }
+  }
+
+  async function handleMarkTotoAssistantOut(assistantId: number) {
+    setTotoActingAssistantId(assistantId);
+    setTotoError(null);
+    try {
+      await markAssistantOut(assistantId);
+      await loadTotoAssistants();
+    } catch (err) {
+      setTotoError(err instanceof Error ? err.message : "Could not mark out-time.");
+    } finally {
+      setTotoActingAssistantId(null);
     }
   }
 
@@ -321,6 +439,161 @@ export default function JamadarAttendancePage() {
                       className="inline-flex items-center gap-1.5 rounded-md border border-nnm-blue px-3 py-1.5 text-xs font-semibold text-nnm-blue hover:bg-blue-50 disabled:opacity-60"
                     >
                       {actingId === w.staffId ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <LogOut className="h-3.5 w-3.5" />}
+                      Mark Out
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <h2 className="mb-1 mt-10 flex items-center gap-2 text-lg font-semibold text-slate-900">
+          <Truck className="h-5 w-5" />
+          Toto Vehicle Drivers &amp; Assistants
+        </h2>
+        <p className="mb-4 text-sm text-slate-500">
+          Toto (e-rickshaw) drivers and their assistants in {user.wardName} - marked by you, not the Driver Supervisor.
+        </p>
+
+        {totoError && (
+          <div role="alert" className="mb-5 flex items-center gap-2 rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+            <AlertCircle className="h-4 w-4 shrink-0" />
+            {totoError}
+          </div>
+        )}
+
+        <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Drivers</h3>
+        {!totoDrivers ? (
+          <div className="mb-6 flex items-center gap-2 text-sm text-slate-400">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Loading drivers...
+          </div>
+        ) : totoDrivers.length === 0 ? (
+          <p className="mb-6 text-sm text-slate-400">No Toto drivers on file for your ward yet.</p>
+        ) : (
+          <div className="mb-6 space-y-3">
+            {totoDrivers.map((d) => (
+              <div key={d.driverId} className="flex items-center justify-between rounded-xl border border-slate-200 bg-white p-4">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold text-slate-900">{d.name}</span>
+                    {statusBadge(d.status)}
+                  </div>
+                  <div className="mt-0.5 text-xs text-slate-400">
+                    {d.vehicleNumber ?? "No vehicle number on file"}
+                    {" - "}
+                    {d.shiftName ?? "No shift assigned"}
+                    {d.inTime && ` - In: ${d.inTime}`}
+                    {d.outTime && ` - Out: ${d.outTime}`}
+                  </div>
+                </div>
+
+                <div className="flex gap-2">
+                  {!d.status && (
+                    <>
+                      <button
+                        onClick={() => handleMarkTotoDriverIn(d.driverId)}
+                        disabled={totoActingDriverId === d.driverId}
+                        className="inline-flex items-center gap-1.5 rounded-md bg-nnm-blue px-3 py-1.5 text-xs font-semibold text-white hover:bg-nnm-blue-dark disabled:opacity-60"
+                      >
+                        {totoActingDriverId === d.driverId ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <LogIn className="h-3.5 w-3.5" />}
+                        Mark In
+                      </button>
+                      <button
+                        onClick={() => handleMarkTotoDriverAbsent(d.driverId, true)}
+                        disabled={totoActingDriverId === d.driverId}
+                        className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-60"
+                      >
+                        <UserX className="h-3.5 w-3.5" />
+                        Absent (Informed)
+                      </button>
+                      <button
+                        onClick={() => handleMarkTotoDriverAbsent(d.driverId, false)}
+                        disabled={totoActingDriverId === d.driverId}
+                        className="inline-flex items-center gap-1.5 rounded-md border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:opacity-60"
+                      >
+                        <UserX className="h-3.5 w-3.5" />
+                        Absent (Not Informed)
+                      </button>
+                    </>
+                  )}
+                  {d.status && (d.status === "present" || d.status === "half_day") && !d.outTime && (
+                    <button
+                      onClick={() => handleMarkTotoDriverOut(d.driverId)}
+                      disabled={totoActingDriverId === d.driverId}
+                      className="inline-flex items-center gap-1.5 rounded-md border border-nnm-blue px-3 py-1.5 text-xs font-semibold text-nnm-blue hover:bg-blue-50 disabled:opacity-60"
+                    >
+                      {totoActingDriverId === d.driverId ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <LogOut className="h-3.5 w-3.5" />}
+                      Mark Out
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Assistants</h3>
+        {!totoAssistants ? (
+          <div className="flex items-center gap-2 text-sm text-slate-400">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Loading assistants...
+          </div>
+        ) : totoAssistants.length === 0 ? (
+          <p className="text-sm text-slate-400">No Toto assistants on file for your ward yet.</p>
+        ) : (
+          <div className="space-y-3">
+            {totoAssistants.map((a) => (
+              <div key={a.assistantId} className="flex items-center justify-between rounded-xl border border-slate-200 bg-white p-4">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold text-slate-900">{a.name}</span>
+                    {statusBadge(a.status)}
+                  </div>
+                  <div className="mt-0.5 text-xs text-slate-400">
+                    {a.shiftName ?? "No shift assigned"}
+                    {a.inTime && ` - In: ${a.inTime}`}
+                    {a.outTime && ` - Out: ${a.outTime}`}
+                  </div>
+                </div>
+
+                <div className="flex gap-2">
+                  {!a.status && (
+                    <>
+                      <button
+                        onClick={() => handleMarkTotoAssistantIn(a.assistantId)}
+                        disabled={totoActingAssistantId === a.assistantId}
+                        className="inline-flex items-center gap-1.5 rounded-md bg-nnm-blue px-3 py-1.5 text-xs font-semibold text-white hover:bg-nnm-blue-dark disabled:opacity-60"
+                      >
+                        {totoActingAssistantId === a.assistantId ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <LogIn className="h-3.5 w-3.5" />}
+                        Mark In
+                      </button>
+                      <button
+                        onClick={() => handleMarkTotoAssistantAbsent(a.assistantId, true)}
+                        disabled={totoActingAssistantId === a.assistantId}
+                        className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-60"
+                      >
+                        <UserX className="h-3.5 w-3.5" />
+                        Absent (Informed)
+                      </button>
+                      <button
+                        onClick={() => handleMarkTotoAssistantAbsent(a.assistantId, false)}
+                        disabled={totoActingAssistantId === a.assistantId}
+                        className="inline-flex items-center gap-1.5 rounded-md border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:opacity-60"
+                      >
+                        <UserX className="h-3.5 w-3.5" />
+                        Absent (Not Informed)
+                      </button>
+                    </>
+                  )}
+                  {a.status && (a.status === "present" || a.status === "half_day") && !a.outTime && (
+                    <button
+                      onClick={() => handleMarkTotoAssistantOut(a.assistantId)}
+                      disabled={totoActingAssistantId === a.assistantId}
+                      className="inline-flex items-center gap-1.5 rounded-md border border-nnm-blue px-3 py-1.5 text-xs font-semibold text-nnm-blue hover:bg-blue-50 disabled:opacity-60"
+                    >
+                      {totoActingAssistantId === a.assistantId ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <LogOut className="h-3.5 w-3.5" />}
                       Mark Out
                     </button>
                   )}
