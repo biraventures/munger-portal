@@ -8,7 +8,7 @@ export function AdminLoginClient() {
   const router = useRouter();
 
   async function handleSubmit(values: StaffLoginValues) {
-    await adminLogin(values.username, values.password);
+    await adminLogin(values.username, values.password, values.rememberMe);
     router.push("/admin/dashboard");
   }
 

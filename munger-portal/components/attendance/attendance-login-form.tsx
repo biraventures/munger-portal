@@ -6,6 +6,7 @@ import { Eye, EyeOff, Loader2 } from "lucide-react";
 export interface AttendanceLoginValues {
   username: string;
   password: string;
+  rememberMe: boolean;
 }
 
 export function AttendanceLoginForm({
@@ -15,9 +16,11 @@ export function AttendanceLoginForm({
 }) {
   const usernameId = useId();
   const passwordId = useId();
+  const rememberMeId = useId();
 
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [rememberMe, setRememberMe] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -33,7 +36,7 @@ export function AttendanceLoginForm({
 
     setSubmitting(true);
     try {
-      await onSubmit({ username: username.trim(), password });
+      await onSubmit({ username: username.trim(), password, rememberMe });
     } catch (err) {
       setError(err instanceof Error ? err.message : "We couldn't log you in. Check your username and password, then try again.");
     } finally {
@@ -71,7 +74,7 @@ export function AttendanceLoginForm({
         />
       </div>
 
-      <div className="mb-2">
+      <div className="mb-4">
         <label htmlFor={passwordId} className="mb-1.5 block text-sm font-medium text-slate-700">
           Password
         </label>
@@ -94,6 +97,19 @@ export function AttendanceLoginForm({
             {showPassword ? <EyeOff className="h-[18px] w-[18px]" /> : <Eye className="h-[18px] w-[18px]" />}
           </button>
         </div>
+      </div>
+
+      <div className="mb-4 flex items-center justify-between">
+        <label htmlFor={rememberMeId} className="flex cursor-pointer items-center gap-2 text-xs font-medium text-slate-600 select-none">
+          <input
+            id={rememberMeId}
+            type="checkbox"
+            checked={rememberMe}
+            onChange={(e) => setRememberMe(e.target.checked)}
+            className="h-4 w-4 rounded border-slate-300 text-nnm-blue accent-nnm-blue focus:ring-nnm-blue"
+          />
+          Remember me
+        </label>
       </div>
 
       <p className="mb-5 text-xs text-slate-400">Forgot your password? Contact your Attendance Admin to have it reset.</p>

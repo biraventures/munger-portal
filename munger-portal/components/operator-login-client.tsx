@@ -8,7 +8,7 @@ export function OperatorLoginClient() {
   const router = useRouter();
 
   async function handleSubmit(values: StaffLoginValues) {
-    await operatorLogin(values.username, values.password); // throws on failure — StaffLoginForm shows the error
+    await operatorLogin(values.username, values.password, values.rememberMe); // throws on failure — StaffLoginForm shows the error
     router.push("/operator/dashboard");
   }
 
