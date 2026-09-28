@@ -47,6 +47,8 @@ import {
   insertLightHandler,
   createStreetSegmentHandler,
   updateStreetSegmentHandler,
+  deleteLightMistakeHandler,
+  deleteStreetSegmentMistakeHandler,
 } from "../controllers/streetlightCommissioner.controller";
 import { requireAttendanceRole } from "../middleware/requireAttendanceRole";
 
@@ -117,6 +119,11 @@ streetlightRouter.get("/street-segments", requireAttendanceRole(), listStreetSeg
 streetlightRouter.patch("/street-segments/:id/gps", requireAttendanceRole([...COMMISSIONER_ROLES]), setStreetSegmentGpsAttendanceHandler);
 streetlightRouter.post("/street-segments", requireAttendanceRole([...OVERSIGHT_ROLES]), createStreetSegmentHandler);
 streetlightRouter.patch("/street-segments/:id", requireAttendanceRole([...OVERSIGHT_ROLES]), updateStreetSegmentHandler);
+// Removing a street/light added by mistake (data-entry correction) -
+// distinct from /deactivated/:id below, which decommissions a light
+// that genuinely existed. Same role gate as creating them.
+streetlightRouter.delete("/street-segments/:id", requireAttendanceRole([...OVERSIGHT_ROLES]), deleteStreetSegmentMistakeHandler);
+streetlightRouter.delete("/lights/:id", requireAttendanceRole([...OVERSIGHT_ROLES]), deleteLightMistakeHandler);
 streetlightRouter.get("/street-segments/:id/lights", requireAttendanceRole(), listLightsForSegmentAttendanceHandler);
 streetlightRouter.get("/streetlight-city-managers", requireAttendanceRole([...COMMISSIONER_ROLES]), listStreetlightCityManagersAttendanceHandler);
 streetlightRouter.get("/streetlight-city-manager-assignment", requireAttendanceRole([...COMMISSIONER_ROLES]), getStreetlightCityManagerAssignmentAttendanceHandler);

@@ -6,6 +6,7 @@ import { buildStreetlightDelayReport } from "../services/streetlightDelayReport.
 import { deleteAllStreetlightData } from "../services/streetlightStatusDashboard.service";
 import { insertLightAfterSequence } from "../services/lightInsert.service";
 import { createStreetSegment, updateStreetSegment } from "../services/streetSegmentManagement.service";
+import { deleteLightAddedByMistake, deleteStreetSegmentAddedByMistake } from "../services/streetlightMistakeDelete.service";
 import { addSheetFromRows } from "../services/export.service";
 import { streetSegmentRepository } from "../repositories/streetSegment.repository";
 import { lightRepository } from "../repositories/light.repository";
@@ -248,4 +249,33 @@ export const updateStreetSegmentHandler = asyncHandler(async (req: Request, res:
     endPoint: bodyParsed.data.endPoint ?? null,
   });
   res.status(200).json({ segment });
+});
+
+const mistakeLightIdParamSchema = z.object({ id: z.coerce.number().int().positive() });
+
+/**
+ * DELETE /api/v1/streetlight/lights/:id - removes a light added by
+ * mistake (wrong ward, duplicate entry, etc.). Hard delete, blocked if
+ * the light has any fault/change-request history - see
+ * deleteLightAddedByMistake()'s comment. Deliberately separate from the
+ * deactivate -> field-verify -> Commissioner-delete decommission flow
+ * (verifyLightForDeletionHandler/deleteVerifiedLightHandler above),
+ * which is for a light that was really out there and is now being
+ * formally retired, not for undoing a data-entry mistake.
+ */
+export const deleteLightMistakeHandler = asyncHandler(async (req: Request, res: Response) => {
+  const parsed = mistakeLightIdParamSchema.safeParse(req.params);
+  if (!parsed.success) throw ApiError.badRequest("Invalid light id");
+  await deleteLightAddedByMistake(parsed.data.id);
+  res.status(200).json({ success: true });
+});
+
+const mistakeSegmentIdParamSchema = z.object({ id: z.coerce.number().int().positive() });
+
+/** DELETE /api/v1/streetlight/street-segments/:id - same as deleteLightMistakeHandler, for a whole street (and its lights) added by mistake. */
+export const deleteStreetSegmentMistakeHandler = asyncHandler(async (req: Request, res: Response) => {
+  const parsed = mistakeSegmentIdParamSchema.safeParse(req.params);
+  if (!parsed.success) throw ApiError.badRequest("Invalid segment id");
+  await deleteStreetSegmentAddedByMistake(parsed.data.id);
+  res.status(200).json({ success: true });
 });

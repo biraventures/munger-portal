@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { AlertCircle, BarChart3, ChevronLeft, ChevronDown, ChevronRight, CheckCircle2, XCircle, PlusCircle, Pencil, X } from "lucide-react";
+import { AlertCircle, BarChart3, ChevronLeft, ChevronDown, ChevronRight, CheckCircle2, XCircle, PlusCircle, Pencil, Trash2, X } from "lucide-react";
 import { AttendanceHeader } from "@/components/attendance/attendance-header";
 import { useAttendanceGuard } from "@/lib/use-attendance-guard";
 import {
@@ -14,6 +14,8 @@ import {
   insertLight,
   createStreetSegment,
   updateStreetSegment,
+  deleteStreetSegmentMistake,
+  deleteLightMistake,
   type WardStatus,
   type StreetStatus,
   type SegmentLightStatus,
@@ -52,6 +54,9 @@ export default function StreetlightStatusDashboardPage() {
   const [editingSegmentId, setEditingSegmentId] = useState<number | null>(null);
   const [editStreetForm, setEditStreetForm] = useState(emptyStreetForm);
   const [editStreetSaving, setEditStreetSaving] = useState(false);
+
+  const [deletingSegmentId, setDeletingSegmentId] = useState<number | null>(null);
+  const [deletingLightId, setDeletingLightId] = useState<number | null>(null);
 
   const [changingStatusLightId, setChangingStatusLightId] = useState<number | null>(null);
   const [insertingSeq, setInsertingSeq] = useState<number | null>(null);
@@ -301,6 +306,44 @@ export default function StreetlightStatusDashboardPage() {
     }
   }
 
+  /**
+   * Removes a street added by mistake - blocked server-side (with a
+   * clear reason) if any of its lights already has fault or
+   * change-request history, so this only ever undoes a genuine
+   * data-entry mistake, never real field activity.
+   */
+  async function handleDeleteStreet(segmentId: number, label: string) {
+    if (!window.confirm(`Remove "${label}" and every light on it? This can't be undone. Only use this if the street was added by mistake.`)) return;
+    setDeletingSegmentId(segmentId);
+    setError(null);
+    try {
+      await deleteStreetSegmentMistake(segmentId);
+      if (editingSegmentId === segmentId) setEditingSegmentId(null);
+      if (expandedSegmentId === segmentId) setExpandedSegmentId(null);
+      load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not remove this street.");
+    } finally {
+      setDeletingSegmentId(null);
+    }
+  }
+
+  /** Removes a single light added by mistake - same server-side safety check as handleDeleteStreet. */
+  async function handleDeleteLight(segmentId: number, lightId: number, serialNumber: string) {
+    if (!window.confirm(`Remove light ${serialNumber}? This can't be undone. Only use this if it was added by mistake.`)) return;
+    setDeletingLightId(lightId);
+    setError(null);
+    try {
+      await deleteLightMistake(lightId);
+      await refreshSegmentLights(segmentId);
+      load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not remove this light.");
+    } finally {
+      setDeletingLightId(null);
+    }
+  }
+
   if (!attendance) {
     return <div className="flex min-h-screen items-center justify-center text-sm text-slate-400">Loading…</div>;
   }
@@ -445,10 +488,23 @@ export default function StreetlightStatusDashboardPage() {
                           <td className="px-4 py-2.5">{s.notWorking > 0 ? <span className="font-semibold text-red-600">{s.notWorking}</span> : 0}</td>
                           {canManageStreets && (
                             <td className="px-4 py-2.5">
-                              <button onClick={() => openEditStreet(s)} className="inline-flex items-center gap-1 text-xs font-medium text-nnm-blue hover:underline">
-                                <Pencil className="h-3 w-3" />
-                                Edit
-                              </button>
+                              <div className="flex items-center gap-3">
+                                <button onClick={() => openEditStreet(s)} className="inline-flex items-center gap-1 text-xs font-medium text-nnm-blue hover:underline">
+                                  <Pencil className="h-3 w-3" />
+                                  Edit
+                                </button>
+                                {s.segmentId && (
+                                  <button
+                                    onClick={() => handleDeleteStreet(s.segmentId!, (s.endPoint ? `${s.startPoint} - ${s.endPoint}` : s.startPoint) ?? "this street")}
+                                    disabled={deletingSegmentId === s.segmentId}
+                                    title="Remove this street if it was added by mistake"
+                                    className="inline-flex items-center gap-1 text-xs font-medium text-red-600 hover:underline disabled:opacity-60"
+                                  >
+                                    <Trash2 className="h-3 w-3" />
+                                    {deletingSegmentId === s.segmentId ? "Removing…" : "Delete"}
+                                  </button>
+                                )}
+                              </div>
                             </td>
                           )}
                         </tr>
@@ -580,6 +636,18 @@ export default function StreetlightStatusDashboardPage() {
                                                 </option>
                                               ))}
                                             </select>
+                                          )}
+
+                                          {canEditLights && (
+                                            <button
+                                              onClick={() => handleDeleteLight(s.segmentId!, l.lightId, l.serialNumber)}
+                                              disabled={deletingLightId === l.lightId}
+                                              title="Remove this light if it was added by mistake"
+                                              className="inline-flex items-center gap-1 rounded-full border border-red-200 px-2 py-0.5 text-[10px] font-semibold uppercase text-red-600 hover:bg-red-50 disabled:opacity-60"
+                                            >
+                                              <Trash2 className="h-3 w-3" />
+                                              {deletingLightId === l.lightId ? "Removing…" : "Delete"}
+                                            </button>
                                           )}
                                         </div>
                                         {repairFormLightId === l.lightId && (
