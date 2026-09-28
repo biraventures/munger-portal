@@ -1,1 +1,0 @@
-ALTER TABLE transactions ALTER COLUMN counter TYPE VARCHAR(64);
