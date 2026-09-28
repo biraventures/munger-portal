@@ -1,5 +1,6 @@
 import { pool } from "../config/db";
 import { ApiError } from "../utils/ApiError";
+import { propertySaveRepository } from "../repositories/propertySave.repository";
 
 /**
  * Deletes a property holding entirely, including every record
@@ -43,6 +44,13 @@ export async function deletePropertyCompletely(holdingNo: string, confirmationPh
     );
   }
 
+  // Snapshot what's about to be destroyed, for the final property_history
+  // row below - the whole point of keeping history "for future
+  // reference" is defeated if deleting the holding is the one thing
+  // that leaves no record at all.
+  const { rows: propertyRows } = await pool.query(`SELECT * FROM properties WHERE holding_no = $1`, [holdingNo]);
+  const { rows: floorRows } = await pool.query(`SELECT * FROM floors WHERE holding_no = $1`, [holdingNo]);
+
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
@@ -50,11 +58,28 @@ export async function deletePropertyCompletely(holdingNo: string, confirmationPh
     await client.query(`DELETE FROM demand_notices WHERE holding_no = $1`, [holdingNo]);
     await client.query(`DELETE FROM floors WHERE holding_no = $1`, [holdingNo]);
     await client.query(`DELETE FROM tax_history_stages WHERE holding_no = $1`, [holdingNo]);
-    await client.query(`DELETE FROM property_history WHERE holding_no = $1`, [holdingNo]);
     await client.query(`DELETE FROM property_change_requests WHERE holding_no = $1`, [holdingNo]);
     await client.query(`UPDATE trade_license_applications SET holding_no = NULL WHERE holding_no = $1`, [holdingNo]);
     await client.query(`DELETE FROM cancellation_requests WHERE holding_no = $1`, [holdingNo]);
     await client.query(`DELETE FROM properties WHERE holding_no = $1`, [holdingNo]);
+
+    // property_history is deliberately left in place (migration 087
+    // dropped its FK to properties for exactly this) - a "Deleted"
+    // version is added on top instead of erasing the trail, so
+    // whoever deleted this holding, when, and what it looked like
+    // right before deletion stays on file.
+    const version = await propertySaveRepository.nextHistoryVersion(holdingNo, client);
+    await propertySaveRepository.insertHistory(
+      holdingNo,
+      version,
+      "Deleted",
+      "Manual Deletion",
+      `Confirmed by typing holding number "${confirmationPhrase.trim()}"`,
+      actorDisplayName,
+      { property: propertyRows[0] ?? null, floors: floorRows },
+      client,
+    );
+
     await client.query("COMMIT");
   } catch (err) {
     await client.query("ROLLBACK");
@@ -62,5 +87,4 @@ export async function deletePropertyCompletely(holdingNo: string, confirmationPh
   } finally {
     client.release();
   }
-  void actorDisplayName; // reserved for an audit log entry if one is added later
 }

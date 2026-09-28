@@ -73,6 +73,70 @@ export function DemandNoticeReprintView({ notice, onClose }: { notice: Printable
           </div>
         </div>
 
+        {notice.floorBreakdown && (
+          <table className="mt-3.5 w-full border-collapse text-[11px]">
+            <thead>
+              <tr className="bg-slate-100">
+                <th className="border border-slate-400 p-1.5 text-left">Floor</th>
+                <th className="border border-slate-400 p-1.5 text-left">Area</th>
+                <th className="border border-slate-400 p-1.5 text-left">Const.</th>
+                <th className="border border-slate-400 p-1.5 text-left">Usage</th>
+                <th className="border border-slate-400 p-1.5 text-left">Occ.</th>
+                <th className="border border-slate-400 p-1.5 text-right">Rate</th>
+                <th className="border border-slate-400 p-1.5 text-right">ARV</th>
+                <th className="border border-slate-400 p-1.5 text-right">Tax @ 9%</th>
+              </tr>
+            </thead>
+            <tbody>
+              {notice.floorBreakdown.collapsed ? (
+                // Reverse-solved floor area came out larger than the plot
+                // itself at generation time - same fallback the original
+                // (non-reprint) view uses, frozen here so a reprint shows
+                // exactly what the original document showed.
+                <tr>
+                  <td className="border border-slate-400 p-1.5" colSpan={2}>
+                    <b>Total Built-up Area</b>
+                  </td>
+                  <td className="border border-slate-400 p-1.5" colSpan={6}>
+                    {notice.floorBreakdown.groundFloorBuiltArea} sqft
+                  </td>
+                </tr>
+              ) : (
+                notice.floorBreakdown.rows.map((row, i) =>
+                  row.error ? (
+                    <tr key={i}>
+                      <td colSpan={8} className="border border-slate-400 p-1.5 text-red-700">
+                        {row.floor}: {row.error}
+                      </td>
+                    </tr>
+                  ) : row.demolished ? (
+                    <tr key={i} className="italic text-slate-400">
+                      <td className="border border-slate-400 p-1.5">{row.floor} (Demolished)</td>
+                      <td colSpan={4} className="border border-slate-400 p-1.5">
+                        Not part of current total
+                      </td>
+                      <td className="border border-slate-400 p-1.5 text-right">—</td>
+                      <td className="border border-slate-400 p-1.5 text-right">N/A</td>
+                      <td className="border border-slate-400 p-1.5 text-right">N/A</td>
+                    </tr>
+                  ) : (
+                    <tr key={i}>
+                      <td className="border border-slate-400 p-1.5">{row.floor}</td>
+                      <td className="border border-slate-400 p-1.5">{row.area}</td>
+                      <td className="border border-slate-400 p-1.5">{row.constType}</td>
+                      <td className="border border-slate-400 p-1.5">{row.usage}</td>
+                      <td className="border border-slate-400 p-1.5">{row.occupancy}</td>
+                      <td className="border border-slate-400 p-1.5 text-right">{row.rate}</td>
+                      <td className="border border-slate-400 p-1.5 text-right">{row.floorArv}</td>
+                      <td className="border border-slate-400 p-1.5 text-right">{row.floorTax}</td>
+                    </tr>
+                  ),
+                )
+              )}
+            </tbody>
+          </table>
+        )}
+
         <table className="mt-3.5 w-full border-collapse text-[11px]">
           <thead>
             <tr className="bg-slate-100">

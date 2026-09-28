@@ -2,6 +2,7 @@ import ExcelJS from "exceljs";
 import { pool } from "../config/db";
 import { getNextMigratedHoldingNo } from "./holdingNumberSeries.service";
 import { migratedHoldingSurveyRepository } from "../repositories/migratedHoldingSurvey.repository";
+import { propertySaveRepository } from "../repositories/propertySave.repository";
 
 /**
  * Expected columns, in order, matching the "Cleaned Data" sheet this
@@ -127,6 +128,38 @@ export async function importMigratedHoldingsXlsx(fileBuffer: Buffer, actorDispla
         oldTaxStatus: taxStatus,
         oldRemarks: remarks,
       });
+
+      // Every other write path into properties/floors already records
+      // its first version in property_history via applyPropertySave()
+      // (see that function's comment) - this raw-INSERT bulk-import
+      // path was the one gap, silently starting a holding's audit
+      // trail at whatever the later survey happens to be instead of
+      // at its actual creation. No floors yet at this stage (added
+      // once the holding is surveyed, via applySurveyEntry - that step
+      // already writes its own "Updated" version on top of this one).
+      const version = await propertySaveRepository.nextHistoryVersion(holdingNo);
+      await propertySaveRepository.insertHistory(
+        holdingNo,
+        version,
+        "Created",
+        "Migrated Holding Import",
+        null,
+        actorDisplayName,
+        {
+          property: {
+            holdingNo,
+            oldHoldingNo,
+            oldPid,
+            ownerName,
+            relationType,
+            relationName: relativeName,
+            ward,
+            assessmentYear: currentAssessmentYear,
+          },
+          floors: [],
+        },
+      );
+
       result.holdingsCreated++;
     } catch (err) {
       result.errors.push({ row: rowNo, message: err instanceof Error ? err.message : "Unknown error creating this holding." });

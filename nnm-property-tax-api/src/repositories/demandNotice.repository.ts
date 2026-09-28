@@ -1,6 +1,7 @@
 import { pool } from "../config/db";
 import type { Pool, PoolClient } from "pg";
 import { DEMAND_NOTICE_START_NO } from "../constants/taxRates";
+import type { FrozenFloorBreakdown } from "../types/property.types";
 
 export interface DemandNoticeRow {
   demand_no: string;
@@ -23,6 +24,9 @@ export interface DemandNoticeRow {
   cancelled: boolean;
   cancelled_reason: string | null;
   cancelled_at: Date | null;
+  // Frozen at generation time (migration 086) - see that migration's
+  // comment. Null for notices generated before this column existed.
+  floor_breakdown: FrozenFloorBreakdown | null;
 }
 
 export const demandNoticeRepository = {
@@ -61,14 +65,16 @@ export const demandNoticeRepository = {
     assessmentYear: string;
     reminderNumber: number;
     previousUnsettledDemandNos: string | null;
+    // Frozen floor-wise breakdown (migration 086) - see FrozenFloorBreakdown's comment.
+    floorBreakdown: FrozenFloorBreakdown;
   }): Promise<void> {
     await pool.query(
       `INSERT INTO demand_notices (
         demand_no, holding_no, notice_date, generated_by, arv,
         current_year_tax_net, previous_years_tax_base, total_fine_amount,
         other_charges, total_amount_demanded, assessment_year,
-        reminder_number, previous_unsettled_demand_nos
-      ) VALUES ($1,$2, now(), $3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+        reminder_number, previous_unsettled_demand_nos, floor_breakdown
+      ) VALUES ($1,$2, now(), $3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
       [
         row.demandNo,
         row.holdingNo,
@@ -82,6 +88,7 @@ export const demandNoticeRepository = {
         row.assessmentYear,
         row.reminderNumber,
         row.previousUnsettledDemandNos,
+        JSON.stringify(row.floorBreakdown),
       ],
     );
   },

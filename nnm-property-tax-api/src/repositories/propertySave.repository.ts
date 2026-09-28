@@ -1,4 +1,5 @@
 import { pool } from "../config/db";
+import type { Pool, PoolClient } from "pg";
 import type { PropertyRow, FloorRow } from "../types/property.types";
 import type { FloorInput } from "../types/propertySave.types";
 
@@ -203,24 +204,34 @@ export const propertySaveRepository = {
     await pool.query(`DELETE FROM tax_history_stages WHERE holding_no = $1 AND auto_generated = TRUE`, [holdingNo]);
   },
 
-  async nextHistoryVersion(holdingNo: string): Promise<number> {
-    const { rows } = await pool.query<{ max: number | null }>(
+  async nextHistoryVersion(holdingNo: string, client: Pool | PoolClient = pool): Promise<number> {
+    const { rows } = await client.query<{ max: number | null }>(
       `SELECT max(version) AS max FROM property_history WHERE holding_no = $1`,
       [holdingNo],
     );
     return (rows[0]?.max ?? 0) + 1;
   },
 
+  /**
+   * "Deleted" (migration 087, alongside dropping this table's FK to
+   * properties) records a holding's removal as a final version instead
+   * of leaving the trail simply stop - see propertyDelete.service.ts /
+   * propertyBulkCleanup.service.ts. Callers that delete a holding pass
+   * their transaction's client so this participates in the same
+   * BEGIN/COMMIT - a rolled-back deletion must not leave behind a
+   * "Deleted" row for a holding that's still there.
+   */
   async insertHistory(
     holdingNo: string,
     version: number,
-    action: "Created" | "Updated",
+    action: "Created" | "Updated" | "Deleted",
     changeBasis: string | null,
     changeReference: string | null,
     operatorDisplayName: string,
     snapshot: unknown,
+    client: Pool | PoolClient = pool,
   ): Promise<void> {
-    await pool.query(
+    await client.query(
       `INSERT INTO property_history (
         holding_no, version, action, change_basis, change_reference, operator_name, ts, snapshot
       ) VALUES ($1,$2,$3,$4,$5,$6, now(), $7)`,

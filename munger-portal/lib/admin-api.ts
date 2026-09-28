@@ -247,6 +247,30 @@ export async function fetchDemandNoticeHistoryAdmin(holdingNo: string): Promise<
   return data.history;
 }
 
+// Frozen at generation/payment time (migration 086) - null for a
+// document that predates that column. `collapsed`/`groundFloorBuiltArea`
+// mirror the same reverse-solved-area fallback the live (non-reprint)
+// notice/receipt views use.
+export interface FrozenFloorBreakdown {
+  collapsed: boolean;
+  groundFloorBuiltArea: string;
+  rows: {
+    floor: string;
+    demolished?: boolean;
+    area?: number;
+    constType?: string;
+    usage?: string;
+    occupancy?: string;
+    category?: string;
+    rate?: number;
+    useFactor?: number;
+    occFactor?: number;
+    floorArv?: string;
+    floorTax?: string;
+    error?: string | null;
+  }[];
+}
+
 export interface PrintableDemandNoticeHistory {
   demandNo: string;
   formattedDemandNo: string;
@@ -271,6 +295,7 @@ export interface PrintableDemandNoticeHistory {
   superseded: boolean;
   cancelled: boolean;
   cancelledReason: string | null;
+  floorBreakdown: FrozenFloorBreakdown | null;
 }
 
 export async function fetchDemandNoticeReprintAdmin(demandNo: string): Promise<PrintableDemandNoticeHistory> {
@@ -320,8 +345,10 @@ export interface PrintableReceiptHistory {
     otherCharges: string;
   } | null;
   arrearStagesPaid: { period: string; years: number; annualCharge: string; amount: string }[];
+  legacyArrearPeriodsPaid: string | null;
   cancelled: boolean;
   cancelledReason: string | null;
+  floorBreakdown: FrozenFloorBreakdown | null;
 }
 
 export async function fetchReceiptReprintAdmin(receiptNo: string): Promise<PrintableReceiptHistory> {
