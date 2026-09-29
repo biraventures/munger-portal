@@ -28,6 +28,14 @@ mobileRouter.get("/health", (_req, res) => {
 mobileRouter.get("/form-options", getFormOptions);
 mobileRouter.use("/auth", authRouter);
 mobileRouter.use("/properties", propertyRouter);
+// mobileRouter.use(
+//   "/properties",
+//   (req, res, next) => {
+//     console.log("fhdhgdghghfc");
+//     next();
+//   },
+//   propertyRouter,
+// );
 mobileRouter.use("/operator", operatorRouter);
 mobileRouter.use("/shops", shopRouter);
 mobileRouter.use("/shop-rental-applications", shopRentalApplicationRouter);
@@ -60,4 +68,4 @@ mobileRouter.use("/admin/auth", adminAuthRouter);
 mobileRouter.use("/admin", adminRouter);
 
 //Tc auth routes
-mobileRouter.use("/admin/tc", tcAuthRouter);
+mobileRouter.use("/tc", tcAuthRouter);

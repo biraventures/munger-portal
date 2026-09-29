@@ -11,7 +11,7 @@ export async function tcLogin(
 ): Promise<tcLoginResult> {
   const tc = await taxCollectorRepository.findByUsername(username);
   if (!tc) {
-    throw new ApiError(401, "Invalid username or password");
+    throw new ApiError(401, "User Not Found");
   }
 
   const passwordMatches = await bcrypt.compare(password, tc.password_hash);
@@ -31,7 +31,7 @@ export async function tcLogin(
     sub: tc.id,
     username: tc.code,
     displayName: tc.name,
-    mobile: tc.mobile,
+    mobile: tc.mobile_number,
     email: tc.email,
     active: tc.active,
   };
@@ -45,7 +45,7 @@ export async function tcLogin(
       id: tc.id,
       username: tc.code,
       displayName: tc.name,
-      mobile: tc.mobile,
+      mobile: tc.mobile_number,
       email: tc.email,
       active: tc.active,
     },

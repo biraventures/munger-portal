@@ -7,7 +7,7 @@ export interface TaxCollectorRow {
   name: string;
   active: boolean;
   email: string;
-  mobile: string;
+  mobile_number: string;
 }
 
 export const taxCollectorRepository = {
