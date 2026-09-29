@@ -5,7 +5,7 @@ import rateLimit from "express-rate-limit";
 import pinoHttp from "pino-http";
 import { env } from "./config/env";
 import { apiRouter } from "./routes";
-import { mobileRouter } from "../mobile/index";
+import { mobileRouter } from "./mobile/index";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler";
 
 export function createApp() {
