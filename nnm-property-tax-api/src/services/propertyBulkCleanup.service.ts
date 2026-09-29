@@ -1,4 +1,5 @@
 import { pool } from "../config/db";
+import { propertySaveRepository } from "../repositories/propertySave.repository";
 
 export interface SpacedHoldingPreview {
   holdingNo: string;
@@ -69,6 +70,11 @@ export async function bulkDeleteSpacedHoldings(actorDisplayName: string): Promis
       continue;
     }
 
+    // Snapshot before deleting - see propertyDelete.service.ts's
+    // identical comment; same "Deleted" version pattern applies here.
+    const { rows: propertyRows } = await pool.query(`SELECT * FROM properties WHERE holding_no = $1`, [holdingNo]);
+    const { rows: floorRows } = await pool.query(`SELECT * FROM floors WHERE holding_no = $1`, [holdingNo]);
+
     const client = await pool.connect();
     try {
       await client.query("BEGIN");
@@ -76,11 +82,23 @@ export async function bulkDeleteSpacedHoldings(actorDisplayName: string): Promis
       await client.query(`DELETE FROM demand_notices WHERE holding_no = $1`, [holdingNo]);
       await client.query(`DELETE FROM floors WHERE holding_no = $1`, [holdingNo]);
       await client.query(`DELETE FROM tax_history_stages WHERE holding_no = $1`, [holdingNo]);
-      await client.query(`DELETE FROM property_history WHERE holding_no = $1`, [holdingNo]);
       await client.query(`DELETE FROM property_change_requests WHERE holding_no = $1`, [holdingNo]);
       await client.query(`UPDATE trade_license_applications SET holding_no = NULL WHERE holding_no = $1`, [holdingNo]);
       await client.query(`DELETE FROM cancellation_requests WHERE holding_no = $1`, [holdingNo]);
       await client.query(`DELETE FROM properties WHERE holding_no = $1`, [holdingNo]);
+
+      const version = await propertySaveRepository.nextHistoryVersion(holdingNo, client);
+      await propertySaveRepository.insertHistory(
+        holdingNo,
+        version,
+        "Deleted",
+        "Bulk Cleanup - Spaced Holding",
+        null,
+        actorDisplayName,
+        { property: propertyRows[0] ?? null, floors: floorRows },
+        client,
+      );
+
       await client.query("COMMIT");
       result.deleted.push(holdingNo);
     } catch (err) {
@@ -91,7 +109,6 @@ export async function bulkDeleteSpacedHoldings(actorDisplayName: string): Promis
     }
   }
 
-  void actorDisplayName; // reserved for an audit log entry if one is added later
   return result;
 }
 

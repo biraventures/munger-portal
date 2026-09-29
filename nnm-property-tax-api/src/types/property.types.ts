@@ -117,6 +117,23 @@ export interface TaxCalculationResult {
   };
 }
 
+/**
+ * A frozen copy of the floor-wise breakdown as it appeared on a demand
+ * notice/receipt at the moment it was generated — stored as JSONB on
+ * demand_notices/transactions (migration 086) so a reprint can show the
+ * same per-floor table originally shown, unaffected by later floor
+ * edits. `collapsed`/`groundFloorBuiltArea` mirror the same
+ * reverse-solved-area fallback the live notice/receipt views use (see
+ * notice-view.tsx/receipt-view.tsx): when true, the original document
+ * showed a single "Total Built-up Area" line instead of `rows`, because
+ * the per-floor split couldn't be shown without looking like an error.
+ */
+export interface FrozenFloorBreakdown {
+  collapsed: boolean;
+  groundFloorBuiltArea: string;
+  rows: FloorBreakdownEntry[];
+}
+
 export interface RebateOrLateFeeResult {
   rebate: number;
   lateFee: number;

@@ -76,4 +76,10 @@ export const lightChangeRequestRepository = {
     const { rows } = await pool.query<LightChangeApprovalRow>(`SELECT * FROM light_change_approvals WHERE request_id = $1 ORDER BY decided_at ASC`, [requestId]);
     return rows;
   },
+
+  /** Whether a light has ANY change-request history at all (any status) - used to block a "delete as mistaken entry" on a light something real has already happened to. */
+  async countByLight(lightId: number): Promise<number> {
+    const { rows } = await pool.query<{ count: string }>(`SELECT COUNT(*)::text AS count FROM light_change_requests WHERE light_id = $1`, [lightId]);
+    return parseInt(rows[0]!.count, 10);
+  },
 };

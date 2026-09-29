@@ -247,6 +247,30 @@ export async function fetchDemandNoticeHistoryAdmin(holdingNo: string): Promise<
   return data.history;
 }
 
+// Frozen at generation/payment time (migration 086) - null for a
+// document that predates that column. `collapsed`/`groundFloorBuiltArea`
+// mirror the same reverse-solved-area fallback the live (non-reprint)
+// notice/receipt views use.
+export interface FrozenFloorBreakdown {
+  collapsed: boolean;
+  groundFloorBuiltArea: string;
+  rows: {
+    floor: string;
+    demolished?: boolean;
+    area?: number;
+    constType?: string;
+    usage?: string;
+    occupancy?: string;
+    category?: string;
+    rate?: number;
+    useFactor?: number;
+    occFactor?: number;
+    floorArv?: string;
+    floorTax?: string;
+    error?: string | null;
+  }[];
+}
+
 export interface PrintableDemandNoticeHistory {
   demandNo: string;
   formattedDemandNo: string;
@@ -271,6 +295,7 @@ export interface PrintableDemandNoticeHistory {
   superseded: boolean;
   cancelled: boolean;
   cancelledReason: string | null;
+  floorBreakdown: FrozenFloorBreakdown | null;
 }
 
 export async function fetchDemandNoticeReprintAdmin(demandNo: string): Promise<PrintableDemandNoticeHistory> {
@@ -320,8 +345,10 @@ export interface PrintableReceiptHistory {
     otherCharges: string;
   } | null;
   arrearStagesPaid: { period: string; years: number; annualCharge: string; amount: string }[];
+  legacyArrearPeriodsPaid: string | null;
   cancelled: boolean;
   cancelledReason: string | null;
+  floorBreakdown: FrozenFloorBreakdown | null;
 }
 
 export async function fetchReceiptReprintAdmin(receiptNo: string): Promise<PrintableReceiptHistory> {
@@ -1479,6 +1506,33 @@ export async function fetchEmployeeDatabaseProgress(): Promise<EmployeeDatabaseP
   const res = await fetch(`${API_BASE_URL}/admin/employees/progress`, { headers: authHeaders() });
   if (!res.ok) throw new Error("Could not load progress.");
   return res.json();
+}
+
+/**
+ * Downloads the staff list as .xlsx, with every record's verification
+ * status, who verified it, and when. Open to the Establishment Clerk,
+ * City Manager, and Commissioner alike (same three roles that can view
+ * the list at all) - there's one verification stage in this system
+ * (the City Manager's), so all three download the same sheet rather
+ * than three separately-filtered ones. Pass a status to download just
+ * the pending or just the verified subset instead of everyone.
+ */
+export async function downloadEmployeesExport(status?: EmployeeStatus): Promise<void> {
+  const params = status ? `?status=${status}` : "";
+  const res = await fetch(`${API_BASE_URL}/admin/employees/export${params}`, { headers: authHeaders() });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || "Could not download the staff list.");
+  }
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `employee-database${status ? `-${status}` : ""}-${new Date().toISOString().slice(0, 10)}.xlsx`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
 }
 
 // ---------------------------------------------------------------------------

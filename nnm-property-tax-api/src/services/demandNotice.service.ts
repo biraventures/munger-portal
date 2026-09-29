@@ -8,6 +8,7 @@ import { num } from "../utils/num";
 import { ApiError } from "../utils/ApiError";
 import { buildVerificationUrl } from "../utils/verificationSignature";
 import type { DemandNoticeResult } from "../types/demandNotice.types";
+import type { FrozenFloorBreakdown } from "../types/property.types";
 
 function formatDocNumber(n: string | number, type: "Payment" | "Demand", date: Date): string {
   const dd = String(date.getDate()).padStart(2, "0");
@@ -84,6 +85,16 @@ export async function generateDemandNotice(holdingNo: string, generatedBy: strin
   // transparency about how that total was reached.
   const grandTotal = Math.ceil(currentTotal + yearWiseArrears + arrears.penalty + otherCharges - num(property.misc_rebate));
 
+  // Same reverse-solved-area fallback notice-view.tsx/receipt-view.tsx
+  // use for display - frozen here so a reprint shows the identical
+  // collapsed-vs-per-floor choice the original document made, not
+  // whatever the live property's area looks like later.
+  const floorBreakdown: FrozenFloorBreakdown = {
+    collapsed: Number(calc.vacant.groundFloorBuiltArea) > Number(property.area_sqft),
+    groundFloorBuiltArea: calc.vacant.groundFloorBuiltArea,
+    rows: calc.breakdown,
+  };
+
   const demandNoNum = await demandNoticeRepository.getNextDemandNo();
   const demandNo = String(demandNoNum);
   const dateStr = `${String(now.getDate()).padStart(2, "0")}-${String(now.getMonth() + 1).padStart(2, "0")}-${now.getFullYear()}`;
@@ -113,6 +124,7 @@ export async function generateDemandNotice(holdingNo: string, generatedBy: strin
     assessmentYear: property.assessment_year,
     reminderNumber,
     previousUnsettledDemandNos,
+    floorBreakdown,
   });
 
   if (previousUnsettled.length > 0) {
@@ -169,6 +181,10 @@ export interface PrintableDemandNoticeHistory {
   superseded: boolean;
   cancelled: boolean;
   cancelledReason: string | null;
+  // Frozen at generation time (migration 086) - null for notices
+  // generated before this column existed, same as breakdown/
+  // arrearStagesPaid on a receipt.
+  floorBreakdown: FrozenFloorBreakdown | null;
 }
 
 /**
@@ -211,6 +227,7 @@ export async function getDemandNoticeForReprint(demandNo: string): Promise<Print
     superseded: notice.superseded,
     cancelled: notice.cancelled,
     cancelledReason: notice.cancelled_reason,
+    floorBreakdown: notice.floor_breakdown,
   };
 }
 

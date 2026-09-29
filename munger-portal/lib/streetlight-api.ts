@@ -789,3 +789,30 @@ export async function updateStreetSegment(segmentId: number, input: UpdateStreet
     throw new Error(body.error || "Could not save these changes.");
   }
 }
+
+/**
+ * Removes a street (and every light on it) added by mistake - a
+ * data-entry correction, not the deactivate/verify/delete decommission
+ * flow above. Blocked server-side if any of its lights already has
+ * fault or change-request history.
+ */
+export async function deleteStreetSegmentMistake(segmentId: number): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/streetlight/street-segments/${segmentId}`, { method: "DELETE", headers: authHeaders() });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || "Could not remove this street.");
+  }
+}
+
+/**
+ * Removes a single light added by mistake - same "data-entry
+ * correction" idea as deleteStreetSegmentMistake, blocked server-side
+ * if the light already has fault or change-request history.
+ */
+export async function deleteLightMistake(lightId: number): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/streetlight/lights/${lightId}`, { method: "DELETE", headers: authHeaders() });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || "Could not remove this light.");
+  }
+}

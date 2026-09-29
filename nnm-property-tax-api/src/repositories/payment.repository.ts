@@ -1,6 +1,7 @@
 import { pool } from "../config/db";
 import type { Pool, PoolClient } from "pg";
 import { RECEIPT_START_NO } from "../constants/taxRates";
+import type { FrozenFloorBreakdown } from "../types/property.types";
 
 export interface TransactionRow {
   receipt_no: string;
@@ -23,6 +24,10 @@ export interface TransactionRow {
   cancelled: boolean;
   cancelled_reason: string | null;
   cancelled_at: Date | null;
+  // Frozen at payment time, copied from the settled demand notice's own
+  // floor_breakdown (migration 086) - never recomputed from live floors,
+  // same reasoning as arv/current_year_tax_net etc. above.
+  floor_breakdown: FrozenFloorBreakdown | null;
 }
 
 export const paymentRepository = {
@@ -67,6 +72,10 @@ export const paymentRepository = {
       // a reprint show exactly which years were cleared, not just a
       // lump sum.
       arrearStagesPaid: { period: string; years: number; annualCharge: string; amount: string }[];
+      // Copied from the settled demand notice's own frozen breakdown
+      // (migration 086) - null only for a notice that predates that
+      // column, same reasoning as arv etc. above.
+      floorBreakdown: FrozenFloorBreakdown | null;
     },
     client: Pool | PoolClient = pool,
   ): Promise<void> {
@@ -76,8 +85,8 @@ export const paymentRepository = {
         collected_by, counter, demand_no, arrear_periods_paid,
         tax_collector_code, tax_collector_name,
         arv, current_year_tax_net, previous_years_tax_base, total_fine_amount, other_charges,
-        arrear_stages_paid
-      ) VALUES ($1,$2, now(), $3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`,
+        arrear_stages_paid, floor_breakdown
+      ) VALUES ($1,$2, now(), $3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)`,
       [
         row.receiptNo,
         row.holdingNo,
@@ -95,6 +104,7 @@ export const paymentRepository = {
         row.totalFineAmount,
         row.otherCharges,
         JSON.stringify(row.arrearStagesPaid),
+        row.floorBreakdown !== null ? JSON.stringify(row.floorBreakdown) : null,
       ],
     );
   },

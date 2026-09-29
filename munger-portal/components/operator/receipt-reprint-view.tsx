@@ -86,6 +86,70 @@ export function ReceiptReprintView({ receipt, onClose }: { receipt: PrintableRec
           </div>
         </div>
 
+        {receipt.floorBreakdown && (
+          <table className="mt-3.5 w-full border-collapse text-[11px]">
+            <thead>
+              <tr className="bg-slate-100">
+                <th className="border border-slate-400 p-1.5 text-left">Floor</th>
+                <th className="border border-slate-400 p-1.5 text-left">Area</th>
+                <th className="border border-slate-400 p-1.5 text-left">Const.</th>
+                <th className="border border-slate-400 p-1.5 text-left">Usage</th>
+                <th className="border border-slate-400 p-1.5 text-left">Occ.</th>
+                <th className="border border-slate-400 p-1.5 text-right">Rate</th>
+                <th className="border border-slate-400 p-1.5 text-right">ARV</th>
+                <th className="border border-slate-400 p-1.5 text-right">Tax @ 9%</th>
+              </tr>
+            </thead>
+            <tbody>
+              {receipt.floorBreakdown.collapsed ? (
+                // Reverse-solved floor area came out larger than the plot
+                // itself at generation time - same fallback the original
+                // (non-reprint) view uses, frozen here so a reprint shows
+                // exactly what the original document showed.
+                <tr>
+                  <td className="border border-slate-400 p-1.5" colSpan={2}>
+                    <b>Total Built-up Area</b>
+                  </td>
+                  <td className="border border-slate-400 p-1.5" colSpan={6}>
+                    {receipt.floorBreakdown.groundFloorBuiltArea} sqft
+                  </td>
+                </tr>
+              ) : (
+                receipt.floorBreakdown.rows.map((row, i) =>
+                  row.error ? (
+                    <tr key={i}>
+                      <td colSpan={8} className="border border-slate-400 p-1.5 text-red-700">
+                        {row.floor}: {row.error}
+                      </td>
+                    </tr>
+                  ) : row.demolished ? (
+                    <tr key={i} className="italic text-slate-400">
+                      <td className="border border-slate-400 p-1.5">{row.floor} (Demolished)</td>
+                      <td colSpan={4} className="border border-slate-400 p-1.5">
+                        Not part of current total
+                      </td>
+                      <td className="border border-slate-400 p-1.5 text-right">—</td>
+                      <td className="border border-slate-400 p-1.5 text-right">N/A</td>
+                      <td className="border border-slate-400 p-1.5 text-right">N/A</td>
+                    </tr>
+                  ) : (
+                    <tr key={i}>
+                      <td className="border border-slate-400 p-1.5">{row.floor}</td>
+                      <td className="border border-slate-400 p-1.5">{row.area}</td>
+                      <td className="border border-slate-400 p-1.5">{row.constType}</td>
+                      <td className="border border-slate-400 p-1.5">{row.usage}</td>
+                      <td className="border border-slate-400 p-1.5">{row.occupancy}</td>
+                      <td className="border border-slate-400 p-1.5 text-right">{row.rate}</td>
+                      <td className="border border-slate-400 p-1.5 text-right">{row.floorArv}</td>
+                      <td className="border border-slate-400 p-1.5 text-right">{row.floorTax}</td>
+                    </tr>
+                  ),
+                )
+              )}
+            </tbody>
+          </table>
+        )}
+
         {receipt.breakdown && (
           <table className="mt-3.5 w-full border-collapse text-[11px]">
             <thead>
@@ -125,7 +189,7 @@ export function ReceiptReprintView({ receipt, onClose }: { receipt: PrintableRec
           </table>
         )}
 
-        {receipt.arrearStagesPaid.length > 0 && (
+        {receipt.arrearStagesPaid.length > 0 ? (
           <>
             <div className="mt-3 text-[11px] font-bold">Arrear Period(s) Cleared by This Payment</div>
             <table className="mt-1 w-full border-collapse text-[11px]">
@@ -149,6 +213,15 @@ export function ReceiptReprintView({ receipt, onClose }: { receipt: PrintableRec
               </tbody>
             </table>
           </>
+        ) : (
+          // Older receipts, from before the structured per-period
+          // breakdown existed, only ever had this free-text summary of
+          // what was cleared - shown here rather than nothing.
+          receipt.legacyArrearPeriodsPaid && (
+            <div className="mt-3 text-[11px]">
+              <b>Arrear Period(s) Cleared by This Payment</b> {receipt.legacyArrearPeriodsPaid}
+            </div>
+          )
         )}
 
         <div

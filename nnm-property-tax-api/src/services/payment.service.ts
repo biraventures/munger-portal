@@ -13,6 +13,7 @@ import { num } from "../utils/num";
 import { ApiError } from "../utils/ApiError";
 import { buildVerificationUrl } from "../utils/verificationSignature";
 import type { PaymentInput, PaymentResult } from "../types/payment.types";
+import type { FrozenFloorBreakdown } from "../types/property.types";
 
 function formatDocNumber(n: string | number, type: "Payment" | "Demand", date: Date): string {
   const dd = String(date.getDate()).padStart(2, "0");
@@ -53,10 +54,24 @@ export interface PrintableReceiptHistory {
   // Which specific arrear years this payment cleared, e.g. a stage
   // with period "2018-2019 to 2020-2021" - frozen at payment time
   // (migration 025), same reasoning as breakdown above. Empty array
-  // if this payment cleared no arrears (current year only).
+  // if this payment cleared no arrears (current year only, or a
+  // pre-migration-025 receipt whose per-period detail was never
+  // captured - see legacyArrearPeriodsPaid below for that case).
   arrearStagesPaid: { period: string; years: number; annualCharge: string; amount: string }[];
+  // The old free-text arrear-periods field (on transactions since the
+  // very first schema, predating the structured arrearStagesPaid
+  // table by migration 025). Only meaningful as a fallback: shown on
+  // the reprint when arrearStagesPaid is empty but this has content,
+  // for a receipt old enough to predate the structured breakdown -
+  // better than silently showing nothing for what this payment
+  // actually cleared.
+  legacyArrearPeriodsPaid: string | null;
   cancelled: boolean;
   cancelledReason: string | null;
+  // Copied from the settled demand notice at payment time (migration
+  // 086) - null only for a receipt whose demand notice predates that
+  // column.
+  floorBreakdown: FrozenFloorBreakdown | null;
 }
 
 /**
@@ -106,8 +121,10 @@ export async function getReceiptForReprint(receiptNo: string): Promise<Printable
           }
         : null,
     arrearStagesPaid: txn.arrear_stages_paid ?? [],
+    legacyArrearPeriodsPaid: txn.arrear_periods_paid,
     cancelled: txn.cancelled,
     cancelledReason: txn.cancelled_reason,
+    floorBreakdown: txn.floor_breakdown,
   };
 }
 
@@ -260,6 +277,7 @@ export async function submitPayment(
         totalFineAmount: notice.total_fine_amount,
         otherCharges: notice.other_charges,
         arrearStagesPaid: clearance.stages,
+        floorBreakdown: notice.floor_breakdown,
       },
       client,
     );
