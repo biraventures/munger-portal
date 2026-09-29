@@ -18,6 +18,6 @@ export const postTcLogin = asyncHandler(async (req: Request, res: Response) => {
     );
   }
 
-  const result = await tcLogin(parsed.data.username, parsed.data.password);
+  const result = await tcLogin(parsed.data.username.toUpperCase(), parsed.data.password);
   res.status(200).json(result);
 });
