@@ -20,7 +20,6 @@ mobileRouter.use("/properties", propertyRouter);
 //   propertyRouter,
 // );
 mobileRouter.use("/tax-collectors", taxCollectorRouter);
-;
 mobileRouter.use("/dashboard-summary", dashboardSummaryRouter);
 
 //Tc auth routes
