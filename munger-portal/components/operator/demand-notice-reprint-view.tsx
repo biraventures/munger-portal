@@ -153,6 +153,17 @@ export function DemandNoticeReprintView({ notice, onClose }: { notice: Printable
               <td className="border border-slate-400 p-1.5">Current Year Tax (net)</td>
               <td className="border border-slate-400 p-1.5 text-right">{money(notice.currentYearTaxNet)}</td>
             </tr>
+            {Number(notice.areaRebate) > 0 && (
+              <tr>
+                <td className="border border-slate-400 p-1.5 pl-6 italic text-slate-500">
+                  — of which, Plinth Area / Rain Water Harvesting Rebate already applied
+                  {notice.areaRebateReason ? ` (${notice.areaRebateReason})` : ""}
+                </td>
+                <td className="border border-slate-400 p-1.5 text-right italic text-slate-500">
+                  −{money(notice.areaRebate)}
+                </td>
+              </tr>
+            )}
             {Number(notice.previousYearsTaxBase) > 0 && (
               <tr>
                 <td className="border border-slate-400 p-1.5">Previous Years&apos; Outstanding Demand</td>

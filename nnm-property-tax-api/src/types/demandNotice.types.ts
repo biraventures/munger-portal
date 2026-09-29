@@ -12,6 +12,11 @@ export interface DemandNoticeResult {
   taxCalc: unknown;
   totals: {
     currentTaxBase: string;
+    // Plinth-area/rain-water rebate, already subtracted into
+    // currentTaxBase - surfaced separately (migration 089) so the
+    // print template can show it as its own line.
+    currentTaxAreaRebate: string;
+    currentTaxAreaRebateReason: string;
     currentTaxRebate: string;
     penalty: string;
     outstandingDemand: string;

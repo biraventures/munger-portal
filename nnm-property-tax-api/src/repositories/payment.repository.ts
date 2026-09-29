@@ -28,6 +28,11 @@ export interface TransactionRow {
   // floor_breakdown (migration 086) - never recomputed from live floors,
   // same reasoning as arv/current_year_tax_net etc. above.
   floor_breakdown: FrozenFloorBreakdown | null;
+  // Frozen at payment time, copied from the settled demand notice's own
+  // area_rebate/area_rebate_reason (migration 089) - same reasoning as
+  // floor_breakdown above.
+  area_rebate: string | null;
+  area_rebate_reason: string | null;
 }
 
 export const paymentRepository = {
@@ -76,6 +81,11 @@ export const paymentRepository = {
       // (migration 086) - null only for a notice that predates that
       // column, same reasoning as arv etc. above.
       floorBreakdown: FrozenFloorBreakdown | null;
+      // Copied from the settled demand notice's own frozen area_rebate/
+      // area_rebate_reason (migration 089) - same reasoning as
+      // floorBreakdown above.
+      areaRebate: string | null;
+      areaRebateReason: string | null;
     },
     client: Pool | PoolClient = pool,
   ): Promise<void> {
@@ -85,8 +95,8 @@ export const paymentRepository = {
         collected_by, counter, demand_no, arrear_periods_paid,
         tax_collector_code, tax_collector_name,
         arv, current_year_tax_net, previous_years_tax_base, total_fine_amount, other_charges,
-        arrear_stages_paid, floor_breakdown
-      ) VALUES ($1,$2, now(), $3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)`,
+        arrear_stages_paid, floor_breakdown, area_rebate, area_rebate_reason
+      ) VALUES ($1,$2, now(), $3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)`,
       [
         row.receiptNo,
         row.holdingNo,
@@ -105,6 +115,8 @@ export const paymentRepository = {
         row.otherCharges,
         JSON.stringify(row.arrearStagesPaid),
         row.floorBreakdown !== null ? JSON.stringify(row.floorBreakdown) : null,
+        row.areaRebate,
+        row.areaRebateReason,
       ],
     );
   },

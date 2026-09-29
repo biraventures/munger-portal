@@ -80,7 +80,6 @@ export default function AdminDashboardPage() {
   const isMutationChainRole = admin.role === "tax_daroga" || admin.role === "mutation_nodal_clerk" || admin.role === "deputy_commissioner" || isCommissioner;
   const showMutationApprovals = isMutationChainRole;
   const showCancellationRequests = !isRestrictedRole;
-  const showTaxCollectors = !isRestrictedRole;
   const showBulkDemandNotices = !isRestrictedRole;
   const showAllPropertyChanges = isCommissioner;
   const showRenumberHolding = isCommissioner;
@@ -107,7 +106,7 @@ export default function AdminDashboardPage() {
     admin.role === "tax_daroga" || admin.role === "tax_surveyor" || admin.role === "tax_collector" || admin.role === "stall_prabhari" || admin.role === "je_mechanical" || admin.role === "ae_mechanical" ||
     admin.role === "commissioner" || admin.role === "deputy_commissioner" || admin.role === "city_manager";
   const propertyGroupVisible =
-    showMutationApprovals || showCancellationRequests || showTaxCollectors || showBulkDemandNotices || showAllPropertyChanges || showRenumberHolding || showBulkUploadProperties ||
+    showMutationApprovals || showCancellationRequests || showBulkDemandNotices || showAllPropertyChanges || showRenumberHolding || showBulkUploadProperties ||
     showMigratedHoldingsBulkUpload || showMigratedHoldingsAssign || showMigratedHoldingsSurveyor || showMigratedHoldingsMySurveys || showInitiateSurvey || showTaxCollectorPage ||
     showReportPropertyDiscrepancy || showMyDiscrepancyReports || showPropertyDiscrepancyRequests || showResurveyFlags || showCollectionIssues || showTaxCollectorAssignments || showRevertAuditTrail;
 
@@ -197,16 +196,6 @@ export default function AdminDashboardPage() {
                   </span>
                   <h3 className="mb-1.5 text-base font-semibold text-slate-900">Cancellation Requests</h3>
                   <p className="text-sm text-slate-500">Requests to cancel a demand notice or payment receipt.</p>
-                </Link>
-              )}
-
-              {showTaxCollectors && (
-                <Link href="/admin/tax-collectors" className={cardClass}>
-                  <span className={iconWrapClass}>
-                    <Users className="h-6 w-6" strokeWidth={1.8} />
-                  </span>
-                  <h3 className="mb-1.5 text-base font-semibold text-slate-900">Tax Collectors</h3>
-                  <p className="text-sm text-slate-500">Add field collectors and their codes for payment tracking.</p>
                 </Link>
               )}
 

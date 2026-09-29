@@ -125,6 +125,8 @@ export async function generateDemandNotice(holdingNo: string, generatedBy: strin
     reminderNumber,
     previousUnsettledDemandNos,
     floorBreakdown,
+    areaRebate: num(calc.rebate),
+    areaRebateReason: calc.rebateReason,
   });
 
   if (previousUnsettled.length > 0) {
@@ -145,6 +147,11 @@ export async function generateDemandNotice(holdingNo: string, generatedBy: strin
     taxCalc: calc,
     totals: {
       currentTaxBase: netCurrentBeforeTiming.toFixed(2),
+      // Plinth-area/rain-water rebate - already subtracted into
+      // currentTaxBase above; surfaced separately too so the print
+      // template can show it as its own line (see migration 089).
+      currentTaxAreaRebate: calc.rebate,
+      currentTaxAreaRebateReason: calc.rebateReason,
       currentTaxRebate: timing.rebate.toFixed(2),
       penalty: arrears.penalty.toFixed(2),
       outstandingDemand: yearWiseArrears.toFixed(2),
@@ -185,6 +192,11 @@ export interface PrintableDemandNoticeHistory {
   // generated before this column existed, same as breakdown/
   // arrearStagesPaid on a receipt.
   floorBreakdown: FrozenFloorBreakdown | null;
+  // Frozen at generation time (migration 089) - see that migration's
+  // comment. Null if this notice predates the column, or simply had
+  // no rebate to show.
+  areaRebate: string | null;
+  areaRebateReason: string | null;
 }
 
 /**
@@ -228,6 +240,8 @@ export async function getDemandNoticeForReprint(demandNo: string): Promise<Print
     cancelled: notice.cancelled,
     cancelledReason: notice.cancelled_reason,
     floorBreakdown: notice.floor_breakdown,
+    areaRebate: notice.area_rebate,
+    areaRebateReason: notice.area_rebate_reason,
   };
 }
 

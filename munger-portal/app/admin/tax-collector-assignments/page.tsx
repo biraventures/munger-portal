@@ -117,7 +117,12 @@ export default function TaxCollectorAssignmentsPage() {
             {collectors.map((c) => (
               <div key={c.username} className="rounded-xl border border-slate-200 bg-white p-4">
                 <div className="mb-3 flex items-center justify-between">
-                  <p className="text-sm font-semibold text-slate-800">{c.displayName}</p>
+                  <div>
+                    <p className="text-sm font-semibold text-slate-800">{c.displayName}</p>
+                    <p className="font-mono text-xs text-slate-400">
+                      {c.code ? `Code: ${c.code}` : "No code generated (pre-existing account)"}
+                    </p>
+                  </div>
                   <select
                     value={c.assignedCityManagerUsername ?? ""}
                     onChange={(e) => handleAssign(c.username, e.target.value)}

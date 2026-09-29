@@ -2,20 +2,22 @@ const API_BASE_URL =
   process.env.NEXT_PUBLIC_PROPERTY_TAX_API_URL || "http://localhost:4000/api/v1";
 
 /**
- * Public, unauthenticated lookup — used by both the operator's payment
- * form and the citizen-facing payment page. Returns null (not a thrown
- * error) for "not found", since that's an expected, normal outcome
- * while someone is still typing a code — only network/server failures
- * should surface as errors to the caller.
+ * Public, unauthenticated - verifies a Tax Collector code the citizen
+ * (or operator) typed in, against the real login-based Tax Collector
+ * accounts (admins.role = 'tax_collector', auto-assigned a code at
+ * account creation - see scripts/create-admin.ts). Throws with a
+ * friendly message on a 404 ("not found/inactive") or any other
+ * failure, since the caller shows this directly as a verification
+ * error.
  */
-export async function lookupTaxCollectorByCode(code: string): Promise<{ code: string; name: string } | null> {
+export async function verifyTaxCollectorCode(code: string): Promise<{ code: string; name: string }> {
   const res = await fetch(`${API_BASE_URL}/tax-collectors/lookup/${encodeURIComponent(code)}`);
-  if (res.status === 404) return null;
-  if (!res.ok) throw new Error("Could not look up tax collector.");
+  if (res.status === 404) throw new Error("No active tax collector found with that code. Please check and try again.");
+  if (!res.ok) throw new Error("Could not verify tax collector code. Please try again.");
   return res.json();
 }
 
-/** Public, unauthenticated - powers the code+name dropdown on both the operator's and citizen's payment forms, replacing free-text entry. */
+/** Public, unauthenticated - powers the code+name dropdown on the operator's counter-payment form (see TaxCollectorCodeInput). */
 export async function fetchActiveTaxCollectors(): Promise<{ code: string; name: string }[]> {
   const res = await fetch(`${API_BASE_URL}/tax-collectors/active`);
   if (!res.ok) throw new Error("Could not load tax collectors.");

@@ -310,6 +310,8 @@ export interface PrintableDemandNoticeHistory {
   cancelled: boolean;
   cancelledReason: string | null;
   floorBreakdown: FrozenFloorBreakdown | null;
+  areaRebate: string | null;
+  areaRebateReason: string | null;
 }
 
 export async function fetchDemandNoticeReprint(demandNo: string): Promise<PrintableDemandNoticeHistory> {
@@ -365,6 +367,8 @@ export interface PrintableReceiptHistory {
     previousYearsTaxBase: string;
     totalFineAmount: string;
     otherCharges: string;
+    areaRebate: string | null;
+    areaRebateReason: string | null;
   } | null;
   arrearStagesPaid: { period: string; years: number; annualCharge: string; amount: string }[];
   legacyArrearPeriodsPaid: string | null;

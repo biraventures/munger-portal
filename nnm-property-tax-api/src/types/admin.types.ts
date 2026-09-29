@@ -146,6 +146,8 @@ export interface AdminRow {
   email: string | null;
   assigned_city_manager_username: string | null;
   is_demo: boolean;
+  /** Auto-generated 6-8 char alphanumeric code, only set for role = 'tax_collector' (see scripts/create-admin.ts). */
+  tax_collector_code: string | null;
 }
 
 export interface AdminLoginResult {

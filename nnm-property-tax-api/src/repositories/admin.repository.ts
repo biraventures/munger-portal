@@ -40,6 +40,38 @@ export const adminRepository = {
     return rows;
   },
 
+  /**
+   * Resolves a citizen/operator-entered code to an active Tax
+   * Collector LOGIN account - used at payment time (see
+   * onlinePayment.service.ts / payment.service.ts). Case-insensitive,
+   * same reasoning as the old tax_collectors table's lookup: codes are
+   * typically entered without care for casing.
+   */
+  async findActiveTaxCollectorByCode(code: string): Promise<AdminRow | null> {
+    const { rows } = await pool.query<AdminRow>(
+      `SELECT * FROM admins WHERE role = 'tax_collector' AND active = TRUE AND tax_collector_code IS NOT NULL AND lower(tax_collector_code) = lower($1) LIMIT 1`,
+      [code],
+    );
+    return rows[0] ?? null;
+  },
+
+  /** Every active Tax Collector's code + display name - powers the operator counter form's dropdown (see TaxCollectorCodeInput). */
+  async listActiveTaxCollectorCodes(): Promise<{ code: string; name: string }[]> {
+    const { rows } = await pool.query<{ tax_collector_code: string; display_name: string }>(
+      `SELECT tax_collector_code, display_name FROM admins WHERE role = 'tax_collector' AND active = TRUE AND tax_collector_code IS NOT NULL ORDER BY display_name ASC`,
+    );
+    return rows.map((r) => ({ code: r.tax_collector_code, name: r.display_name }));
+  },
+
+  /** Used at payment time - is this Tax Collector login account allowed to collect for this specific ward? Mirrors the old tax_collectors table's isTaggedForWard. */
+  async isTaxCollectorTaggedForWard(taxCollectorUsername: string, ward: string): Promise<boolean> {
+    const { rows } = await pool.query(
+      `SELECT 1 FROM tax_collector_login_wards WHERE tax_collector_username = $1 AND ward = $2 LIMIT 1`,
+      [taxCollectorUsername, ward],
+    );
+    return rows.length > 0;
+  },
+
   /** Commissioner assigns which of the (two) City Managers reviews a given Tax Collector's cancellation requests. Only meaningful for tax_collector accounts. */
   async assignCityManager(taxCollectorUsername: string, cityManagerUsername: string): Promise<AdminRow | null> {
     const { rows } = await pool.query<AdminRow>(

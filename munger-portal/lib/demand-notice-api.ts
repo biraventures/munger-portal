@@ -36,6 +36,8 @@ export interface DemandNoticeData {
   };
   totals: {
     currentTaxBase: string;
+    currentTaxAreaRebate: string;
+    currentTaxAreaRebateReason: string;
     currentTaxRebate: string;
     penalty: string;
     outstandingDemand: string;

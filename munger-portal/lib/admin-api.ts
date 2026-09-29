@@ -296,6 +296,8 @@ export interface PrintableDemandNoticeHistory {
   cancelled: boolean;
   cancelledReason: string | null;
   floorBreakdown: FrozenFloorBreakdown | null;
+  areaRebate: string | null;
+  areaRebateReason: string | null;
 }
 
 export async function fetchDemandNoticeReprintAdmin(demandNo: string): Promise<PrintableDemandNoticeHistory> {
@@ -343,6 +345,8 @@ export interface PrintableReceiptHistory {
     previousYearsTaxBase: string;
     totalFineAmount: string;
     otherCharges: string;
+    areaRebate: string | null;
+    areaRebateReason: string | null;
   } | null;
   arrearStagesPaid: { period: string; years: number; annualCharge: string; amount: string }[];
   legacyArrearPeriodsPaid: string | null;
@@ -499,75 +503,6 @@ export async function downloadMonthlyDriverAttendanceReportAdmin(year: number, m
   );
 }
 
-// ---------------------------------------------------------------------------
-// Tax Collector management
-// ---------------------------------------------------------------------------
-
-export interface TaxCollectorSummary {
-  id: number;
-  code: string;
-  name: string;
-  active: boolean;
-}
-
-export async function fetchTaxCollectors(): Promise<TaxCollectorSummary[]> {
-  const res = await fetch(`${API_BASE_URL}/admin/tax-collectors`, { headers: authHeaders() });
-  if (!res.ok) throw new Error("Could not load tax collectors.");
-  const data: { collectors: TaxCollectorSummary[] } = await res.json();
-  return data.collectors;
-}
-
-export async function createTaxCollectorAdmin(code: string, name: string): Promise<TaxCollectorSummary> {
-  const res = await fetch(`${API_BASE_URL}/admin/tax-collectors`, {
-    method: "POST",
-    headers: authHeaders(),
-    body: JSON.stringify({ code, name }),
-  });
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body.error || "Could not create tax collector.");
-  }
-  return res.json();
-}
-
-export async function setTaxCollectorActiveAdmin(id: number, active: boolean): Promise<TaxCollectorSummary> {
-  const res = await fetch(`${API_BASE_URL}/admin/tax-collectors/${id}/active`, {
-    method: "PATCH",
-    headers: authHeaders(),
-    body: JSON.stringify({ active }),
-  });
-  if (!res.ok) throw new Error("Could not update tax collector status.");
-  return res.json();
-}
-
-export async function fetchAvailableWards(): Promise<string[]> {
-  const res = await fetch(`${API_BASE_URL}/admin/tax-collectors/available-wards`, { headers: authHeaders() });
-  if (!res.ok) throw new Error("Could not load available wards.");
-  const data: { wards: string[] } = await res.json();
-  return data.wards;
-}
-
-export async function fetchTaxCollectorWards(id: number): Promise<string[]> {
-  const res = await fetch(`${API_BASE_URL}/admin/tax-collectors/${id}/wards`, { headers: authHeaders() });
-  if (!res.ok) throw new Error("Could not load this collector's wards.");
-  const data: { wards: string[] } = await res.json();
-  return data.wards;
-}
-
-/** Tax Daroga only - the backend rejects this for any other admin role. */
-export async function setTaxCollectorWardsAdmin(id: number, wards: string[]): Promise<string[]> {
-  const res = await fetch(`${API_BASE_URL}/admin/tax-collectors/${id}/wards`, {
-    method: "PUT",
-    headers: authHeaders(),
-    body: JSON.stringify({ wards }),
-  });
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body.error || "Could not update tagged wards.");
-  }
-  const data: { wards: string[] } = await res.json();
-  return data.wards;
-}
 // ---------------------------------------------------------------------------
 // Cancellation requests - demand notices / receipts
 // ---------------------------------------------------------------------------
@@ -1145,6 +1080,8 @@ export async function requestCancellationAdmin(requestType: "demand_notice" | "r
 export interface TaxCollectorWithAssignment {
   username: string;
   displayName: string;
+  /** Auto-generated at account creation (see scripts/create-admin.ts) - null only if this account predates that. */
+  code: string | null;
   assignedCityManagerUsername: string | null;
   wards: string[];
 }

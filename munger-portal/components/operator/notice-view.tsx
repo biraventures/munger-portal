@@ -241,6 +241,18 @@ export function NoticeView({ notice, onClose }: { notice: DemandNoticeData; onCl
               </td>
               <td className="border-x border-slate-400 p-1.5 text-right italic text-slate-500">{calc.vacant.tax}</td>
             </tr>
+            {Number(t.currentTaxAreaRebate) > 0 && (
+              <tr>
+                <td colSpan={5} className="border-x border-slate-400 p-1.5 pl-6 italic text-slate-500">
+                  — Plinth Area / Rain Water Harvesting Rebate already applied
+                  {t.currentTaxAreaRebateReason ? ` (${t.currentTaxAreaRebateReason})` : ""} — this is why A is less than
+                  the floorwise total above
+                </td>
+                <td className="border-x border-slate-400 p-1.5 text-right italic text-slate-500">
+                  −{t.currentTaxAreaRebate}
+                </td>
+              </tr>
+            )}
             {Number(t.yearWiseArrears) > 0 && (
               <tr>
                 <td colSpan={5} className="border-x border-slate-400 p-1.5">

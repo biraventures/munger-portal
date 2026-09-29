@@ -1,14 +1,6 @@
 import { Router } from "express";
 import { listOperators, setOperatorActive } from "../controllers/adminOperators.controller";
 import {
-  listTaxCollectors,
-  createTaxCollector,
-  setTaxCollectorActive,
-  getAvailableWards,
-  getTaxCollectorWards,
-  setTaxCollectorWards,
-} from "../controllers/taxCollector.controller";
-import {
   getChangeRequests,
   getChangeRequestById,
   postApproveChangeRequest,
@@ -395,17 +387,6 @@ adminRouter.post("/tax-history/bulk-regenerate", requireSeniorAdmin, postBulkReg
 // Data export - GET /api/v1/admin/export?dataset=properties|payments|notices|changes|all
 adminRouter.get("/export", requireSeniorAdmin, getDataExport);
 
-// Tax collector management - any admin except Stall Prabhari can view/create/toggle.
-adminRouter.get("/tax-collectors", requireNonStallPrabhari, listTaxCollectors);
-adminRouter.post("/tax-collectors", requireNonStallPrabhari, createTaxCollector);
-adminRouter.patch("/tax-collectors/:id/active", requireNonStallPrabhari, setTaxCollectorActive);
-
-// Ward tagging - viewing is open to any admin except Stall Prabhari,
-// but only Tax Daroga can change which wards a collector is allowed
-// to operate in.
-adminRouter.get("/tax-collectors/available-wards", requireNonStallPrabhari, getAvailableWards);
-adminRouter.get("/tax-collectors/:id/wards", requireNonStallPrabhari, getTaxCollectorWards);
-adminRouter.put("/tax-collectors/:id/wards", requireAdminRole("tax_daroga"), setTaxCollectorWards);
 
 // Assistant Town Planning Supervisor (ATPS) and Commissioner
 // capture/edit coordinates and manage KML imports. Assistant

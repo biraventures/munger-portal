@@ -11,6 +11,7 @@ export const listTaxCollectorsWithAssignmentHandler = asyncHandler(async (_req: 
     taxCollectors: collectors.map((c) => ({
       username: c.username,
       displayName: c.display_name,
+      code: c.tax_collector_code,
       assignedCityManagerUsername: c.assigned_city_manager_username,
       wards: wardsByCollector[c.username] ?? [],
     })),

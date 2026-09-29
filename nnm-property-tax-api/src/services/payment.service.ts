@@ -1,7 +1,7 @@
 import { pool } from "../config/db";
 import { propertyRepository } from "../repositories/property.repository";
 import { paymentRepository } from "../repositories/payment.repository";
-import { taxCollectorRepository } from "../repositories/taxCollector.repository";
+import { adminRepository } from "../repositories/admin.repository";
 import { demandNoticeRepository } from "../repositories/demandNotice.repository";
 import { cancellationRequestRepository } from "../repositories/cancellationRequest.repository";
 import { calculateTax } from "./taxCalculation.service";
@@ -50,6 +50,9 @@ export interface PrintableReceiptHistory {
     previousYearsTaxBase: string;
     totalFineAmount: string;
     otherCharges: string;
+    // Frozen at payment time (migration 089) - see that migration's comment.
+    areaRebate: string | null;
+    areaRebateReason: string | null;
   } | null;
   // Which specific arrear years this payment cleared, e.g. a stage
   // with period "2018-2019 to 2020-2021" - frozen at payment time
@@ -118,6 +121,8 @@ export async function getReceiptForReprint(receiptNo: string): Promise<Printable
             previousYearsTaxBase: txn.previous_years_tax_base!,
             totalFineAmount: txn.total_fine_amount!,
             otherCharges: txn.other_charges!,
+            areaRebate: txn.area_rebate,
+            areaRebateReason: txn.area_rebate_reason,
           }
         : null,
     arrearStagesPaid: txn.arrear_stages_paid ?? [],
@@ -202,18 +207,18 @@ export async function submitPayment(
   // tracking this at all.
   let taxCollector: { code: string; name: string } | null = null;
   if (input.taxCollectorCode) {
-    const collector = await taxCollectorRepository.findByCode(input.taxCollectorCode);
+    const collector = await adminRepository.findActiveTaxCollectorByCode(input.taxCollectorCode);
     if (!collector) {
       throw ApiError.badRequest(`No active tax collector with code "${input.taxCollectorCode}".`);
     }
     if (!property.ward) {
       throw ApiError.badRequest("This property has no ward on file, so a tax collector cannot be assigned to its payment.");
     }
-    const allowed = await taxCollectorRepository.isTaggedForWard(collector.id, property.ward);
+    const allowed = await adminRepository.isTaxCollectorTaggedForWard(collector.username, property.ward);
     if (!allowed) {
-      throw ApiError.badRequest(`Tax collector "${collector.name}" is not tagged for Ward ${property.ward}.`);
+      throw ApiError.badRequest(`Tax collector "${collector.display_name}" is not tagged for Ward ${property.ward}.`);
     }
-    taxCollector = { code: collector.code, name: collector.name };
+    taxCollector = { code: collector.tax_collector_code!, name: collector.display_name };
   }
 
   // Snapshot pending arrears BEFORE this payment, and which specific
@@ -278,6 +283,8 @@ export async function submitPayment(
         otherCharges: notice.other_charges,
         arrearStagesPaid: clearance.stages,
         floorBreakdown: notice.floor_breakdown,
+        areaRebate: notice.area_rebate,
+        areaRebateReason: notice.area_rebate_reason,
       },
       client,
     );
