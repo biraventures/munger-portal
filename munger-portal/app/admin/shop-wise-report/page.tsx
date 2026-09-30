@@ -41,8 +41,14 @@ export default function ShopWiseReportPage() {
 
   function openShop(shopNo: string) {
     // Opens in its own window/tab, as asked - the report is meant to be
-    // reviewed alongside the list, not replace it.
-    window.open(`/admin/shop-wise-report/${encodeURIComponent(shopNo)}`, "_blank", "noopener,noreferrer");
+    // reviewed alongside the list, not replace it. No noopener/
+    // noreferrer here on purpose - this is an internal, same-origin
+    // route, and the admin login token lives in sessionStorage (see
+    // admin-auth.ts), which only gets copied into a new tab when the
+    // browser keeps an opener relationship to it. noopener breaks
+    // that relationship, so the new tab opened with an empty
+    // sessionStorage and useAdminGuard bounced it straight to login.
+    window.open(`/admin/shop-wise-report/${encodeURIComponent(shopNo)}`, "_blank");
   }
 
   if (!admin) {

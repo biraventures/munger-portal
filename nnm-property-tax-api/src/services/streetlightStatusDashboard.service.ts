@@ -23,9 +23,12 @@ export interface StreetStatusRow {
  * Ward-wise streetlight status - total active lights per ward, and
  * how many currently have an open fault ("not working" - the
  * module's existing fault-driven definition of functional status,
- * not a separately-tracked field) versus none.
+ * not a separately-tracked field) versus none. `wardId` narrows to
+ * one ward - used to scope a ward_parshad login to their own ward
+ * (see WARD_SCOPED_ROLES in attendance.types.ts); omit for every
+ * ward, as the cross-ward oversight roles get.
  */
-export async function buildWardStatusDashboard(agencyName?: string): Promise<WardStatusRow[]> {
+export async function buildWardStatusDashboard(agencyName?: string, wardId?: number): Promise<WardStatusRow[]> {
   const { rows } = await pool.query<WardStatusRow>(
     `SELECT
        w.id AS "wardId", w.ward_name AS "wardName",
@@ -36,17 +39,18 @@ export async function buildWardStatusDashboard(agencyName?: string): Promise<War
      LEFT JOIN lights l ON l.ward_id = w.id AND l.active = TRUE AND l.deleted_at IS NULL
      LEFT JOIN installation_agencies ia ON ia.id = l.installation_agency_id
      LEFT JOIN light_faults lf ON lf.light_id = l.id AND lf.status = 'open'
-     WHERE $1::text IS NULL OR ia.agency_name = $1
+     WHERE ($1::text IS NULL OR ia.agency_name = $1)
+       AND ($2::int IS NULL OR w.id = $2)
      GROUP BY w.id, w.ward_name
      HAVING COUNT(l.id) > 0
      ORDER BY w.ward_name ASC`,
-    [agencyName ?? null],
+    [agencyName ?? null, wardId ?? null],
   );
   return rows;
 }
 
-/** Street-wise streetlight status - same breakdown, per street segment. `agencyName` narrows to one installation agency, same as buildWardStatusDashboard - omit for both. */
-export async function buildStreetStatusDashboard(agencyName?: string): Promise<StreetStatusRow[]> {
+/** Street-wise streetlight status - same breakdown, per street segment. `agencyName` narrows to one installation agency, same as buildWardStatusDashboard - omit for both. `wardId` scopes to one ward, same as buildWardStatusDashboard. */
+export async function buildStreetStatusDashboard(agencyName?: string, wardId?: number): Promise<StreetStatusRow[]> {
   const { rows } = await pool.query<StreetStatusRow>(
     `SELECT
        ss.id AS "segmentId", w.ward_name AS "wardName", ss.start_point AS "startPoint", ss.end_point AS "endPoint", ia.agency_name AS "agencyName",
@@ -58,12 +62,19 @@ export async function buildStreetStatusDashboard(agencyName?: string): Promise<S
      LEFT JOIN installation_agencies ia ON ia.id = ss.installation_agency_id
      LEFT JOIN lights l ON l.segment_id = ss.id AND l.active = TRUE AND l.deleted_at IS NULL
      LEFT JOIN light_faults lf ON lf.light_id = l.id AND lf.status = 'open'
-     WHERE $1::text IS NULL OR ia.agency_name = $1
+     WHERE ($1::text IS NULL OR ia.agency_name = $1)
+       AND ($2::int IS NULL OR ss.ward_id = $2)
      GROUP BY ss.id, w.ward_name, ss.start_point, ss.end_point, ia.agency_name
      ORDER BY w.ward_name ASC, ss.start_point ASC`,
-    [agencyName ?? null],
+    [agencyName ?? null, wardId ?? null],
   );
   return rows;
+}
+
+/** The ward a street segment belongs to - used to check a ward_parshad login isn't drilling into a segment outside their own ward (the wards/streets lists are already scoped, but the segment-id drill-down is a direct id lookup that needs its own check). Returns null if the segment doesn't exist. */
+export async function getSegmentWardId(segmentId: number): Promise<number | null> {
+  const { rows } = await pool.query<{ ward_id: number }>(`SELECT ward_id FROM street_segments WHERE id = $1`, [segmentId]);
+  return rows[0]?.ward_id ?? null;
 }
 
 export interface SegmentLightFaultHistoryRow {

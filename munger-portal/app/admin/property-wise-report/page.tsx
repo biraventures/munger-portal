@@ -32,7 +32,14 @@ export default function PropertyWiseReportPage() {
   }
 
   function openHolding(holdingNo: string) {
-    window.open(`/admin/property-wise-report/${encodeURIComponent(holdingNo)}`, "_blank", "noopener,noreferrer");
+    // No noopener/noreferrer here on purpose - this is an internal,
+    // same-origin route, and the admin login token lives in
+    // sessionStorage (see admin-auth.ts), which only gets copied into
+    // a new tab when the browser keeps an opener relationship to it.
+    // noopener breaks that relationship, so the new tab opened with
+    // an empty sessionStorage and useAdminGuard bounced it straight
+    // to the login page.
+    window.open(`/admin/property-wise-report/${encodeURIComponent(holdingNo)}`, "_blank");
   }
 
   if (!admin) {

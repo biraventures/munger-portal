@@ -8,7 +8,14 @@ import { lightFaultPenaltyRepository } from "../repositories/lightFaultPenalty.r
 import { reportFaultByStaff, markFaultRepaired, linkFaultToLight, getLightRepairHistorySummary } from "../services/lightFault.service";
 import { accrueAllOverduePenalties, accruePenaltiesForFault } from "../services/penaltyAccrual.service";
 import { importLightsCsv } from "../services/lightCsvImport.service";
-import { buildWardStatusDashboard, buildStreetStatusDashboard, buildSegmentLightStatus, buildHighMastWardStatusDashboard, buildHighMastLightsForWard } from "../services/streetlightStatusDashboard.service";
+import {
+  buildWardStatusDashboard,
+  buildStreetStatusDashboard,
+  buildSegmentLightStatus,
+  buildHighMastWardStatusDashboard,
+  buildHighMastLightsForWard,
+  getSegmentWardId,
+} from "../services/streetlightStatusDashboard.service";
 import { asyncHandler } from "../middleware/asyncHandler";
 import { ApiError } from "../utils/ApiError";
 
@@ -272,26 +279,39 @@ export const myPenaltyTotalHandler = asyncHandler(async (req: Request, res: Resp
 const statusDashboardQuerySchema = z.object({ agency: z.enum(["NN", "EESL"]).optional() });
 const AGENCY_NAME_BY_CODE: Record<"NN" | "EESL", string> = { NN: "Nagar Nigam", EESL: "EESL" };
 
+/** ward_parshad only ever sees their own ward on this dashboard, same as the rest of the portal (see WARD_SCOPED_ROLES) - Mayor/Deputy Mayor are cross-ward, same as City Manager/DMC/Commissioner. Undefined means "no ward restriction". */
+function statusDashboardWardScope(req: Request): number | undefined {
+  if (req.attendanceUser?.role === "ward_parshad") {
+    return req.attendanceUser.wardId ?? undefined;
+  }
+  return undefined;
+}
+
 export const getWardStatusDashboardHandler = asyncHandler(async (req: Request, res: Response) => {
   const parsed = statusDashboardQuerySchema.safeParse(req.query);
   if (!parsed.success) throw ApiError.badRequest("Invalid query", parsed.error.flatten().fieldErrors);
-  const wards = await buildWardStatusDashboard(parsed.data.agency ? AGENCY_NAME_BY_CODE[parsed.data.agency] : undefined);
+  const wards = await buildWardStatusDashboard(parsed.data.agency ? AGENCY_NAME_BY_CODE[parsed.data.agency] : undefined, statusDashboardWardScope(req));
   res.status(200).json({ wards });
 });
 
 export const getStreetStatusDashboardHandler = asyncHandler(async (req: Request, res: Response) => {
   const parsed = statusDashboardQuerySchema.safeParse(req.query);
   if (!parsed.success) throw ApiError.badRequest("Invalid query", parsed.error.flatten().fieldErrors);
-  const streets = await buildStreetStatusDashboard(parsed.data.agency ? AGENCY_NAME_BY_CODE[parsed.data.agency] : undefined);
+  const streets = await buildStreetStatusDashboard(parsed.data.agency ? AGENCY_NAME_BY_CODE[parsed.data.agency] : undefined, statusDashboardWardScope(req));
   res.status(200).json({ streets });
 });
 
 const segmentIdParamSchema = z.object({ id: z.coerce.number().int().positive() });
 
-/** The status dashboard's drill-down - individual lights on one segment, their working/not-working status, and fault history. */
+/** The status dashboard's drill-down - individual lights on one segment, their working/not-working status, and fault history. A ward_parshad drilling into a segment id outside their own ward (the wards/streets lists are already scoped, but this is a direct id lookup) is refused, same as if the street didn't exist. */
 export const getSegmentLightStatusHandler = asyncHandler(async (req: Request, res: Response) => {
   const parsed = segmentIdParamSchema.safeParse(req.params);
   if (!parsed.success) throw ApiError.badRequest("Invalid segment id");
+  const scopeWardId = statusDashboardWardScope(req);
+  if (scopeWardId !== undefined) {
+    const segmentWardId = await getSegmentWardId(parsed.data.id);
+    if (segmentWardId !== scopeWardId) throw ApiError.notFound("Street not found");
+  }
   const lights = await buildSegmentLightStatus(parsed.data.id);
   res.status(200).json({ lights });
 });
