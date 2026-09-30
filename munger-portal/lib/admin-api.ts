@@ -34,6 +34,43 @@ export async function setOperatorActive(id: number, active: boolean): Promise<Op
   return data.operator;
 }
 
+/**
+ * Admins-table logins (Tax Daroga, Deputy Commissioner, Commissioner,
+ * Tax Collector, etc.) - separate from OperatorSummary above (the
+ * front-counter `operators` table) and from the attendance module's own
+ * user management. Commissioner-only.
+ */
+export interface AdminAccountSummary {
+  id: number;
+  username: string;
+  display_name: string;
+  role: AdminRole;
+  active: boolean;
+  is_demo: boolean;
+  tax_collector_code: string | null;
+}
+
+export async function fetchAdminAccounts(): Promise<AdminAccountSummary[]> {
+  const res = await fetch(`${API_BASE_URL}/admin/accounts`, { headers: authHeaders() });
+  if (!res.ok) throw new Error("Could not load admin accounts.");
+  const data: { accounts: AdminAccountSummary[] } = await res.json();
+  return data.accounts;
+}
+
+export async function setAdminAccountActive(id: number, active: boolean): Promise<AdminAccountSummary> {
+  const res = await fetch(`${API_BASE_URL}/admin/accounts/${id}/active`, {
+    method: "PATCH",
+    headers: authHeaders(),
+    body: JSON.stringify({ active }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || "Could not update this account's status.");
+  }
+  const data: { account: AdminAccountSummary } = await res.json();
+  return data.account;
+}
+
 export type ChangeRequestStatus = "pending" | "approved" | "rejected" | "reverted";
 
 export type ApprovalTier = "minor" | "significant" | "mutation";

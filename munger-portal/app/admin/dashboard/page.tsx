@@ -98,6 +98,7 @@ export default function AdminDashboardPage() {
   const showCollectionIssues = admin.role === "tax_daroga" || admin.role === "commissioner" || admin.role === "city_manager";
   const showTaxCollectorAssignments = isCommissioner;
   const showRevertAuditTrail = isCommissioner;
+  const showManageLogins = isCommissioner;
   const showEmployeeDatabaseEntry = admin.role === "establishment_clerk";
   const showEmployeeDatabaseList = admin.role === "establishment_clerk";
   const showEmployeeDatabaseVerify = admin.role === "city_manager";
@@ -144,7 +145,7 @@ export default function AdminDashboardPage() {
   const showAssignCoordinates = isAtps || isCommissioner;
   const showGisMap = isAtps || isAssistantArchitect || isCommissioner;
   const showBuildingMapApproval = isAssistantArchitect;
-  const miscGroupVisible = showOperators || showDocumentArchive || showAttendanceReport || showAssignCoordinates || showGisMap || showBuildingMapApproval;
+  const miscGroupVisible = showOperators || showManageLogins || showDocumentArchive || showAttendanceReport || showAssignCoordinates || showGisMap || showBuildingMapApproval;
   const employeeDatabaseGroupVisible = showEmployeeDatabaseEntry || showEmployeeDatabaseList || showEmployeeDatabaseVerify || showEmployeeDatabaseProgress;
   const streetlightGroupVisible = isStreetlightReporterRole;
 
@@ -605,6 +606,16 @@ export default function AdminDashboardPage() {
                   </span>
                   <h3 className="mb-1.5 text-base font-semibold text-slate-900">Operators</h3>
                   <p className="text-sm text-slate-500">Activate or deactivate counter operator accounts.</p>
+                </Link>
+              )}
+
+              {showManageLogins && (
+                <Link href="/admin/manage-logins" className={cardClass}>
+                  <span className={iconWrapClass}>
+                    <ShieldCheck className="h-6 w-6" strokeWidth={1.8} />
+                  </span>
+                  <h3 className="mb-1.5 text-base font-semibold text-slate-900">Manage Logins</h3>
+                  <p className="text-sm text-slate-500">Activate or deactivate Tax Daroga, Tax Collector, and other officer logins.</p>
                 </Link>
               )}
 

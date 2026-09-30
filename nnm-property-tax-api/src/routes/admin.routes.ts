@@ -90,6 +90,7 @@ import { listResurveyFlagsHandler, reviewResurveyFlagHandler, exportResurveyFlag
 import { listAllCollectionIssues } from "../controllers/collectionIssue.controller";
 import { postGenerateCollectionIssueNotice, getCollectionIssueNotices } from "../controllers/collectionIssueNotice.controller";
 import { listTaxCollectorsWithAssignmentHandler, listCityManagersHandler, assignCityManagerHandler, setTaxCollectorWardsHandler } from "../controllers/taxCollectorAssignment.controller";
+import { listAdminAccounts, setAdminAccountActive } from "../controllers/adminAccounts.controller";
 import { listEntryRevertEventsHandler, exportEntryRevertEventsHandler } from "../controllers/entryRevertEvent.controller";
 import {
   postCreateEmployeeHandler,
@@ -168,6 +169,13 @@ const requireNonStallPrabhari = requireAdminRole(
 // Operator management
 adminRouter.get("/operators", requireSeniorAdmin, listOperators);
 adminRouter.patch("/operators/:id/active", requireSeniorAdmin, setOperatorActive);
+
+// Admins-table login management (Tax Daroga, Deputy Commissioner,
+// Commissioner, Tax Collector, etc.) - Commissioner only, separate from
+// the front-counter Operators list above and from the attendance
+// module's own /attendance/users screen.
+adminRouter.get("/accounts", requireAdminRole("commissioner"), listAdminAccounts);
+adminRouter.patch("/accounts/:id/active", requireAdminRole("commissioner"), setAdminAccountActive);
 
 // Property mutation approval queue - restricted to the actual chain's
 // roles (tax_daroga -> mutation_nodal_clerk -> deputy_commissioner ->

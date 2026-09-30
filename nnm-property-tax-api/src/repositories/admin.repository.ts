@@ -120,4 +120,35 @@ export const adminRepository = {
     }
     return this.listTaxCollectorWards(taxCollectorUsername);
   },
+
+  /**
+   * Every admins-table login (Tax Daroga, Deputy Commissioner,
+   * Commissioner, Tax Collector, and the rest of ADMIN_ROLES) for the
+   * Commissioner's account-management screen. Deliberately excludes
+   * password_hash - this list is for activate/deactivate, never for
+   * showing or checking credentials. The separate front-counter
+   * `operators` table has its own listing (operator.repository.ts) and
+   * isn't included here.
+   */
+  async listAllForManagement(): Promise<Omit<AdminRow, "password_hash">[]> {
+    const { rows } = await pool.query<Omit<AdminRow, "password_hash">>(
+      `SELECT id, username, display_name, role, active, email, assigned_city_manager_username, is_demo, tax_collector_code
+       FROM admins ORDER BY role ASC, display_name ASC`,
+    );
+    return rows;
+  },
+
+  async setActive(id: number, active: boolean): Promise<Omit<AdminRow, "password_hash"> | null> {
+    const { rows } = await pool.query<Omit<AdminRow, "password_hash">>(
+      `UPDATE admins SET active = $2 WHERE id = $1
+       RETURNING id, username, display_name, role, active, email, assigned_city_manager_username, is_demo, tax_collector_code`,
+      [id, active],
+    );
+    return rows[0] ?? null;
+  },
+
+  async findById(id: number): Promise<AdminRow | null> {
+    const { rows } = await pool.query<AdminRow>(`SELECT * FROM admins WHERE id = $1 LIMIT 1`, [id]);
+    return rows[0] ?? null;
+  },
 };
