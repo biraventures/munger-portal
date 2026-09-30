@@ -57,6 +57,7 @@ import {
   exportGeoData,
 } from "../controllers/geo.controller";
 import { uploadPropertiesXlsxHandler } from "../controllers/propertyBulkImport.controller";
+import { searchPropertiesHandler, getPropertyReportHandler } from "../controllers/propertyReport.controller";
 import { getShopsPendingPublication, postApproveShopPublication } from "../controllers/shopPublicationApproval.controller";
 import {
   getShopEditRequests,
@@ -284,6 +285,14 @@ adminRouter.get("/properties/spaced-holdings", requireAdminRole("commissioner"),
 adminRouter.post("/properties/spaced-holdings/delete-all", requireAdminRole("commissioner"), postDeleteSpacedHoldings);
 adminRouter.post("/properties/remove-duplicate-floors", requireAdminRole("commissioner"), postRemoveDuplicateFloors);
 adminRouter.post("/properties/bulk-upload", requireAdminRole("commissioner"), uploadPropertiesXlsxHandler);
+
+// Property-wise report (Commissioner/DMC/City Manager): search by
+// holding no/owner/address, then full detail + tax pending + change
+// log + discrepancy flags + resurvey flags + surveyor field
+// verifications for one holding. See propertyReport.controller.ts.
+const requirePropertyReportRole = requireAdminRole("commissioner", "deputy_commissioner", "city_manager");
+adminRouter.get("/properties/search", requirePropertyReportRole, searchPropertiesHandler);
+adminRouter.get("/properties/:holdingNo/report", requirePropertyReportRole, getPropertyReportHandler);
 
 // Shop publication approval - gates a newly-entered shop from public
 // visibility until Stall Prabhari, City Manager, and Deputy

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Users, FileClock, FileWarning, LayoutGrid, ShoppingBag, Store, BarChart3, Award, Archive, Download, XCircle, ShieldCheck, Trash2, RefreshCw, Upload, MapPin, Map as MapIcon, ClipboardCheck, UserCheck, ClipboardList, Receipt, RotateCcw, AlertTriangle, List, Flag } from "lucide-react";
+import { Users, FileClock, FileWarning, LayoutGrid, ShoppingBag, Store, BarChart3, Award, Archive, Download, XCircle, ShieldCheck, Trash2, RefreshCw, Upload, MapPin, Map as MapIcon, ClipboardCheck, UserCheck, ClipboardList, Receipt, RotateCcw, AlertTriangle, List, Flag, Home } from "lucide-react";
 import { AdminHeader } from "@/components/admin-header";
 import { DashboardSummaryWidget } from "@/components/dashboard-summary-widget";
 import { useAdminGuard } from "@/lib/use-admin-guard";
@@ -106,10 +106,12 @@ export default function AdminDashboardPage() {
   const isStreetlightReporterRole =
     admin.role === "tax_daroga" || admin.role === "tax_surveyor" || admin.role === "tax_collector" || admin.role === "stall_prabhari" || admin.role === "je_mechanical" || admin.role === "ae_mechanical" ||
     admin.role === "commissioner" || admin.role === "deputy_commissioner" || admin.role === "city_manager";
+  const showPropertyWiseReport = admin.role === "commissioner" || admin.role === "deputy_commissioner" || admin.role === "city_manager";
   const propertyGroupVisible =
     showMutationApprovals || showCancellationRequests || showBulkDemandNotices || showAllPropertyChanges || showRenumberHolding || showBulkUploadProperties ||
     showMigratedHoldingsBulkUpload || showMigratedHoldingsAssign || showMigratedHoldingsSurveyor || showMigratedHoldingsMySurveys || showInitiateSurvey || showTaxCollectorPage ||
-    showReportPropertyDiscrepancy || showMyDiscrepancyReports || showPropertyDiscrepancyRequests || showResurveyFlags || showCollectionIssues || showTaxCollectorAssignments || showRevertAuditTrail;
+    showReportPropertyDiscrepancy || showMyDiscrepancyReports || showPropertyDiscrepancyRequests || showResurveyFlags || showCollectionIssues || showTaxCollectorAssignments || showRevertAuditTrail ||
+    showPropertyWiseReport;
 
   const showShopAgreementApprovals = !isTradeLicenseNodal && !isGisOnlyRole && !isNarrowlyScopedRole;
   const showShopRentalApplications = !isTradeLicenseNodal && !isGisOnlyRole && !isNarrowlyScopedRole;
@@ -353,6 +355,16 @@ export default function AdminDashboardPage() {
                   <p className="text-sm text-slate-500">
                     {admin.role === "city_manager" ? "Generate the standard legal notice for a reported collection issue." : "See what Tax Collectors have reported."}
                   </p>
+                </Link>
+              )}
+
+              {showPropertyWiseReport && (
+                <Link href="/admin/property-wise-report" className={cardClass}>
+                  <span className={iconWrapClass}>
+                    <Home className="h-6 w-6" strokeWidth={1.8} />
+                  </span>
+                  <h3 className="mb-1.5 text-base font-semibold text-slate-900">Property-wise Report</h3>
+                  <p className="text-sm text-slate-500">Search a holding for full details, tax pending, change log, discrepancy/re-survey flags, and surveyor visits.</p>
                 </Link>
               )}
 
