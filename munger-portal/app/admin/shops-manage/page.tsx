@@ -65,7 +65,7 @@ export default function ShopsManagePage() {
       !search.trim() ||
       s.shop_no.toLowerCase().includes(search.toLowerCase()) ||
       (s.market_name ?? "").toLowerCase().includes(search.toLowerCase()) ||
-      s.location.toLowerCase().includes(search.toLowerCase()),
+      (s.location ?? "").toLowerCase().includes(search.toLowerCase()),
   );
 
   return (

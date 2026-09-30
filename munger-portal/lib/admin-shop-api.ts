@@ -392,7 +392,10 @@ export async function fetchRentalPreferences(status?: ShopRentalPreferenceStatus
 export interface ShopSummaryForAllotment {
   shop_no: string;
   market_name: string | null;
-  location: string;
+  // location was NOT NULL until migration 043_shop_fields_optional.sql
+  // dropped that constraint - genuinely null for some shops now, hence
+  // the (s.location ?? "") guards wherever this gets searched/filtered.
+  location: string | null;
   area_sqft: string | null;
   status: string;
 }

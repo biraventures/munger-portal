@@ -35,7 +35,7 @@ export default function ShopWiseReportPage() {
     return shops.filter((s) => {
       if (market && s.market_name !== market) return false;
       if (!q) return true;
-      return s.shop_no.toLowerCase().includes(q) || (s.market_name ?? "").toLowerCase().includes(q) || s.location.toLowerCase().includes(q);
+      return s.shop_no.toLowerCase().includes(q) || (s.market_name ?? "").toLowerCase().includes(q) || (s.location ?? "").toLowerCase().includes(q);
     });
   }, [shops, search, market]);
 
