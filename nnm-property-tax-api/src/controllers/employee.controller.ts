@@ -29,7 +29,7 @@ const employeeFieldsSchema = z.object({
   aadhaarNumber: z.string().trim().min(1),
   panNumber: z.string().trim().nullish(),
   reservationCategory: z.enum(["scheduled_caste", "scheduled_tribe", "other_backward_class", "extremely_backward_class", "backward_class_women", "divyang", "general"]),
-  educationalQualification: z.enum(["below_matric", "matriculation", "intermediate", "diploma_degree"]),
+  educationalQualification: z.enum(["no_formal_education", "below_matric", "matriculation", "intermediate", "diploma_degree"]),
   dateOfAppointment: z.string().trim().min(1),
   appointmentOrderNumber: z.string().trim().nullish(),
   appointingAuthority: z.enum(["government_of_bihar", "munger_municipal_corporation"]),
