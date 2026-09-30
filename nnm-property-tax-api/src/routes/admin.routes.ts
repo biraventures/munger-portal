@@ -35,6 +35,8 @@ import {
 } from "../controllers/shopAgreement.controller";
 import { listAllShops, getPerSqftReport, uploadShopsCsvHandler } from "../controllers/shop.controller";
 import { deleteShopHandler } from "../controllers/shopDelete.controller";
+import { getShopReportHandler } from "../controllers/shopReport.controller";
+import { createShopFlagHandler, listShopFlagsForShopHandler, listOpenShopFlagsHandler, resolveShopFlagHandler } from "../controllers/shopFlag.controller";
 import { postRenumberHolding, postRenameHolding, postFixHoldingNoSpaces } from "../controllers/propertyRenumber.controller";
 import { deletePropertyHandler } from "../controllers/propertyDelete.controller";
 import { getSpacedHoldings, postDeleteSpacedHoldings, postRemoveDuplicateFloors } from "../controllers/propertyBulkCleanup.controller";
@@ -264,6 +266,16 @@ adminRouter.get("/employees/progress", requireAdminRole("commissioner"), getEmpl
 adminRouter.get("/shops", listAllShops);
 adminRouter.post("/shops/bulk-upload", requireAdminRole("commissioner"), uploadShopsCsvHandler);
 adminRouter.delete("/shops/:shopNo", requireAdminRole("commissioner"), deleteShopHandler);
+
+// Shop-wise report (Commissioner/City Manager): full detail + agreement
+// history + edit-request change log + flags for one shop, and flagging
+// something on it for Stall Prabhari to correct or justify. See
+// shopReport.controller.ts / shopFlag.controller.ts / migration 090.
+adminRouter.get("/shops/:shopNo/report", requireAdminRole("commissioner", "city_manager"), getShopReportHandler);
+adminRouter.get("/shops/:shopNo/flags", requireAdminRole("commissioner", "city_manager", "stall_prabhari"), listShopFlagsForShopHandler);
+adminRouter.post("/shops/:shopNo/flags", requireAdminRole("commissioner", "city_manager"), createShopFlagHandler);
+adminRouter.get("/shop-flags/open", requireAdminRole("stall_prabhari"), listOpenShopFlagsHandler);
+adminRouter.post("/shop-flags/:id/resolve", requireAdminRole("stall_prabhari"), resolveShopFlagHandler);
 adminRouter.post("/properties/:holdingNo/renumber", requireAdminRole("commissioner"), postRenumberHolding);
 adminRouter.post("/properties/:holdingNo/rename", requireAdminRole("commissioner"), postRenameHolding);
 adminRouter.delete("/properties/:holdingNo", requireAdminRole("commissioner"), deletePropertyHandler);

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Users, FileClock, FileWarning, LayoutGrid, ShoppingBag, Store, BarChart3, Award, Archive, Download, XCircle, ShieldCheck, Trash2, RefreshCw, Upload, MapPin, Map as MapIcon, ClipboardCheck, UserCheck, ClipboardList, Receipt, RotateCcw, AlertTriangle, List } from "lucide-react";
+import { Users, FileClock, FileWarning, LayoutGrid, ShoppingBag, Store, BarChart3, Award, Archive, Download, XCircle, ShieldCheck, Trash2, RefreshCw, Upload, MapPin, Map as MapIcon, ClipboardCheck, UserCheck, ClipboardList, Receipt, RotateCcw, AlertTriangle, List, Flag } from "lucide-react";
 import { AdminHeader } from "@/components/admin-header";
 import { DashboardSummaryWidget } from "@/components/dashboard-summary-widget";
 import { useAdminGuard } from "@/lib/use-admin-guard";
@@ -122,6 +122,8 @@ export default function AdminDashboardPage() {
   const showBulkUploadShops = isCommissioner;
   const showManageShops = isCommissioner;
   const showShopInspection = admin.role === "city_manager" || admin.role === "deputy_commissioner";
+  const showShopWiseReport = admin.role === "commissioner" || admin.role === "city_manager";
+  const showShopFlags = isStallPrabhari;
   const shopGroupVisible =
     showShopAgreementApprovals ||
     showShopRentalApplications ||
@@ -131,6 +133,8 @@ export default function AdminDashboardPage() {
     showShopEditApprovals ||
     showDemandReceiptActions ||
     showShopInspection ||
+    showShopWiseReport ||
+    showShopFlags ||
     showShopAgreementDocumentRequests ||
     showBulkUploadShops ||
     showManageShops;
@@ -434,6 +438,26 @@ export default function AdminDashboardPage() {
                   </span>
                   <h3 className="mb-1.5 text-base font-semibold text-slate-900">Shop Inspection</h3>
                   <p className="text-sm text-slate-500">Search a shop and record irregularities found on-site.</p>
+                </Link>
+              )}
+
+              {showShopWiseReport && (
+                <Link href="/admin/shop-wise-report" className={cardClass}>
+                  <span className={iconWrapClass}>
+                    <Store className="h-6 w-6" strokeWidth={1.8} />
+                  </span>
+                  <h3 className="mb-1.5 text-base font-semibold text-slate-900">Shop-wise Report</h3>
+                  <p className="text-sm text-slate-500">Every shop, filterable by market - open one for full details, agreement history, and to flag issues.</p>
+                </Link>
+              )}
+
+              {showShopFlags && (
+                <Link href="/admin/shop-flags" className={cardClass}>
+                  <span className={iconWrapClass}>
+                    <Flag className="h-6 w-6" strokeWidth={1.8} />
+                  </span>
+                  <h3 className="mb-1.5 text-base font-semibold text-slate-900">Flagged Shops</h3>
+                  <p className="text-sm text-slate-500">Respond to shops the Commissioner or City Manager flagged for correction or justification.</p>
                 </Link>
               )}
 
