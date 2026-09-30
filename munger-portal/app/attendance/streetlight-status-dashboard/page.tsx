@@ -718,7 +718,10 @@ export default function StreetlightStatusDashboardPage() {
                                             {l.faultHistory.map((f) => (
                                               <p key={f.faultId} className="text-xs text-slate-600">
                                                 Reported {new Date(f.reportedAt).toLocaleDateString("en-IN")}
-                                                {f.status === "repaired" && f.repairedAt ? ` · Repaired ${new Date(f.repairedAt).toLocaleDateString("en-IN")}` : " · Still open"}
+                                                {f.reportedByName ? ` by ${f.reportedByName}` : f.reportedByType === "public" ? " (public report)" : ""}
+                                                {f.status === "repaired" && f.repairedAt
+                                                  ? ` · Repaired ${new Date(f.repairedAt).toLocaleDateString("en-IN")}${f.repairedByName ? ` by ${f.repairedByName}` : ""}`
+                                                  : " · Still open"}
                                                 {f.reporterNotes ? ` - "${f.reporterNotes}"` : ""}
                                               </p>
                                             ))}

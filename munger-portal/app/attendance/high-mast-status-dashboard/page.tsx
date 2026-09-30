@@ -331,7 +331,9 @@ export default function HighMastStatusDashboardPage() {
                         <ul className="mt-1.5 space-y-1">
                           {l.faultHistory.map((f) => (
                             <li key={f.faultId}>
-                              {new Date(f.reportedAt).toLocaleDateString("en-IN")} - {f.status} {f.reporterNotes ? `(${f.reporterNotes})` : ""}
+                              {new Date(f.reportedAt).toLocaleDateString("en-IN")}
+                              {f.reportedByName ? ` by ${f.reportedByName}` : f.reportedByType === "public" ? " (public)" : ""} - {f.status}
+                              {f.status === "repaired" && f.repairedByName ? ` by ${f.repairedByName}` : ""} {f.reporterNotes ? `(${f.reporterNotes})` : ""}
                             </li>
                           ))}
                         </ul>

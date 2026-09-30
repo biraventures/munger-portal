@@ -81,8 +81,12 @@ export interface SegmentLightFaultHistoryRow {
   faultId: number;
   reportedAt: string;
   reportedByType: "staff" | "public" | "admin";
+  /** Who raised it - the attendance user's or admin's display name. Null for a public report (no login, just a phone number - see reporter_phone on light_faults). */
+  reportedByName: string | null;
   status: "open" | "repaired";
   repairedAt: string | null;
+  /** Who closed it out - the attendance user's display name. Null while still open. */
+  repairedByName: string | null;
   reporterNotes: string | null;
 }
 
@@ -115,10 +119,24 @@ export async function buildSegmentLightStatus(segmentId: number): Promise<Segmen
     light_id: number;
     reported_at: string;
     reported_by_type: "staff" | "public" | "admin";
+    reported_by_name: string | null;
     status: "open" | "repaired";
     repaired_at: string | null;
+    repaired_by_name: string | null;
     reporter_notes: string | null;
-  }>(`SELECT id, light_id, reported_at, reported_by_type, status, repaired_at, reporter_notes FROM light_faults WHERE light_id = ANY($1) ORDER BY reported_at DESC`, [lightIds]);
+  }>(
+    `SELECT
+       lf.id, lf.light_id, lf.reported_at, lf.reported_by_type, lf.status, lf.repaired_at, lf.reporter_notes,
+       COALESCE(ru.display_name, ra.display_name) AS reported_by_name,
+       rpu.display_name AS repaired_by_name
+     FROM light_faults lf
+     LEFT JOIN attendance_users ru ON ru.id = lf.reported_by_user_id
+     LEFT JOIN admins ra ON ra.username = lf.reported_by_admin_username
+     LEFT JOIN attendance_users rpu ON rpu.id = lf.repaired_by_user_id
+     WHERE lf.light_id = ANY($1)
+     ORDER BY lf.reported_at DESC`,
+    [lightIds],
+  );
 
   const faultsByLight = new Map<number, SegmentLightFaultHistoryRow[]>();
   for (const f of faults) {
@@ -126,8 +144,10 @@ export async function buildSegmentLightStatus(segmentId: number): Promise<Segmen
       faultId: f.id,
       reportedAt: f.reported_at,
       reportedByType: f.reported_by_type,
+      reportedByName: f.reported_by_name,
       status: f.status,
       repairedAt: f.repaired_at,
+      repairedByName: f.repaired_by_name,
       reporterNotes: f.reporter_notes,
     };
     const existing = faultsByLight.get(f.light_id);
@@ -232,10 +252,24 @@ export async function buildHighMastLightsForWard(wardId: number): Promise<HighMa
     light_id: number;
     reported_at: string;
     reported_by_type: "staff" | "public" | "admin";
+    reported_by_name: string | null;
     status: "open" | "repaired";
     repaired_at: string | null;
+    repaired_by_name: string | null;
     reporter_notes: string | null;
-  }>(`SELECT id, light_id, reported_at, reported_by_type, status, repaired_at, reporter_notes FROM light_faults WHERE light_id = ANY($1) ORDER BY reported_at DESC`, [lightIds]);
+  }>(
+    `SELECT
+       lf.id, lf.light_id, lf.reported_at, lf.reported_by_type, lf.status, lf.repaired_at, lf.reporter_notes,
+       COALESCE(ru.display_name, ra.display_name) AS reported_by_name,
+       rpu.display_name AS repaired_by_name
+     FROM light_faults lf
+     LEFT JOIN attendance_users ru ON ru.id = lf.reported_by_user_id
+     LEFT JOIN admins ra ON ra.username = lf.reported_by_admin_username
+     LEFT JOIN attendance_users rpu ON rpu.id = lf.repaired_by_user_id
+     WHERE lf.light_id = ANY($1)
+     ORDER BY lf.reported_at DESC`,
+    [lightIds],
+  );
 
   const faultsByLight = new Map<number, SegmentLightFaultHistoryRow[]>();
   for (const f of faults) {
@@ -243,8 +277,10 @@ export async function buildHighMastLightsForWard(wardId: number): Promise<HighMa
       faultId: f.id,
       reportedAt: f.reported_at,
       reportedByType: f.reported_by_type,
+      reportedByName: f.reported_by_name,
       status: f.status,
       repairedAt: f.repaired_at,
+      repairedByName: f.repaired_by_name,
       reporterNotes: f.reporter_notes,
     };
     const existing = faultsByLight.get(f.light_id);
@@ -264,4 +300,56 @@ export async function buildHighMastLightsForWard(wardId: number): Promise<HighMa
       switchStatus: l.switch_status,
     };
   });
+}
+
+// ---------------------------------------------------------------------------
+// Fault audit trail - a flat, city-wide (or ward-wide for ward_parshad)
+// log of every "Mark Defective"/"Mark Functional" action, most recent
+// first, with who did it. Same underlying light_faults rows the
+// per-light history above already shows, just listed across every
+// light instead of one light at a time, for Mayor/Deputy Mayor/Ward
+// Parshad/City Manager/DMC/Commissioner/attendance_admin to review
+// accountability without drilling into each street.
+// ---------------------------------------------------------------------------
+
+export interface FaultAuditTrailRow {
+  faultId: number;
+  lightId: number | null;
+  serialNumber: string | null;
+  lightType: "streetlight" | "high_mast" | null;
+  wardName: string | null;
+  startPoint: string | null;
+  endPoint: string | null;
+  reportedAt: string;
+  reportedByType: "staff" | "public" | "admin";
+  reportedByName: string | null;
+  reporterNotes: string | null;
+  status: "open" | "repaired";
+  repairedAt: string | null;
+  repairedByName: string | null;
+  repairNotes: string | null;
+}
+
+/** `wardId` scopes to one ward (ward_parshad); omit for the whole city. `limit` caps how far back the trail goes - defaults to the most recent 300 actions, which is plenty for reviewing recent activity without paging. */
+export async function buildFaultAuditTrail(wardId?: number, limit = 300): Promise<FaultAuditTrailRow[]> {
+  const { rows } = await pool.query<FaultAuditTrailRow>(
+    `SELECT
+       lf.id AS "faultId", l.id AS "lightId", l.serial_number AS "serialNumber", l.light_type AS "lightType",
+       w.ward_name AS "wardName", ss.start_point AS "startPoint", ss.end_point AS "endPoint",
+       lf.reported_at AS "reportedAt", lf.reported_by_type AS "reportedByType",
+       COALESCE(ru.display_name, ra.display_name) AS "reportedByName", lf.reporter_notes AS "reporterNotes",
+       lf.status, lf.repaired_at AS "repairedAt", rpu.display_name AS "repairedByName", lf.repair_notes AS "repairNotes"
+     FROM light_faults lf
+     LEFT JOIN lights l ON l.id = lf.light_id
+     LEFT JOIN street_segments ss ON ss.id = l.segment_id
+     LEFT JOIN attendance_wards w ON w.id = l.ward_id
+     LEFT JOIN attendance_users ru ON ru.id = lf.reported_by_user_id
+     LEFT JOIN admins ra ON ra.username = lf.reported_by_admin_username
+     LEFT JOIN attendance_users rpu ON rpu.id = lf.repaired_by_user_id
+     WHERE $1::int IS NULL OR l.ward_id = $1
+     ORDER BY lf.reported_at DESC
+     LIMIT $2`,
+    [wardId ?? null, limit],
+  );
+  return rows;
 }

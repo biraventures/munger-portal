@@ -585,8 +585,10 @@ export interface SegmentLightFaultHistoryEntry {
   faultId: number;
   reportedAt: string;
   reportedByType: "staff" | "public" | "admin";
+  reportedByName: string | null;
   status: "open" | "repaired";
   repairedAt: string | null;
+  repairedByName: string | null;
   reporterNotes: string | null;
 }
 
@@ -605,6 +607,37 @@ export async function fetchSegmentLightStatus(segmentId: number): Promise<Segmen
   if (!res.ok) throw new Error("Could not load lights for this street.");
   const data: { lights: SegmentLightStatus[] } = await res.json();
   return data.lights;
+}
+
+// ---------------------------------------------------------------------------
+// Fault audit trail - flat, city-wide (or ward-wide for ward_parshad)
+// log of every Mark Defective/Mark Functional action, most recent
+// first, with who did it.
+// ---------------------------------------------------------------------------
+
+export interface FaultAuditTrailEntry {
+  faultId: number;
+  lightId: number | null;
+  serialNumber: string | null;
+  lightType: "streetlight" | "high_mast" | null;
+  wardName: string | null;
+  startPoint: string | null;
+  endPoint: string | null;
+  reportedAt: string;
+  reportedByType: "staff" | "public" | "admin";
+  reportedByName: string | null;
+  reporterNotes: string | null;
+  status: "open" | "repaired";
+  repairedAt: string | null;
+  repairedByName: string | null;
+  repairNotes: string | null;
+}
+
+export async function fetchFaultAuditTrail(): Promise<FaultAuditTrailEntry[]> {
+  const res = await fetch(`${API_BASE_URL}/streetlight/fault-audit-trail`, { headers: authHeaders() });
+  if (!res.ok) throw new Error("Could not load the fault audit trail.");
+  const data: { trail: FaultAuditTrailEntry[] } = await res.json();
+  return data.trail;
 }
 
 // ---------------------------------------------------------------------------

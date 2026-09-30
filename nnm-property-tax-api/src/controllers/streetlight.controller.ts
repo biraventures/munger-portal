@@ -14,6 +14,7 @@ import {
   buildSegmentLightStatus,
   buildHighMastWardStatusDashboard,
   buildHighMastLightsForWard,
+  buildFaultAuditTrail,
   getSegmentWardId,
 } from "../services/streetlightStatusDashboard.service";
 import { asyncHandler } from "../middleware/asyncHandler";
@@ -314,6 +315,12 @@ export const getSegmentLightStatusHandler = asyncHandler(async (req: Request, re
   }
   const lights = await buildSegmentLightStatus(parsed.data.id);
   res.status(200).json({ lights });
+});
+
+/** City-wide (or ward-wide for ward_parshad) log of every Mark Defective/Mark Functional action, most recent first - who raised each fault and who closed it out. */
+export const getFaultAuditTrailHandler = asyncHandler(async (req: Request, res: Response) => {
+  const trail = await buildFaultAuditTrail(statusDashboardWardScope(req));
+  res.status(200).json({ trail });
 });
 
 // ---------------------------------------------------------------------------

@@ -25,6 +25,14 @@ export default function AttendanceDashboardPage() {
     "pyau_je",
     "pyau_ae",
     "pyau_contractor",
+    // Mayor/Deputy Mayor/Ward Parshad (migration 084) had logins but
+    // were missing from this list, so they got bounced straight back
+    // to the login page before ever seeing the dashboard - including
+    // the unconditional "Streetlights" hub card below, which is how
+    // they reach the streetlight status view.
+    "mayor",
+    "deputy_mayor",
+    "ward_parshad",
   ]);
 
   if (!user) {
