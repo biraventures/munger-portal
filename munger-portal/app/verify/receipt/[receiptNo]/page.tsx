@@ -36,6 +36,8 @@ function Content() {
           <VerificationField label="Owner Name" value={data.ownerName} />
           <VerificationField label="Address" value={data.address} />
           <VerificationField label="Payment Mode" value={data.paymentMode} />
+          {data.tvNumber && <VerificationField label="T.V. No." value={data.tvNumber} />}
+          {data.tvDate && <VerificationField label="T.V. Date" value={data.tvDate} />}
           <VerificationField label="Amount Received" value={`₹${Number(data.amountReceived).toLocaleString("en-IN")}`} />
           {data.demandNo && <VerificationField label="Against Demand No" value={data.demandNo} />}
         </>

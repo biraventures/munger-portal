@@ -9,6 +9,7 @@ import {
 import { submitShopRentPayment, getShopReceiptForReprint, listShopPaymentHistory } from "../services/shopRentPayment.service";
 import { asyncHandler } from "../middleware/asyncHandler";
 import { ApiError } from "../utils/ApiError";
+import { tvNumberSchema } from "../utils/tvNumberSchema";
 
 const shopNoParamSchema = z.object({ shopNo: z.string().trim().min(1).max(32) });
 
@@ -48,11 +49,22 @@ export const getPrintableDemandNotice = asyncHandler(async (req: Request, res: R
   res.status(200).json(notice);
 });
 
-const paymentSchema = z.object({
-  demandNo: z.string().min(1, "Select a rent demand to pay against"),
-  paymentMode: z.string().min(1),
-  counter: z.string().trim().max(50).nullish(),
-});
+const paymentSchema = z
+  .object({
+    demandNo: z.string().min(1, "Select a rent demand to pay against"),
+    paymentMode: z.string().min(1),
+    counter: z.string().trim().max(50).nullish(),
+    tvNumber: tvNumberSchema.nullish(),
+    tvDate: z.string().trim().min(1).nullish(),
+  })
+  .refine((data) => data.paymentMode !== "District Treasury" || !!data.tvNumber, {
+    message: "T.V. number is required for District Treasury payments",
+    path: ["tvNumber"],
+  })
+  .refine((data) => data.paymentMode !== "District Treasury" || !!data.tvDate, {
+    message: "T.V. date is required for District Treasury payments",
+    path: ["tvDate"],
+  });
 
 /** POST /api/v1/shops/:shopNo/rent-payments — operator only. */
 export const postShopRentPaymentHandler = asyncHandler(async (req: Request, res: Response) => {

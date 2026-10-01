@@ -158,13 +158,26 @@ export const shopRentPaymentRepository = {
     amountReceived: number;
     collectedBy: string;
     counter: string | null;
+    tvNumber: string | null;
+    tvDate: string | null;
   }): Promise<ShopRentPaymentRow> {
     const { rows } = await pool.query<ShopRentPaymentRow>(
       `INSERT INTO shop_rent_payments (
-        receipt_no, shop_no, agreement_id, demand_no, payment_mode, amount_received, collected_by, counter, txn_date
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8, now())
+        receipt_no, shop_no, agreement_id, demand_no, payment_mode, amount_received, collected_by, counter, tv_number, tv_date, txn_date
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10, now())
       RETURNING *`,
-      [row.receiptNo, row.shopNo, row.agreementId, row.demandNo, row.paymentMode, row.amountReceived, row.collectedBy, row.counter],
+      [
+        row.receiptNo,
+        row.shopNo,
+        row.agreementId,
+        row.demandNo,
+        row.paymentMode,
+        row.amountReceived,
+        row.collectedBy,
+        row.counter,
+        row.tvNumber,
+        row.tvDate,
+      ],
     );
     return rows[0]!;
   },

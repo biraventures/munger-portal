@@ -83,6 +83,16 @@ export function ReceiptReprintView({ receipt, onClose }: { receipt: PrintableRec
             <div>
               <b className="inline-block w-[140px]">Counter</b> {receipt.counter ?? "—"}
             </div>
+            {receipt.tvNumber && (
+              <div>
+                <b className="inline-block w-[140px]">T.V. No.</b> {receipt.tvNumber}
+              </div>
+            )}
+            {receipt.tvDate && (
+              <div>
+                <b className="inline-block w-[140px]">T.V. Date</b> {receipt.tvDate}
+              </div>
+            )}
           </div>
         </div>
 

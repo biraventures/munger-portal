@@ -333,6 +333,8 @@ export interface PrintableReceiptHistory {
   verificationUrl: string;
   taxCollectorCode: string | null;
   taxCollectorName: string | null;
+  tvNumber: string | null;
+  tvDate: string | null;
   breakdown: {
     arv: string;
     currentYearTaxNet: string;

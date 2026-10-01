@@ -337,6 +337,14 @@ export function ReceiptView({ receipt, onNewPayment }: { receipt: ReceiptData; o
                   </td>
                 </tr>
               )}
+              {receipt.tvNumber && (
+                <tr>
+                  <td className="p-1.5">T.V. No.</td>
+                  <td className="p-1.5">{receipt.tvNumber}</td>
+                  <td className="p-1.5">T.V. Date</td>
+                  <td className="p-1.5">{receipt.tvDate}</td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>

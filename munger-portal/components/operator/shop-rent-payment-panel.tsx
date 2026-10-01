@@ -16,7 +16,10 @@ import { ShopNoticeView } from "./shop-notice-view";
 const inputClass =
   "w-full rounded-md border border-slate-300 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-nnm-blue focus:ring-offset-1";
 const labelClass = "mb-1.5 block text-sm font-medium text-slate-700";
-const PAYMENT_MODES = ["Cash", "Cheque", "Online / UPI", "Card", "Demand Draft"];
+const PAYMENT_MODES = ["Cash", "Cheque", "Online / UPI", "Card", "Demand Draft", "District Treasury"];
+
+const TV_NUMBER_MIN = 15;
+const TV_NUMBER_MAX = 40;
 
 export function ShopRentPaymentPanel({
   shopNo,
@@ -34,6 +37,9 @@ export function ShopRentPaymentPanel({
   const [selectedDemandNo, setSelectedDemandNo] = useState("");
   const [paymentMode, setPaymentMode] = useState(PAYMENT_MODES[0]);
   const [counter, setCounter] = useState("");
+  const [tvNumber, setTvNumber] = useState("");
+  const [tvDate, setTvDate] = useState("");
+  const isDistrictTreasury = paymentMode === "District Treasury";
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [printingNotice, setPrintingNotice] = useState<PrintableShopDemand | null>(null);
@@ -85,9 +91,34 @@ export function ShopRentPaymentPanel({
       setError("Select a rent demand to collect payment against.");
       return;
     }
+    if (isDistrictTreasury) {
+      const tv = tvNumber.trim();
+      if (!tv) {
+        setError("T.V. number is required for District Treasury payments.");
+        return;
+      }
+      if (tv.length < TV_NUMBER_MIN || tv.length > TV_NUMBER_MAX) {
+        setError(`T.V. number must be between ${TV_NUMBER_MIN} and ${TV_NUMBER_MAX} characters.`);
+        return;
+      }
+      if (/\s/.test(tv)) {
+        setError("T.V. number cannot contain spaces.");
+        return;
+      }
+      if (!tvDate) {
+        setError("T.V. date is required for District Treasury payments.");
+        return;
+      }
+    }
     setSubmitting(true);
     try {
-      const receipt = await submitShopRentPayment(shopNo, { demandNo: selectedDemandNo, paymentMode, counter: counter || undefined });
+      const receipt = await submitShopRentPayment(shopNo, {
+        demandNo: selectedDemandNo,
+        paymentMode,
+        counter: counter || undefined,
+        tvNumber: isDistrictTreasury ? tvNumber.trim() : undefined,
+        tvDate: isDistrictTreasury ? tvDate : undefined,
+      });
       onPaymentSuccess(receipt);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Payment failed.");
@@ -206,6 +237,33 @@ export function ShopRentPaymentPanel({
               <label className={labelClass}>Counter (optional)</label>
               <input value={counter} onChange={(e) => setCounter(e.target.value)} className={inputClass} />
             </div>
+            {isDistrictTreasury && (
+              <>
+                <div>
+                  <label className={labelClass}>T.V. Number</label>
+                  <input
+                    value={tvNumber}
+                    onChange={(e) => setTvNumber(e.target.value)}
+                    minLength={TV_NUMBER_MIN}
+                    maxLength={TV_NUMBER_MAX}
+                    placeholder="Treasury voucher number"
+                    className={inputClass}
+                  />
+                  <p className="mt-1 text-xs text-slate-500">
+                    {TV_NUMBER_MIN}–{TV_NUMBER_MAX} characters, letters/numbers/symbols, no spaces.
+                  </p>
+                </div>
+                <div>
+                  <label className={labelClass}>T.V. Date</label>
+                  <input
+                    type="date"
+                    value={tvDate}
+                    onChange={(e) => setTvDate(e.target.value)}
+                    className={inputClass}
+                  />
+                </div>
+              </>
+            )}
           </div>
 
           <button

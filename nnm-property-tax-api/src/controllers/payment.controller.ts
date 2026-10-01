@@ -1,16 +1,32 @@
 import type { Request, Response } from "express";
 import { z } from "zod";
 import { holdingNoSchema } from "../utils/holdingNoSchema";
+import { tvNumberSchema } from "../utils/tvNumberSchema";
 import { submitPayment, getReceiptForReprint, listPaymentHistory } from "../services/payment.service";
 import { asyncHandler } from "../middleware/asyncHandler";
 import { ApiError } from "../utils/ApiError";
 
-const paymentSchema = z.object({
-  paymentMode: z.string().min(1),
-  counter: z.string().trim().max(64).nullish(),
-  demandNo: z.string().min(1, "Select a demand notice to pay against"),
-  taxCollectorCode: z.string().trim().max(32).nullish(),
-});
+const paymentSchema = z
+  .object({
+    paymentMode: z.string().min(1),
+    counter: z.string().trim().max(64).nullish(),
+    demandNo: z.string().min(1, "Select a demand notice to pay against"),
+    taxCollectorCode: z.string().trim().max(32).nullish(),
+    tvNumber: tvNumberSchema.nullish(),
+    tvDate: z.string().trim().min(1).nullish(),
+  })
+  // "District Treasury" payments are identified by the T.V. number/date
+  // instead of a till receipt, so both are required only for that mode -
+  // every other mode leaves them unset, same as counter/taxCollectorCode
+  // being optional for modes that don't apply to them.
+  .refine((data) => data.paymentMode !== "District Treasury" || !!data.tvNumber, {
+    message: "T.V. number is required for District Treasury payments",
+    path: ["tvNumber"],
+  })
+  .refine((data) => data.paymentMode !== "District Treasury" || !!data.tvDate, {
+    message: "T.V. date is required for District Treasury payments",
+    path: ["tvDate"],
+  });
 
 const holdingNoParamSchema = z.object({
   holdingNo: holdingNoSchema,

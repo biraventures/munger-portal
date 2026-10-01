@@ -15,6 +15,10 @@ export interface TransactionRow {
   arrear_periods_paid: string | null;
   tax_collector_code: string | null;
   tax_collector_name: string | null;
+  // Treasury Voucher number + date (migration 093) - only present when
+  // payment_mode is "District Treasury".
+  tv_number: string | null;
+  tv_date: Date | null;
   arv: string | null;
   current_year_tax_net: string | null;
   previous_years_tax_base: string | null;
@@ -66,6 +70,10 @@ export const paymentRepository = {
       arrearPeriodsPaid: string | null;
       taxCollectorCode: string | null;
       taxCollectorName: string | null;
+      // Treasury Voucher number + date (migration 093) - null unless
+      // paymentMode is "District Treasury".
+      tvNumber: string | null;
+      tvDate: string | null;
       // Frozen breakdown snapshot - see migration 024's comment for why
       // this is stored here rather than reconstructed later via a join.
       arv: string | null;
@@ -93,10 +101,10 @@ export const paymentRepository = {
       `INSERT INTO transactions (
         receipt_no, holding_no, txn_date, payment_mode, amount_received,
         collected_by, counter, demand_no, arrear_periods_paid,
-        tax_collector_code, tax_collector_name,
+        tax_collector_code, tax_collector_name, tv_number, tv_date,
         arv, current_year_tax_net, previous_years_tax_base, total_fine_amount, other_charges,
         arrear_stages_paid, floor_breakdown, area_rebate, area_rebate_reason
-      ) VALUES ($1,$2, now(), $3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)`,
+      ) VALUES ($1,$2, now(), $3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)`,
       [
         row.receiptNo,
         row.holdingNo,
@@ -108,6 +116,8 @@ export const paymentRepository = {
         row.arrearPeriodsPaid,
         row.taxCollectorCode,
         row.taxCollectorName,
+        row.tvNumber,
+        row.tvDate,
         row.arv,
         row.currentYearTaxNet,
         row.previousYearsTaxBase,

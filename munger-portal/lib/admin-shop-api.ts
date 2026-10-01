@@ -275,6 +275,8 @@ export interface PrintableShopReceiptHistory {
   miscRebateReason: string | null;
   collectedBy: string;
   verificationUrl: string;
+  tvNumber: string | null;
+  tvDate: string | null;
 }
 
 export async function fetchShopReceiptReprintAdmin(receiptNo: string): Promise<PrintableShopReceiptHistory> {
