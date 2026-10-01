@@ -435,3 +435,19 @@ export interface ShopInspectionRow {
   inspected_role: string;
   inspected_at: Date;
 }
+
+/** Commissioner/City Manager -> Stall Prabhari flag on a shop - see migration 090. */
+export interface ShopFlagRow {
+  id: number;
+  shop_no: string;
+  flagged_by_username: string;
+  flagged_by_display_name: string;
+  flagged_by_role: string;
+  remarks: string;
+  flagged_at: Date;
+  status: "open" | "resolved";
+  resolved_by_username: string | null;
+  resolved_by_display_name: string | null;
+  resolved_at: Date | null;
+  resolution_notes: string | null;
+}

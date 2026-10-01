@@ -107,12 +107,12 @@ export const lightFaultRepository = {
     return rows[0]!;
   },
 
-  async markRepaired(id: number, repairedByUserId: number, repairNotes: string | null): Promise<LightFaultRow | null> {
+  async markRepaired(id: number, repairedByUserId: number, repairNotes: string | null, functionalSince: string | null): Promise<LightFaultRow | null> {
     // Atomic WHERE status='open' guard - prevents a fault being marked repaired twice (and generating a second, incorrect "repaired" state change) if two requests race.
     const { rows } = await pool.query<LightFaultRow>(
-      `UPDATE light_faults SET status = 'repaired', repaired_at = now(), repaired_by_user_id = $2, repair_notes = $3
+      `UPDATE light_faults SET status = 'repaired', repaired_at = now(), repaired_by_user_id = $2, repair_notes = $3, functional_since = $4
        WHERE id = $1 AND status = 'open' RETURNING *`,
-      [id, repairedByUserId, repairNotes],
+      [id, repairedByUserId, repairNotes, functionalSince],
     );
     return rows[0] ?? null;
   },

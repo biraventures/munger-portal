@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 import { propertyRepository } from "../repositories/property.repository";
 import { onlinePaymentRepository } from "../repositories/onlinePayment.repository";
-import { taxCollectorRepository } from "../repositories/taxCollector.repository";
+import { adminRepository } from "../repositories/admin.repository";
 import { paymentRepository } from "../repositories/payment.repository";
 import { env } from "../config/env";
 import { ApiError } from "../utils/ApiError";
@@ -50,18 +50,18 @@ export async function initiateOnlinePayment(
   // typo doesn't silently get recorded as "no collector".
   let taxCollector: { code: string; name: string } | null = null;
   if (taxCollectorCode) {
-    const collector = await taxCollectorRepository.findByCode(taxCollectorCode);
+    const collector = await adminRepository.findActiveTaxCollectorByCode(taxCollectorCode);
     if (!collector) {
       throw ApiError.badRequest(`No active tax collector with code "${taxCollectorCode}".`);
     }
     if (!property.ward) {
       throw ApiError.badRequest("This property has no ward on file, so a tax collector cannot be assigned to its payment.");
     }
-    const allowed = await taxCollectorRepository.isTaggedForWard(collector.id, property.ward);
+    const allowed = await adminRepository.isTaxCollectorTaggedForWard(collector.username, property.ward);
     if (!allowed) {
-      throw ApiError.badRequest(`Tax collector "${collector.name}" is not tagged for Ward ${property.ward}.`);
+      throw ApiError.badRequest(`Tax collector "${collector.display_name}" is not tagged for Ward ${property.ward}.`);
     }
-    taxCollector = { code: collector.code, name: collector.name };
+    taxCollector = { code: collector.tax_collector_code!, name: collector.display_name };
   }
 
   const orderId = crypto.randomUUID();

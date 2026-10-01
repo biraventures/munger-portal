@@ -40,6 +40,38 @@ export const adminRepository = {
     return rows;
   },
 
+  /**
+   * Resolves a citizen/operator-entered code to an active Tax
+   * Collector LOGIN account - used at payment time (see
+   * onlinePayment.service.ts / payment.service.ts). Case-insensitive,
+   * same reasoning as the old tax_collectors table's lookup: codes are
+   * typically entered without care for casing.
+   */
+  async findActiveTaxCollectorByCode(code: string): Promise<AdminRow | null> {
+    const { rows } = await pool.query<AdminRow>(
+      `SELECT * FROM admins WHERE role = 'tax_collector' AND active = TRUE AND tax_collector_code IS NOT NULL AND lower(tax_collector_code) = lower($1) LIMIT 1`,
+      [code],
+    );
+    return rows[0] ?? null;
+  },
+
+  /** Every active Tax Collector's code + display name - powers the operator counter form's dropdown (see TaxCollectorCodeInput). */
+  async listActiveTaxCollectorCodes(): Promise<{ code: string; name: string }[]> {
+    const { rows } = await pool.query<{ tax_collector_code: string; display_name: string }>(
+      `SELECT tax_collector_code, display_name FROM admins WHERE role = 'tax_collector' AND active = TRUE AND tax_collector_code IS NOT NULL ORDER BY display_name ASC`,
+    );
+    return rows.map((r) => ({ code: r.tax_collector_code, name: r.display_name }));
+  },
+
+  /** Used at payment time - is this Tax Collector login account allowed to collect for this specific ward? Mirrors the old tax_collectors table's isTaggedForWard. */
+  async isTaxCollectorTaggedForWard(taxCollectorUsername: string, ward: string): Promise<boolean> {
+    const { rows } = await pool.query(
+      `SELECT 1 FROM tax_collector_login_wards WHERE tax_collector_username = $1 AND ward = $2 LIMIT 1`,
+      [taxCollectorUsername, ward],
+    );
+    return rows.length > 0;
+  },
+
   /** Commissioner assigns which of the (two) City Managers reviews a given Tax Collector's cancellation requests. Only meaningful for tax_collector accounts. */
   async assignCityManager(taxCollectorUsername: string, cityManagerUsername: string): Promise<AdminRow | null> {
     const { rows } = await pool.query<AdminRow>(
@@ -87,5 +119,36 @@ export const adminRepository = {
       client.release();
     }
     return this.listTaxCollectorWards(taxCollectorUsername);
+  },
+
+  /**
+   * Every admins-table login (Tax Daroga, Deputy Commissioner,
+   * Commissioner, Tax Collector, and the rest of ADMIN_ROLES) for the
+   * Commissioner's account-management screen. Deliberately excludes
+   * password_hash - this list is for activate/deactivate, never for
+   * showing or checking credentials. The separate front-counter
+   * `operators` table has its own listing (operator.repository.ts) and
+   * isn't included here.
+   */
+  async listAllForManagement(): Promise<Omit<AdminRow, "password_hash">[]> {
+    const { rows } = await pool.query<Omit<AdminRow, "password_hash">>(
+      `SELECT id, username, display_name, role, active, email, assigned_city_manager_username, is_demo, tax_collector_code
+       FROM admins ORDER BY role ASC, display_name ASC`,
+    );
+    return rows;
+  },
+
+  async setActive(id: number, active: boolean): Promise<Omit<AdminRow, "password_hash"> | null> {
+    const { rows } = await pool.query<Omit<AdminRow, "password_hash">>(
+      `UPDATE admins SET active = $2 WHERE id = $1
+       RETURNING id, username, display_name, role, active, email, assigned_city_manager_username, is_demo, tax_collector_code`,
+      [id, active],
+    );
+    return rows[0] ?? null;
+  },
+
+  async findById(id: number): Promise<AdminRow | null> {
+    const { rows } = await pool.query<AdminRow>(`SELECT * FROM admins WHERE id = $1 LIMIT 1`, [id]);
+    return rows[0] ?? null;
   },
 };

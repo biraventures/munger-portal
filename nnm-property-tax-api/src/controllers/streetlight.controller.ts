@@ -8,7 +8,15 @@ import { lightFaultPenaltyRepository } from "../repositories/lightFaultPenalty.r
 import { reportFaultByStaff, markFaultRepaired, linkFaultToLight, getLightRepairHistorySummary } from "../services/lightFault.service";
 import { accrueAllOverduePenalties, accruePenaltiesForFault } from "../services/penaltyAccrual.service";
 import { importLightsCsv } from "../services/lightCsvImport.service";
-import { buildWardStatusDashboard, buildStreetStatusDashboard, buildSegmentLightStatus, buildHighMastWardStatusDashboard, buildHighMastLightsForWard } from "../services/streetlightStatusDashboard.service";
+import {
+  buildWardStatusDashboard,
+  buildStreetStatusDashboard,
+  buildSegmentLightStatus,
+  buildHighMastWardStatusDashboard,
+  buildHighMastLightsForWard,
+  buildFaultAuditTrail,
+  getSegmentWardId,
+} from "../services/streetlightStatusDashboard.service";
 import { asyncHandler } from "../middleware/asyncHandler";
 import { ApiError } from "../utils/ApiError";
 
@@ -124,6 +132,32 @@ export const setLightActiveHandler = asyncHandler(async (req: Request, res: Resp
   res.status(200).json({ light: { id: updated.id, active: updated.active } });
 });
 
+/**
+ * Sets (or clears) an individual light's own GPS location - optional,
+ * captured straight from the status dashboard next to that light's
+ * serial number. Distinct from a fault report's reported_gps_lat/lng,
+ * which records where a specific fault was raised from; this is the
+ * light's own registered location. Passing both fields as null clears
+ * it back to "not recorded".
+ */
+const setLightGpsSchema = z.object({
+  latitude: z.coerce.number().min(-90).max(90).nullable(),
+  longitude: z.coerce.number().min(-180).max(180).nullable(),
+});
+
+export const setLightGpsHandler = asyncHandler(async (req: Request, res: Response) => {
+  const paramsParsed = lightIdParamSchema.safeParse(req.params);
+  if (!paramsParsed.success) throw ApiError.badRequest("Invalid light id");
+  const bodyParsed = setLightGpsSchema.safeParse(req.body);
+  if (!bodyParsed.success) throw ApiError.badRequest("Invalid input", bodyParsed.error.flatten().fieldErrors);
+  if ((bodyParsed.data.latitude === null) !== (bodyParsed.data.longitude === null)) {
+    throw ApiError.badRequest("Provide both latitude and longitude, or clear both.");
+  }
+  const updated = await lightRepository.setGpsLocation(paramsParsed.data.id, bodyParsed.data.latitude, bodyParsed.data.longitude);
+  if (!updated) throw ApiError.notFound("Light not found");
+  res.status(200).json({ light: { id: updated.id, latitude: updated.latitude, longitude: updated.longitude } });
+});
+
 const csvUploadSchema = z.object({ csvContent: z.string().min(1, "File appears to be empty") });
 
 /** POST /api/v1/streetlight/lights/bulk-upload - the ward-wise field-inventory import (see lightCsvImport.service.ts for the exact expected columns). Additive - re-uploading does not deactivate/replace existing entries, since there's no natural per-row identifier to match against besides the serial number, which is already checked for duplicates. */
@@ -205,15 +239,15 @@ export const reportFaultHandler = asyncHandler(async (req: Request, res: Respons
 });
 
 const faultIdParamSchema = z.object({ id: z.coerce.number().int().positive() });
-const markRepairedSchema = z.object({ repairNotes: z.string().trim().nullish() });
+const markRepairedSchema = z.object({ repairNotes: z.string().trim().nullish(), functionalSince: z.string().trim().nullish() });
 
 export const markFaultRepairedHandler = asyncHandler(async (req: Request, res: Response) => {
   const paramsParsed = faultIdParamSchema.safeParse(req.params);
   if (!paramsParsed.success) throw ApiError.badRequest("Invalid fault id");
   const bodyParsed = markRepairedSchema.safeParse(req.body);
   if (!bodyParsed.success) throw ApiError.badRequest("Invalid input");
-  const fault = await markFaultRepaired(req.attendanceUser!, paramsParsed.data.id, bodyParsed.data.repairNotes ?? null);
-  res.status(200).json({ fault: { id: fault.id, status: fault.status, repairedAt: fault.repaired_at } });
+  const fault = await markFaultRepaired(req.attendanceUser!, paramsParsed.data.id, bodyParsed.data.repairNotes ?? null, bodyParsed.data.functionalSince ?? null);
+  res.status(200).json({ fault: { id: fault.id, status: fault.status, repairedAt: fault.repaired_at, functionalSince: fault.functional_since } });
 });
 
 const linkLightSchema = z.object({ lightId: z.coerce.number().int().positive() });
@@ -272,28 +306,47 @@ export const myPenaltyTotalHandler = asyncHandler(async (req: Request, res: Resp
 const statusDashboardQuerySchema = z.object({ agency: z.enum(["NN", "EESL"]).optional() });
 const AGENCY_NAME_BY_CODE: Record<"NN" | "EESL", string> = { NN: "Nagar Nigam", EESL: "EESL" };
 
+/** ward_parshad only ever sees their own ward on this dashboard, same as the rest of the portal (see WARD_SCOPED_ROLES) - Mayor/Deputy Mayor are cross-ward, same as City Manager/DMC/Commissioner. Undefined means "no ward restriction". */
+function statusDashboardWardScope(req: Request): number | undefined {
+  if (req.attendanceUser?.role === "ward_parshad") {
+    return req.attendanceUser.wardId ?? undefined;
+  }
+  return undefined;
+}
+
 export const getWardStatusDashboardHandler = asyncHandler(async (req: Request, res: Response) => {
   const parsed = statusDashboardQuerySchema.safeParse(req.query);
   if (!parsed.success) throw ApiError.badRequest("Invalid query", parsed.error.flatten().fieldErrors);
-  const wards = await buildWardStatusDashboard(parsed.data.agency ? AGENCY_NAME_BY_CODE[parsed.data.agency] : undefined);
+  const wards = await buildWardStatusDashboard(parsed.data.agency ? AGENCY_NAME_BY_CODE[parsed.data.agency] : undefined, statusDashboardWardScope(req));
   res.status(200).json({ wards });
 });
 
 export const getStreetStatusDashboardHandler = asyncHandler(async (req: Request, res: Response) => {
   const parsed = statusDashboardQuerySchema.safeParse(req.query);
   if (!parsed.success) throw ApiError.badRequest("Invalid query", parsed.error.flatten().fieldErrors);
-  const streets = await buildStreetStatusDashboard(parsed.data.agency ? AGENCY_NAME_BY_CODE[parsed.data.agency] : undefined);
+  const streets = await buildStreetStatusDashboard(parsed.data.agency ? AGENCY_NAME_BY_CODE[parsed.data.agency] : undefined, statusDashboardWardScope(req));
   res.status(200).json({ streets });
 });
 
 const segmentIdParamSchema = z.object({ id: z.coerce.number().int().positive() });
 
-/** The status dashboard's drill-down - individual lights on one segment, their working/not-working status, and fault history. */
+/** The status dashboard's drill-down - individual lights on one segment, their working/not-working status, and fault history. A ward_parshad drilling into a segment id outside their own ward (the wards/streets lists are already scoped, but this is a direct id lookup) is refused, same as if the street didn't exist. */
 export const getSegmentLightStatusHandler = asyncHandler(async (req: Request, res: Response) => {
   const parsed = segmentIdParamSchema.safeParse(req.params);
   if (!parsed.success) throw ApiError.badRequest("Invalid segment id");
+  const scopeWardId = statusDashboardWardScope(req);
+  if (scopeWardId !== undefined) {
+    const segmentWardId = await getSegmentWardId(parsed.data.id);
+    if (segmentWardId !== scopeWardId) throw ApiError.notFound("Street not found");
+  }
   const lights = await buildSegmentLightStatus(parsed.data.id);
   res.status(200).json({ lights });
+});
+
+/** City-wide (or ward-wide for ward_parshad) log of every Mark Defective/Mark Functional action, most recent first - who raised each fault and who closed it out. */
+export const getFaultAuditTrailHandler = asyncHandler(async (req: Request, res: Response) => {
+  const trail = await buildFaultAuditTrail(statusDashboardWardScope(req));
+  res.status(200).json({ trail });
 });
 
 // ---------------------------------------------------------------------------

@@ -63,6 +63,15 @@ export const changeRequestRepository = {
     return { rows, total: parseInt(countResult.rows[0]?.count ?? "0", 10) };
   },
 
+  /** Every change request ever raised against one holding - pending, approved, rejected, or reverted - most recent first. Powers the Commissioner/DMC/City Manager property report's "log of changes made or pending". */
+  async listForHolding(holdingNo: string): Promise<ChangeRequestRow[]> {
+    const { rows } = await pool.query<ChangeRequestRow>(
+      `SELECT * FROM property_change_requests WHERE holding_no = $1 ORDER BY requested_at DESC`,
+      [holdingNo],
+    );
+    return rows;
+  },
+
   /** status/stage filters are independent - pass either, both, or neither. */
   async list(filters: { status?: ChangeRequestStatus; stage?: AdminRole }): Promise<ChangeRequestRow[]> {
     const conditions: string[] = [];

@@ -167,6 +167,17 @@ export function ReceiptReprintView({ receipt, onClose }: { receipt: PrintableRec
                 <td className="border border-slate-400 p-1.5">Current Year Tax (net)</td>
                 <td className="border border-slate-400 p-1.5 text-right">{money(receipt.breakdown.currentYearTaxNet)}</td>
               </tr>
+              {Number(receipt.breakdown.areaRebate) > 0 && (
+                <tr>
+                  <td className="border border-slate-400 p-1.5 pl-6 italic text-slate-500">
+                    — of which, Plinth Area / Rain Water Harvesting Rebate already applied
+                    {receipt.breakdown.areaRebateReason ? ` (${receipt.breakdown.areaRebateReason})` : ""}
+                  </td>
+                  <td className="border border-slate-400 p-1.5 text-right italic text-slate-500">
+                    −{money(receipt.breakdown.areaRebate)}
+                  </td>
+                </tr>
+              )}
               {Number(receipt.breakdown.previousYearsTaxBase) > 0 && (
                 <tr>
                   <td className="border border-slate-400 p-1.5">Previous Years&apos; Outstanding Demand</td>
