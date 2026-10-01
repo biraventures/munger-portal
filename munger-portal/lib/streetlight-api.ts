@@ -107,6 +107,19 @@ export async function setLightActive(id: number, active: boolean): Promise<void>
   if (!res.ok) throw new Error("Could not update light status.");
 }
 
+/** Sets (or, passing both as null, clears) an individual light's own optional GPS location - captured straight from the status dashboard next to that light's serial number. */
+export async function setLightGps(id: number, latitude: number | null, longitude: number | null): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/streetlight/lights/${id}/gps`, {
+    method: "PATCH",
+    headers: authHeaders(),
+    body: JSON.stringify({ latitude, longitude }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || "Could not save this light's location.");
+  }
+}
+
 export interface LightsCsvImportResult {
   created: number;
   errors: { row: number; message: string }[];
@@ -217,11 +230,11 @@ export async function fetchLightRepairHistorySummary(lightId: number): Promise<L
   return res.json();
 }
 
-export async function markFaultRepaired(faultId: number, repairNotes: string | null): Promise<void> {
+export async function markFaultRepaired(faultId: number, repairNotes: string | null, functionalSince: string | null = null): Promise<void> {
   const res = await fetch(`${API_BASE_URL}/streetlight/faults/${faultId}/repaired`, {
     method: "PATCH",
     headers: authHeaders(),
-    body: JSON.stringify({ repairNotes }),
+    body: JSON.stringify({ repairNotes, functionalSince }),
   });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
@@ -589,7 +602,9 @@ export interface SegmentLightFaultHistoryEntry {
   status: "open" | "repaired";
   repairedAt: string | null;
   repairedByName: string | null;
+  functionalSince: string | null;
   reporterNotes: string | null;
+  repairNotes: string | null;
 }
 
 export interface SegmentLightStatus {
@@ -600,6 +615,8 @@ export interface SegmentLightStatus {
   faultHistory: SegmentLightFaultHistoryEntry[];
   lightSerialSeq: number | null;
   switchStatus: "working" | "not_working" | "automatic" | "joint" | null;
+  latitude: number | null;
+  longitude: number | null;
 }
 
 export async function fetchSegmentLightStatus(segmentId: number): Promise<SegmentLightStatus[]> {
@@ -630,6 +647,7 @@ export interface FaultAuditTrailEntry {
   status: "open" | "repaired";
   repairedAt: string | null;
   repairedByName: string | null;
+  functionalSince: string | null;
   repairNotes: string | null;
 }
 
@@ -661,6 +679,8 @@ export interface HighMastLightStatus {
   working: boolean;
   faultHistory: SegmentLightFaultHistoryEntry[];
   switchStatus: "working" | "not_working" | "automatic" | "joint" | null;
+  latitude: number | null;
+  longitude: number | null;
 }
 
 export async function fetchHighMastLightsForWard(wardId: number): Promise<HighMastLightStatus[]> {

@@ -74,6 +74,15 @@ export const lightRepository = {
     return rows[0] ?? null;
   },
 
+  /** Sets (or clears, passing null for both) this individual light's own GPS location - optional, recorded straight from the status dashboard next to its serial number, distinct from a fault report's GPS. */
+  async setGpsLocation(id: number, latitude: number | null, longitude: number | null): Promise<LightRow | null> {
+    const { rows } = await pool.query<LightRow>(
+      `UPDATE lights SET latitude = $2, longitude = $3 WHERE id = $1 AND deleted_at IS NULL RETURNING *`,
+      [id, latitude, longitude],
+    );
+    return rows[0] ?? null;
+  },
+
   /** Soft delete - keeps the row (and any fault history referencing it) but removes it from the active registry. Used by the light_change_requests approval chain's final step. */
   async softDelete(id: number): Promise<LightRow | null> {
     const { rows } = await pool.query<LightRow>(`UPDATE lights SET deleted_at = now(), active = FALSE WHERE id = $1 AND deleted_at IS NULL RETURNING *`, [id]);

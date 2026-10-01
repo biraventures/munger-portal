@@ -7,6 +7,7 @@ import {
   createLightHandler,
   uploadLightsCsvHandler,
   setLightActiveHandler,
+  setLightGpsHandler,
   listContractorWardsHandler,
   assignContractorWardHandler,
   listFaultsHandler,
@@ -96,6 +97,11 @@ streetlightRouter.get("/lights", requireAttendanceRole(), listLightsHandler);
 streetlightRouter.post("/lights", requireAttendanceRole([...REGISTRY_MANAGE_ROLES]), createLightHandler);
 streetlightRouter.post("/lights/bulk-upload", requireAttendanceRole([...REGISTRY_MANAGE_ROLES]), uploadLightsCsvHandler);
 streetlightRouter.patch("/lights/:id/active", requireAttendanceRole([...REGISTRY_MANAGE_ROLES]), setLightActiveHandler);
+// Optional per-light GPS location, set straight from the status dashboard next to a light's serial number -
+// available to whoever can already see that dashboard (REGISTRY_MANAGE_ROLES already covers OVERSIGHT_ROLES'
+// city_manager/DMC/commissioner/attendance_admin, plus STATUS_VIEW_ROLES for Mayor/Deputy Mayor/Ward Parshad),
+// since it's a location note, not a registry edit.
+streetlightRouter.patch("/lights/:id/gps", requireAttendanceRole([...REGISTRY_MANAGE_ROLES, ...STATUS_VIEW_ROLES]), setLightGpsHandler);
 
 // --- Light change requests (add/status/deactivate/reactivate/delete)
 // - proposed by JE/AE/nodal clerk/contractor, approved through

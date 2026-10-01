@@ -132,6 +132,32 @@ export const setLightActiveHandler = asyncHandler(async (req: Request, res: Resp
   res.status(200).json({ light: { id: updated.id, active: updated.active } });
 });
 
+/**
+ * Sets (or clears) an individual light's own GPS location - optional,
+ * captured straight from the status dashboard next to that light's
+ * serial number. Distinct from a fault report's reported_gps_lat/lng,
+ * which records where a specific fault was raised from; this is the
+ * light's own registered location. Passing both fields as null clears
+ * it back to "not recorded".
+ */
+const setLightGpsSchema = z.object({
+  latitude: z.coerce.number().min(-90).max(90).nullable(),
+  longitude: z.coerce.number().min(-180).max(180).nullable(),
+});
+
+export const setLightGpsHandler = asyncHandler(async (req: Request, res: Response) => {
+  const paramsParsed = lightIdParamSchema.safeParse(req.params);
+  if (!paramsParsed.success) throw ApiError.badRequest("Invalid light id");
+  const bodyParsed = setLightGpsSchema.safeParse(req.body);
+  if (!bodyParsed.success) throw ApiError.badRequest("Invalid input", bodyParsed.error.flatten().fieldErrors);
+  if ((bodyParsed.data.latitude === null) !== (bodyParsed.data.longitude === null)) {
+    throw ApiError.badRequest("Provide both latitude and longitude, or clear both.");
+  }
+  const updated = await lightRepository.setGpsLocation(paramsParsed.data.id, bodyParsed.data.latitude, bodyParsed.data.longitude);
+  if (!updated) throw ApiError.notFound("Light not found");
+  res.status(200).json({ light: { id: updated.id, latitude: updated.latitude, longitude: updated.longitude } });
+});
+
 const csvUploadSchema = z.object({ csvContent: z.string().min(1, "File appears to be empty") });
 
 /** POST /api/v1/streetlight/lights/bulk-upload - the ward-wise field-inventory import (see lightCsvImport.service.ts for the exact expected columns). Additive - re-uploading does not deactivate/replace existing entries, since there's no natural per-row identifier to match against besides the serial number, which is already checked for duplicates. */
@@ -213,15 +239,15 @@ export const reportFaultHandler = asyncHandler(async (req: Request, res: Respons
 });
 
 const faultIdParamSchema = z.object({ id: z.coerce.number().int().positive() });
-const markRepairedSchema = z.object({ repairNotes: z.string().trim().nullish() });
+const markRepairedSchema = z.object({ repairNotes: z.string().trim().nullish(), functionalSince: z.string().trim().nullish() });
 
 export const markFaultRepairedHandler = asyncHandler(async (req: Request, res: Response) => {
   const paramsParsed = faultIdParamSchema.safeParse(req.params);
   if (!paramsParsed.success) throw ApiError.badRequest("Invalid fault id");
   const bodyParsed = markRepairedSchema.safeParse(req.body);
   if (!bodyParsed.success) throw ApiError.badRequest("Invalid input");
-  const fault = await markFaultRepaired(req.attendanceUser!, paramsParsed.data.id, bodyParsed.data.repairNotes ?? null);
-  res.status(200).json({ fault: { id: fault.id, status: fault.status, repairedAt: fault.repaired_at } });
+  const fault = await markFaultRepaired(req.attendanceUser!, paramsParsed.data.id, bodyParsed.data.repairNotes ?? null, bodyParsed.data.functionalSince ?? null);
+  res.status(200).json({ fault: { id: fault.id, status: fault.status, repairedAt: fault.repaired_at, functionalSince: fault.functional_since } });
 });
 
 const linkLightSchema = z.object({ lightId: z.coerce.number().int().positive() });

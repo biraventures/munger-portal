@@ -10,10 +10,10 @@ import {
   requestCancellation,
   type DemandNoticeHistoryEntry,
   type PaymentHistoryEntry,
-  type PrintableDemandNoticeHistory,
   type PrintableReceiptHistory,
 } from "@/lib/operator-api";
-import { DemandNoticeReprintView } from "./demand-notice-reprint-view";
+import type { DemandNoticeReprintData } from "@/lib/demand-notice-api";
+import { NoticeView } from "./notice-view";
 import { ReceiptReprintView } from "./receipt-reprint-view";
 
 export function PropertyDocumentHistory({ holdingNo }: { holdingNo: string }) {
@@ -21,7 +21,7 @@ export function PropertyDocumentHistory({ holdingNo }: { holdingNo: string }) {
   const [paymentHistory, setPaymentHistory] = useState<PaymentHistoryEntry[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loadingItem, setLoadingItem] = useState<string | null>(null);
-  const [noticeReprint, setNoticeReprint] = useState<PrintableDemandNoticeHistory | null>(null);
+  const [noticeReprint, setNoticeReprint] = useState<DemandNoticeReprintData | null>(null);
   const [receiptReprint, setReceiptReprint] = useState<PrintableReceiptHistory | null>(null);
 
   const [cancelling, setCancelling] = useState<{ type: "demand_notice" | "receipt"; id: string } | null>(null);
@@ -92,7 +92,7 @@ export function PropertyDocumentHistory({ holdingNo }: { holdingNo: string }) {
   if (noticeReprint) {
     return (
       <section className="rounded-xl border border-slate-200 bg-white p-6">
-        <DemandNoticeReprintView notice={noticeReprint} onClose={() => setNoticeReprint(null)} />
+        <NoticeView notice={noticeReprint} onClose={() => setNoticeReprint(null)} closeLabel="Close" />
       </section>
     );
   }

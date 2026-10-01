@@ -65,6 +65,7 @@ export interface LightFaultRow {
   repaired_at: string | null;
   repaired_by_user_id: number | null;
   repair_notes: string | null;
+  functional_since: string | null;
   assigned_contractor_id: number | null;
 }
 

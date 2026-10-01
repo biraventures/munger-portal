@@ -7,8 +7,8 @@ import { parseYearStartOrNull } from "../utils/assessmentYear";
 import { num } from "../utils/num";
 import { ApiError } from "../utils/ApiError";
 import { buildVerificationUrl } from "../utils/verificationSignature";
-import type { DemandNoticeResult } from "../types/demandNotice.types";
-import type { FrozenFloorBreakdown } from "../types/property.types";
+import type { DemandNoticeResult, DemandNoticeReprintResult, DemandNoticeTotals } from "../types/demandNotice.types";
+import type { FrozenFloorBreakdown, TaxCalculationResult } from "../types/property.types";
 
 function formatDocNumber(n: string | number, type: "Payment" | "Demand", date: Date): string {
   const dd = String(date.getDate()).padStart(2, "0");
@@ -110,6 +110,24 @@ export async function generateDemandNotice(holdingNo: string, generatedBy: strin
   const reminderNumber = previousUnsettled.length > 0 ? Math.max(...previousUnsettled.map((n) => n.reminder_number)) + 1 : 0;
   const previousUnsettledDemandNos = previousUnsettled.length > 0 ? previousUnsettled.map((n) => n.demand_no).join(", ") : null;
   const reminderLabel = reminderNumber > 0 ? `${ordinal(reminderNumber)} Reminder` : null;
+  const previousUnsettledDemandNosFormatted = previousUnsettled.map((n) => formatDocNumber(n.demand_no, "Demand", n.notice_date));
+
+  const totals: DemandNoticeTotals = {
+    currentTaxBase: netCurrentBeforeTiming.toFixed(2),
+    // Plinth-area/rain-water rebate - already subtracted into
+    // currentTaxBase above; surfaced separately too so the print
+    // template can show it as its own line (see migration 089).
+    currentTaxAreaRebate: calc.rebate,
+    currentTaxAreaRebateReason: calc.rebateReason,
+    currentTaxRebate: timing.rebate.toFixed(2),
+    penalty: arrears.penalty.toFixed(2),
+    outstandingDemand: yearWiseArrears.toFixed(2),
+    yearWiseArrears: yearWiseArrears.toFixed(2),
+    arrearsBaseTax: yearWiseArrears.toFixed(2),
+    totalFineAmount: totalFineAmount.toFixed(2),
+    otherCharges: otherCharges.toFixed(2),
+    grandTotal: grandTotal.toFixed(2),
+  };
 
   await demandNoticeRepository.insertDemandNotice({
     demandNo,
@@ -127,6 +145,17 @@ export async function generateDemandNotice(holdingNo: string, generatedBy: strin
     floorBreakdown,
     areaRebate: num(calc.rebate),
     areaRebateReason: calc.rebateReason,
+    // Frozen full renderable payload (migration 092) - the exact same
+    // property/taxCalc/totals/previousUnsettledDemandNosFormatted this
+    // function returns below, serialized verbatim, so a reprint can
+    // replay it straight back into notice-view.tsx later with nothing
+    // re-derived - see getDemandNoticeForReprint.
+    snapshot: {
+      property: property as unknown as Record<string, unknown>,
+      taxCalc: calc,
+      totals,
+      previousUnsettledDemandNos: previousUnsettledDemandNosFormatted,
+    },
   });
 
   if (previousUnsettled.length > 0) {
@@ -140,108 +169,119 @@ export async function generateDemandNotice(holdingNo: string, generatedBy: strin
     generatedBy,
     reminderNumber,
     reminderLabel,
-    previousUnsettledDemandNos: previousUnsettled.map((n) => formatDocNumber(n.demand_no, "Demand", n.notice_date)),
+    previousUnsettledDemandNos: previousUnsettledDemandNosFormatted,
     verificationUrl: buildVerificationUrl("demand-notice", demandNo),
     property: property as unknown as Record<string, unknown>,
     floors,
     taxCalc: calc,
-    totals: {
-      currentTaxBase: netCurrentBeforeTiming.toFixed(2),
-      // Plinth-area/rain-water rebate - already subtracted into
-      // currentTaxBase above; surfaced separately too so the print
-      // template can show it as its own line (see migration 089).
-      currentTaxAreaRebate: calc.rebate,
-      currentTaxAreaRebateReason: calc.rebateReason,
-      currentTaxRebate: timing.rebate.toFixed(2),
-      penalty: arrears.penalty.toFixed(2),
-      outstandingDemand: yearWiseArrears.toFixed(2),
-      yearWiseArrears: yearWiseArrears.toFixed(2),
-      arrearsBaseTax: yearWiseArrears.toFixed(2),
-      totalFineAmount: totalFineAmount.toFixed(2),
-      otherCharges: otherCharges.toFixed(2),
-      grandTotal: grandTotal.toFixed(2),
-    },
+    totals,
   };
 }
 
-export interface PrintableDemandNoticeHistory {
-  demandNo: string;
-  formattedDemandNo: string;
-  date: string;
-  holdingNo: string;
-  ownerName: string;
-  address: string;
-  assessmentYear: string | null;
-  arv: string;
-  currentYearTaxNet: string;
-  previousYearsTaxBase: string;
-  totalFineAmount: string;
-  otherCharges: string;
-  totalAmountDemanded: string;
-  settled: boolean;
-  settledReceiptNo: string | null;
-  generatedBy: string;
-  verificationUrl: string;
-  reminderNumber: number;
-  reminderLabel: string | null;
-  previousUnsettledDemandNos: string | null;
-  superseded: boolean;
-  cancelled: boolean;
-  cancelledReason: string | null;
-  // Frozen at generation time (migration 086) - null for notices
-  // generated before this column existed, same as breakdown/
-  // arrearStagesPaid on a receipt.
-  floorBreakdown: FrozenFloorBreakdown | null;
-  // Frozen at generation time (migration 089) - see that migration's
-  // comment. Null if this notice predates the column, or simply had
-  // no rebate to show.
-  areaRebate: string | null;
-  areaRebateReason: string | null;
-}
-
 /**
- * A historical reprint, built ONLY from the frozen totals stored on the
- * demand_notices row at generation time — deliberately NOT a
- * recalculation from current property/floor data, which could have
- * changed since (a mutation approved after this notice was issued)
- * and would then show numbers that never actually appeared on the
- * original notice. Owner name/address are pulled fresh from the
- * property for display context only — those aren't part of what was
- * "demanded" and recalculating them doesn't change any figure.
+ * A historical reprint. Two paths, depending on whether this notice
+ * was generated after migration 092 added the full snapshot column:
+ *
+ * - Snapshot present (generated from now on): the exact property,
+ *   taxCalc and totals the original notice was rendered from,
+ *   serialized verbatim at generation time - nothing recomputed or
+ *   re-derived, so notice-view.tsx renders a reprint that is
+ *   word-for-word, line-for-line identical to the document as issued.
+ *
+ * - Snapshot absent (generated before migration 092 existed): the
+ *   full payload was never captured, only the aggregate totals frozen
+ *   in this row's own columns (migrations 024/086/089). Best-effort
+ *   reconstruction - property/floor detail pulled LIVE (may have
+ *   changed since the notice was issued), with the frozen
+ *   floor_breakdown (if present) substituted in so the per-floor
+ *   table matches what was actually issued as closely as what was
+ *   kept allows. The amount figures themselves are still exactly what
+ *   was frozen at generation time, never recalculated - only their
+ *   breakdown into individual line items (penalty vs. fine, rebate
+ *   timing) couldn't be preserved since older rows never stored that
+ *   split, so those lines collapse to zero here the same way the
+ *   previous reprint template did.
  */
-export async function getDemandNoticeForReprint(demandNo: string): Promise<PrintableDemandNoticeHistory> {
+export async function getDemandNoticeForReprint(demandNo: string): Promise<DemandNoticeReprintResult> {
   const notice = await demandNoticeRepository.findByDemandNo(demandNo);
   if (!notice) throw ApiError.notFound(`Demand notice ${demandNo} not found.`);
 
-  const property = await propertyRepository.findByHoldingNo(notice.holding_no);
-
-  return {
+  const dateStr = `${String(notice.notice_date.getDate()).padStart(2, "0")}-${String(notice.notice_date.getMonth() + 1).padStart(2, "0")}-${notice.notice_date.getFullYear()}`;
+  const shared = {
     demandNo: notice.demand_no,
     formattedDemandNo: formatDocNumber(notice.demand_no, "Demand", notice.notice_date),
-    date: `${String(notice.notice_date.getDate()).padStart(2, "0")}-${String(notice.notice_date.getMonth() + 1).padStart(2, "0")}-${notice.notice_date.getFullYear()}`,
-    holdingNo: notice.holding_no,
-    ownerName: property ? String((property as unknown as Record<string, unknown>).owner_name ?? "") : "",
-    address: property ? String((property as unknown as Record<string, unknown>).address ?? "") : "",
-    assessmentYear: notice.assessment_year,
-    arv: notice.arv,
-    currentYearTaxNet: notice.current_year_tax_net,
-    previousYearsTaxBase: notice.previous_years_tax_base,
-    totalFineAmount: notice.total_fine_amount,
-    otherCharges: notice.other_charges,
-    totalAmountDemanded: notice.total_amount_demanded,
-    settled: notice.settled,
-    settledReceiptNo: notice.settled_receipt_no,
+    date: dateStr,
     generatedBy: notice.generated_by,
     verificationUrl: buildVerificationUrl("demand-notice", notice.demand_no),
     reminderNumber: notice.reminder_number,
     reminderLabel: notice.reminder_number > 0 ? `${ordinal(notice.reminder_number)} Reminder` : null,
-    previousUnsettledDemandNos: notice.previous_unsettled_demand_nos,
+    floors: [] as unknown[],
+    settled: notice.settled,
+    settledReceiptNo: notice.settled_receipt_no,
     superseded: notice.superseded,
     cancelled: notice.cancelled,
     cancelledReason: notice.cancelled_reason,
-    floorBreakdown: notice.floor_breakdown,
-    areaRebate: notice.area_rebate,
-    areaRebateReason: notice.area_rebate_reason,
+  };
+
+  if (notice.snapshot) {
+    return {
+      ...shared,
+      previousUnsettledDemandNos: notice.snapshot.previousUnsettledDemandNos,
+      property: notice.snapshot.property,
+      taxCalc: notice.snapshot.taxCalc,
+      totals: notice.snapshot.totals,
+    };
+  }
+
+  const property = await propertyRepository.findByHoldingNo(notice.holding_no);
+  if (!property) throw ApiError.notFound(`Property not found for Holding No: ${notice.holding_no}`);
+  const floors = await propertyRepository.findFloorsByHoldingNo(notice.holding_no);
+  const liveCalc = calculateTax(property, floors);
+  const taxCalc: TaxCalculationResult = notice.floor_breakdown
+    ? {
+        ...liveCalc,
+        breakdown: notice.floor_breakdown.rows,
+        vacant: { ...liveCalc.vacant, groundFloorBuiltArea: notice.floor_breakdown.groundFloorBuiltArea },
+      }
+    : liveCalc;
+
+  // The stored list is a plain comma-joined string of raw (unformatted)
+  // demand numbers (see previousUnsettledDemandNos in
+  // insertDemandNotice above) - look each one up for its own notice
+  // date so it can be formatted the same way the original would have
+  // shown it. A number that no longer resolves (very old/cleaned-up
+  // data) falls back to showing the raw number rather than dropping it.
+  let previousUnsettledDemandNos: string[] = [];
+  if (notice.previous_unsettled_demand_nos) {
+    const rawNos = notice.previous_unsettled_demand_nos
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    const lookups = await Promise.all(rawNos.map((n) => demandNoticeRepository.findByDemandNo(n)));
+    previousUnsettledDemandNos = lookups.map((found, i) => (found ? formatDocNumber(found.demand_no, "Demand", found.notice_date) : (rawNos[i] ?? "")));
+  }
+
+  return {
+    ...shared,
+    previousUnsettledDemandNos,
+    property: property as unknown as Record<string, unknown>,
+    taxCalc,
+    totals: {
+      currentTaxBase: notice.current_year_tax_net,
+      currentTaxAreaRebate: notice.area_rebate ?? "0.00",
+      currentTaxAreaRebateReason: notice.area_rebate_reason ?? "",
+      // Older rows never stored the rebate/penalty split separately from
+      // the aggregate total_fine_amount - best-effort shows nothing for
+      // these two rather than a guess that could be wrong.
+      currentTaxRebate: "0.00",
+      penalty: "0.00",
+      outstandingDemand: notice.previous_years_tax_base,
+      yearWiseArrears: notice.previous_years_tax_base,
+      arrearsBaseTax: notice.previous_years_tax_base,
+      totalFineAmount: notice.total_fine_amount,
+      otherCharges: notice.other_charges,
+      grandTotal: notice.total_amount_demanded,
+    },
   };
 }
 

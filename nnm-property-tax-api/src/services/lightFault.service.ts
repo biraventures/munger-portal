@@ -16,12 +16,12 @@ async function findResponsibleContractor(wardId: number): Promise<number | null>
   return mapping?.contractor_id ?? null;
 }
 
-/** Both non-functional-since fields are optional, but if a since-date is given it can't be in the future (a claimed history, not a schedule). */
-function validateNonFunctionalSince(nonFunctionalSince: string | null | undefined): void {
-  if (!nonFunctionalSince) return;
-  const parsed = new Date(nonFunctionalSince);
-  if (Number.isNaN(parsed.getTime())) throw ApiError.badRequest("Invalid non-functional-since date.");
-  if (parsed.getTime() > Date.now()) throw ApiError.badRequest("Non-functional-since date can't be in the future.");
+/** Shared by non_functional_since (reporting a fault) and functional_since (marking one repaired) - both are optional, but if given, can't be in the future (a claimed date, not a schedule). `label` names the field in the error message. */
+function validateClaimedDate(dateStr: string | null | undefined, label: string): void {
+  if (!dateStr) return;
+  const parsed = new Date(dateStr);
+  if (Number.isNaN(parsed.getTime())) throw ApiError.badRequest(`Invalid ${label} date.`);
+  if (parsed.getTime() > Date.now()) throw ApiError.badRequest(`${label} date can't be in the future.`);
 }
 
 /** Staff-reported fault - any logged-in attendance role, per what was asked for ("all staff"). Captures the reporter's GPS location if given, building up a location record of faulty lights over time. */
@@ -34,7 +34,7 @@ export async function reportFaultByStaff(
   if (WARD_SCOPED_ROLES.includes(user.role) && light.ward_id !== user.wardId) {
     throw new ApiError(403, "You can only report streetlights in your own assigned ward.");
   }
-  validateNonFunctionalSince(input.nonFunctionalSince);
+  validateClaimedDate(input.nonFunctionalSince, "non-functional-since");
 
   const contractorId = await findResponsibleContractor(light.ward_id);
   const now = new Date();
@@ -69,7 +69,7 @@ export async function reportFaultByAdmin(
 ): Promise<LightFaultRow> {
   const light = await lightRepository.findById(input.lightId);
   if (!light) throw ApiError.notFound("Light not found.");
-  validateNonFunctionalSince(input.nonFunctionalSince);
+  validateClaimedDate(input.nonFunctionalSince, "non-functional-since");
 
   const contractorId = await findResponsibleContractor(light.ward_id);
   const now = new Date();
@@ -109,7 +109,7 @@ export async function reportFaultByPublic(input: {
   if (!/^[0-9]{10}$/.test(input.phone)) {
     throw ApiError.badRequest("Please provide a valid 10-digit phone number.");
   }
-  validateNonFunctionalSince(input.nonFunctionalSince);
+  validateClaimedDate(input.nonFunctionalSince, "non-functional-since");
 
   const light = input.serialNumber ? await lightRepository.findBySerialNumber(input.serialNumber) : null;
   const contractorId = light ? await findResponsibleContractor(light.ward_id) : null;
@@ -143,15 +143,16 @@ export async function reportFaultByPublic(input: {
  * delay itself is what the Commissioner's delay report surfaces
  * instead - see streetlightDelayReport.service.ts).
  */
-export async function markFaultRepaired(user: AttendanceTokenPayload, faultId: number, repairNotes: string | null): Promise<LightFaultRow> {
+export async function markFaultRepaired(user: AttendanceTokenPayload, faultId: number, repairNotes: string | null, functionalSince?: string | null): Promise<LightFaultRow> {
   if (user.role === "city_manager") {
     const assignment = await streetlightCityManagerAssignmentRepository.get();
     if (assignment.assigned_city_manager_id !== user.sub) {
       throw new ApiError(403, "You are not the City Manager currently assigned to streetlight faults.");
     }
   }
+  validateClaimedDate(functionalSince, "functional-since");
 
-  const updated = await lightFaultRepository.markRepaired(faultId, user.sub, repairNotes);
+  const updated = await lightFaultRepository.markRepaired(faultId, user.sub, repairNotes, functionalSince ?? null);
   if (!updated) {
     const existing = await lightFaultRepository.findById(faultId);
     if (!existing) throw ApiError.notFound("Fault not found.");

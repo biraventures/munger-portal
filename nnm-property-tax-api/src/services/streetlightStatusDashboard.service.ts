@@ -87,7 +87,10 @@ export interface SegmentLightFaultHistoryRow {
   repairedAt: string | null;
   /** Who closed it out - the attendance user's display name. Null while still open. */
   repairedByName: string | null;
+  /** The claimed date the light started working again (distinct from repairedAt, which is when the Mark Functional action was actually taken) - optional, entered by whoever closed it out. */
+  functionalSince: string | null;
   reporterNotes: string | null;
+  repairNotes: string | null;
 }
 
 export interface SegmentLightStatusRow {
@@ -98,6 +101,9 @@ export interface SegmentLightStatusRow {
   faultHistory: SegmentLightFaultHistoryRow[];
   lightSerialSeq: number | null;
   switchStatus: "working" | "not_working" | "automatic" | "joint" | null;
+  /** Optional GPS location recorded for this specific light (distinct from a fault report's own GPS) - null until someone sets it from the status dashboard. */
+  latitude: number | null;
+  longitude: number | null;
 }
 
 /**
@@ -107,8 +113,16 @@ export interface SegmentLightStatusRow {
  * first.
  */
 export async function buildSegmentLightStatus(segmentId: number): Promise<SegmentLightStatusRow[]> {
-  const { rows: lights } = await pool.query<{ id: number; serial_number: string; active: boolean; light_serial_seq: number | null; switch_status: "working" | "not_working" | "automatic" | "joint" | null }>(
-    `SELECT id, serial_number, active, light_serial_seq, switch_status FROM lights WHERE segment_id = $1 AND deleted_at IS NULL ORDER BY light_serial_seq ASC, light_serial_suffix ASC NULLS FIRST`,
+  const { rows: lights } = await pool.query<{
+    id: number;
+    serial_number: string;
+    active: boolean;
+    light_serial_seq: number | null;
+    switch_status: "working" | "not_working" | "automatic" | "joint" | null;
+    latitude: number | null;
+    longitude: number | null;
+  }>(
+    `SELECT id, serial_number, active, light_serial_seq, switch_status, latitude, longitude FROM lights WHERE segment_id = $1 AND deleted_at IS NULL ORDER BY light_serial_seq ASC, light_serial_suffix ASC NULLS FIRST`,
     [segmentId],
   );
   if (lights.length === 0) return [];
@@ -123,12 +137,14 @@ export async function buildSegmentLightStatus(segmentId: number): Promise<Segmen
     status: "open" | "repaired";
     repaired_at: string | null;
     repaired_by_name: string | null;
+    functional_since: string | null;
     reporter_notes: string | null;
+    repair_notes: string | null;
   }>(
     `SELECT
-       lf.id, lf.light_id, lf.reported_at, lf.reported_by_type, lf.status, lf.repaired_at, lf.reporter_notes,
+       lf.id, lf.light_id, lf.reported_at, lf.reported_by_type, lf.status, lf.repaired_at, lf.reporter_notes, lf.repair_notes,
        COALESCE(ru.display_name, ra.display_name) AS reported_by_name,
-       rpu.display_name AS repaired_by_name
+       rpu.display_name AS repaired_by_name, lf.functional_since
      FROM light_faults lf
      LEFT JOIN attendance_users ru ON ru.id = lf.reported_by_user_id
      LEFT JOIN admins ra ON ra.username = lf.reported_by_admin_username
@@ -148,7 +164,9 @@ export async function buildSegmentLightStatus(segmentId: number): Promise<Segmen
       status: f.status,
       repairedAt: f.repaired_at,
       repairedByName: f.repaired_by_name,
+      functionalSince: f.functional_since,
       reporterNotes: f.reporter_notes,
+      repairNotes: f.repair_notes,
     };
     const existing = faultsByLight.get(f.light_id);
     if (existing) existing.push(entry);
@@ -165,6 +183,8 @@ export async function buildSegmentLightStatus(segmentId: number): Promise<Segmen
       faultHistory: history,
       lightSerialSeq: l.light_serial_seq,
       switchStatus: l.switch_status,
+      latitude: l.latitude,
+      longitude: l.longitude,
     };
   });
 }
@@ -230,6 +250,9 @@ export interface HighMastLightStatusRow {
   working: boolean;
   faultHistory: SegmentLightFaultHistoryRow[];
   switchStatus: "working" | "not_working" | "automatic" | "joint" | null;
+  /** Optional GPS location recorded for this specific light - null until someone sets it from the status dashboard. */
+  latitude: number | null;
+  longitude: number | null;
 }
 
 /** Every High Mast light in one ward, its working/not-working status, and full fault history - the drill-down from buildHighMastWardStatusDashboard. */
@@ -240,8 +263,10 @@ export async function buildHighMastLightsForWard(wardId: number): Promise<HighMa
     locality_name: string;
     active: boolean;
     switch_status: "working" | "not_working" | "automatic" | "joint" | null;
+    latitude: number | null;
+    longitude: number | null;
   }>(
-    `SELECT id, serial_number, locality_name, active, switch_status FROM lights WHERE ward_id = $1 AND light_type = 'high_mast' AND deleted_at IS NULL ORDER BY serial_number ASC`,
+    `SELECT id, serial_number, locality_name, active, switch_status, latitude, longitude FROM lights WHERE ward_id = $1 AND light_type = 'high_mast' AND deleted_at IS NULL ORDER BY serial_number ASC`,
     [wardId],
   );
   if (lights.length === 0) return [];
@@ -256,12 +281,14 @@ export async function buildHighMastLightsForWard(wardId: number): Promise<HighMa
     status: "open" | "repaired";
     repaired_at: string | null;
     repaired_by_name: string | null;
+    functional_since: string | null;
     reporter_notes: string | null;
+    repair_notes: string | null;
   }>(
     `SELECT
-       lf.id, lf.light_id, lf.reported_at, lf.reported_by_type, lf.status, lf.repaired_at, lf.reporter_notes,
+       lf.id, lf.light_id, lf.reported_at, lf.reported_by_type, lf.status, lf.repaired_at, lf.reporter_notes, lf.repair_notes,
        COALESCE(ru.display_name, ra.display_name) AS reported_by_name,
-       rpu.display_name AS repaired_by_name
+       rpu.display_name AS repaired_by_name, lf.functional_since
      FROM light_faults lf
      LEFT JOIN attendance_users ru ON ru.id = lf.reported_by_user_id
      LEFT JOIN admins ra ON ra.username = lf.reported_by_admin_username
@@ -281,7 +308,9 @@ export async function buildHighMastLightsForWard(wardId: number): Promise<HighMa
       status: f.status,
       repairedAt: f.repaired_at,
       repairedByName: f.repaired_by_name,
+      functionalSince: f.functional_since,
       reporterNotes: f.reporter_notes,
+      repairNotes: f.repair_notes,
     };
     const existing = faultsByLight.get(f.light_id);
     if (existing) existing.push(entry);
@@ -298,6 +327,8 @@ export async function buildHighMastLightsForWard(wardId: number): Promise<HighMa
       working: !history.some((h) => h.status === "open"),
       faultHistory: history,
       switchStatus: l.switch_status,
+      latitude: l.latitude,
+      longitude: l.longitude,
     };
   });
 }
@@ -327,6 +358,7 @@ export interface FaultAuditTrailRow {
   status: "open" | "repaired";
   repairedAt: string | null;
   repairedByName: string | null;
+  functionalSince: string | null;
   repairNotes: string | null;
 }
 
@@ -338,7 +370,7 @@ export async function buildFaultAuditTrail(wardId?: number, limit = 300): Promis
        w.ward_name AS "wardName", ss.start_point AS "startPoint", ss.end_point AS "endPoint",
        lf.reported_at AS "reportedAt", lf.reported_by_type AS "reportedByType",
        COALESCE(ru.display_name, ra.display_name) AS "reportedByName", lf.reporter_notes AS "reporterNotes",
-       lf.status, lf.repaired_at AS "repairedAt", rpu.display_name AS "repairedByName", lf.repair_notes AS "repairNotes"
+       lf.status, lf.repaired_at AS "repairedAt", rpu.display_name AS "repairedByName", lf.functional_since AS "functionalSince", lf.repair_notes AS "repairNotes"
      FROM light_faults lf
      LEFT JOIN lights l ON l.id = lf.light_id
      LEFT JOIN street_segments ss ON ss.id = l.segment_id

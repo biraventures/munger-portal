@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AlertCircle, BarChart3, ChevronLeft, CheckCircle2, XCircle } from "lucide-react";
+import { AlertCircle, BarChart3, ChevronLeft, CheckCircle2, XCircle, MapPin, LocateFixed } from "lucide-react";
 import { AttendanceHeader } from "@/components/attendance/attendance-header";
 import { useAttendanceGuard } from "@/lib/use-attendance-guard";
 import {
@@ -9,6 +9,7 @@ import {
   fetchHighMastLightsForWard,
   markFaultRepaired,
   reportFault,
+  setLightGps,
   type WardStatus,
   type HighMastLightStatus,
 } from "@/lib/streetlight-api";
@@ -38,6 +39,14 @@ export default function HighMastStatusDashboardPage() {
   const [faultyFormDate, setFaultyFormDate] = useState(todayLocalDateString());
   const [repairFormLightId, setRepairFormLightId] = useState<number | null>(null);
   const [repairFormNotes, setRepairFormNotes] = useState("");
+  const [repairFormDate, setRepairFormDate] = useState(todayLocalDateString());
+
+  const [gpsFormLightId, setGpsFormLightId] = useState<number | null>(null);
+  const [gpsFormLat, setGpsFormLat] = useState("");
+  const [gpsFormLng, setGpsFormLng] = useState("");
+  const [gpsFormError, setGpsFormError] = useState<string | null>(null);
+  const [savingGpsLightId, setSavingGpsLightId] = useState<number | null>(null);
+  const [locatingGps, setLocatingGps] = useState(false);
 
   useEffect(() => {
     if (!attendance) return;
@@ -75,6 +84,7 @@ export default function HighMastStatusDashboardPage() {
   function openRepairForm(light: HighMastLightStatus) {
     setRepairFormLightId(light.lightId);
     setRepairFormNotes("");
+    setRepairFormDate(todayLocalDateString());
     setError(null);
   }
 
@@ -93,7 +103,7 @@ export default function HighMastStatusDashboardPage() {
     setError(null);
     try {
       for (const faultId of openFaultIds) {
-        await markFaultRepaired(faultId, repairFormNotes.trim() || null);
+        await markFaultRepaired(faultId, repairFormNotes.trim() || null, repairFormDate || null);
       }
       setRepairFormLightId(null);
       setWardLights(await fetchHighMastLightsForWard(openWard.id));
@@ -135,6 +145,87 @@ export default function HighMastStatusDashboardPage() {
       setError(err instanceof Error ? err.message : "Could not report this light as faulty.");
     } finally {
       setMarkingFaultyLightId(null);
+    }
+  }
+
+  /**
+   * Optional per-light GPS location, entered next to the light's serial
+   * number - a location note distinct from a fault report's own GPS.
+   * Opens with the light's existing coordinates pre-filled, if any.
+   */
+  function openGpsForm(light: HighMastLightStatus) {
+    setGpsFormLightId(light.lightId);
+    setGpsFormLat(light.latitude != null ? String(light.latitude) : "");
+    setGpsFormLng(light.longitude != null ? String(light.longitude) : "");
+    setGpsFormError(null);
+  }
+
+  function cancelGpsForm() {
+    setGpsFormLightId(null);
+    setGpsFormError(null);
+  }
+
+  /** Fills the form from the browser's current location, if the device/browser allows it - the field stays editable either way. */
+  function useCurrentLocationForGpsForm() {
+    if (!navigator.geolocation) {
+      setGpsFormError("This device doesn't support location capture. Enter the coordinates manually.");
+      return;
+    }
+    setLocatingGps(true);
+    setGpsFormError(null);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setGpsFormLat(String(pos.coords.latitude.toFixed(6)));
+        setGpsFormLng(String(pos.coords.longitude.toFixed(6)));
+        setLocatingGps(false);
+      },
+      () => {
+        setGpsFormError("Could not get the current location. Enter the coordinates manually.");
+        setLocatingGps(false);
+      },
+      { enableHighAccuracy: true, timeout: 10000 },
+    );
+  }
+
+  async function submitGpsForm(lightId: number) {
+    if (!openWard) return;
+    const latTrim = gpsFormLat.trim();
+    const lngTrim = gpsFormLng.trim();
+    if ((latTrim === "") !== (lngTrim === "")) {
+      setGpsFormError("Enter both latitude and longitude, or leave both blank.");
+      return;
+    }
+    const lat = latTrim === "" ? null : Number(latTrim);
+    const lng = lngTrim === "" ? null : Number(lngTrim);
+    if ((lat !== null && (Number.isNaN(lat) || lat < -90 || lat > 90)) || (lng !== null && (Number.isNaN(lng) || lng < -180 || lng > 180))) {
+      setGpsFormError("Enter valid coordinates (latitude -90 to 90, longitude -180 to 180).");
+      return;
+    }
+    setSavingGpsLightId(lightId);
+    setGpsFormError(null);
+    try {
+      await setLightGps(lightId, lat, lng);
+      setGpsFormLightId(null);
+      setWardLights(await fetchHighMastLightsForWard(openWard.id));
+    } catch (err) {
+      setGpsFormError(err instanceof Error ? err.message : "Could not save this light's location.");
+    } finally {
+      setSavingGpsLightId(null);
+    }
+  }
+
+  async function clearGpsForm(lightId: number) {
+    if (!openWard) return;
+    setSavingGpsLightId(lightId);
+    setGpsFormError(null);
+    try {
+      await setLightGps(lightId, null, null);
+      setGpsFormLightId(null);
+      setWardLights(await fetchHighMastLightsForWard(openWard.id));
+    } catch (err) {
+      setGpsFormError(err instanceof Error ? err.message : "Could not clear this light's location.");
+    } finally {
+      setSavingGpsLightId(null);
     }
   }
 
@@ -224,6 +315,28 @@ export default function HighMastStatusDashboardPage() {
                   <div key={l.lightId} className="rounded-lg border border-slate-200 bg-white p-4">
                     <div className="flex items-center justify-between">
                       <div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          {gpsFormLightId !== l.lightId &&
+                            (l.latitude != null && l.longitude != null ? (
+                              <button
+                                onClick={() => openGpsForm(l)}
+                                title="Edit this light's recorded location"
+                                className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-medium text-blue-700 hover:bg-blue-100"
+                              >
+                                <MapPin className="h-3 w-3" />
+                                {l.latitude.toFixed(5)}, {l.longitude.toFixed(5)}
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => openGpsForm(l)}
+                                title="Optionally record this light's GPS location"
+                                className="inline-flex items-center gap-1 rounded-full border border-dashed border-slate-300 px-2 py-0.5 text-[10px] font-medium text-slate-400 hover:border-nnm-blue hover:text-nnm-blue"
+                              >
+                                <MapPin className="h-3 w-3" />
+                                Add location
+                              </button>
+                            ))}
+                        </div>
                         <p className="font-mono text-sm font-semibold text-slate-900">{l.serialNumber}</p>
                         <p className="text-xs text-slate-500">{l.localityName}</p>
                       </div>
@@ -266,7 +379,17 @@ export default function HighMastStatusDashboardPage() {
                     {repairFormLightId === l.lightId && (
                       <div className="mt-3 space-y-2 rounded-md border border-green-200 bg-green-50 p-3">
                         <div>
-                          <label className="mb-1 block text-[10px] font-semibold uppercase text-slate-500">Repair comments</label>
+                          <label className="mb-1 block text-[10px] font-semibold uppercase text-slate-500">Functional since</label>
+                          <input
+                            type="date"
+                            value={repairFormDate}
+                            max={todayLocalDateString()}
+                            onChange={(e) => setRepairFormDate(e.target.value)}
+                            className="rounded-md border border-slate-300 px-2 py-1 text-xs outline-none focus:ring-1 focus:ring-nnm-blue"
+                          />
+                        </div>
+                        <div>
+                          <label className="mb-1 block text-[10px] font-semibold uppercase text-slate-500">Remarks</label>
                           <textarea
                             value={repairFormNotes}
                             onChange={(e) => setRepairFormNotes(e.target.value)}
@@ -325,6 +448,65 @@ export default function HighMastStatusDashboardPage() {
                         </div>
                       </div>
                     )}
+                    {gpsFormLightId === l.lightId && (
+                      <div className="mt-3 space-y-2 rounded-md border border-blue-200 bg-blue-50 p-3">
+                        <div className="flex flex-wrap items-end gap-2">
+                          <div>
+                            <label className="mb-1 block text-[10px] font-semibold uppercase text-slate-500">Latitude</label>
+                            <input
+                              type="text"
+                              inputMode="decimal"
+                              value={gpsFormLat}
+                              onChange={(e) => setGpsFormLat(e.target.value)}
+                              placeholder="e.g. 25.3746"
+                              className="w-28 rounded-md border border-slate-300 px-2 py-1 text-xs outline-none focus:ring-1 focus:ring-nnm-blue"
+                            />
+                          </div>
+                          <div>
+                            <label className="mb-1 block text-[10px] font-semibold uppercase text-slate-500">Longitude</label>
+                            <input
+                              type="text"
+                              inputMode="decimal"
+                              value={gpsFormLng}
+                              onChange={(e) => setGpsFormLng(e.target.value)}
+                              placeholder="e.g. 86.4735"
+                              className="w-28 rounded-md border border-slate-300 px-2 py-1 text-xs outline-none focus:ring-1 focus:ring-nnm-blue"
+                            />
+                          </div>
+                          <button
+                            onClick={useCurrentLocationForGpsForm}
+                            disabled={locatingGps}
+                            title="Use this device's current location"
+                            className="inline-flex items-center gap-1 rounded-md border border-slate-300 px-2 py-1 text-xs font-medium text-slate-600 hover:bg-slate-100 disabled:opacity-60"
+                          >
+                            <LocateFixed className="h-3.5 w-3.5" />
+                            {locatingGps ? "Locating…" : "Use current location"}
+                          </button>
+                        </div>
+                        {gpsFormError && <p className="text-xs text-red-600">{gpsFormError}</p>}
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            onClick={() => submitGpsForm(l.lightId)}
+                            disabled={savingGpsLightId === l.lightId}
+                            className="rounded-md bg-nnm-blue px-3 py-1 text-xs font-semibold text-white hover:opacity-90 disabled:opacity-60"
+                          >
+                            {savingGpsLightId === l.lightId ? "Saving…" : "Save Location"}
+                          </button>
+                          {(l.latitude != null || l.longitude != null) && (
+                            <button
+                              onClick={() => clearGpsForm(l.lightId)}
+                              disabled={savingGpsLightId === l.lightId}
+                              className="rounded-md border border-slate-300 px-3 py-1 text-xs font-medium text-slate-600 hover:bg-slate-100 disabled:opacity-60"
+                            >
+                              Clear
+                            </button>
+                          )}
+                          <button onClick={cancelGpsForm} className="rounded-md border border-slate-300 px-3 py-1 text-xs font-medium text-slate-600 hover:bg-slate-100">
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    )}
                     {l.faultHistory.length > 0 && (
                       <details className="mt-2 text-xs text-slate-500">
                         <summary className="cursor-pointer font-medium text-slate-600">Fault history ({l.faultHistory.length})</summary>
@@ -333,7 +515,10 @@ export default function HighMastStatusDashboardPage() {
                             <li key={f.faultId}>
                               {new Date(f.reportedAt).toLocaleDateString("en-IN")}
                               {f.reportedByName ? ` by ${f.reportedByName}` : f.reportedByType === "public" ? " (public)" : ""} - {f.status}
-                              {f.status === "repaired" && f.repairedByName ? ` by ${f.repairedByName}` : ""} {f.reporterNotes ? `(${f.reporterNotes})` : ""}
+                              {f.status === "repaired" && f.repairedByName ? ` by ${f.repairedByName}` : ""}
+                              {f.status === "repaired" && f.functionalSince ? ` (functional since ${new Date(f.functionalSince).toLocaleDateString("en-IN")})` : ""}
+                              {f.reporterNotes ? ` (${f.reporterNotes})` : ""}
+                              {f.repairNotes ? ` · Remarks: "${f.repairNotes}"` : ""}
                             </li>
                           ))}
                         </ul>

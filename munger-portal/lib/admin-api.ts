@@ -1,4 +1,5 @@
 import { getAdminToken, type AdminRole } from "./admin-auth";
+import type { DemandNoticeReprintData } from "./demand-notice-api";
 
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_PROPERTY_TAX_API_URL || "http://localhost:4000/api/v1";
@@ -308,36 +309,7 @@ export interface FrozenFloorBreakdown {
   }[];
 }
 
-export interface PrintableDemandNoticeHistory {
-  demandNo: string;
-  formattedDemandNo: string;
-  date: string;
-  holdingNo: string;
-  ownerName: string;
-  address: string;
-  assessmentYear: string | null;
-  arv: string;
-  currentYearTaxNet: string;
-  previousYearsTaxBase: string;
-  totalFineAmount: string;
-  otherCharges: string;
-  totalAmountDemanded: string;
-  settled: boolean;
-  settledReceiptNo: string | null;
-  generatedBy: string;
-  verificationUrl: string;
-  reminderNumber: number;
-  reminderLabel: string | null;
-  previousUnsettledDemandNos: string | null;
-  superseded: boolean;
-  cancelled: boolean;
-  cancelledReason: string | null;
-  floorBreakdown: FrozenFloorBreakdown | null;
-  areaRebate: string | null;
-  areaRebateReason: string | null;
-}
-
-export async function fetchDemandNoticeReprintAdmin(demandNo: string): Promise<PrintableDemandNoticeHistory> {
+export async function fetchDemandNoticeReprintAdmin(demandNo: string): Promise<DemandNoticeReprintData> {
   const res = await fetch(`${API_BASE_URL}/properties/demand-notices/${encodeURIComponent(demandNo)}/print`, { headers: authHeaders() });
   if (!res.ok) throw new Error("Could not load this demand notice.");
   return res.json();
