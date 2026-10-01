@@ -1,3 +1,5 @@
+import { removeAuthCookie, setAuthCookie } from "./authCookie";
+
 const TOKEN_KEY = "nnm_operator_token";
 const OPERATOR_KEY = "nnm_operator_info";
 
@@ -9,9 +11,14 @@ export interface OperatorInfo {
 }
 
 const API_BASE_URL =
-  process.env.NEXT_PUBLIC_PROPERTY_TAX_API_URL || "http://localhost:4000/api/v1";
+  process.env.NEXT_PUBLIC_PROPERTY_TAX_API_URL ||
+  "http://localhost:4000/api/v1";
 
-export async function operatorLogin(username: string, password: string, rememberMe: boolean = false): Promise<OperatorInfo> {
+export async function operatorLogin(
+  username: string,
+  password: string,
+  rememberMe: boolean = false,
+): Promise<OperatorInfo> {
   const res = await fetch(`${API_BASE_URL}/auth/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -29,6 +36,7 @@ export async function operatorLogin(username: string, password: string, remember
 
   sessionStorage.setItem(TOKEN_KEY, data.token);
   sessionStorage.setItem(OPERATOR_KEY, JSON.stringify(data.operator));
+  setAuthCookie(data.token);
 
   if (rememberMe) {
     localStorage.setItem(TOKEN_KEY, data.token);
@@ -43,7 +51,8 @@ export async function operatorLogin(username: string, password: string, remember
 
 export function getOperatorToken(): string | null {
   if (typeof window === "undefined") return null;
-  const token = sessionStorage.getItem(TOKEN_KEY) || localStorage.getItem(TOKEN_KEY);
+  const token =
+    sessionStorage.getItem(TOKEN_KEY) || localStorage.getItem(TOKEN_KEY);
   if (token && !sessionStorage.getItem(TOKEN_KEY)) {
     try {
       sessionStorage.setItem(TOKEN_KEY, token);
@@ -54,7 +63,8 @@ export function getOperatorToken(): string | null {
 
 export function getOperatorInfo(): OperatorInfo | null {
   if (typeof window === "undefined") return null;
-  const raw = sessionStorage.getItem(OPERATOR_KEY) || localStorage.getItem(OPERATOR_KEY);
+  const raw =
+    sessionStorage.getItem(OPERATOR_KEY) || localStorage.getItem(OPERATOR_KEY);
   if (raw && !sessionStorage.getItem(OPERATOR_KEY)) {
     try {
       sessionStorage.setItem(OPERATOR_KEY, raw);
@@ -68,4 +78,5 @@ export function operatorLogout(): void {
   sessionStorage.removeItem(OPERATOR_KEY);
   localStorage.removeItem(TOKEN_KEY);
   localStorage.removeItem(OPERATOR_KEY);
+  removeAuthCookie();
 }
