@@ -1,3 +1,5 @@
+import { removeAuthCookie, setAuthCookie } from "./authCookie";
+
 const TOKEN_KEY = "nnm_attendance_token";
 const USER_KEY = "nnm_attendance_user";
 
@@ -63,9 +65,14 @@ export interface AttendanceUserInfo {
 }
 
 const API_BASE_URL =
-  process.env.NEXT_PUBLIC_PROPERTY_TAX_API_URL || "http://localhost:4000/api/v1";
+  process.env.NEXT_PUBLIC_PROPERTY_TAX_API_URL ||
+  "http://localhost:4000/api/v1";
 
-export async function attendanceLogin(username: string, password: string, rememberMe: boolean = false): Promise<AttendanceUserInfo> {
+export async function attendanceLogin(
+  username: string,
+  password: string,
+  rememberMe: boolean = false,
+): Promise<AttendanceUserInfo> {
   const res = await fetch(`${API_BASE_URL}/attendance/auth/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -81,6 +88,7 @@ export async function attendanceLogin(username: string, password: string, rememb
 
   sessionStorage.setItem(TOKEN_KEY, data.token);
   sessionStorage.setItem(USER_KEY, JSON.stringify(data.user));
+  setAuthCookie(data.token);
 
   if (rememberMe) {
     localStorage.setItem(TOKEN_KEY, data.token);
@@ -95,7 +103,8 @@ export async function attendanceLogin(username: string, password: string, rememb
 
 export function getAttendanceToken(): string | null {
   if (typeof window === "undefined") return null;
-  const token = sessionStorage.getItem(TOKEN_KEY) || localStorage.getItem(TOKEN_KEY);
+  const token =
+    sessionStorage.getItem(TOKEN_KEY) || localStorage.getItem(TOKEN_KEY);
   if (token && !sessionStorage.getItem(TOKEN_KEY)) {
     try {
       sessionStorage.setItem(TOKEN_KEY, token);
@@ -106,7 +115,8 @@ export function getAttendanceToken(): string | null {
 
 export function getAttendanceUserInfo(): AttendanceUserInfo | null {
   if (typeof window === "undefined") return null;
-  const raw = sessionStorage.getItem(USER_KEY) || localStorage.getItem(USER_KEY);
+  const raw =
+    sessionStorage.getItem(USER_KEY) || localStorage.getItem(USER_KEY);
   if (raw && !sessionStorage.getItem(USER_KEY)) {
     try {
       sessionStorage.setItem(USER_KEY, raw);
@@ -120,4 +130,5 @@ export function attendanceLogout(): void {
   sessionStorage.removeItem(USER_KEY);
   localStorage.removeItem(TOKEN_KEY);
   localStorage.removeItem(USER_KEY);
+  removeAuthCookie();
 }

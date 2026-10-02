@@ -1,3 +1,5 @@
+import { removeAuthCookie, setAuthCookie } from "./authCookie";
+
 const TOKEN_KEY = "nnm_admin_token";
 const ADMIN_KEY = "nnm_admin_info";
 
@@ -60,9 +62,14 @@ export interface AdminInfo {
 }
 
 const API_BASE_URL =
-  process.env.NEXT_PUBLIC_PROPERTY_TAX_API_URL || "http://localhost:4000/api/v1";
+  process.env.NEXT_PUBLIC_PROPERTY_TAX_API_URL ||
+  "http://localhost:4000/api/v1";
 
-export async function adminLogin(username: string, password: string, rememberMe: boolean = false): Promise<AdminInfo> {
+export async function adminLogin(
+  username: string,
+  password: string,
+  rememberMe: boolean = false,
+): Promise<AdminInfo> {
   const res = await fetch(`${API_BASE_URL}/admin/auth/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -77,6 +84,7 @@ export async function adminLogin(username: string, password: string, rememberMe:
   const data: { token: string; admin: AdminInfo } = await res.json();
   sessionStorage.setItem(TOKEN_KEY, data.token);
   sessionStorage.setItem(ADMIN_KEY, JSON.stringify(data.admin));
+  setAuthCookie(data.token);
 
   if (rememberMe) {
     localStorage.setItem(TOKEN_KEY, data.token);
@@ -91,7 +99,8 @@ export async function adminLogin(username: string, password: string, rememberMe:
 
 export function getAdminToken(): string | null {
   if (typeof window === "undefined") return null;
-  const token = sessionStorage.getItem(TOKEN_KEY) || localStorage.getItem(TOKEN_KEY);
+  const token =
+    sessionStorage.getItem(TOKEN_KEY) || localStorage.getItem(TOKEN_KEY);
   if (token && !sessionStorage.getItem(TOKEN_KEY)) {
     try {
       sessionStorage.setItem(TOKEN_KEY, token);
@@ -102,7 +111,8 @@ export function getAdminToken(): string | null {
 
 export function getAdminInfo(): AdminInfo | null {
   if (typeof window === "undefined") return null;
-  const raw = sessionStorage.getItem(ADMIN_KEY) || localStorage.getItem(ADMIN_KEY);
+  const raw =
+    sessionStorage.getItem(ADMIN_KEY) || localStorage.getItem(ADMIN_KEY);
   if (raw && !sessionStorage.getItem(ADMIN_KEY)) {
     try {
       sessionStorage.setItem(ADMIN_KEY, raw);
@@ -116,4 +126,5 @@ export function adminLogout(): void {
   sessionStorage.removeItem(ADMIN_KEY);
   localStorage.removeItem(TOKEN_KEY);
   localStorage.removeItem(ADMIN_KEY);
+  removeAuthCookie();
 }
