@@ -1,0 +1,20 @@
+-- Freezes everything notice-view.tsx needs to re-render a demand
+-- notice identically - the full property record, the full tax
+-- calculation result (including the per-floor breakdown and vacant-
+-- land figures), the full totals breakdown, and the formatted list of
+-- previously-superseded demand numbers - exactly as they were at the
+-- moment the notice was generated. Migrations 024/086/089 already
+-- froze the scalar totals and the floor-wise breakdown separately, in
+-- pieces; this supersedes that piecemeal approach for anything
+-- generated from now on by capturing the WHOLE renderable payload in
+-- one shot, so a reprint can be built by replaying this JSON straight
+-- back into the exact same template the original notice used -
+-- word-for-word, line-for-line identical, nothing re-derived.
+--
+-- Nullable, same reasoning as the earlier frozen columns - a notice
+-- generated before this column existed has nothing to backfill this
+-- from (the full payload was computed at the time but never
+-- persisted), so its reprint falls back to a best-effort
+-- reconstruction from the older frozen columns plus the live property
+-- record (see getDemandNoticeForReprint in demandNotice.service.ts).
+ALTER TABLE demand_notices ADD COLUMN snapshot JSONB;

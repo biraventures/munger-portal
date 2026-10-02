@@ -392,7 +392,10 @@ export async function fetchRentalPreferences(status?: ShopRentalPreferenceStatus
 export interface ShopSummaryForAllotment {
   shop_no: string;
   market_name: string | null;
-  location: string;
+  // location was NOT NULL until migration 043_shop_fields_optional.sql
+  // dropped that constraint - genuinely null for some shops now, hence
+  // the (s.location ?? "") guards wherever this gets searched/filtered.
+  location: string | null;
   area_sqft: string | null;
   status: string;
 }
@@ -802,4 +805,113 @@ export async function rejectShopAgreementDocumentRequest(id: number, reason: str
   }
   const data: { request: ShopAgreementDocumentRequestSummary } = await res.json();
   return data.request;
+}
+
+// ---------------------------------------------------------------------
+// Shop-wise report (Commissioner/City Manager) + shop flags -> Stall
+// Prabhari. See shopReport.controller.ts / shopFlag.controller.ts.
+// ---------------------------------------------------------------------
+
+export interface ShopDetail {
+  shop_no: string;
+  market_name: string | null;
+  market_shop_number: string | null;
+  location: string;
+  ward: string | null;
+  area_sqft: string | null;
+  total_area_sqft: string | null;
+  built_up_area_sqft: string | null;
+  status: "vacant" | "occupied" | "under_notice" | "terminated";
+  publication_stage: "stall_prabhari" | "city_manager" | "deputy_commissioner" | "approved";
+  created_by: string;
+  created_date: string;
+  last_modified_by: string | null;
+  last_modified_date: string | null;
+}
+
+export interface ShopAgreementHistoryEntry {
+  id: number;
+  shop_no: string;
+  agreement_number: string | null;
+  holder_name: string;
+  holder_mobile: string | null;
+  holder_address: string | null;
+  business_name: string | null;
+  base_monthly_rent: string;
+  agreement_start_date: string | null;
+  agreement_end_date: string | null;
+  security_deposit: string;
+  rent_paid_till_month: string | null;
+  status: "active" | "expired" | "terminated";
+  created_by: string;
+  created_date: string;
+  last_modified_by: string | null;
+  last_modified_date: string | null;
+}
+
+export interface ShopFlag {
+  id: number;
+  shop_no: string;
+  flagged_by_username: string;
+  flagged_by_display_name: string;
+  flagged_by_role: string;
+  remarks: string;
+  flagged_at: string;
+  status: "open" | "resolved";
+  resolved_by_username: string | null;
+  resolved_by_display_name: string | null;
+  resolved_at: string | null;
+  resolution_notes: string | null;
+}
+
+export interface ShopReport {
+  shop: ShopDetail;
+  agreements: ShopAgreementHistoryEntry[];
+  editRequests: ShopEditRequestSummary[];
+  flags: ShopFlag[];
+}
+
+export async function fetchShopReport(shopNo: string): Promise<ShopReport> {
+  const res = await fetch(`${API_BASE_URL}/admin/shops/${encodeURIComponent(shopNo)}/report`, { headers: authHeaders() });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || "Could not load this shop's report.");
+  }
+  return res.json();
+}
+
+export async function createShopFlag(shopNo: string, remarks: string): Promise<ShopFlag> {
+  const res = await fetch(`${API_BASE_URL}/admin/shops/${encodeURIComponent(shopNo)}/flags`, {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify({ remarks }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || "Could not record this flag.");
+  }
+  const data: { flag: ShopFlag } = await res.json();
+  return data.flag;
+}
+
+/** Stall Prabhari's worklist - every shop flag still awaiting a response, oldest first. */
+export async function fetchOpenShopFlags(): Promise<ShopFlag[]> {
+  const res = await fetch(`${API_BASE_URL}/admin/shop-flags/open`, { headers: authHeaders() });
+  if (!res.ok) throw new Error("Could not load flagged shops.");
+  const data: { flags: ShopFlag[] } = await res.json();
+  return data.flags;
+}
+
+export async function resolveShopFlag(id: number, resolutionNotes: string): Promise<ShopFlag> {
+  const res = await fetch(`${API_BASE_URL}/admin/shop-flags/${id}/resolve`, {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify({ resolutionNotes }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || "Could not save this response.");
+  }
+  const data: { flag: ShopFlag } = await res.json();
+  return data.flag;
 }

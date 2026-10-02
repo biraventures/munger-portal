@@ -2,19 +2,42 @@
 
 import { useRef } from "react";
 import { Printer } from "lucide-react";
-import type { DemandNoticeData } from "@/lib/demand-notice-api";
+import type { DemandNoticeData, DemandNoticeReprintData } from "@/lib/demand-notice-api";
 import { DocumentVerificationQR } from "./document-verification-qr";
 import { printElementInNewWindow } from "@/lib/print-in-new-window";
+import { CancelledWatermark, CancelledBanner, SupersededBanner } from "./cancelled-document-notice";
 
 function str(v: unknown): string {
   return v === null || v === undefined ? "" : String(v);
 }
 
-export function NoticeView({ notice, onClose }: { notice: DemandNoticeData; onClose: () => void }) {
+/**
+ * Renders a demand notice - used both right after generation (a
+ * freshly-created DemandNoticeData, never settled/cancelled/
+ * superseded yet) and for a reprint (a DemandNoticeReprintData, which
+ * adds the notice's current lifecycle status). Same component either
+ * way, so a reprint is word-for-word, line-for-line identical to the
+ * notice as originally issued - the only addition for a reprint is
+ * the lifecycle-status block at the very end (settled/cancelled/
+ * superseded), which wasn't and couldn't have been on the original
+ * printout since that status didn't exist yet at generation time.
+ */
+export function NoticeView({
+  notice,
+  onClose,
+  closeLabel = "Back to property",
+}: {
+  notice: DemandNoticeData | DemandNoticeReprintData;
+  onClose: () => void;
+  closeLabel?: string;
+}) {
   const printRef = useRef<HTMLDivElement>(null);
   const p = notice.property;
   const calc = notice.taxCalc;
   const t = notice.totals;
+  // Present only on a reprint (see DemandNoticeReprintData) - absent on
+  // a freshly-generated notice, which by definition is none of these yet.
+  const status = "cancelled" in notice ? notice : null;
 
   return (
     <div>
@@ -27,12 +50,16 @@ export function NoticeView({ notice, onClose }: { notice: DemandNoticeData; onCl
           Print / Save as PDF
         </button>
         <button onClick={onClose} className="text-sm font-medium text-nnm-blue hover:underline">
-          Back to property
+          {closeLabel}
         </button>
       </div>
 
-      <div ref={printRef}
-        className="printable-area rounded-xl border border-slate-200 bg-white p-8 text-[12px] text-[#222]" style={{ fontFamily: "Arial, sans-serif" }}>
+      <div
+        ref={printRef}
+        className="printable-area rounded-xl border border-slate-200 bg-white p-8 text-[12px] text-[#222]"
+        style={{ fontFamily: "Arial, sans-serif", position: "relative" }}
+      >
+        {status?.cancelled && <CancelledWatermark />}
         {/* Header */}
         <div className="flex items-start justify-between gap-3 border-b-2 border-nnm-blue pb-2">
           <DocumentVerificationQR url={notice.verificationUrl} />
@@ -54,6 +81,10 @@ export function NoticeView({ notice, onClose }: { notice: DemandNoticeData; onCl
             </div>
           </div>
         </div>
+
+        {/* Reprint-only lifecycle status - see the `status` comment above. Not part of the notice as originally issued. */}
+        {status?.cancelled && <CancelledBanner reason={status.cancelledReason} />}
+        {status && !status.cancelled && status.superseded && <SupersededBanner />}
 
         {notice.reminderLabel && (
           <div className="mt-2.5 rounded border border-amber-400 bg-amber-50 px-3 py-2 text-[11px] text-amber-800">
@@ -241,6 +272,18 @@ export function NoticeView({ notice, onClose }: { notice: DemandNoticeData; onCl
               </td>
               <td className="border-x border-slate-400 p-1.5 text-right italic text-slate-500">{calc.vacant.tax}</td>
             </tr>
+            {Number(t.currentTaxAreaRebate) > 0 && (
+              <tr>
+                <td colSpan={5} className="border-x border-slate-400 p-1.5 pl-6 italic text-slate-500">
+                  — Plinth Area / Rain Water Harvesting Rebate already applied
+                  {t.currentTaxAreaRebateReason ? ` (${t.currentTaxAreaRebateReason})` : ""} — this is why A is less than
+                  the floorwise total above
+                </td>
+                <td className="border-x border-slate-400 p-1.5 text-right italic text-slate-500">
+                  −{t.currentTaxAreaRebate}
+                </td>
+              </tr>
+            )}
             {Number(t.yearWiseArrears) > 0 && (
               <tr>
                 <td colSpan={5} className="border-x border-slate-400 p-1.5">
@@ -358,8 +401,25 @@ export function NoticeView({ notice, onClose }: { notice: DemandNoticeData; onCl
         <div className="mt-4 border-t border-slate-300 pt-2 text-[9.5px] text-slate-500">
           This is a computer generated demand notice. This notice is not a payment receipt.
           <br />
+          This demand notice is generated based on the measurements provided by holding owner or captured during
+          survey in the presence of holding owner, usage category, occupancy type and construction type as also the
+          road type. If holding owner has any concerns they can file a written objection in Nagar Nigam Munger.
+          <br />
           Generated by {notice.generatedBy} on {notice.date}
         </div>
+
+        {/* Reprint-only lifecycle status - see the `status` comment above. Not part of the notice as originally issued. */}
+        {status && (
+          <div className="mt-2 text-[9.5px] font-semibold">
+            {status.settled ? (
+              <span className="text-green-700">This demand has been settled — Receipt No {status.settledReceiptNo}.</span>
+            ) : status.superseded ? (
+              <span className="text-slate-500">This demand was superseded by a later reminder notice and is no longer separately payable.</span>
+            ) : status.cancelled ? null : (
+              <span className="text-amber-700">This demand has not yet been settled.</span>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

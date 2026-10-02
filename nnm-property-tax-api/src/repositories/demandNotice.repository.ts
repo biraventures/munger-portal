@@ -2,6 +2,7 @@ import { pool } from "../config/db";
 import type { Pool, PoolClient } from "pg";
 import { DEMAND_NOTICE_START_NO } from "../constants/taxRates";
 import type { FrozenFloorBreakdown } from "../types/property.types";
+import type { DemandNoticeSnapshot } from "../types/demandNotice.types";
 
 export interface DemandNoticeRow {
   demand_no: string;
@@ -27,6 +28,20 @@ export interface DemandNoticeRow {
   // Frozen at generation time (migration 086) - see that migration's
   // comment. Null for notices generated before this column existed.
   floor_breakdown: FrozenFloorBreakdown | null;
+  // Frozen at generation time (migration 089) - the plinth-area/
+  // rain-water-harvesting rebate already folded into
+  // current_year_tax_net, surfaced as its own line so a reader can
+  // see where the gap from the floorwise "before rebate" total comes
+  // from. Null for notices generated before this column existed, or
+  // simply not applicable (no rebate).
+  area_rebate: string | null;
+  area_rebate_reason: string | null;
+  // Frozen at generation time (migration 092) - the FULL renderable
+  // payload (property/taxCalc/totals/previousUnsettledDemandNos), so a
+  // reprint can replay it straight back into notice-view.tsx for a
+  // word-for-word, line-for-line identical document. Null for notices
+  // generated before this column existed - see getDemandNoticeForReprint.
+  snapshot: DemandNoticeSnapshot | null;
 }
 
 export const demandNoticeRepository = {
@@ -67,14 +82,20 @@ export const demandNoticeRepository = {
     previousUnsettledDemandNos: string | null;
     // Frozen floor-wise breakdown (migration 086) - see FrozenFloorBreakdown's comment.
     floorBreakdown: FrozenFloorBreakdown;
+    // Frozen plinth-area/rain-water rebate (migration 089) - see that migration's comment.
+    areaRebate: number;
+    areaRebateReason: string;
+    // Frozen full renderable payload (migration 092) - see DemandNoticeSnapshot's comment.
+    snapshot: DemandNoticeSnapshot;
   }): Promise<void> {
     await pool.query(
       `INSERT INTO demand_notices (
         demand_no, holding_no, notice_date, generated_by, arv,
         current_year_tax_net, previous_years_tax_base, total_fine_amount,
         other_charges, total_amount_demanded, assessment_year,
-        reminder_number, previous_unsettled_demand_nos, floor_breakdown
-      ) VALUES ($1,$2, now(), $3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
+        reminder_number, previous_unsettled_demand_nos, floor_breakdown,
+        area_rebate, area_rebate_reason, snapshot
+      ) VALUES ($1,$2, now(), $3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`,
       [
         row.demandNo,
         row.holdingNo,
@@ -89,6 +110,9 @@ export const demandNoticeRepository = {
         row.reminderNumber,
         row.previousUnsettledDemandNos,
         JSON.stringify(row.floorBreakdown),
+        row.areaRebate,
+        row.areaRebateReason || null,
+        JSON.stringify(row.snapshot),
       ],
     );
   },

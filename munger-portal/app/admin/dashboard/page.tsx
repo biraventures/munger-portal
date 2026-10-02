@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Users, FileClock, FileWarning, LayoutGrid, ShoppingBag, Store, BarChart3, Award, Archive, Download, XCircle, ShieldCheck, Trash2, RefreshCw, Upload, MapPin, Map as MapIcon, ClipboardCheck, UserCheck, ClipboardList, Receipt, RotateCcw, AlertTriangle, List } from "lucide-react";
+import { Users, FileClock, FileWarning, LayoutGrid, ShoppingBag, Store, BarChart3, Award, Archive, Download, XCircle, ShieldCheck, Trash2, RefreshCw, Upload, MapPin, Map as MapIcon, ClipboardCheck, UserCheck, ClipboardList, Receipt, RotateCcw, AlertTriangle, List, Flag, Home } from "lucide-react";
 import { AdminHeader } from "@/components/admin-header";
 import { DashboardSummaryWidget } from "@/components/dashboard-summary-widget";
 import { useAdminGuard } from "@/lib/use-admin-guard";
@@ -80,7 +80,6 @@ export default function AdminDashboardPage() {
   const isMutationChainRole = admin.role === "tax_daroga" || admin.role === "mutation_nodal_clerk" || admin.role === "deputy_commissioner" || isCommissioner;
   const showMutationApprovals = isMutationChainRole;
   const showCancellationRequests = !isRestrictedRole;
-  const showTaxCollectors = !isRestrictedRole;
   const showBulkDemandNotices = !isRestrictedRole;
   const showAllPropertyChanges = isCommissioner;
   const showRenumberHolding = isCommissioner;
@@ -99,6 +98,7 @@ export default function AdminDashboardPage() {
   const showCollectionIssues = admin.role === "tax_daroga" || admin.role === "commissioner" || admin.role === "city_manager";
   const showTaxCollectorAssignments = isCommissioner;
   const showRevertAuditTrail = isCommissioner;
+  const showManageLogins = isCommissioner;
   const showEmployeeDatabaseEntry = admin.role === "establishment_clerk";
   const showEmployeeDatabaseList = admin.role === "establishment_clerk";
   const showEmployeeDatabaseVerify = admin.role === "city_manager";
@@ -106,10 +106,12 @@ export default function AdminDashboardPage() {
   const isStreetlightReporterRole =
     admin.role === "tax_daroga" || admin.role === "tax_surveyor" || admin.role === "tax_collector" || admin.role === "stall_prabhari" || admin.role === "je_mechanical" || admin.role === "ae_mechanical" ||
     admin.role === "commissioner" || admin.role === "deputy_commissioner" || admin.role === "city_manager";
+  const showPropertyWiseReport = admin.role === "commissioner" || admin.role === "deputy_commissioner" || admin.role === "city_manager";
   const propertyGroupVisible =
-    showMutationApprovals || showCancellationRequests || showTaxCollectors || showBulkDemandNotices || showAllPropertyChanges || showRenumberHolding || showBulkUploadProperties ||
+    showMutationApprovals || showCancellationRequests || showBulkDemandNotices || showAllPropertyChanges || showRenumberHolding || showBulkUploadProperties ||
     showMigratedHoldingsBulkUpload || showMigratedHoldingsAssign || showMigratedHoldingsSurveyor || showMigratedHoldingsMySurveys || showInitiateSurvey || showTaxCollectorPage ||
-    showReportPropertyDiscrepancy || showMyDiscrepancyReports || showPropertyDiscrepancyRequests || showResurveyFlags || showCollectionIssues || showTaxCollectorAssignments || showRevertAuditTrail;
+    showReportPropertyDiscrepancy || showMyDiscrepancyReports || showPropertyDiscrepancyRequests || showResurveyFlags || showCollectionIssues || showTaxCollectorAssignments || showRevertAuditTrail ||
+    showPropertyWiseReport;
 
   const showShopAgreementApprovals = !isTradeLicenseNodal && !isGisOnlyRole && !isNarrowlyScopedRole;
   const showShopRentalApplications = !isTradeLicenseNodal && !isGisOnlyRole && !isNarrowlyScopedRole;
@@ -122,6 +124,8 @@ export default function AdminDashboardPage() {
   const showBulkUploadShops = isCommissioner;
   const showManageShops = isCommissioner;
   const showShopInspection = admin.role === "city_manager" || admin.role === "deputy_commissioner";
+  const showShopWiseReport = admin.role === "commissioner" || admin.role === "city_manager";
+  const showShopFlags = isStallPrabhari;
   const shopGroupVisible =
     showShopAgreementApprovals ||
     showShopRentalApplications ||
@@ -131,6 +135,8 @@ export default function AdminDashboardPage() {
     showShopEditApprovals ||
     showDemandReceiptActions ||
     showShopInspection ||
+    showShopWiseReport ||
+    showShopFlags ||
     showShopAgreementDocumentRequests ||
     showBulkUploadShops ||
     showManageShops;
@@ -145,7 +151,7 @@ export default function AdminDashboardPage() {
   const showAssignCoordinates = isAtps || isCommissioner;
   const showGisMap = isAtps || isAssistantArchitect || isCommissioner;
   const showBuildingMapApproval = isAssistantArchitect;
-  const miscGroupVisible = showOperators || showDocumentArchive || showAttendanceReport || showAssignCoordinates || showGisMap || showBuildingMapApproval;
+  const miscGroupVisible = showOperators || showManageLogins || showDocumentArchive || showAttendanceReport || showAssignCoordinates || showGisMap || showBuildingMapApproval;
   const employeeDatabaseGroupVisible = showEmployeeDatabaseEntry || showEmployeeDatabaseList || showEmployeeDatabaseVerify || showEmployeeDatabaseProgress;
   const streetlightGroupVisible = isStreetlightReporterRole;
 
@@ -197,16 +203,6 @@ export default function AdminDashboardPage() {
                   </span>
                   <h3 className="mb-1.5 text-base font-semibold text-slate-900">Cancellation Requests</h3>
                   <p className="text-sm text-slate-500">Requests to cancel a demand notice or payment receipt.</p>
-                </Link>
-              )}
-
-              {showTaxCollectors && (
-                <Link href="/admin/tax-collectors" className={cardClass}>
-                  <span className={iconWrapClass}>
-                    <Users className="h-6 w-6" strokeWidth={1.8} />
-                  </span>
-                  <h3 className="mb-1.5 text-base font-semibold text-slate-900">Tax Collectors</h3>
-                  <p className="text-sm text-slate-500">Add field collectors and their codes for payment tracking.</p>
                 </Link>
               )}
 
@@ -362,6 +358,16 @@ export default function AdminDashboardPage() {
                 </Link>
               )}
 
+              {showPropertyWiseReport && (
+                <Link href="/admin/property-wise-report" className={cardClass}>
+                  <span className={iconWrapClass}>
+                    <Home className="h-6 w-6" strokeWidth={1.8} />
+                  </span>
+                  <h3 className="mb-1.5 text-base font-semibold text-slate-900">Property-wise Report</h3>
+                  <p className="text-sm text-slate-500">Search a holding for full details, tax pending, change log, discrepancy/re-survey flags, and surveyor visits.</p>
+                </Link>
+              )}
+
               {showTaxCollectorAssignments && (
                 <Link href="/admin/tax-collector-assignments" className={cardClass}>
                   <span className={iconWrapClass}>
@@ -444,6 +450,26 @@ export default function AdminDashboardPage() {
                   </span>
                   <h3 className="mb-1.5 text-base font-semibold text-slate-900">Shop Inspection</h3>
                   <p className="text-sm text-slate-500">Search a shop and record irregularities found on-site.</p>
+                </Link>
+              )}
+
+              {showShopWiseReport && (
+                <Link href="/admin/shop-wise-report" className={cardClass}>
+                  <span className={iconWrapClass}>
+                    <Store className="h-6 w-6" strokeWidth={1.8} />
+                  </span>
+                  <h3 className="mb-1.5 text-base font-semibold text-slate-900">Shop-wise Report</h3>
+                  <p className="text-sm text-slate-500">Every shop, filterable by market - open one for full details, agreement history, and to flag issues.</p>
+                </Link>
+              )}
+
+              {showShopFlags && (
+                <Link href="/admin/shop-flags" className={cardClass}>
+                  <span className={iconWrapClass}>
+                    <Flag className="h-6 w-6" strokeWidth={1.8} />
+                  </span>
+                  <h3 className="mb-1.5 text-base font-semibold text-slate-900">Flagged Shops</h3>
+                  <p className="text-sm text-slate-500">Respond to shops the Commissioner or City Manager flagged for correction or justification.</p>
                 </Link>
               )}
 
@@ -616,6 +642,16 @@ export default function AdminDashboardPage() {
                   </span>
                   <h3 className="mb-1.5 text-base font-semibold text-slate-900">Operators</h3>
                   <p className="text-sm text-slate-500">Activate or deactivate counter operator accounts.</p>
+                </Link>
+              )}
+
+              {showManageLogins && (
+                <Link href="/admin/manage-logins" className={cardClass}>
+                  <span className={iconWrapClass}>
+                    <ShieldCheck className="h-6 w-6" strokeWidth={1.8} />
+                  </span>
+                  <h3 className="mb-1.5 text-base font-semibold text-slate-900">Manage Logins</h3>
+                  <p className="text-sm text-slate-500">Activate or deactivate Tax Daroga, Tax Collector, and other officer logins.</p>
                 </Link>
               )}
 

@@ -4,7 +4,7 @@ import { useState } from "react";
 import { AlertCircle, FileText, Loader2, Printer, Receipt, Search, ShieldAlert } from "lucide-react";
 import { AdminHeader } from "@/components/admin-header";
 import { useAdminGuard } from "@/lib/use-admin-guard";
-import { DemandNoticeReprintView } from "@/components/operator/demand-notice-reprint-view";
+import { NoticeView } from "@/components/operator/notice-view";
 import { ReceiptReprintView } from "@/components/operator/receipt-reprint-view";
 import { ShopNoticeView } from "@/components/operator/shop-notice-view";
 import { ShopReceiptReprintView } from "@/components/operator/shop-receipt-reprint-view";
@@ -16,9 +16,9 @@ import {
   fetchReceiptReprintAdmin,
   type DemandNoticeHistoryEntry,
   type PaymentHistoryEntry,
-  type PrintableDemandNoticeHistory,
   type PrintableReceiptHistory,
 } from "@/lib/admin-api";
+import type { DemandNoticeReprintData } from "@/lib/demand-notice-api";
 import {
   fetchShopDemandHistoryAdmin,
   fetchShopReceiptReprintAdmin,
@@ -54,7 +54,7 @@ export default function DocumentArchivePage() {
   const [shopPaymentHistory, setShopPaymentHistory] = useState<ShopPaymentHistoryEntry[] | null>(null);
   const [violations, setViolations] = useState<ViolationNotice[] | null>(null);
 
-  const [noticeReprint, setNoticeReprint] = useState<PrintableDemandNoticeHistory | null>(null);
+  const [noticeReprint, setNoticeReprint] = useState<DemandNoticeReprintData | null>(null);
   const [receiptReprint, setReceiptReprint] = useState<PrintableReceiptHistory | null>(null);
   const [shopDemandView, setShopDemandView] = useState<PrintableShopDemand | null>(null);
   const [shopReceiptView, setShopReceiptView] = useState<PrintableShopReceiptHistory | null>(null);
@@ -133,7 +133,7 @@ export default function DocumentArchivePage() {
           <AdminHeader admin={admin} />
         </div>
         <main className="mx-auto max-w-3xl px-6 py-10">
-          <DemandNoticeReprintView notice={noticeReprint} onClose={() => setNoticeReprint(null)} />
+          <NoticeView notice={noticeReprint} onClose={() => setNoticeReprint(null)} closeLabel="Close" />
         </main>
       </div>
     );

@@ -1,13 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { AlertTriangle, BarChart3, Upload, Route as RouteIcon, UserCheck as UserCheckIcon, Clock as ClockIcon, PlusCircle, Lightbulb, Trash2 } from "lucide-react";
+import { AlertTriangle, BarChart3, Upload, Route as RouteIcon, UserCheck as UserCheckIcon, Clock as ClockIcon, PlusCircle, Lightbulb, Trash2, ClipboardList } from "lucide-react";
 import { AttendanceHeader } from "@/components/attendance/attendance-header";
 import { useAttendanceGuard } from "@/lib/use-attendance-guard";
 
 const OVERSIGHT_ROLES = ["city_manager", "municipal_commissioner", "deputy_municipal_commissioner", "attendance_admin"];
 const COMMISSIONER_ROLES = ["municipal_commissioner", "attendance_admin"];
 const LIGHT_CHANGE_ROLES = ["streetlight_nodal_clerk", "streetlight_ae", "streetlight_je", "streetlight_contractor", "city_manager", "municipal_commissioner", "deputy_municipal_commissioner", "attendance_admin"];
+const VIEWER_ROLES = ["mayor", "deputy_mayor", "ward_parshad"];
 
 const cardClass = "flex flex-col rounded-xl border border-slate-200 bg-white p-6 transition-shadow hover:shadow-md";
 const iconWrapClass = "mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-blue-50 text-nnm-blue";
@@ -22,6 +23,7 @@ export default function StreetlightsHubPage() {
   const isOversight = OVERSIGHT_ROLES.includes(attendance.role);
   const isCommissioner = COMMISSIONER_ROLES.includes(attendance.role);
   const canChangeLights = LIGHT_CHANGE_ROLES.includes(attendance.role);
+  const isViewer = VIEWER_ROLES.includes(attendance.role);
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -53,6 +55,16 @@ export default function StreetlightsHubPage() {
             </Link>
           )}
 
+          {isViewer && (
+            <Link href="/attendance/streetlight-status-view" className={cardClass}>
+              <span className={iconWrapClass}>
+                <BarChart3 className="h-6 w-6" strokeWidth={1.8} />
+              </span>
+              <h3 className="mb-1.5 text-base font-semibold text-slate-900">Status Dashboard</h3>
+              <p className="text-sm text-slate-500">Working vs not working, ward-wise or street-wise. Mark a light defective or functional.</p>
+            </Link>
+          )}
+
           {isOversight && (
             <Link href="/attendance/streetlight-status-dashboard" className={cardClass}>
               <span className={iconWrapClass}>
@@ -70,6 +82,16 @@ export default function StreetlightsHubPage() {
               </span>
               <h3 className="mb-1.5 text-base font-semibold text-slate-900">High Mast Status Dashboard</h3>
               <p className="text-sm text-slate-500">Working vs not working for High Mast lights, ward-wise, separate from street lights.</p>
+            </Link>
+          )}
+
+          {(isOversight || isViewer) && (
+            <Link href="/attendance/streetlight-fault-audit-trail" className={cardClass}>
+              <span className={iconWrapClass}>
+                <ClipboardList className="h-6 w-6" strokeWidth={1.8} />
+              </span>
+              <h3 className="mb-1.5 text-base font-semibold text-slate-900">Fault Audit Trail</h3>
+              <p className="text-sm text-slate-500">Every light marked defective or functional, most recent first, with who did it.</p>
             </Link>
           )}
 

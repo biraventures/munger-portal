@@ -36,6 +36,8 @@ export interface DemandNoticeData {
   };
   totals: {
     currentTaxBase: string;
+    currentTaxAreaRebate: string;
+    currentTaxAreaRebateReason: string;
     currentTaxRebate: string;
     penalty: string;
     outstandingDemand: string;
@@ -45,6 +47,22 @@ export interface DemandNoticeData {
     otherCharges: string;
     grandTotal: string;
   };
+}
+
+/**
+ * Everything DemandNoticeData has, plus the notice's current lifecycle
+ * status - only meaningful for a reprint (the original printout was
+ * always fresh/unsettled at the moment it was generated, so these
+ * fields don't apply there). Same underlying template (NoticeView)
+ * renders both: a reprint is otherwise word-for-word, line-for-line
+ * identical to the original.
+ */
+export interface DemandNoticeReprintData extends DemandNoticeData {
+  settled: boolean;
+  settledReceiptNo: string | null;
+  superseded: boolean;
+  cancelled: boolean;
+  cancelledReason: string | null;
 }
 
 export async function generateDemandNotice(holdingNo: string): Promise<DemandNoticeData> {

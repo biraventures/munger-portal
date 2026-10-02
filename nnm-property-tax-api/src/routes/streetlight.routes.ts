@@ -7,6 +7,7 @@ import {
   createLightHandler,
   uploadLightsCsvHandler,
   setLightActiveHandler,
+  setLightGpsHandler,
   listContractorWardsHandler,
   assignContractorWardHandler,
   listFaultsHandler,
@@ -20,6 +21,7 @@ import {
   getWardStatusDashboardHandler,
   getStreetStatusDashboardHandler,
   getSegmentLightStatusHandler,
+  getFaultAuditTrailHandler,
   getHighMastWardStatusDashboardHandler,
   getHighMastLightsForWardHandler,
 } from "../controllers/streetlight.controller";
@@ -71,6 +73,16 @@ const REGISTRY_MANAGE_ROLES = [
 
 const OVERSIGHT_ROLES = ["city_manager", "municipal_commissioner", "deputy_municipal_commissioner", "attendance_admin"] as const;
 
+// Mayor/Deputy Mayor/Ward Parshad get the same ward -> street -> light
+// status view as OVERSIGHT_ROLES (ward_parshad scoped to their own
+// ward server-side, see statusDashboardWardScope in
+// streetlight.controller.ts), but only Mark Faulty/Mark Repaired -
+// none of the add/edit/delete street or light-registry actions
+// OVERSIGHT_ROLES also gets, so this is its own role list, used only
+// on the read endpoints below and the fault-repaired endpoint further
+// down - never merged into OVERSIGHT_ROLES itself.
+const STATUS_VIEW_ROLES = ["mayor", "deputy_mayor", "ward_parshad"] as const;
+
 // --- Installation agencies - municipal_commissioner manages this list, per what was explicitly asked for ---
 streetlightRouter.get("/agencies", requireAttendanceRole(), listInstallationAgenciesHandler);
 streetlightRouter.post("/agencies", requireAttendanceRole(["municipal_commissioner", "attendance_admin"]), createInstallationAgencyHandler);
@@ -85,6 +97,11 @@ streetlightRouter.get("/lights", requireAttendanceRole(), listLightsHandler);
 streetlightRouter.post("/lights", requireAttendanceRole([...REGISTRY_MANAGE_ROLES]), createLightHandler);
 streetlightRouter.post("/lights/bulk-upload", requireAttendanceRole([...REGISTRY_MANAGE_ROLES]), uploadLightsCsvHandler);
 streetlightRouter.patch("/lights/:id/active", requireAttendanceRole([...REGISTRY_MANAGE_ROLES]), setLightActiveHandler);
+// Optional per-light GPS location, set straight from the status dashboard next to a light's serial number -
+// available to whoever can already see that dashboard (REGISTRY_MANAGE_ROLES already covers OVERSIGHT_ROLES'
+// city_manager/DMC/commissioner/attendance_admin, plus STATUS_VIEW_ROLES for Mayor/Deputy Mayor/Ward Parshad),
+// since it's a location note, not a registry edit.
+streetlightRouter.patch("/lights/:id/gps", requireAttendanceRole([...REGISTRY_MANAGE_ROLES, ...STATUS_VIEW_ROLES]), setLightGpsHandler);
 
 // --- Light change requests (add/status/deactivate/reactivate/delete)
 // - proposed by JE/AE/nodal clerk/contractor, approved through
@@ -98,10 +115,11 @@ streetlightRouter.get("/light-change-requests", requireAttendanceRole(), listLig
 streetlightRouter.post("/light-change-requests/:id/approve", requireAttendanceRole([...LIGHT_CHANGE_APPROVER_ROLES]), postApproveLightChangeHandler);
 streetlightRouter.post("/light-change-requests/:id/reject", requireAttendanceRole([...LIGHT_CHANGE_APPROVER_ROLES]), postRejectLightChangeHandler);
 
-// --- Status dashboard, ward-wise and street-wise - City Manager, DMC, Municipal Commissioner ---
-streetlightRouter.get("/status-dashboard/wards", requireAttendanceRole([...OVERSIGHT_ROLES]), getWardStatusDashboardHandler);
-streetlightRouter.get("/status-dashboard/streets", requireAttendanceRole([...OVERSIGHT_ROLES]), getStreetStatusDashboardHandler);
-streetlightRouter.get("/status-dashboard/segments/:id/lights", requireAttendanceRole([...OVERSIGHT_ROLES]), getSegmentLightStatusHandler);
+// --- Status dashboard, ward-wise and street-wise - City Manager, DMC, Municipal Commissioner, plus Mayor/Deputy Mayor/Ward Parshad (view + mark faulty/repaired only, see STATUS_VIEW_ROLES above) ---
+streetlightRouter.get("/status-dashboard/wards", requireAttendanceRole([...OVERSIGHT_ROLES, ...STATUS_VIEW_ROLES]), getWardStatusDashboardHandler);
+streetlightRouter.get("/status-dashboard/streets", requireAttendanceRole([...OVERSIGHT_ROLES, ...STATUS_VIEW_ROLES]), getStreetStatusDashboardHandler);
+streetlightRouter.get("/status-dashboard/segments/:id/lights", requireAttendanceRole([...OVERSIGHT_ROLES, ...STATUS_VIEW_ROLES]), getSegmentLightStatusHandler);
+streetlightRouter.get("/fault-audit-trail", requireAttendanceRole([...OVERSIGHT_ROLES, ...STATUS_VIEW_ROLES]), getFaultAuditTrailHandler);
 streetlightRouter.get("/high-mast-status-dashboard/wards", requireAttendanceRole([...OVERSIGHT_ROLES]), getHighMastWardStatusDashboardHandler);
 streetlightRouter.get("/high-mast-status-dashboard/wards/:id/lights", requireAttendanceRole([...OVERSIGHT_ROLES]), getHighMastLightsForWardHandler);
 streetlightRouter.patch("/lights/:id/switch-status", requireAttendanceRole([...OVERSIGHT_ROLES]), setLightSwitchStatusHandler);
@@ -145,7 +163,7 @@ streetlightRouter.post("/faults", requireAttendanceRole(), reportFaultHandler);
 streetlightRouter.get("/lights/:id/repair-history-summary", requireAttendanceRole(["municipal_commissioner", "attendance_admin"]), getLightRepairHistorySummaryHandler);
 streetlightRouter.patch(
   "/faults/:id/repaired",
-  requireAttendanceRole(["streetlight_contractor", ...REGISTRY_MANAGE_ROLES]),
+  requireAttendanceRole(["streetlight_contractor", ...REGISTRY_MANAGE_ROLES, ...STATUS_VIEW_ROLES]),
   markFaultRepairedHandler,
 );
 streetlightRouter.patch("/faults/:id/link-light", requireAttendanceRole([...REGISTRY_MANAGE_ROLES]), linkFaultToLightHandler);

@@ -1,14 +1,6 @@
 import { Router } from "express";
 import { listOperators, setOperatorActive } from "../controllers/adminOperators.controller";
 import {
-  listTaxCollectors,
-  createTaxCollector,
-  setTaxCollectorActive,
-  getAvailableWards,
-  getTaxCollectorWards,
-  setTaxCollectorWards,
-} from "../controllers/taxCollector.controller";
-import {
   getChangeRequests,
   getChangeRequestById,
   postApproveChangeRequest,
@@ -43,6 +35,8 @@ import {
 } from "../controllers/shopAgreement.controller";
 import { listAllShops, getPerSqftReport, uploadShopsCsvHandler } from "../controllers/shop.controller";
 import { deleteShopHandler } from "../controllers/shopDelete.controller";
+import { getShopReportHandler } from "../controllers/shopReport.controller";
+import { createShopFlagHandler, listShopFlagsForShopHandler, listOpenShopFlagsHandler, resolveShopFlagHandler } from "../controllers/shopFlag.controller";
 import { postRenumberHolding, postRenameHolding, postFixHoldingNoSpaces } from "../controllers/propertyRenumber.controller";
 import { deletePropertyHandler } from "../controllers/propertyDelete.controller";
 import { getSpacedHoldings, postDeleteSpacedHoldings, postRemoveDuplicateFloors } from "../controllers/propertyBulkCleanup.controller";
@@ -63,6 +57,7 @@ import {
   exportGeoData,
 } from "../controllers/geo.controller";
 import { uploadPropertiesXlsxHandler } from "../controllers/propertyBulkImport.controller";
+import { searchPropertiesHandler, getPropertyReportHandler } from "../controllers/propertyReport.controller";
 import { getShopsPendingPublication, postApproveShopPublication } from "../controllers/shopPublicationApproval.controller";
 import {
   getShopEditRequests,
@@ -98,6 +93,7 @@ import { listResurveyFlagsHandler, reviewResurveyFlagHandler, exportResurveyFlag
 import { listAllCollectionIssues } from "../controllers/collectionIssue.controller";
 import { postGenerateCollectionIssueNotice, getCollectionIssueNotices } from "../controllers/collectionIssueNotice.controller";
 import { listTaxCollectorsWithAssignmentHandler, listCityManagersHandler, assignCityManagerHandler, setTaxCollectorWardsHandler } from "../controllers/taxCollectorAssignment.controller";
+import { listAdminAccounts, setAdminAccountActive } from "../controllers/adminAccounts.controller";
 import { listEntryRevertEventsHandler, exportEntryRevertEventsHandler } from "../controllers/entryRevertEvent.controller";
 import {
   postCreateEmployeeHandler,
@@ -176,6 +172,13 @@ const requireNonStallPrabhari = requireAdminRole(
 // Operator management
 adminRouter.get("/operators", requireSeniorAdmin, listOperators);
 adminRouter.patch("/operators/:id/active", requireSeniorAdmin, setOperatorActive);
+
+// Admins-table login management (Tax Daroga, Deputy Commissioner,
+// Commissioner, Tax Collector, etc.) - Commissioner only, separate from
+// the front-counter Operators list above and from the attendance
+// module's own /attendance/users screen.
+adminRouter.get("/accounts", requireAdminRole("commissioner"), listAdminAccounts);
+adminRouter.patch("/accounts/:id/active", requireAdminRole("commissioner"), setAdminAccountActive);
 
 // Property mutation approval queue - restricted to the actual chain's
 // roles (tax_daroga -> mutation_nodal_clerk -> deputy_commissioner ->
@@ -264,6 +267,16 @@ adminRouter.get("/employees/progress", requireAdminRole("commissioner"), getEmpl
 adminRouter.get("/shops", listAllShops);
 adminRouter.post("/shops/bulk-upload", requireAdminRole("commissioner"), uploadShopsCsvHandler);
 adminRouter.delete("/shops/:shopNo", requireAdminRole("commissioner"), deleteShopHandler);
+
+// Shop-wise report (Commissioner/City Manager): full detail + agreement
+// history + edit-request change log + flags for one shop, and flagging
+// something on it for Stall Prabhari to correct or justify. See
+// shopReport.controller.ts / shopFlag.controller.ts / migration 090.
+adminRouter.get("/shops/:shopNo/report", requireAdminRole("commissioner", "city_manager"), getShopReportHandler);
+adminRouter.get("/shops/:shopNo/flags", requireAdminRole("commissioner", "city_manager", "stall_prabhari"), listShopFlagsForShopHandler);
+adminRouter.post("/shops/:shopNo/flags", requireAdminRole("commissioner", "city_manager"), createShopFlagHandler);
+adminRouter.get("/shop-flags/open", requireAdminRole("stall_prabhari"), listOpenShopFlagsHandler);
+adminRouter.post("/shop-flags/:id/resolve", requireAdminRole("stall_prabhari"), resolveShopFlagHandler);
 adminRouter.post("/properties/:holdingNo/renumber", requireAdminRole("commissioner"), postRenumberHolding);
 adminRouter.post("/properties/:holdingNo/rename", requireAdminRole("commissioner"), postRenameHolding);
 adminRouter.delete("/properties/:holdingNo", requireAdminRole("commissioner"), deletePropertyHandler);
@@ -272,6 +285,14 @@ adminRouter.get("/properties/spaced-holdings", requireAdminRole("commissioner"),
 adminRouter.post("/properties/spaced-holdings/delete-all", requireAdminRole("commissioner"), postDeleteSpacedHoldings);
 adminRouter.post("/properties/remove-duplicate-floors", requireAdminRole("commissioner"), postRemoveDuplicateFloors);
 adminRouter.post("/properties/bulk-upload", requireAdminRole("commissioner"), uploadPropertiesXlsxHandler);
+
+// Property-wise report (Commissioner/DMC/City Manager): search by
+// holding no/owner/address, then full detail + tax pending + change
+// log + discrepancy flags + resurvey flags + surveyor field
+// verifications for one holding. See propertyReport.controller.ts.
+const requirePropertyReportRole = requireAdminRole("commissioner", "deputy_commissioner", "city_manager");
+adminRouter.get("/properties/search", requirePropertyReportRole, searchPropertiesHandler);
+adminRouter.get("/properties/:holdingNo/report", requirePropertyReportRole, getPropertyReportHandler);
 
 // Shop publication approval - gates a newly-entered shop from public
 // visibility until Stall Prabhari, City Manager, and Deputy
@@ -395,17 +416,6 @@ adminRouter.post("/tax-history/bulk-regenerate", requireSeniorAdmin, postBulkReg
 // Data export - GET /api/v1/admin/export?dataset=properties|payments|notices|changes|all
 adminRouter.get("/export", requireSeniorAdmin, getDataExport);
 
-// Tax collector management - any admin except Stall Prabhari can view/create/toggle.
-adminRouter.get("/tax-collectors", requireNonStallPrabhari, listTaxCollectors);
-adminRouter.post("/tax-collectors", requireNonStallPrabhari, createTaxCollector);
-adminRouter.patch("/tax-collectors/:id/active", requireNonStallPrabhari, setTaxCollectorActive);
-
-// Ward tagging - viewing is open to any admin except Stall Prabhari,
-// but only Tax Daroga can change which wards a collector is allowed
-// to operate in.
-adminRouter.get("/tax-collectors/available-wards", requireNonStallPrabhari, getAvailableWards);
-adminRouter.get("/tax-collectors/:id/wards", requireNonStallPrabhari, getTaxCollectorWards);
-adminRouter.put("/tax-collectors/:id/wards", requireAdminRole("tax_daroga"), setTaxCollectorWards);
 
 // Assistant Town Planning Supervisor (ATPS) and Commissioner
 // capture/edit coordinates and manage KML imports. Assistant
