@@ -5,6 +5,7 @@ import Link from "next/link";
 import { AlertCircle, Camera, CheckCircle2, Loader2, LogIn, LogOut, UserX, Lightbulb, Truck } from "lucide-react";
 import { AttendanceHeader } from "@/components/attendance/attendance-header";
 import { useAttendanceGuard } from "@/lib/use-attendance-guard";
+import { useAttendanceLang, type AttendanceLang } from "@/lib/attendance-i18n";
 import {
   fetchWardWorkersToday,
   markStaffIn,
@@ -25,26 +26,133 @@ import {
   type WardAssistantToday,
 } from "@/lib/attendance-api";
 
-function statusBadge(status: string | null) {
+const STRINGS = {
+  en: {
+    loading: "Loading...",
+    title: "Today's Attendance",
+    subtitle: "Mark each worker in as they arrive, or mark them absent.",
+    couldNotLoadWorkers: "Could not load the worker list.",
+    couldNotLoadTotoDrivers: "Could not load the Toto driver list.",
+    couldNotLoadTotoAssistants: "Could not load the Toto assistant list.",
+    couldNotMarkIn: "Could not mark in-time.",
+    couldNotMarkAbsent: "Could not mark absence.",
+    couldNotMarkOut: "Could not mark out-time.",
+    cameraPermissionError: "Could not access the camera. Check camera permission for this site.",
+    captureError: "Could not capture from the camera.",
+    photoUploadFailed: "Photo upload failed.",
+    dailyGroupPhoto: "Daily Group Photo",
+    uploadedToday: "Uploaded for today.",
+    photoInstructions: "One group photo per day for your ward - taken live with the camera, right now. Marking anyone in or absent is unlocked once this is done.",
+    openCamera: "Open Camera",
+    uploading: "Uploading...",
+    captureAndUpload: "Capture & Upload",
+    cancel: "Cancel",
+    streetlights: "Streetlights",
+    streetlightsDesc: "Report a damaged or non-functional streetlight in",
+    takePhotoFirst: "Take today's group photo above to see and mark your workers.",
+    loadingWorkers: "Loading workers...",
+    noWorkers: "No workers on file for your ward yet.",
+    noShift: "No shift assigned",
+    inLabel: "In",
+    outLabel: "Out",
+    markIn: "Mark In",
+    markOut: "Mark Out",
+    absentInformed: "Absent (Informed)",
+    absentNotInformed: "Absent (Not Informed)",
+    totoHeading: "Toto Vehicle Drivers & Assistants",
+    totoSubtitle: "Toto (e-rickshaw) drivers and their assistants in",
+    totoSubtitleSuffix: "- marked by you, not the Driver Supervisor.",
+    driversHeading: "Drivers",
+    assistantsHeading: "Assistants",
+    loadingDrivers: "Loading drivers...",
+    noTotoDrivers: "No Toto drivers on file for your ward yet.",
+    loadingAssistants: "Loading assistants...",
+    noTotoAssistants: "No Toto assistants on file for your ward yet.",
+    noVehicleNumber: "No vehicle number on file",
+    status: {
+      present: "Present",
+      half_day: "Half Day",
+      absent_informed: "Absent (Informed)",
+      absent_not_informed: "Absent (Not Informed)",
+      absent: "Absent",
+    } as Record<string, string>,
+  },
+  hi: {
+    loading: "लोड हो रहा है...",
+    title: "आज की हाज़िरी",
+    subtitle: "हर कर्मचारी के आने पर उसे इन मार्क करें, या उसे अनुपस्थित मार्क करें।",
+    couldNotLoadWorkers: "कर्मचारी सूची लोड नहीं हो सकी।",
+    couldNotLoadTotoDrivers: "टोटो ड्राइवर सूची लोड नहीं हो सकी।",
+    couldNotLoadTotoAssistants: "टोटो सहायक सूची लोड नहीं हो सकी।",
+    couldNotMarkIn: "इन-टाइम मार्क नहीं हो सका।",
+    couldNotMarkAbsent: "अनुपस्थिति मार्क नहीं हो सकी।",
+    couldNotMarkOut: "आउट-टाइम मार्क नहीं हो सका।",
+    cameraPermissionError: "कैमरा एक्सेस नहीं हो सका। इस साइट के लिए कैमरा अनुमति जाँचें।",
+    captureError: "कैमरे से फ़ोटो नहीं ली जा सकी।",
+    photoUploadFailed: "फ़ोटो अपलोड नहीं हो सकी।",
+    dailyGroupPhoto: "दैनिक समूह फ़ोटो",
+    uploadedToday: "आज के लिए अपलोड हो गई।",
+    photoInstructions: "आपके वार्ड के लिए प्रतिदिन एक समूह फ़ोटो - अभी कैमरे से लाइव ली जाती है। यह होने पर ही किसी को इन या अनुपस्थित मार्क करना खुलता है।",
+    openCamera: "कैमरा खोलें",
+    uploading: "अपलोड हो रहा है...",
+    captureAndUpload: "फ़ोटो लें और अपलोड करें",
+    cancel: "रद्द करें",
+    streetlights: "स्ट्रीट लाइट्स",
+    streetlightsDesc: "में क्षतिग्रस्त या खराब स्ट्रीट लाइट की रिपोर्ट करें।",
+    takePhotoFirst: "अपने कर्मचारियों को देखने और मार्क करने के लिए ऊपर आज की समूह फ़ोटो लें।",
+    loadingWorkers: "कर्मचारी लोड हो रहे हैं...",
+    noWorkers: "आपके वार्ड के लिए अभी कोई कर्मचारी दर्ज नहीं है।",
+    noShift: "कोई शिफ्ट निर्धारित नहीं",
+    inLabel: "इन",
+    outLabel: "आउट",
+    markIn: "इन मार्क करें",
+    markOut: "आउट मार्क करें",
+    absentInformed: "अनुपस्थित (सूचित)",
+    absentNotInformed: "अनुपस्थित (असूचित)",
+    totoHeading: "टोटो वाहन ड्राइवर और सहायक",
+    totoSubtitle: "टोटो (ई-रिक्शा) ड्राइवर और उनके सहायक",
+    totoSubtitleSuffix: "में - आपके द्वारा मार्क किए जाते हैं, ड्राइवर सुपरवाइज़र द्वारा नहीं।",
+    driversHeading: "ड्राइवर",
+    assistantsHeading: "सहायक",
+    loadingDrivers: "ड्राइवर लोड हो रहे हैं...",
+    noTotoDrivers: "आपके वार्ड के लिए अभी कोई टोटो ड्राइवर दर्ज नहीं है।",
+    loadingAssistants: "सहायक लोड हो रहे हैं...",
+    noTotoAssistants: "आपके वार्ड के लिए अभी कोई टोटो सहायक दर्ज नहीं है।",
+    noVehicleNumber: "कोई वाहन नंबर दर्ज नहीं है",
+    status: {
+      present: "उपस्थित",
+      half_day: "हाफ डे",
+      absent_informed: "अनुपस्थित (सूचित)",
+      absent_not_informed: "अनुपस्थित (असूचित)",
+      absent: "अनुपस्थित",
+    } as Record<string, string>,
+  },
+};
+
+function statusBadge(status: string | null, lang: AttendanceLang) {
   if (!status) return null;
-  const map: Record<string, { label: string; className: string }> = {
-    present: { label: "Present", className: "bg-green-100 text-green-700" },
-    half_day: { label: "Half Day", className: "bg-amber-100 text-amber-700" },
-    absent_informed: { label: "Absent (Informed)", className: "bg-slate-200 text-slate-700" },
-    absent_not_informed: { label: "Absent (Not Informed)", className: "bg-red-100 text-red-700" },
-    absent: { label: "Absent", className: "bg-red-100 text-red-700" },
+  const s = STRINGS[lang];
+  const classMap: Record<string, string> = {
+    present: "bg-green-100 text-green-700",
+    half_day: "bg-amber-100 text-amber-700",
+    absent_informed: "bg-slate-200 text-slate-700",
+    absent_not_informed: "bg-red-100 text-red-700",
+    absent: "bg-red-100 text-red-700",
   };
-  const entry = map[status];
-  if (!entry) return null;
+  const label = s.status[status];
+  const className = classMap[status];
+  if (!label || !className) return null;
   return (
-    <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${entry.className}`}>
-      {entry.label}
+    <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${className}`}>
+      {label}
     </span>
   );
 }
 
 export default function JamadarAttendancePage() {
   const user = useAttendanceGuard(["jamadar"]);
+  const { lang } = useAttendanceLang();
+  const s = STRINGS[lang];
   const [workers, setWorkers] = useState<WardWorkerToday[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [actingId, setActingId] = useState<number | null>(null);
@@ -72,7 +180,7 @@ export default function JamadarAttendancePage() {
       const list = await fetchWardWorkersToday(user.wardId);
       setWorkers(list);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not load the worker list.");
+      setError(err instanceof Error ? err.message : s.couldNotLoadWorkers);
     }
   }
 
@@ -82,7 +190,7 @@ export default function JamadarAttendancePage() {
       const list = await fetchWardDriversToday(user.wardId);
       setTotoDrivers(list);
     } catch (err) {
-      setTotoError(err instanceof Error ? err.message : "Could not load the Toto driver list.");
+      setTotoError(err instanceof Error ? err.message : s.couldNotLoadTotoDrivers);
     }
   }
 
@@ -92,7 +200,7 @@ export default function JamadarAttendancePage() {
       const list = await fetchWardAssistantsToday(user.wardId);
       setTotoAssistants(list);
     } catch (err) {
-      setTotoError(err instanceof Error ? err.message : "Could not load the Toto assistant list.");
+      setTotoError(err instanceof Error ? err.message : s.couldNotLoadTotoAssistants);
     }
   }
 
@@ -123,7 +231,7 @@ export default function JamadarAttendancePage() {
       await markStaffIn(staffId);
       await loadWorkers();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not mark in-time.");
+      setError(err instanceof Error ? err.message : s.couldNotMarkIn);
     } finally {
       setActingId(null);
     }
@@ -136,7 +244,7 @@ export default function JamadarAttendancePage() {
       await markStaffAbsent(staffId, informed);
       await loadWorkers();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not mark absence.");
+      setError(err instanceof Error ? err.message : s.couldNotMarkAbsent);
     } finally {
       setActingId(null);
     }
@@ -149,7 +257,7 @@ export default function JamadarAttendancePage() {
       await markStaffOut(staffId);
       await loadWorkers();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not mark out-time.");
+      setError(err instanceof Error ? err.message : s.couldNotMarkOut);
     } finally {
       setActingId(null);
     }
@@ -162,7 +270,7 @@ export default function JamadarAttendancePage() {
       await markDriverIn(driverId);
       await loadTotoDrivers();
     } catch (err) {
-      setTotoError(err instanceof Error ? err.message : "Could not mark in-time.");
+      setTotoError(err instanceof Error ? err.message : s.couldNotMarkIn);
     } finally {
       setTotoActingDriverId(null);
     }
@@ -175,7 +283,7 @@ export default function JamadarAttendancePage() {
       await markDriverAbsent(driverId, informed);
       await loadTotoDrivers();
     } catch (err) {
-      setTotoError(err instanceof Error ? err.message : "Could not mark absence.");
+      setTotoError(err instanceof Error ? err.message : s.couldNotMarkAbsent);
     } finally {
       setTotoActingDriverId(null);
     }
@@ -188,7 +296,7 @@ export default function JamadarAttendancePage() {
       await markDriverOut(driverId);
       await loadTotoDrivers();
     } catch (err) {
-      setTotoError(err instanceof Error ? err.message : "Could not mark out-time.");
+      setTotoError(err instanceof Error ? err.message : s.couldNotMarkOut);
     } finally {
       setTotoActingDriverId(null);
     }
@@ -201,7 +309,7 @@ export default function JamadarAttendancePage() {
       await markAssistantIn(assistantId);
       await loadTotoAssistants();
     } catch (err) {
-      setTotoError(err instanceof Error ? err.message : "Could not mark in-time.");
+      setTotoError(err instanceof Error ? err.message : s.couldNotMarkIn);
     } finally {
       setTotoActingAssistantId(null);
     }
@@ -214,7 +322,7 @@ export default function JamadarAttendancePage() {
       await markAssistantAbsent(assistantId, informed);
       await loadTotoAssistants();
     } catch (err) {
-      setTotoError(err instanceof Error ? err.message : "Could not mark absence.");
+      setTotoError(err instanceof Error ? err.message : s.couldNotMarkAbsent);
     } finally {
       setTotoActingAssistantId(null);
     }
@@ -227,7 +335,7 @@ export default function JamadarAttendancePage() {
       await markAssistantOut(assistantId);
       await loadTotoAssistants();
     } catch (err) {
-      setTotoError(err instanceof Error ? err.message : "Could not mark out-time.");
+      setTotoError(err instanceof Error ? err.message : s.couldNotMarkOut);
     } finally {
       setTotoActingAssistantId(null);
     }
@@ -248,7 +356,7 @@ export default function JamadarAttendancePage() {
         if (videoRef.current) videoRef.current.srcObject = stream;
       });
     } catch (err) {
-      setCameraError(err instanceof Error ? err.message : "Could not access the camera. Check camera permission for this site.");
+      setCameraError(err instanceof Error ? err.message : s.cameraPermissionError);
     }
   }
 
@@ -268,7 +376,7 @@ export default function JamadarAttendancePage() {
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
       const ctx = canvas.getContext("2d");
-      if (!ctx) throw new Error("Could not capture from the camera.");
+      if (!ctx) throw new Error(s.captureError);
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
       const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
       const base64 = dataUrl.split(",")[1] ?? "";
@@ -276,7 +384,7 @@ export default function JamadarAttendancePage() {
       setPhotoUploaded(true);
       stopCamera();
     } catch (err) {
-      setPhotoError(err instanceof Error ? err.message : "Photo upload failed.");
+      setPhotoError(err instanceof Error ? err.message : s.photoUploadFailed);
     } finally {
       setPhotoUploading(false);
     }
@@ -290,7 +398,7 @@ export default function JamadarAttendancePage() {
   }, []);
 
   if (!user) {
-    return <div className="flex min-h-screen items-center justify-center text-sm text-slate-400">Loading...</div>;
+    return <div className="flex min-h-screen items-center justify-center text-sm text-slate-400">{s.loading}</div>;
   }
 
   return (
@@ -298,8 +406,8 @@ export default function JamadarAttendancePage() {
       <AttendanceHeader user={user} />
 
       <main className="mx-auto max-w-3xl px-6 py-10">
-        <h1 className="mb-1 text-2xl font-semibold text-slate-900">Today&apos;s Attendance - {user.wardName}</h1>
-        <p className="mb-6 text-sm text-slate-500">Mark each worker in as they arrive, or mark them absent.</p>
+        <h1 className="mb-1 text-2xl font-semibold text-slate-900">{s.title} - {user.wardName}</h1>
+        <p className="mb-6 text-sm text-slate-500">{s.subtitle}</p>
 
         {error && (
           <div role="alert" className="mb-5 flex items-center gap-2 rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-700">
@@ -311,19 +419,16 @@ export default function JamadarAttendancePage() {
         <section className="mb-6 rounded-xl border border-slate-200 bg-white p-6">
           <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-700">
             <Camera className="h-4 w-4" />
-            Daily Group Photo
+            {s.dailyGroupPhoto}
           </h2>
           {photoUploaded === true ? (
             <p className="flex items-center gap-1.5 text-sm text-green-700">
               <CheckCircle2 className="h-4 w-4" />
-              Uploaded for today.
+              {s.uploadedToday}
             </p>
           ) : (
             <>
-              <p className="mb-3 text-sm text-slate-500">
-                One group photo per day for your ward - taken live with the camera, right now. Marking anyone in or
-                absent is unlocked once this is done.
-              </p>
+              <p className="mb-3 text-sm text-slate-500">{s.photoInstructions}</p>
 
               {!cameraActive ? (
                 <button
@@ -331,7 +436,7 @@ export default function JamadarAttendancePage() {
                   className="inline-flex items-center gap-1.5 rounded-md bg-nnm-blue px-3 py-2 text-sm font-semibold text-white hover:bg-nnm-blue-dark"
                 >
                   <Camera className="h-4 w-4" />
-                  Open Camera
+                  {s.openCamera}
                 </button>
               ) : (
                 <div>
@@ -343,14 +448,14 @@ export default function JamadarAttendancePage() {
                       className="inline-flex items-center gap-1.5 rounded-md bg-nnm-blue px-3 py-2 text-sm font-semibold text-white hover:bg-nnm-blue-dark disabled:opacity-60"
                     >
                       {photoUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Camera className="h-4 w-4" />}
-                      {photoUploading ? "Uploading..." : "Capture & Upload"}
+                      {photoUploading ? s.uploading : s.captureAndUpload}
                     </button>
                     <button
                       onClick={stopCamera}
                       disabled={photoUploading}
                       className="rounded-md border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-60"
                     >
-                      Cancel
+                      {s.cancel}
                     </button>
                   </div>
                 </div>
@@ -371,22 +476,22 @@ export default function JamadarAttendancePage() {
             <Lightbulb className="h-5 w-5" strokeWidth={1.8} />
           </span>
           <div>
-            <h2 className="text-sm font-semibold text-slate-800">Streetlights</h2>
-            <p className="text-xs text-slate-500">Report a damaged or non-functional streetlight in {user.wardName}.</p>
+            <h2 className="text-sm font-semibold text-slate-800">{s.streetlights}</h2>
+            <p className="text-xs text-slate-500">{user.wardName} {s.streetlightsDesc}</p>
           </div>
         </Link>
 
         {photoUploaded !== true ? (
           <p className="rounded-xl border border-dashed border-slate-300 bg-white p-6 text-center text-sm text-slate-400">
-            Take today&apos;s group photo above to see and mark your workers.
+            {s.takePhotoFirst}
           </p>
         ) : !workers ? (
           <div className="flex items-center gap-2 text-sm text-slate-400">
             <Loader2 className="h-4 w-4 animate-spin" />
-            Loading workers...
+            {s.loadingWorkers}
           </div>
         ) : workers.length === 0 ? (
-          <p className="text-sm text-slate-400">No workers on file for your ward yet.</p>
+          <p className="text-sm text-slate-400">{s.noWorkers}</p>
         ) : (
           <div className="space-y-3">
             {workers.map((w) => (
@@ -394,12 +499,12 @@ export default function JamadarAttendancePage() {
                 <div>
                   <div className="flex items-center gap-2">
                     <span className="font-semibold text-slate-900">{w.name}</span>
-                    {statusBadge(w.status)}
+                    {statusBadge(w.status, lang)}
                   </div>
                   <div className="mt-0.5 text-xs text-slate-400">
-                    {w.shiftName ?? "No shift assigned"}
-                    {w.inTime && ` - In: ${w.inTime}`}
-                    {w.outTime && ` - Out: ${w.outTime}`}
+                    {w.shiftName ?? s.noShift}
+                    {w.inTime && ` - ${s.inLabel}: ${w.inTime}`}
+                    {w.outTime && ` - ${s.outLabel}: ${w.outTime}`}
                   </div>
                 </div>
 
@@ -412,7 +517,7 @@ export default function JamadarAttendancePage() {
                         className="inline-flex items-center gap-1.5 rounded-md bg-nnm-blue px-3 py-1.5 text-xs font-semibold text-white hover:bg-nnm-blue-dark disabled:opacity-60"
                       >
                         {actingId === w.staffId ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <LogIn className="h-3.5 w-3.5" />}
-                        Mark In
+                        {s.markIn}
                       </button>
                       <button
                         onClick={() => handleMarkAbsent(w.staffId, true)}
@@ -420,7 +525,7 @@ export default function JamadarAttendancePage() {
                         className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-60"
                       >
                         <UserX className="h-3.5 w-3.5" />
-                        Absent (Informed)
+                        {s.absentInformed}
                       </button>
                       <button
                         onClick={() => handleMarkAbsent(w.staffId, false)}
@@ -428,7 +533,7 @@ export default function JamadarAttendancePage() {
                         className="inline-flex items-center gap-1.5 rounded-md border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:opacity-60"
                       >
                         <UserX className="h-3.5 w-3.5" />
-                        Absent (Not Informed)
+                        {s.absentNotInformed}
                       </button>
                     </>
                   )}
@@ -439,7 +544,7 @@ export default function JamadarAttendancePage() {
                       className="inline-flex items-center gap-1.5 rounded-md border border-nnm-blue px-3 py-1.5 text-xs font-semibold text-nnm-blue hover:bg-blue-50 disabled:opacity-60"
                     >
                       {actingId === w.staffId ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <LogOut className="h-3.5 w-3.5" />}
-                      Mark Out
+                      {s.markOut}
                     </button>
                   )}
                 </div>
@@ -450,10 +555,10 @@ export default function JamadarAttendancePage() {
 
         <h2 className="mb-1 mt-10 flex items-center gap-2 text-lg font-semibold text-slate-900">
           <Truck className="h-5 w-5" />
-          Toto Vehicle Drivers &amp; Assistants
+          {s.totoHeading}
         </h2>
         <p className="mb-4 text-sm text-slate-500">
-          Toto (e-rickshaw) drivers and their assistants in {user.wardName} - marked by you, not the Driver Supervisor.
+          {s.totoSubtitle} {user.wardName} {s.totoSubtitleSuffix}
         </p>
 
         {totoError && (
@@ -463,14 +568,14 @@ export default function JamadarAttendancePage() {
           </div>
         )}
 
-        <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Drivers</h3>
+        <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">{s.driversHeading}</h3>
         {!totoDrivers ? (
           <div className="mb-6 flex items-center gap-2 text-sm text-slate-400">
             <Loader2 className="h-4 w-4 animate-spin" />
-            Loading drivers...
+            {s.loadingDrivers}
           </div>
         ) : totoDrivers.length === 0 ? (
-          <p className="mb-6 text-sm text-slate-400">No Toto drivers on file for your ward yet.</p>
+          <p className="mb-6 text-sm text-slate-400">{s.noTotoDrivers}</p>
         ) : (
           <div className="mb-6 space-y-3">
             {totoDrivers.map((d) => (
@@ -478,14 +583,14 @@ export default function JamadarAttendancePage() {
                 <div>
                   <div className="flex items-center gap-2">
                     <span className="font-semibold text-slate-900">{d.name}</span>
-                    {statusBadge(d.status)}
+                    {statusBadge(d.status, lang)}
                   </div>
                   <div className="mt-0.5 text-xs text-slate-400">
-                    {d.vehicleNumber ?? "No vehicle number on file"}
+                    {d.vehicleNumber ?? s.noVehicleNumber}
                     {" - "}
-                    {d.shiftName ?? "No shift assigned"}
-                    {d.inTime && ` - In: ${d.inTime}`}
-                    {d.outTime && ` - Out: ${d.outTime}`}
+                    {d.shiftName ?? s.noShift}
+                    {d.inTime && ` - ${s.inLabel}: ${d.inTime}`}
+                    {d.outTime && ` - ${s.outLabel}: ${d.outTime}`}
                   </div>
                 </div>
 
@@ -498,7 +603,7 @@ export default function JamadarAttendancePage() {
                         className="inline-flex items-center gap-1.5 rounded-md bg-nnm-blue px-3 py-1.5 text-xs font-semibold text-white hover:bg-nnm-blue-dark disabled:opacity-60"
                       >
                         {totoActingDriverId === d.driverId ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <LogIn className="h-3.5 w-3.5" />}
-                        Mark In
+                        {s.markIn}
                       </button>
                       <button
                         onClick={() => handleMarkTotoDriverAbsent(d.driverId, true)}
@@ -506,7 +611,7 @@ export default function JamadarAttendancePage() {
                         className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-60"
                       >
                         <UserX className="h-3.5 w-3.5" />
-                        Absent (Informed)
+                        {s.absentInformed}
                       </button>
                       <button
                         onClick={() => handleMarkTotoDriverAbsent(d.driverId, false)}
@@ -514,7 +619,7 @@ export default function JamadarAttendancePage() {
                         className="inline-flex items-center gap-1.5 rounded-md border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:opacity-60"
                       >
                         <UserX className="h-3.5 w-3.5" />
-                        Absent (Not Informed)
+                        {s.absentNotInformed}
                       </button>
                     </>
                   )}
@@ -525,7 +630,7 @@ export default function JamadarAttendancePage() {
                       className="inline-flex items-center gap-1.5 rounded-md border border-nnm-blue px-3 py-1.5 text-xs font-semibold text-nnm-blue hover:bg-blue-50 disabled:opacity-60"
                     >
                       {totoActingDriverId === d.driverId ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <LogOut className="h-3.5 w-3.5" />}
-                      Mark Out
+                      {s.markOut}
                     </button>
                   )}
                 </div>
@@ -534,14 +639,14 @@ export default function JamadarAttendancePage() {
           </div>
         )}
 
-        <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Assistants</h3>
+        <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">{s.assistantsHeading}</h3>
         {!totoAssistants ? (
           <div className="flex items-center gap-2 text-sm text-slate-400">
             <Loader2 className="h-4 w-4 animate-spin" />
-            Loading assistants...
+            {s.loadingAssistants}
           </div>
         ) : totoAssistants.length === 0 ? (
-          <p className="text-sm text-slate-400">No Toto assistants on file for your ward yet.</p>
+          <p className="text-sm text-slate-400">{s.noTotoAssistants}</p>
         ) : (
           <div className="space-y-3">
             {totoAssistants.map((a) => (
@@ -549,12 +654,12 @@ export default function JamadarAttendancePage() {
                 <div>
                   <div className="flex items-center gap-2">
                     <span className="font-semibold text-slate-900">{a.name}</span>
-                    {statusBadge(a.status)}
+                    {statusBadge(a.status, lang)}
                   </div>
                   <div className="mt-0.5 text-xs text-slate-400">
-                    {a.shiftName ?? "No shift assigned"}
-                    {a.inTime && ` - In: ${a.inTime}`}
-                    {a.outTime && ` - Out: ${a.outTime}`}
+                    {a.shiftName ?? s.noShift}
+                    {a.inTime && ` - ${s.inLabel}: ${a.inTime}`}
+                    {a.outTime && ` - ${s.outLabel}: ${a.outTime}`}
                   </div>
                 </div>
 
@@ -567,7 +672,7 @@ export default function JamadarAttendancePage() {
                         className="inline-flex items-center gap-1.5 rounded-md bg-nnm-blue px-3 py-1.5 text-xs font-semibold text-white hover:bg-nnm-blue-dark disabled:opacity-60"
                       >
                         {totoActingAssistantId === a.assistantId ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <LogIn className="h-3.5 w-3.5" />}
-                        Mark In
+                        {s.markIn}
                       </button>
                       <button
                         onClick={() => handleMarkTotoAssistantAbsent(a.assistantId, true)}
@@ -575,7 +680,7 @@ export default function JamadarAttendancePage() {
                         className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-60"
                       >
                         <UserX className="h-3.5 w-3.5" />
-                        Absent (Informed)
+                        {s.absentInformed}
                       </button>
                       <button
                         onClick={() => handleMarkTotoAssistantAbsent(a.assistantId, false)}
@@ -583,7 +688,7 @@ export default function JamadarAttendancePage() {
                         className="inline-flex items-center gap-1.5 rounded-md border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:opacity-60"
                       >
                         <UserX className="h-3.5 w-3.5" />
-                        Absent (Not Informed)
+                        {s.absentNotInformed}
                       </button>
                     </>
                   )}
@@ -594,7 +699,7 @@ export default function JamadarAttendancePage() {
                       className="inline-flex items-center gap-1.5 rounded-md border border-nnm-blue px-3 py-1.5 text-xs font-semibold text-nnm-blue hover:bg-blue-50 disabled:opacity-60"
                     >
                       {totoActingAssistantId === a.assistantId ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <LogOut className="h-3.5 w-3.5" />}
-                      Mark Out
+                      {s.markOut}
                     </button>
                   )}
                 </div>

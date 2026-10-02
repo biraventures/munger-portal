@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useId, useState, type FormEvent } from "react";
+import { useId, useState, type FormEvent } from "react";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
+import { useAttendanceLang, type AttendanceLang } from "@/lib/attendance-i18n";
 
 export interface AttendanceLoginValues {
   username: string;
@@ -9,7 +10,7 @@ export interface AttendanceLoginValues {
   rememberMe: boolean;
 }
 
-type Lang = "en" | "hi";
+type Lang = AttendanceLang;
 
 const STRINGS: Record<Lang, Record<string, string>> = {
   en: {
@@ -46,8 +47,6 @@ const STRINGS: Record<Lang, Record<string, string>> = {
   },
 };
 
-const LANG_STORAGE_KEY = "nnm-attendance-login-lang";
-
 export function AttendanceLoginForm({
   onSubmit,
 }: {
@@ -57,7 +56,9 @@ export function AttendanceLoginForm({
   const passwordId = useId();
   const rememberMeId = useId();
 
-  const [lang, setLang] = useState<Lang>("en");
+  // Shared with every /attendance/* page via AttendanceLangProvider -
+  // the choice made here is what every screen after login shows too.
+  const { lang, setLang } = useAttendanceLang();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [rememberMe, setRememberMe] = useState(false);
@@ -67,25 +68,8 @@ export function AttendanceLoginForm({
 
   const t = STRINGS[lang];
 
-  // Remembers the last language chosen on this device - login is the
-  // one screen every field-staff role sees before anything else, so
-  // this is the one place a language choice needs to persist.
-  useEffect(() => {
-    try {
-      const saved = window.localStorage.getItem(LANG_STORAGE_KEY);
-      if (saved === "en" || saved === "hi") setLang(saved);
-    } catch {
-      // localStorage unavailable (private browsing, etc.) - default to English, no harm done.
-    }
-  }, []);
-
   function changeLang(next: Lang) {
     setLang(next);
-    try {
-      window.localStorage.setItem(LANG_STORAGE_KEY, next);
-    } catch {
-      // Not persisted this time, but the toggle still works for the current visit.
-    }
   }
 
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
