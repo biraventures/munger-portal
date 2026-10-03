@@ -36,6 +36,8 @@ export function verifyReceipt(receiptNo: string, sig: string) {
     paymentMode: string;
     amountReceived: string;
     demandNo: string | null;
+    tvNumber: string | null;
+    tvDate: string | null;
   }>(`receipt/${encodeURIComponent(receiptNo)}`, sig);
 }
 
@@ -64,6 +66,8 @@ export function verifyShopReceipt(receiptNo: string, sig: string) {
     holderName: string;
     paymentMode: string;
     amountReceived: string;
+    tvNumber: string | null;
+    tvDate: string | null;
   }>(`shop-receipt/${encodeURIComponent(receiptNo)}`, sig);
 }
 

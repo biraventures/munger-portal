@@ -52,6 +52,36 @@ export const ATTENDANCE_ROLE_LABELS: Record<AttendanceRole, string> = {
   deputy_mayor: "Deputy Mayor",
 };
 
+export const ATTENDANCE_ROLE_LABELS_HI: Record<AttendanceRole, string> = {
+  jamadar: "जमादार",
+  driver_supervisor: "ड्राइवर सुपरवाइज़र",
+  sanitation_officer: "सफाई अधिकारी",
+  sanitation_prabhari: "सफाई प्रभारी",
+  attendance_admin: "अटेंडेंस एडमिन",
+  junior_engineer: "कनिष्ठ अभियंता",
+  assistant_engineer_mechanical: "सहायक अभियंता (मैकेनिकल)",
+  maintenance_nodal_clerk: "मेंटेनेंस नोडल क्लर्क",
+  streetlight_contractor: "मेंटेनेंस कॉन्ट्रैक्टर (स्ट्रीट लाइट)",
+  streetlight_je: "कनिष्ठ अभियंता (स्ट्रीट लाइट)",
+  streetlight_ae: "सहायक अभियंता (स्ट्रीट लाइट)",
+  streetlight_nodal_clerk: "स्ट्रीट लाइट नोडल क्लर्क",
+  city_manager: "सिटी मैनेजर",
+  deputy_municipal_commissioner: "उप नगर आयुक्त",
+  municipal_commissioner: "नगर आयुक्त",
+  pyau_je: "कनिष्ठ अभियंता (प्याऊ)",
+  pyau_ae: "सहायक अभियंता (प्याऊ)",
+  pyau_contractor: "मेंटेनेंस कॉन्ट्रैक्टर (प्याऊ)",
+  apswmo: "एपीएसडब्ल्यूएमओ",
+  ward_parshad: "वार्ड पार्षद",
+  mayor: "मेयर",
+  deputy_mayor: "उप मेयर",
+};
+
+/** Role label in the given UI language - use this instead of reading ATTENDANCE_ROLE_LABELS directly wherever a page already knows the current language. */
+export function attendanceRoleLabel(role: AttendanceRole, lang: "en" | "hi"): string {
+  return lang === "hi" ? ATTENDANCE_ROLE_LABELS_HI[role] : ATTENDANCE_ROLE_LABELS[role];
+}
+
 export const WARD_SCOPED_ROLES: AttendanceRole[] = ["jamadar", "driver_supervisor", "ward_parshad"];
 export const OFFICER_ROLES: AttendanceRole[] = ["sanitation_officer", "sanitation_prabhari", "attendance_admin"];
 

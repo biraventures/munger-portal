@@ -252,6 +252,8 @@ export interface ShopRentPaymentResult {
   miscRebateReason: string | null;
   collectedBy: string;
   verificationUrl: string;
+  tvNumber: string | null;
+  tvDate: string | null;
 }
 
 export interface PrintableShopDemand {
@@ -328,7 +330,15 @@ export async function fetchPrintableAgreement(agreementId: number): Promise<Prin
 
 export async function submitShopRentPayment(
   shopNo: string,
-  input: { demandNo: string; paymentMode: string; counter?: string | null },
+  input: {
+    demandNo: string;
+    paymentMode: string;
+    counter?: string | null;
+    /** Required only when paymentMode is "District Treasury". */
+    tvNumber?: string | null;
+    /** Required only when paymentMode is "District Treasury". */
+    tvDate?: string | null;
+  },
 ): Promise<ShopRentPaymentResult> {
   const res = await fetch(`${API_BASE_URL}/shops/${encodeURIComponent(shopNo)}/rent-payments`, {
     method: "POST",
@@ -469,6 +479,8 @@ export interface PrintableShopReceiptHistory {
   miscRebateReason: string | null;
   collectedBy: string;
   verificationUrl: string;
+  tvNumber: string | null;
+  tvDate: string | null;
 }
 
 export async function fetchShopReceiptReprint(receiptNo: string): Promise<PrintableShopReceiptHistory> {

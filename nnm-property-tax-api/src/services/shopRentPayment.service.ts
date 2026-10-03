@@ -2,12 +2,17 @@ import { shopRepository, shopAgreementRepository } from "../repositories/shop.re
 import { shopRentDemandRepository, shopRentPaymentRepository } from "../repositories/shopRent.repository";
 import { ApiError } from "../utils/ApiError";
 import { buildVerificationUrl } from "../utils/verificationSignature";
+import { formatYmdToDmy } from "../utils/formatYmdToDmy";
 import type { ShopRentPaymentRow } from "../types/shop.types";
 
 export interface ShopRentPaymentInput {
   demandNo: string;
   paymentMode: string;
   counter?: string | null;
+  /** Required only when paymentMode is "District Treasury" - the Treasury Voucher number identifying this payment. */
+  tvNumber?: string | null;
+  /** Required only when paymentMode is "District Treasury" - the date on the treasury voucher. */
+  tvDate?: string | null;
 }
 
 export interface ShopRentPaymentResult {
@@ -31,6 +36,8 @@ export interface ShopRentPaymentResult {
   miscRebateReason: string | null;
   collectedBy: string;
   verificationUrl: string;
+  tvNumber: string | null;
+  tvDate: string | null;
 }
 
 /**
@@ -53,6 +60,15 @@ export async function submitShopRentPayment(
     throw ApiError.badRequest(`Rent demand ${input.demandNo} has already been paid.`);
   }
 
+  // "District Treasury" payments are identified by the T.V. number/date
+  // instead of a till receipt - required here too (not just in the
+  // controller's zod schema), same as property tax's payment.service.ts.
+  const tvNumber = input.tvNumber?.trim() || null;
+  const tvDate = input.tvDate?.trim() || null;
+  if (input.paymentMode === "District Treasury" && (!tvNumber || !tvDate)) {
+    throw ApiError.badRequest("T.V. number and date are required for District Treasury payments.");
+  }
+
   const receiptNoNum = await shopRentPaymentRepository.getNextReceiptNo();
   const receiptNo = String(receiptNoNum);
 
@@ -70,6 +86,8 @@ export async function submitShopRentPayment(
     amountReceived: Number(demand.total_amount_demanded),
     collectedBy,
     counter: input.counter ?? null,
+    tvNumber,
+    tvDate,
   });
 
   await shopAgreementRepository.updateRentPaidTillMonth(demand.agreement_id, demand.period_end_month);
@@ -103,6 +121,8 @@ export async function submitShopRentPayment(
     miscRebateReason: demand.misc_rebate_reason,
     collectedBy,
     verificationUrl: buildVerificationUrl("shop-receipt", receiptNo),
+    tvNumber,
+    tvDate: tvDate ? formatYmdToDmy(tvDate) : null,
   };
 }
 
@@ -128,6 +148,8 @@ export interface PrintableShopReceiptHistory {
   miscRebateReason: string | null;
   collectedBy: string;
   verificationUrl: string;
+  tvNumber: string | null;
+  tvDate: string | null;
 }
 
 /**
@@ -169,6 +191,10 @@ export async function getShopReceiptForReprint(receiptNo: string): Promise<Print
     miscRebateReason: demand?.misc_rebate_reason ?? null,
     collectedBy: payment.collected_by,
     verificationUrl: buildVerificationUrl("shop-receipt", payment.receipt_no),
+    tvNumber: payment.tv_number,
+    tvDate: payment.tv_date
+      ? `${String(payment.tv_date.getDate()).padStart(2, "0")}-${String(payment.tv_date.getMonth() + 1).padStart(2, "0")}-${payment.tv_date.getFullYear()}`
+      : null,
   };
 }
 

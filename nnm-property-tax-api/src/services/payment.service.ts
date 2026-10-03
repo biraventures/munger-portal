@@ -12,6 +12,7 @@ import { parseYearStartOrNull } from "../utils/assessmentYear";
 import { num } from "../utils/num";
 import { ApiError } from "../utils/ApiError";
 import { buildVerificationUrl } from "../utils/verificationSignature";
+import { formatYmdToDmy } from "../utils/formatYmdToDmy";
 import type { PaymentInput, PaymentResult } from "../types/payment.types";
 import type { FrozenFloorBreakdown } from "../types/property.types";
 
@@ -40,6 +41,8 @@ export interface PrintableReceiptHistory {
   verificationUrl: string;
   taxCollectorCode: string | null;
   taxCollectorName: string | null;
+  tvNumber: string | null;
+  tvDate: string | null;
   // Frozen at the moment of payment (migration 024) - not
   // reconstructed later by joining to the demand notice, which was
   // fragile (see that migration's comment). Null only for
@@ -107,6 +110,10 @@ export async function getReceiptForReprint(receiptNo: string): Promise<Printable
     verificationUrl: buildVerificationUrl("receipt", txn.receipt_no),
     taxCollectorCode: txn.tax_collector_code,
     taxCollectorName: txn.tax_collector_name,
+    tvNumber: txn.tv_number,
+    tvDate: txn.tv_date
+      ? `${String(txn.tv_date.getDate()).padStart(2, "0")}-${String(txn.tv_date.getMonth() + 1).padStart(2, "0")}-${txn.tv_date.getFullYear()}`
+      : null,
     // Read directly from the frozen snapshot stored at payment time
     // (migration 024) - no longer reconstructed by joining to the
     // demand notice, which was fragile: any issue with that lookup
@@ -221,6 +228,16 @@ export async function submitPayment(
     taxCollector = { code: collector.tax_collector_code!, name: collector.display_name };
   }
 
+  // "District Treasury" payments are identified by the T.V. number/date
+  // instead of a till receipt - required here too (not just in the
+  // controller's zod schema) since this service is the actual source of
+  // truth for what a valid payment looks like.
+  const tvNumber = input.tvNumber?.trim() || null;
+  const tvDate = input.tvDate?.trim() || null;
+  if (input.paymentMode === "District Treasury" && (!tvNumber || !tvDate)) {
+    throw ApiError.badRequest("T.V. number and date are required for District Treasury payments.");
+  }
+
   // Snapshot pending arrears BEFORE this payment, and which specific
   // periods it covers — purely for display on the receipt. The amount
   // actually charged is the notice's frozen total, not recomputed here.
@@ -275,6 +292,8 @@ export async function submitPayment(
             : null,
         taxCollectorCode: taxCollector?.code ?? null,
         taxCollectorName: taxCollector?.name ?? null,
+        tvNumber,
+        tvDate,
         // Frozen at the moment of payment - see migrations 024 and 025's comments.
         arv: notice.arv,
         currentYearTaxNet: notice.current_year_tax_net,
@@ -327,6 +346,11 @@ export async function submitPayment(
     verificationUrl: buildVerificationUrl("receipt", receiptNo),
     taxCollectorCode: taxCollector?.code ?? null,
     taxCollectorName: taxCollector?.name ?? null,
+    tvNumber,
+    // Re-formatted from the "yyyy-mm-dd" the client sends (HTML date
+    // input) to the same "dd-mm-yyyy" display format as every other
+    // date on the receipt, rather than echoing the raw input back.
+    tvDate: tvDate ? formatYmdToDmy(tvDate) : null,
     arrearStagesPaid: clearance.stages,
     // Override the stored (possibly stale) solid_waste_charge column with
     // the value just recomputed above — same "never trusted from stored

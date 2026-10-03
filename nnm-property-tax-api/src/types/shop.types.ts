@@ -198,6 +198,10 @@ export interface ShopRentPaymentRow {
   amount_received: string;
   collected_by: string;
   counter: string | null;
+  // Treasury Voucher number + date (migration 093) - only present when
+  // payment_mode is "District Treasury".
+  tv_number: string | null;
+  tv_date: Date | null;
   txn_date: Date;
   cancelled: boolean;
   cancelled_reason: string | null;

@@ -10,6 +10,10 @@ export interface PaymentInput {
   demandNo: string;
   /** Optional — which tax collector (field agent) facilitated this payment, if any. */
   taxCollectorCode?: string | null;
+  /** Required only when paymentMode is "District Treasury". */
+  tvNumber?: string | null;
+  /** Required only when paymentMode is "District Treasury". */
+  tvDate?: string | null;
 }
 
 export interface ArrearStagePaidView {
@@ -44,6 +48,8 @@ export interface ReceiptData {
   verificationUrl: string;
   taxCollectorCode: string | null;
   taxCollectorName: string | null;
+  tvNumber: string | null;
+  tvDate: string | null;
   arrearStagesPaid: ArrearStagePaidView[];
   property: Record<string, string | number | boolean | null>;
   floors: unknown[];
