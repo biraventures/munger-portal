@@ -1,13 +1,18 @@
 import { propertyRepository } from "../repositories/property.repository";
 import { shopRepository } from "../repositories/shop.repository";
 import { changeRequestRepository } from "../repositories/changeRequest.repository";
+import { propertyDiscrepancyRepository } from "../repositories/propertyDiscrepancy.repository";
 import { shopRentalApplicationRepository } from "../repositories/shopRentalApplication.repository";
 import { tradeLicenseApplicationRepository } from "../repositories/tradeLicenseApplication.repository";
-import { APPROVAL_STAGE_ORDER, ADMIN_ROLE_LABELS } from "../types/admin.types";
+import { APPROVAL_STAGE_ORDER, PROPERTY_DISCREPANCY_APPROVAL_STAGE_ORDER, ADMIN_ROLE_LABELS } from "../types/admin.types";
 
 export interface DashboardSummary {
   holdings: { total: number };
   propertyChanges: {
+    pending: number;
+    byStage: { stage: string; label: string; count: number }[];
+  };
+  propertyDiscrepancies: {
     pending: number;
     byStage: { stage: string; label: string; count: number }[];
   };
@@ -25,10 +30,11 @@ export interface DashboardSummary {
  * calls.
  */
 export async function getDashboardSummary(): Promise<DashboardSummary> {
-  const [holdingsTotal, shopsTotal, changeStageCounts, shopAppStats, tradeLicenseStats] = await Promise.all([
+  const [holdingsTotal, shopsTotal, changeStageCounts, discrepancyStageCounts, shopAppStats, tradeLicenseStats] = await Promise.all([
     propertyRepository.countAll(),
     shopRepository.countAll(),
     changeRequestRepository.countPendingByStage(),
+    propertyDiscrepancyRepository.countPendingByStage(),
     shopRentalApplicationRepository.getStats(),
     tradeLicenseApplicationRepository.getStats(),
   ]);
@@ -44,9 +50,20 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
   }));
   const pendingTotal = byStage.reduce((sum, s) => sum + s.count, 0);
 
+  // Same "always show every stage" rule as byStage above, for the
+  // property discrepancy approval chain (Tax Surveyor → Tax Daroga →
+  // City Manager → Deputy Commissioner).
+  const discrepancyByStage = PROPERTY_DISCREPANCY_APPROVAL_STAGE_ORDER.map((stage) => ({
+    stage,
+    label: ADMIN_ROLE_LABELS[stage],
+    count: discrepancyStageCounts[stage] ?? 0,
+  }));
+  const discrepancyPendingTotal = discrepancyByStage.reduce((sum, s) => sum + s.count, 0);
+
   return {
     holdings: { total: holdingsTotal },
     propertyChanges: { pending: pendingTotal, byStage },
+    propertyDiscrepancies: { pending: discrepancyPendingTotal, byStage: discrepancyByStage },
     shops: { total: shopsTotal },
     shopApplications: shopAppStats,
     tradeLicense: {
@@ -70,24 +87,37 @@ function clampPageSize(pageSize: unknown): number {
   return Math.min(Math.floor(n), 100); // hard ceiling — the widget's own pager offers 25/50, this just guards against an arbitrary huge request
 }
 
-export async function listHoldingsForDashboard(page: unknown, pageSize: unknown, ward: unknown) {
+const HOLDING_SORT_KEYS = ["holdingNo", "taxAmount", "totalAmount", "taxPaidTillYear", "plotArea", "ward"] as const;
+type HoldingSortKey = (typeof HOLDING_SORT_KEYS)[number];
+
+export async function listHoldingsForDashboard(page: unknown, pageSize: unknown, ward: unknown, sort?: unknown, sortDir?: unknown) {
   const p = clampPage(page);
   const ps = clampPageSize(pageSize);
   const wardFilter = typeof ward === "string" && ward.trim() !== "" ? ward.trim() : undefined;
-  const { rows, total } = await propertyRepository.listPaginated(p, ps, wardFilter);
+  const sortKey: HoldingSortKey = HOLDING_SORT_KEYS.includes(sort as HoldingSortKey) ? (sort as HoldingSortKey) : "holdingNo";
+  const sortDirection: "asc" | "desc" = sortDir === "desc" ? "desc" : "asc";
+  const { rows, total } = await propertyRepository.listPaginated(p, ps, wardFilter, sortKey, sortDirection);
   return {
     items: rows.map((r) => ({
       holdingNo: r.holding_no,
+      oldHoldingNo: r.old_holding_no,
       ownerName: r.owner_name,
       ward: r.ward,
+      totalPlotArea: r.area_sqft,
       taxPaidTillYear: r.tax_paid_till_year,
       annualTaxAmount: r.tax_payable,
       solidWasteChargeAmount: r.solid_waste_charge,
+      totalAmountDue: r.outstanding_demand,
     })),
     total,
     page: p,
     pageSize: ps,
   };
+}
+
+/** Every ward value actually on file - the Property-wise Report's ward filter dropdown. */
+export async function listHoldingWardsForDashboard(): Promise<string[]> {
+  return propertyRepository.listDistinctWards();
 }
 
 export async function listPropertyChangesForDashboard(page: unknown, pageSize: unknown) {

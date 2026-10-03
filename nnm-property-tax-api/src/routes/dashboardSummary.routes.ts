@@ -2,6 +2,7 @@ import { Router } from "express";
 import {
   getDashboardSummaryHandler,
   getDashboardHoldingsHandler,
+  getDashboardHoldingWardsHandler,
   getDashboardPropertyChangesHandler,
   getDashboardShopsHandler,
   getDashboardShopApplicationsHandler,
@@ -15,6 +16,7 @@ export const dashboardSummaryRouter = Router();
 dashboardSummaryRouter.use(requireOperatorOrAdmin);
 
 dashboardSummaryRouter.get("/", getDashboardSummaryHandler);
+dashboardSummaryRouter.get("/holdings/wards", getDashboardHoldingWardsHandler);
 dashboardSummaryRouter.get("/holdings", getDashboardHoldingsHandler);
 dashboardSummaryRouter.get("/property-changes", getDashboardPropertyChangesHandler);
 dashboardSummaryRouter.get("/shops", getDashboardShopsHandler);

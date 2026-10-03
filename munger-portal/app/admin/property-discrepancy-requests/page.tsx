@@ -5,7 +5,7 @@ import Link from "next/link";
 import { Loader2, AlertCircle } from "lucide-react";
 import { AdminHeader } from "@/components/admin-header";
 import { useAdminGuard } from "@/lib/use-admin-guard";
-import { fetchDiscrepancyRequests, type PropertyDiscrepancyRequest } from "@/lib/admin-api";
+import { fetchDiscrepancyRequests, fetchDashboardSummaryAdmin, type PropertyDiscrepancyRequest, type DashboardSummary } from "@/lib/admin-api";
 import { ADMIN_ROLE_LABELS } from "@/lib/admin-auth";
 
 const STATUS_TABS: { value: "pending" | "approved" | "rejected" | "all"; label: string }[] = [
@@ -41,6 +41,7 @@ export default function PropertyDiscrepancyRequestsPage() {
   const [myStageOnly, setMyStageOnly] = useState(true);
   const [requests, setRequests] = useState<PropertyDiscrepancyRequest[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [stageCounts, setStageCounts] = useState<DashboardSummary["propertyDiscrepancies"]["byStage"] | null>(null);
 
   useEffect(() => {
     if (!admin || !DISCREPANCY_CHAIN_ROLES.includes(admin.role)) return;
@@ -49,6 +50,13 @@ export default function PropertyDiscrepancyRequestsPage() {
       .then((r) => setRequests(r.requests))
       .catch((err) => setError(err instanceof Error ? err.message : "Could not load discrepancy requests."));
   }, [admin, status, myStageOnly]);
+
+  useEffect(() => {
+    if (!admin || !DISCREPANCY_CHAIN_ROLES.includes(admin.role)) return;
+    fetchDashboardSummaryAdmin()
+      .then((s) => setStageCounts(s.propertyDiscrepancies.byStage))
+      .catch(() => setStageCounts(null));
+  }, [admin]);
 
   if (!admin) {
     return <div className="flex min-h-screen items-center justify-center text-sm text-slate-400">Loading…</div>;
@@ -74,9 +82,22 @@ export default function PropertyDiscrepancyRequestsPage() {
 
       <main className="mx-auto max-w-4xl px-6 py-10">
         <h1 className="mb-1 text-2xl font-semibold text-slate-900">Property Discrepancy Approvals</h1>
-        <p className="mb-6 text-sm text-slate-500">
+        <p className="mb-3 text-sm text-slate-500">
           A Tax Collector&apos;s field-found correction moves through Tax Surveyor → Tax Daroga → City Manager → Deputy Commissioner.
         </p>
+
+        {stageCounts && (
+          <p className="mb-6 text-xs text-slate-500">
+            Pending by level:{" "}
+            {stageCounts.map((s, i) => (
+              <span key={s.stage}>
+                {i > 0 && " · "}
+                {s.label}{" "}
+                <span className={s.count > 0 ? "font-semibold text-red-600" : "font-semibold text-slate-400"}>{s.count}</span>
+              </span>
+            ))}
+          </p>
+        )}
 
         <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
           <div className="flex gap-2">

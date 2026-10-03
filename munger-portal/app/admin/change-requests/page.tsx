@@ -6,7 +6,7 @@ import { Loader2, AlertCircle } from "lucide-react";
 import { AdminHeader } from "@/components/admin-header";
 import { StageBadge } from "@/components/admin/stage-badge";
 import { useAdminGuard } from "@/lib/use-admin-guard";
-import { fetchChangeRequests, type ChangeRequestSummary, type ChangeRequestStatus } from "@/lib/admin-api";
+import { fetchChangeRequests, fetchDashboardSummaryAdmin, type ChangeRequestSummary, type ChangeRequestStatus, type DashboardSummary } from "@/lib/admin-api";
 
 const STATUS_TABS: { value: ChangeRequestStatus | "all"; label: string }[] = [
   { value: "pending", label: "Pending" },
@@ -23,6 +23,7 @@ export default function ChangeRequestsPage() {
   const [myStageOnly, setMyStageOnly] = useState(true);
   const [requests, setRequests] = useState<ChangeRequestSummary[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [stageCounts, setStageCounts] = useState<DashboardSummary["propertyChanges"]["byStage"] | null>(null);
 
   useEffect(() => {
     if (!admin || !MUTATION_CHAIN_ROLES.includes(admin.role)) return;
@@ -31,6 +32,13 @@ export default function ChangeRequestsPage() {
       .then((r) => setRequests(r.requests))
       .catch((err) => setError(err instanceof Error ? err.message : "Could not load change requests."));
   }, [admin, status, myStageOnly]);
+
+  useEffect(() => {
+    if (!admin || !MUTATION_CHAIN_ROLES.includes(admin.role)) return;
+    fetchDashboardSummaryAdmin()
+      .then((s) => setStageCounts(s.propertyChanges.byStage))
+      .catch(() => setStageCounts(null));
+  }, [admin]);
 
   if (!admin) {
     return <div className="flex min-h-screen items-center justify-center text-sm text-slate-400">Loading…</div>;
@@ -56,7 +64,20 @@ export default function ChangeRequestsPage() {
 
       <main className="mx-auto max-w-4xl px-6 py-10">
         <h1 className="mb-1 text-2xl font-semibold text-slate-900">Mutation Approvals</h1>
-        <p className="mb-6 text-sm text-slate-500">Property changes move through Tax Daroga → Mutation Nodal Clerk → City Manager/DMC → Commissioner.</p>
+        <p className="mb-3 text-sm text-slate-500">Property changes move through Tax Daroga → Mutation Nodal Clerk → City Manager/DMC → Commissioner.</p>
+
+        {stageCounts && (
+          <p className="mb-6 text-xs text-slate-500">
+            Pending by desk:{" "}
+            {stageCounts.map((s, i) => (
+              <span key={s.stage}>
+                {i > 0 && " · "}
+                {s.label}{" "}
+                <span className={s.count > 0 ? "font-semibold text-red-600" : "font-semibold text-slate-400"}>{s.count}</span>
+              </span>
+            ))}
+          </p>
+        )}
 
         <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
           <div className="flex gap-2">

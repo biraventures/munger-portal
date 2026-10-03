@@ -8,6 +8,7 @@ import { DashboardSummaryWidget } from "@/components/dashboard-summary-widget";
 import { useAdminGuard } from "@/lib/use-admin-guard";
 import {
   fetchChangeRequests,
+  fetchDiscrepancyRequests,
   fetchDashboardSummaryAdmin,
   fetchDashboardHoldingsAdmin,
   fetchDashboardPropertyChangesAdmin,
@@ -23,6 +24,7 @@ import { ADMIN_ROLE_LABELS } from "@/lib/admin-auth";
 export default function AdminDashboardPage() {
   const admin = useAdminGuard();
   const [myStagePendingCount, setMyStagePendingCount] = useState<number | null>(null);
+  const [myDiscrepancyPendingCount, setMyDiscrepancyPendingCount] = useState<number | null>(null);
   const [myShopStagePendingCount, setMyShopStagePendingCount] = useState<number | null>(null);
   const [myRentalAppPendingCount, setMyRentalAppPendingCount] = useState<number | null>(null);
   const [myTradeLicensePendingCount, setMyTradeLicensePendingCount] = useState<number | null>(null);
@@ -32,6 +34,9 @@ export default function AdminDashboardPage() {
     fetchChangeRequests({ status: "pending", myStage: true })
       .then((r) => setMyStagePendingCount(r.requests.length))
       .catch(() => setMyStagePendingCount(null));
+    fetchDiscrepancyRequests({ status: "pending", myStage: true })
+      .then((r) => setMyDiscrepancyPendingCount(r.requests.length))
+      .catch(() => setMyDiscrepancyPendingCount(null));
     fetchShopAgreementRequests({ status: "pending", myStage: true })
       .then((r) => setMyShopStagePendingCount(r.requests.length))
       .catch(() => setMyShopStagePendingCount(null));
@@ -158,6 +163,18 @@ export default function AdminDashboardPage() {
   const groupHeadingClass = "mb-4 mt-10 text-lg font-semibold text-slate-800 first:mt-0";
   const cardClass = "flex flex-col rounded-xl border border-slate-200 bg-white p-6 transition-shadow hover:shadow-md";
   const iconWrapClass = "mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-blue-50 text-nnm-blue";
+  // A request waiting at this admin's own desk is easy to miss among a
+  // full grid of cards - turning the card red (not just its count) is
+  // the explicit reminder, for exactly the handful of cards below that
+  // report a "waiting on your desk" count.
+  const pendingCardClass = "flex flex-col rounded-xl border-2 border-red-300 bg-red-50 p-6 transition-shadow hover:shadow-md";
+  const pendingIconWrapClass = "mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-red-100 text-red-600";
+  function deskCardClass(pendingCount: number | null): string {
+    return pendingCount && pendingCount > 0 ? pendingCardClass : cardClass;
+  }
+  function deskIconWrapClass(pendingCount: number | null): string {
+    return pendingCount && pendingCount > 0 ? pendingIconWrapClass : iconWrapClass;
+  }
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -183,8 +200,8 @@ export default function AdminDashboardPage() {
             <h2 className={groupHeadingClass}>Property Tax</h2>
             <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
               {showMutationApprovals && (
-                <Link href="/admin/change-requests" className={cardClass}>
-                  <span className={iconWrapClass}>
+                <Link href="/admin/change-requests" className={deskCardClass(myStagePendingCount)}>
+                  <span className={deskIconWrapClass(myStagePendingCount)}>
                     <FileClock className="h-6 w-6" strokeWidth={1.8} />
                   </span>
                   <h3 className="mb-1.5 text-base font-semibold text-slate-900">Mutation Approvals</h3>
@@ -327,12 +344,16 @@ export default function AdminDashboardPage() {
               )}
 
               {showPropertyDiscrepancyRequests && (
-                <Link href="/admin/property-discrepancy-requests" className={cardClass}>
-                  <span className={iconWrapClass}>
+                <Link href="/admin/property-discrepancy-requests" className={deskCardClass(myDiscrepancyPendingCount)}>
+                  <span className={deskIconWrapClass(myDiscrepancyPendingCount)}>
                     <ClipboardCheck className="h-6 w-6" strokeWidth={1.8} />
                   </span>
                   <h3 className="mb-1.5 text-base font-semibold text-slate-900">Property Discrepancy Approvals</h3>
-                  <p className="text-sm text-slate-500">Review a Tax Collector&apos;s field-found correction at your stage.</p>
+                  <p className="text-sm text-slate-500">
+                    {myDiscrepancyPendingCount === null
+                      ? "Review a Tax Collector's field-found correction at your stage."
+                      : `${myDiscrepancyPendingCount} request${myDiscrepancyPendingCount === 1 ? "" : "s"} currently waiting on your desk.`}
+                  </p>
                 </Link>
               )}
 
@@ -396,8 +417,8 @@ export default function AdminDashboardPage() {
             <h2 className={groupHeadingClass}>Shops</h2>
             <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
               {showShopAgreementApprovals && (
-                <Link href="/admin/shop-agreement-requests" className={cardClass}>
-                  <span className={iconWrapClass}>
+                <Link href="/admin/shop-agreement-requests" className={deskCardClass(myShopStagePendingCount)}>
+                  <span className={deskIconWrapClass(myShopStagePendingCount)}>
                     <ShoppingBag className="h-6 w-6" strokeWidth={1.8} />
                   </span>
                   <h3 className="mb-1.5 text-base font-semibold text-slate-900">Shop Agreement Approvals</h3>
@@ -410,8 +431,8 @@ export default function AdminDashboardPage() {
               )}
 
               {showShopRentalApplications && (
-                <Link href="/admin/shop-rental-applications" className={cardClass}>
-                  <span className={iconWrapClass}>
+                <Link href="/admin/shop-rental-applications" className={deskCardClass(myRentalAppPendingCount)}>
+                  <span className={deskIconWrapClass(myRentalAppPendingCount)}>
                     <Store className="h-6 w-6" strokeWidth={1.8} />
                   </span>
                   <h3 className="mb-1.5 text-base font-semibold text-slate-900">Shop Rental Applications</h3>
@@ -541,8 +562,8 @@ export default function AdminDashboardPage() {
             <h2 className={groupHeadingClass}>Trade License</h2>
             <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
               {showTradeLicenseApplications && (
-                <Link href="/admin/trade-license-requests" className={cardClass}>
-                  <span className={iconWrapClass}>
+                <Link href="/admin/trade-license-requests" className={deskCardClass(myTradeLicensePendingCount)}>
+                  <span className={deskIconWrapClass(myTradeLicensePendingCount)}>
                     <Award className="h-6 w-6" strokeWidth={1.8} />
                   </span>
                   <h3 className="mb-1.5 text-base font-semibold text-slate-900">Trade License Applications</h3>

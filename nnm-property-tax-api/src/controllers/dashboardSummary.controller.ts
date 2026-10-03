@@ -2,6 +2,7 @@ import type { Request, Response } from "express";
 import {
   getDashboardSummary,
   listHoldingsForDashboard,
+  listHoldingWardsForDashboard,
   listPropertyChangesForDashboard,
   listShopsForDashboard,
   listShopApplicationsForDashboard,
@@ -16,9 +17,14 @@ export const getDashboardSummaryHandler = asyncHandler(async (_req: Request, res
   res.status(200).json(summary);
 });
 
-/** GET /api/v1/dashboard-summary/holdings?page=&pageSize=&ward= */
+/** GET /api/v1/dashboard-summary/holdings?page=&pageSize=&ward=&sort=&sortDir= */
 export const getDashboardHoldingsHandler = asyncHandler(async (req: Request, res: Response) => {
-  res.status(200).json(await listHoldingsForDashboard(req.query.page, req.query.pageSize, req.query.ward));
+  res.status(200).json(await listHoldingsForDashboard(req.query.page, req.query.pageSize, req.query.ward, req.query.sort, req.query.sortDir));
+});
+
+/** GET /api/v1/dashboard-summary/holdings/wards - every ward value on file, for the Property-wise Report's ward filter. */
+export const getDashboardHoldingWardsHandler = asyncHandler(async (_req: Request, res: Response) => {
+  res.status(200).json({ wards: await listHoldingWardsForDashboard() });
 });
 
 /** GET /api/v1/dashboard-summary/property-changes?page=&pageSize= */

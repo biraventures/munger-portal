@@ -378,6 +378,10 @@ export interface DashboardSummary {
     pending: number;
     byStage: { stage: string; label: string; count: number }[];
   };
+  propertyDiscrepancies: {
+    pending: number;
+    byStage: { stage: string; label: string; count: number }[];
+  };
   shops: { total: number };
   shopApplications: { received: number; pending: number };
   tradeLicense: { received: number; pending: number; issued: number };
@@ -398,12 +402,18 @@ export interface PaginatedResult<T> {
 
 export interface HoldingListItem {
   holdingNo: string;
+  oldHoldingNo: string | null;
   ownerName: string;
   ward: string | null;
+  totalPlotArea: string | number | null;
   taxPaidTillYear: string | null;
   annualTaxAmount: string | number | null;
   solidWasteChargeAmount: string | number | null;
+  totalAmountDue: string | number | null;
 }
+
+export type HoldingSortKey = "holdingNo" | "taxAmount" | "totalAmount" | "taxPaidTillYear" | "plotArea" | "ward";
+export type SortDirection = "asc" | "desc";
 
 export interface PropertyChangeListItem {
   id: number;
@@ -460,8 +470,26 @@ async function fetchDashboardListAdmin<T>(
   return res.json();
 }
 
-export const fetchDashboardHoldingsAdmin = (page: number, pageSize: number, ward?: string) =>
-  fetchDashboardListAdmin<HoldingListItem>("holdings", page, pageSize, ward ? { ward } : undefined);
+export const fetchDashboardHoldingsAdmin = (
+  page: number,
+  pageSize: number,
+  ward?: string,
+  sort?: HoldingSortKey,
+  sortDir?: SortDirection,
+) =>
+  fetchDashboardListAdmin<HoldingListItem>("holdings", page, pageSize, {
+    ...(ward ? { ward } : {}),
+    ...(sort ? { sort } : {}),
+    ...(sortDir ? { sortDir } : {}),
+  });
+
+/** Every ward value on file - the Property-wise Report's ward filter dropdown. */
+export async function fetchHoldingWardsAdmin(): Promise<string[]> {
+  const res = await fetch(`${API_BASE_URL}/dashboard-summary/holdings/wards`, { headers: authHeaders() });
+  if (!res.ok) throw new Error("Could not load the ward list.");
+  const data: { wards: string[] } = await res.json();
+  return data.wards;
+}
 export const fetchDashboardPropertyChangesAdmin = (page: number, pageSize: number) =>
   fetchDashboardListAdmin<PropertyChangeListItem>("property-changes", page, pageSize);
 export const fetchDashboardShopsAdmin = (page: number, pageSize: number) =>

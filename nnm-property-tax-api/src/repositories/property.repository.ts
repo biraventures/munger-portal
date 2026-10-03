@@ -97,13 +97,41 @@ export const propertyRepository = {
     return rows.map((r) => r.ward);
   },
 
-  /** Paginated holding list — for the dashboard overview widget's holdings tab. Optional ward filter for ward-wise viewing. */
-  async listPaginated(page: number, pageSize: number, ward?: string): Promise<{ rows: PropertyRow[]; total: number }> {
+  /**
+   * Paginated holding list — for the dashboard overview widget's
+   * holdings tab, and for the Property-wise Report's full listing.
+   * Optional ward filter for ward-wise viewing. `sort` is restricted
+   * to this fixed allowlist (never interpolated from the raw request
+   * value) so it can't become a SQL-injection vector; an unrecognized
+   * key falls back to the default holding_no ordering.
+   */
+  async listPaginated(
+    page: number,
+    pageSize: number,
+    ward?: string,
+    sort?: string,
+    sortDir?: "asc" | "desc",
+  ): Promise<{ rows: PropertyRow[]; total: number }> {
     const offset = (page - 1) * pageSize;
+    const sortColumn =
+      {
+        holdingNo: "holding_no",
+        taxAmount: "tax_payable",
+        totalAmount: "outstanding_demand",
+        taxPaidTillYear: "tax_paid_till_year",
+        plotArea: "area_sqft",
+        ward: "ward",
+      }[sort ?? "holdingNo"] ?? "holding_no";
+    const direction = sortDir === "desc" ? "DESC" : "ASC";
+    // Always a tie-break on holding_no, ASC, after the requested sort -
+    // keeps paging stable when many rows share the same sort value
+    // (e.g. many holdings with no tax_paid_till_year at all).
+    const orderBy = sortColumn === "holding_no" ? `holding_no ${direction}` : `${sortColumn} ${direction} NULLS LAST, holding_no ASC`;
+
     if (ward) {
       const [{ rows }, { rows: countRows }] = await Promise.all([
         pool.query<PropertyRow>(
-          `SELECT * FROM properties WHERE ward = $1 ORDER BY holding_no ASC LIMIT $2 OFFSET $3`,
+          `SELECT * FROM properties WHERE ward = $1 ORDER BY ${orderBy} LIMIT $2 OFFSET $3`,
           [ward, pageSize, offset],
         ),
         pool.query<{ count: string }>(`SELECT COUNT(*) AS count FROM properties WHERE ward = $1`, [ward]),
@@ -111,7 +139,7 @@ export const propertyRepository = {
       return { rows, total: parseInt(countRows[0]?.count ?? "0", 10) };
     }
     const [{ rows }, total] = await Promise.all([
-      pool.query<PropertyRow>(`SELECT * FROM properties ORDER BY holding_no ASC LIMIT $1 OFFSET $2`, [pageSize, offset]),
+      pool.query<PropertyRow>(`SELECT * FROM properties ORDER BY ${orderBy} LIMIT $1 OFFSET $2`, [pageSize, offset]),
       this.countAll(),
     ]);
     return { rows, total };

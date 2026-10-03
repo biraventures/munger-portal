@@ -72,6 +72,16 @@ export const propertyDiscrepancyRepository = {
     return rows[0] ?? null;
   },
 
+  /** Pending requests grouped by their current stage - a lightweight COUNT for the dashboard summary widget and the discrepancy approvals screen's top strip, not a full row fetch. Mirrors changeRequestRepository.countPendingByStage. */
+  async countPendingByStage(): Promise<Record<string, number>> {
+    const { rows } = await pool.query<{ current_stage: string; count: string }>(
+      `SELECT current_stage, COUNT(*) AS count FROM property_discrepancy_requests WHERE status = 'pending' GROUP BY current_stage`,
+    );
+    const result: Record<string, number> = {};
+    for (const row of rows) result[row.current_stage] = parseInt(row.count, 10);
+    return result;
+  },
+
   /** status/stage filters are independent - pass either, both, or neither. */
   async list(filters: { status?: PropertyDiscrepancyStatus; stage?: AdminRole }): Promise<PropertyDiscrepancyRequestRow[]> {
     const conditions: string[] = [];
