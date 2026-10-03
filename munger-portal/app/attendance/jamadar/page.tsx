@@ -6,6 +6,7 @@ import { AlertCircle, Camera, CheckCircle2, Loader2, LogIn, LogOut, UserX, Light
 import { AttendanceHeader } from "@/components/attendance/attendance-header";
 import { useAttendanceGuard } from "@/lib/use-attendance-guard";
 import { useAttendanceLang, type AttendanceLang } from "@/lib/attendance-i18n";
+import { transliterateName } from "@/lib/hindi-name-transliterate";
 import {
   fetchWardWorkersToday,
   markStaffIn,
@@ -498,7 +499,7 @@ export default function JamadarAttendancePage() {
               <div key={w.staffId} className="flex items-center justify-between rounded-xl border border-slate-200 bg-white p-4">
                 <div>
                   <div className="flex items-center gap-2">
-                    <span className="font-semibold text-slate-900">{w.name}</span>
+                    <span className="font-semibold text-slate-900">{lang === "hi" ? (w.nameHi || transliterateName(w.name)) : w.name}</span>
                     {statusBadge(w.status, lang)}
                   </div>
                   <div className="mt-0.5 text-xs text-slate-400">
@@ -582,7 +583,7 @@ export default function JamadarAttendancePage() {
               <div key={d.driverId} className="flex items-center justify-between rounded-xl border border-slate-200 bg-white p-4">
                 <div>
                   <div className="flex items-center gap-2">
-                    <span className="font-semibold text-slate-900">{d.name}</span>
+                    <span className="font-semibold text-slate-900">{lang === "hi" ? (d.nameHi || transliterateName(d.name)) : d.name}</span>
                     {statusBadge(d.status, lang)}
                   </div>
                   <div className="mt-0.5 text-xs text-slate-400">
@@ -653,7 +654,7 @@ export default function JamadarAttendancePage() {
               <div key={a.assistantId} className="flex items-center justify-between rounded-xl border border-slate-200 bg-white p-4">
                 <div>
                   <div className="flex items-center gap-2">
-                    <span className="font-semibold text-slate-900">{a.name}</span>
+                    <span className="font-semibold text-slate-900">{lang === "hi" ? (a.nameHi || transliterateName(a.name)) : a.name}</span>
                     {statusBadge(a.status, lang)}
                   </div>
                   <div className="mt-0.5 text-xs text-slate-400">

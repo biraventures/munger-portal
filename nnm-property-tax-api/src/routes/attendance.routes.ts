@@ -44,11 +44,13 @@ import {
 import { getAttendanceDashboardSummaryHandler } from "../controllers/attendanceDashboardSummary.controller";
 import {
   listAllStaffHandler,
+  listStaffNamesHandler,
   listStaffJobRolesHandler,
   createStaffHandler,
   setStaffRolesHandler,
   setStaffActiveHandler,
   updateStaffDetailsHandler,
+  setStaffNameHiHandler,
   deleteStaffHandler,
   suspendStaffHandler,
   unsuspendStaffHandler,
@@ -58,18 +60,22 @@ import {
   deactivateAllStaffHandler,
   purgeAllFieldRecordsHandler,
   listAllDriversHandler,
+  listDriverNamesHandler,
   createDriverHandler,
   setDriverActiveHandler,
   transferDriverHandler,
   updateDriverDetailsHandler,
+  setDriverNameHiHandler,
   assignDriverHandler,
   uploadDriverRosterHandler,
   uploadVehicleStaffImportHandler,
   listAllAssistantsHandler,
+  listAssistantNamesHandler,
   createAssistantHandler,
   setAssistantActiveHandler,
   transferAssistantHandler,
   updateAssistantDetailsHandler,
+  setAssistantNameHiHandler,
   reassignAssistantDriverHandler,
   uploadAssistantRosterHandler,
 } from "../controllers/fieldRoster.controller";
@@ -102,6 +108,9 @@ import { loginRateLimiter } from "../middleware/loginRateLimiter";
 export const attendanceRouter = Router();
 
 const OFFICER_ROLES = ["sanitation_officer", "sanitation_prabhari", "attendance_admin"] as const;
+
+/** Who may correct a roster record's auto-transliterated Hindi name (see migration 094) - wider than the general staff/driver/assistant details edit, since this is low-risk and these are the roles reviewing the roster day to day. */
+const NAME_CORRECTION_ROLES = [...OFFICER_ROLES, "apswmo"] as const;
 
 // Public
 attendanceRouter.post("/auth/login", loginRateLimiter, postAttendanceLogin);
@@ -229,10 +238,12 @@ attendanceRouter.delete("/users/:id", requireAttendanceRole(["attendance_admin"]
 // between wards, but cannot create/rename/deactivate). Everything
 // else here stays attendance_admin-only.
 attendanceRouter.get("/staff/all", requireAttendanceRole(["attendance_admin", "sanitation_officer"]), listAllStaffHandler);
+attendanceRouter.get("/staff/names", requireAttendanceRole([...NAME_CORRECTION_ROLES]), listStaffNamesHandler);
 attendanceRouter.get("/staff-job-roles", requireAttendanceRole(), listStaffJobRolesHandler);
 attendanceRouter.post("/staff", requireAttendanceRole(["attendance_admin"]), createStaffHandler);
 attendanceRouter.patch("/staff/:id/active", requireAttendanceRole(["attendance_admin"]), setStaffActiveHandler);
 attendanceRouter.patch("/staff/:id/details", requireAttendanceRole(["attendance_admin", "sanitation_officer"]), updateStaffDetailsHandler);
+attendanceRouter.patch("/staff/:id/name-hi", requireAttendanceRole([...NAME_CORRECTION_ROLES]), setStaffNameHiHandler);
 attendanceRouter.delete("/staff/:id", requireAttendanceRole(["attendance_admin"]), deleteStaffHandler);
 attendanceRouter.patch("/staff/:id/suspend", requireAttendanceRole(["attendance_admin"]), suspendStaffHandler);
 attendanceRouter.patch("/staff/:id/unsuspend", requireAttendanceRole(["attendance_admin"]), unsuspendStaffHandler);
@@ -245,20 +256,24 @@ attendanceRouter.post("/field-records/purge-all", requireAttendanceRole(["attend
 
 // --- Field driver roster management (same admin/officer split as staff above) ---
 attendanceRouter.get("/drivers/all", requireAttendanceRole(["attendance_admin", "sanitation_officer"]), listAllDriversHandler);
+attendanceRouter.get("/drivers/names", requireAttendanceRole([...NAME_CORRECTION_ROLES]), listDriverNamesHandler);
 attendanceRouter.post("/drivers", requireAttendanceRole(["attendance_admin"]), createDriverHandler);
 attendanceRouter.patch("/drivers/:id/active", requireAttendanceRole(["attendance_admin"]), setDriverActiveHandler);
 attendanceRouter.patch("/drivers/:id/transfer", requireAttendanceRole(["attendance_admin", "sanitation_officer"]), transferDriverHandler);
 attendanceRouter.patch("/drivers/:id/details", requireAttendanceRole(["attendance_admin", "sanitation_officer"]), updateDriverDetailsHandler);
+attendanceRouter.patch("/drivers/:id/name-hi", requireAttendanceRole([...NAME_CORRECTION_ROLES]), setDriverNameHiHandler);
 attendanceRouter.patch("/drivers/:id/assign", requireAttendanceRole(["attendance_admin"]), assignDriverHandler);
 attendanceRouter.post("/drivers/bulk-upload", requireAttendanceRole(["attendance_admin"]), uploadDriverRosterHandler);
 attendanceRouter.post("/drivers/vehicle-staff-import", requireAttendanceRole(["attendance_admin"]), uploadVehicleStaffImportHandler);
 
 // --- Field assistants (same admin/officer split as staff/drivers above) ---
 attendanceRouter.get("/assistants/all", requireAttendanceRole(["attendance_admin", "sanitation_officer"]), listAllAssistantsHandler);
+attendanceRouter.get("/assistants/names", requireAttendanceRole([...NAME_CORRECTION_ROLES]), listAssistantNamesHandler);
 attendanceRouter.post("/assistants", requireAttendanceRole(["attendance_admin"]), createAssistantHandler);
 attendanceRouter.patch("/assistants/:id/active", requireAttendanceRole(["attendance_admin"]), setAssistantActiveHandler);
 attendanceRouter.patch("/assistants/:id/transfer", requireAttendanceRole(["attendance_admin", "sanitation_officer"]), transferAssistantHandler);
 attendanceRouter.patch("/assistants/:id/details", requireAttendanceRole(["attendance_admin", "sanitation_officer"]), updateAssistantDetailsHandler);
+attendanceRouter.patch("/assistants/:id/name-hi", requireAttendanceRole([...NAME_CORRECTION_ROLES]), setAssistantNameHiHandler);
 attendanceRouter.patch("/assistants/:id/reassign-driver", requireAttendanceRole(["attendance_admin"]), reassignAssistantDriverHandler);
 attendanceRouter.post("/assistants/bulk-upload", requireAttendanceRole(["attendance_admin"]), uploadAssistantRosterHandler);
 

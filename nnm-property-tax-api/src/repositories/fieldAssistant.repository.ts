@@ -3,7 +3,9 @@ import { pool } from "../config/db";
 export interface FieldAssistantRow {
   id: number;
   name: string;
+  name_hi: string | null;
   external_id: string | null;
+  father_name: string | null;
   driver_id: number;
   ward_id: number;
   shift_id: number | null;
@@ -78,10 +80,11 @@ export const fieldAssistantRepository = {
     wardId: number;
     shiftId: number | null;
     supervisorId: number | null;
+    fatherName?: string | null;
   }): Promise<FieldAssistantRow> {
     const { rows } = await pool.query<FieldAssistantRow>(
-      `INSERT INTO field_assistants (name, external_id, driver_id, ward_id, shift_id, supervisor_id) VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
-      [input.name, input.externalId, input.driverId, input.wardId, input.shiftId, input.supervisorId],
+      `INSERT INTO field_assistants (name, external_id, driver_id, ward_id, shift_id, supervisor_id, father_name) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
+      [input.name, input.externalId, input.driverId, input.wardId, input.shiftId, input.supervisorId, input.fatherName ?? null],
     );
     return rows[0]!;
   },
@@ -106,16 +109,44 @@ export const fieldAssistantRepository = {
 
   async update(
     id: number,
-    input: { name?: string; driverId?: number; wardId?: number; shiftId: number | null; supervisorId: number | null; active: boolean; externalId?: string | null },
+    input: {
+      name?: string;
+      driverId?: number;
+      wardId?: number;
+      shiftId: number | null;
+      supervisorId: number | null;
+      active: boolean;
+      externalId?: string | null;
+      fatherName?: string | null;
+    },
   ): Promise<FieldAssistantRow | null> {
     const { rows } = await pool.query<FieldAssistantRow>(
       `UPDATE field_assistants
        SET name = COALESCE($2, name), driver_id = COALESCE($3, driver_id), ward_id = COALESCE($4, ward_id),
            shift_id = $5, supervisor_id = $6, active = $7,
-           external_id = CASE WHEN $8::boolean THEN $9 ELSE external_id END
+           external_id = CASE WHEN $8::boolean THEN $9 ELSE external_id END,
+           father_name = CASE WHEN $10::boolean THEN $11 ELSE father_name END
        WHERE id = $1 RETURNING *`,
-      [id, input.name ?? null, input.driverId ?? null, input.wardId ?? null, input.shiftId, input.supervisorId, input.active, input.externalId !== undefined, input.externalId ?? null],
+      [
+        id,
+        input.name ?? null,
+        input.driverId ?? null,
+        input.wardId ?? null,
+        input.shiftId,
+        input.supervisorId,
+        input.active,
+        input.externalId !== undefined,
+        input.externalId ?? null,
+        input.fatherName !== undefined,
+        input.fatherName ?? null,
+      ],
     );
+    return rows[0] ?? null;
+  },
+
+  /** The manual Hindi-name override - see migration 094. null clears it, reverting display to the auto-transliterated name. */
+  async setNameHi(id: number, nameHi: string | null): Promise<FieldAssistantRow | null> {
+    const { rows } = await pool.query<FieldAssistantRow>(`UPDATE field_assistants SET name_hi = $2 WHERE id = $1 RETURNING *`, [id, nameHi]);
     return rows[0] ?? null;
   },
 

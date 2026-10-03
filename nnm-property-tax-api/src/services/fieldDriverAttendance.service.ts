@@ -12,6 +12,7 @@ export type DriverWardFilter = "all" | "excludeToto" | "totoOnly";
 export interface WardDriverToday {
   driverId: number;
   name: string;
+  nameHi: string | null;
   vehicleNumber: string | null;
   shiftName: string | null;
   inTime: string | null;
@@ -44,6 +45,7 @@ export async function getWardDriversToday(wardId: number, filter: DriverWardFilt
     return {
       driverId: d.id,
       name: d.name,
+      nameHi: d.name_hi,
       vehicleNumber: d.asset_id ? (vehicleNumberByAssetId.get(d.asset_id) ?? null) : null,
       shiftName: shift ? shift.shift_name : null,
       inTime: rec?.in_time ? istTimeString(rec.in_time) : null,

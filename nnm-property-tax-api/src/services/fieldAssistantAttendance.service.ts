@@ -14,6 +14,7 @@ export type AssistantWardFilter = "all" | "excludeToto" | "totoOnly";
 export interface WardAssistantToday {
   assistantId: number;
   name: string;
+  nameHi: string | null;
   driverId: number;
   shiftName: string | null;
   inTime: string | null;
@@ -41,6 +42,7 @@ export async function getWardAssistantsToday(wardId: number, filter: AssistantWa
     return {
       assistantId: a.id,
       name: a.name,
+      nameHi: a.name_hi,
       driverId: a.driver_id,
       shiftName: shift ? shift.shift_name : null,
       inTime: rec?.in_time ? istTimeString(rec.in_time) : null,

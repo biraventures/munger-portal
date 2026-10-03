@@ -11,6 +11,7 @@ import {
   type AttendanceRole,
 } from "@/lib/attendance-auth";
 import { useAttendanceLang } from "@/lib/attendance-i18n";
+import { transliterateName } from "@/lib/hindi-name-transliterate";
 import logoImg from '@/public/logo.png'
 
 /**
@@ -77,7 +78,7 @@ export function AttendanceHeader({ user }: { user: AttendanceUserInfo }) {
             </button>
           </div>
           <span className="text-right text-sm leading-tight text-slate-500">
-            {user.displayName}
+            {lang === "hi" ? transliterateName(user.displayName) : user.displayName}
             <span className="block text-xs text-slate-400">
               {attendanceRoleLabel(user.role, lang)}
               {user.wardName ? ` - ${user.wardName}` : ""}

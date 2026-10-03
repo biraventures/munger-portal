@@ -151,7 +151,9 @@ export type AttendanceStatus = "present" | "half_day" | "absent_informed" | "abs
 export interface FieldStaffRow {
   id: number;
   name: string;
+  name_hi: string | null;
   external_id: string | null;
+  father_name: string | null;
   ward_id: number;
   shift_id: number | null;
   active: boolean;
@@ -197,7 +199,9 @@ export interface FieldStaffDailyPhotoRow {
 export interface FieldDriverRow {
   id: number;
   name: string;
+  name_hi: string | null;
   external_id: string | null;
+  father_name: string | null;
   dl_number: string | null;
   ward_id: number;
   shift_id: number | null;
