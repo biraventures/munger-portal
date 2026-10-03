@@ -1,5 +1,6 @@
 import { getAdminToken, type AdminRole } from "./admin-auth";
 import type { DemandNoticeReprintData } from "./demand-notice-api";
+import type { ReceiptData } from "./payment-api";
 
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_PROPERTY_TAX_API_URL || "http://localhost:4000/api/v1";
@@ -1026,7 +1027,7 @@ export async function generateDemandNoticeAdmin(holdingNo: string): Promise<Reco
   return res.json();
 }
 
-export async function submitPaymentAdmin(holdingNo: string, input: { amount: number; paymentMode: string; demandNo?: string; counter?: string }): Promise<Record<string, unknown>> {
+export async function submitPaymentAdmin(holdingNo: string, input: { amount: number; paymentMode: string; demandNo?: string; counter?: string }): Promise<ReceiptData> {
   const res = await fetch(`${API_BASE_URL}/properties/${encodeURIComponent(holdingNo)}/payments`, {
     method: "POST",
     headers: authHeaders(),
