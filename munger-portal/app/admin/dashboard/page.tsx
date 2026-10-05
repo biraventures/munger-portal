@@ -112,6 +112,8 @@ export default function AdminDashboardPage() {
   const isStreetlightReporterRole =
     admin.role === "tax_daroga" || admin.role === "tax_surveyor" || admin.role === "tax_collector" || admin.role === "stall_prabhari" || admin.role === "je_mechanical" || admin.role === "ae_mechanical" ||
     admin.role === "commissioner" || admin.role === "deputy_commissioner" || admin.role === "city_manager";
+  const showStreetlightReports =
+    admin.role === "commissioner" || admin.role === "deputy_commissioner" || admin.role === "city_manager" || admin.role === "je_mechanical" || admin.role === "ae_mechanical";
   const showPropertyWiseReport = admin.role === "commissioner" || admin.role === "deputy_commissioner" || admin.role === "city_manager";
   const propertyGroupVisible =
     showMutationApprovals || showCancellationRequests || showBulkDemandNotices || showAllPropertyChanges || showRenumberHolding || showBulkUploadProperties ||
@@ -610,6 +612,16 @@ export default function AdminDashboardPage() {
                   </span>
                   <h3 className="mb-1.5 text-base font-semibold text-slate-900">Report Streetlight Fault</h3>
                   <p className="text-sm text-slate-500">Report a damaged or non-functional streetlight noticed in the field.</p>
+                </Link>
+              )}
+
+              {showStreetlightReports && (
+                <Link href="/admin/streetlight-reports" className={cardClass}>
+                  <span className={iconWrapClass}>
+                    <BarChart3 className="h-6 w-6" strokeWidth={1.8} />
+                  </span>
+                  <h3 className="mb-1.5 text-base font-semibold text-slate-900">Street Light Reports</h3>
+                  <p className="text-sm text-slate-500">Ward-wise, street-wise and agency-wise reports, downloadable for Excel.</p>
                 </Link>
               )}
             </div>

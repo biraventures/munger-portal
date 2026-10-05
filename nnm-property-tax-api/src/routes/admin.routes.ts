@@ -140,6 +140,7 @@ import {
   getTradeLicenseStats,
 } from "../controllers/tradeLicenseApplication.controller";
 import { requireAdmin, requireAdminRole } from "../middleware/requireAdmin";
+import { getStreetlightReportHandler } from "../controllers/streetlightReport.controller";
 import {
   listAllPublicDocumentsHandler,
   uploadPublicDocumentHandler,
@@ -257,6 +258,13 @@ adminRouter.get("/street-segments/:id/lights", requireStreetlightReporterRole, l
 adminRouter.post("/streetlight-faults", requireStreetlightReporterRole, reportStreetlightFaultHandler);
 adminRouter.get("/lights/:id/repair-history-summary", requireAdminRole("commissioner"), getLightRepairHistorySummaryAdminHandler);
 adminRouter.get("/streetlight-faults", listStreetlightFaultsHandler);
+
+// Ward-wise / street-wise / agency-wise street light reports (on-screen + CSV download).
+adminRouter.get(
+  "/streetlight-reports/:kind",
+  requireAdminRole("commissioner", "deputy_commissioner", "city_manager", "je_mechanical", "ae_mechanical"),
+  getStreetlightReportHandler,
+);
 
 // Municipal employee database - Establishment Clerk enters records,
 // City Manager verifies, Commissioner sees overall progress. See
