@@ -68,6 +68,33 @@ export interface GeneratedCollectionIssueNotice {
   noticeDate: string;
   complianceDays: number;
   language: NoticeLanguage;
+  /** True only for a reprint of a notice issued before snapshots were kept - rebuilt from current records, so property details (e.g. owner name) may differ from the original. */
+  reconstructed?: boolean;
+}
+
+/** The text of a notice - shared by first generation and by rebuilding an old notice that has no snapshot. */
+function composeNoticeText(
+  issue: CollectionIssueRow,
+  property: PropertyRow,
+  demandNotice: DemandNoticeRow | null,
+  language: NoticeLanguage,
+  noticeDate: Date,
+) {
+  const template = COLLECTION_ISSUE_NOTICE_TEMPLATES[issue.issue_type];
+  const text = template.text[language];
+  const fallback = FALLBACK_PHRASES[language];
+  const bodyText = fillTemplate(text.body, {
+    ownerName: property.owner_name,
+    holdingNo: property.holding_no,
+    address: property.address,
+    ward: property.ward ?? "-",
+    demandNo: demandNotice?.demand_no ?? fallback.demandNotGenerated,
+    totalAmountDemanded: demandNotice ? money(demandNotice.total_amount_demanded) : "0.00",
+    issueNotes: issue.notes ?? fallback.noRemarks,
+    reportedDate: formatDate(issue.reported_at, language),
+    complianceDays: template.complianceDays,
+  });
+  return { title: text.title, legalBasis: text.legalBasis, bodyText, noticeDate: formatDate(noticeDate, language), complianceDays: template.complianceDays };
 }
 
 /**
@@ -97,24 +124,14 @@ export async function generateCollectionIssueNotice(
     demandNotice = all[0] ?? null;
   }
 
-  const template = COLLECTION_ISSUE_NOTICE_TEMPLATES[issue.issue_type];
-  const text = template.text[language];
   const now = new Date();
   const seq = await collectionIssueNoticeRepository.getNextNoticeSeq();
   const noticeNo = formatNoticeNo(seq, issue.issue_type, now);
+  const content = composeNoticeText(issue, property, demandNotice, language, now);
 
-  const fallback = FALLBACK_PHRASES[language];
-  const bodyText = fillTemplate(text.body, {
-    ownerName: property.owner_name,
-    holdingNo: property.holding_no,
-    address: property.address,
-    ward: property.ward ?? "-",
-    demandNo: demandNotice?.demand_no ?? fallback.demandNotGenerated,
-    totalAmountDemanded: demandNotice ? money(demandNotice.total_amount_demanded) : "0.00",
-    issueNotes: issue.notes ?? fallback.noRemarks,
-    reportedDate: formatDate(issue.reported_at, language),
-    complianceDays: template.complianceDays,
-  });
+  // Frozen alongside the record, so reprinting this notice later gives
+  // exactly what was issued today.
+  const snapshot = { property, issue, demandNotice, ...content, language };
 
   const record = await collectionIssueNoticeRepository.create({
     collectionIssueId,
@@ -125,20 +142,38 @@ export async function generateCollectionIssueNotice(
     language,
     generatedByUsername: admin.username,
     generatedByDisplayName: admin.displayName,
+    snapshot,
   });
 
-  return {
-    record,
-    property,
-    issue,
-    demandNotice,
-    title: text.title,
-    legalBasis: text.legalBasis,
-    bodyText,
-    noticeDate: formatDate(now, language),
-    complianceDays: template.complianceDays,
-    language,
-  };
+  return { record, property, issue, demandNotice, ...content, language };
+}
+
+/**
+ * Reprints a notice already issued. A notice generated since
+ * snapshots were introduced comes back exactly as issued. An older one
+ * has no snapshot, so it's rebuilt from its stored notice number,
+ * language, issue and demand number plus the property's current
+ * details, and flagged as reconstructed.
+ */
+export async function reprintCollectionIssueNotice(noticeId: number): Promise<GeneratedCollectionIssueNotice> {
+  const record = await collectionIssueNoticeRepository.findById(noticeId);
+  if (!record) throw ApiError.notFound("Notice not found.");
+
+  if (record.snapshot) {
+    const { snapshot, ...recordWithoutSnapshot } = record;
+    return { record: recordWithoutSnapshot, ...(snapshot as unknown as Omit<GeneratedCollectionIssueNotice, "record">), reconstructed: false };
+  }
+
+  const issue = await collectionIssueRepository.findById(record.collection_issue_id);
+  if (!issue) throw ApiError.notFound("The collection issue this notice was raised against no longer exists.");
+  const property = await propertyRepository.findByHoldingNo(record.holding_no);
+  if (!property) throw ApiError.notFound("Holding not found.");
+  const demandNotice = record.demand_no ? await demandNoticeRepository.findByDemandNo(record.demand_no) : null;
+
+  const content = composeNoticeText(issue, property, demandNotice, record.language, record.generated_at);
+  const { snapshot: _unused, ...recordWithoutSnapshot } = record;
+  void _unused;
+  return { record: recordWithoutSnapshot, property, issue, demandNotice, ...content, language: record.language, reconstructed: true };
 }
 
 export async function listNoticesForIssue(collectionIssueId: number) {

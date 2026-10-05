@@ -77,6 +77,12 @@ export function CollectionIssueNoticeView({ notice, onClose }: { notice: Generat
         </button>
       </div>
 
+      {notice.reconstructed && (
+        <div className="no-print mb-4 rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+          This notice was issued before exact copies were kept, so it has been rebuilt from the records. The notice number, date, language and demand are as issued, but property details such as the owner&apos;s name and address are as they are now.
+        </div>
+      )}
+
       <div
         ref={printRef}
         className="printable-area rounded-xl border border-slate-200 bg-white p-8 text-[12px] text-[#222]"

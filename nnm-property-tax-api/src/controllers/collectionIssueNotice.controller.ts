@@ -1,6 +1,6 @@
 import type { Request, Response } from "express";
 import { z } from "zod";
-import { generateCollectionIssueNotice, listNoticesForIssue } from "../services/collectionIssueNotice.service";
+import { generateCollectionIssueNotice, listNoticesForIssue, reprintCollectionIssueNotice } from "../services/collectionIssueNotice.service";
 import { asyncHandler } from "../middleware/asyncHandler";
 import { ApiError } from "../utils/ApiError";
 
@@ -25,4 +25,14 @@ export const getCollectionIssueNotices = asyncHandler(async (req: Request, res: 
   if (!parsed.success) throw ApiError.badRequest("Invalid collection issue id");
   const notices = await listNoticesForIssue(parsed.data.id);
   res.status(200).json({ notices });
+});
+
+const noticeIdParamSchema = z.object({ id: z.coerce.number().int().positive() });
+
+/** GET /api/v1/admin/collection-issue-notices/:id/reprint - a notice already issued, exactly as it was (or rebuilt, flagged `reconstructed`, if it predates snapshots). Read-only - never creates a new notice or uses up a notice number. */
+export const getReprintCollectionIssueNotice = asyncHandler(async (req: Request, res: Response) => {
+  const parsed = noticeIdParamSchema.safeParse(req.params);
+  if (!parsed.success) throw ApiError.badRequest("Invalid notice id");
+  const notice = await reprintCollectionIssueNotice(parsed.data.id);
+  res.status(200).json(notice);
 });

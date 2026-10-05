@@ -1768,6 +1768,20 @@ export interface CollectionIssue {
   reported_at: string;
 }
 
+/** One notice as listed under its collection issue - see CollectionIssueNotice for the full row. */
+export interface CollectionIssueNoticeSummary {
+  id: number;
+  notice_no: string;
+  language: "en" | "hi";
+  demand_no: string | null;
+  generated_by_display_name: string;
+  generated_at: string;
+}
+
+export interface CollectionIssueWithNotices extends CollectionIssue {
+  notices: CollectionIssueNoticeSummary[];
+}
+
 export async function reportCollectionIssue(holdingNo: string, issueType: CollectionIssueType, notes?: string): Promise<CollectionIssue> {
   const res = await fetch(`${API_BASE_URL}/properties/${encodeURIComponent(holdingNo)}/collection-issue`, {
     method: "POST",
@@ -1848,10 +1862,11 @@ export async function fetchFieldVerificationsForHolding(holdingNo: string): Prom
 }
 
 /** Oversight worklist - Tax Daroga, Commissioner, and City Manager (who also generates notices from here). */
-export async function fetchAllCollectionIssues(): Promise<CollectionIssue[]> {
-  const res = await fetch(`${API_BASE_URL}/admin/collection-issues`, { headers: authHeaders() });
+export async function fetchAllCollectionIssues(status?: "pending" | "noticed"): Promise<CollectionIssueWithNotices[]> {
+  const qs = status ? `?status=${status}` : "";
+  const res = await fetch(`${API_BASE_URL}/admin/collection-issues${qs}`, { headers: authHeaders() });
   if (!res.ok) throw new Error("Could not load collection issues.");
-  const data: { issues: CollectionIssue[] } = await res.json();
+  const data: { issues: CollectionIssueWithNotices[] } = await res.json();
   return data.issues;
 }
 
@@ -1891,6 +1906,18 @@ export interface GeneratedCollectionIssueNotice {
   noticeDate: string;
   complianceDays: number;
   language: NoticeLanguage;
+  /** True when this is a reprint of a notice issued before copies were kept - rebuilt from current records, so property details may differ from the original. */
+  reconstructed?: boolean;
+}
+
+/** An already-issued notice, exactly as it was issued - read-only, never creates a new notice. */
+export async function reprintCollectionIssueNotice(noticeId: number): Promise<GeneratedCollectionIssueNotice> {
+  const res = await fetch(`${API_BASE_URL}/admin/collection-issue-notices/${noticeId}/reprint`, { headers: authHeaders() });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || "Could not load this notice.");
+  }
+  return res.json();
 }
 
 export async function generateCollectionIssueNotice(collectionIssueId: number, language: NoticeLanguage = "en"): Promise<GeneratedCollectionIssueNotice> {

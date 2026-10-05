@@ -7,6 +7,7 @@ import { changeRequestRepository } from "../repositories/changeRequest.repositor
 import { propertyDiscrepancyRepository } from "../repositories/propertyDiscrepancy.repository";
 import { propertyResurveyFlagRepository } from "../repositories/propertyResurveyFlag.repository";
 import { propertyFieldVerificationRepository } from "../repositories/propertyFieldVerification.repository";
+import { collectionIssueRepository } from "../repositories/collectionIssue.repository";
 import { asyncHandler } from "../middleware/asyncHandler";
 import { ApiError } from "../utils/ApiError";
 
@@ -49,7 +50,8 @@ const holdingNoParamSchema = z.object({ holdingNo: holdingNoSchema });
  * every mutation ever requested against it (the "log of changes made
  * or pending"), every discrepancy reported, every re-survey flag
  * raised, and every field-verification visit logged by a surveyor.
- * Five existing read paths joined into one call, same approach as
+ * Plus every collection issue a Tax Collector raised against it, with the
+ * notices the City Manager issued for each. Six existing read paths joined into one call, same approach as
  * shopReport.controller.ts's getShopReportHandler.
  */
 export const getPropertyReportHandler = asyncHandler(async (req: Request, res: Response) => {
@@ -60,12 +62,13 @@ export const getPropertyReportHandler = asyncHandler(async (req: Request, res: R
   const propertyResult = await searchPropertyByHoldingNo(holdingNo);
   if (!propertyResult.found) throw ApiError.notFound(propertyResult.message ?? "Property not found");
 
-  const [changeRequests, discrepancies, resurveyFlags, fieldVerifications] = await Promise.all([
+  const [changeRequests, discrepancies, resurveyFlags, fieldVerifications, collectionIssues] = await Promise.all([
     changeRequestRepository.listForHolding(holdingNo),
     propertyDiscrepancyRepository.listForHolding(holdingNo),
     propertyResurveyFlagRepository.listForHolding(holdingNo),
     propertyFieldVerificationRepository.listForHolding(holdingNo),
+    collectionIssueRepository.listForHoldingWithNotices(holdingNo),
   ]);
 
-  res.status(200).json({ ...propertyResult, changeRequests, discrepancies, resurveyFlags, fieldVerifications });
+  res.status(200).json({ ...propertyResult, changeRequests, discrepancies, resurveyFlags, fieldVerifications, collectionIssues });
 });

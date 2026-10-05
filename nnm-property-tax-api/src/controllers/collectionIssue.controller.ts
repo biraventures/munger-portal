@@ -42,8 +42,18 @@ export const listCollectionIssuesForHolding = asyncHandler(async (req: Request, 
   res.status(200).json({ issues });
 });
 
-/** GET /api/v1/admin/collection-issues - oversight worklist (Tax Daroga, Commissioner) of every issue reported across all holdings. */
-export const listAllCollectionIssues = asyncHandler(async (_req: Request, res: Response) => {
-  const issues = await collectionIssueRepository.list({});
+const listQuerySchema = z.object({ status: z.enum(["pending", "noticed"]).optional() });
+
+/**
+ * GET /api/v1/admin/collection-issues?status=pending|noticed - the
+ * City Manager / Tax Daroga / Commissioner worklist, each issue with
+ * its notices attached. "pending" = no notice raised yet, so an issue
+ * leaves it as soon as a notice is generated; "noticed" = already
+ * has a notice (where reprints are found); omitted = everything.
+ */
+export const listAllCollectionIssues = asyncHandler(async (req: Request, res: Response) => {
+  const parsed = listQuerySchema.safeParse(req.query);
+  if (!parsed.success) throw ApiError.badRequest("Invalid status");
+  const issues = await collectionIssueRepository.listWithNotices(parsed.data.status);
   res.status(200).json({ issues });
 });

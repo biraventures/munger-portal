@@ -2,10 +2,17 @@
 
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { AlertCircle, Home, Loader2, MapPin } from "lucide-react";
+import { AlertCircle, Home, Loader2, MapPin, Printer, ScrollText } from "lucide-react";
 import { AdminHeader } from "@/components/admin-header";
 import { useAdminGuard } from "@/lib/use-admin-guard";
 import { fetchPropertyReport, type PropertyReport } from "@/lib/admin-property-api";
+import {
+  reprintCollectionIssueNotice,
+  COLLECTION_ISSUE_TYPE_LABELS,
+  NOTICE_LANGUAGE_LABELS,
+  type GeneratedCollectionIssueNotice,
+} from "@/lib/admin-api";
+import { CollectionIssueNoticeView } from "@/components/admin/collection-issue-notice-view";
 
 const ALLOWED_ROLES = ["commissioner", "deputy_commissioner", "city_manager"];
 
@@ -37,6 +44,20 @@ export default function PropertyWiseReportDetailPage() {
 
   const [report, setReport] = useState<PropertyReport | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [openNotice, setOpenNotice] = useState<GeneratedCollectionIssueNotice | null>(null);
+  const [openingNoticeId, setOpeningNoticeId] = useState<number | null>(null);
+
+  async function handleReprint(noticeId: number) {
+    setOpeningNoticeId(noticeId);
+    setError(null);
+    try {
+      setOpenNotice(await reprintCollectionIssueNotice(noticeId));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not load this notice.");
+    } finally {
+      setOpeningNoticeId(null);
+    }
+  }
 
   useEffect(() => {
     if (!admin || !ALLOWED_ROLES.includes(admin.role)) return;
@@ -64,6 +85,17 @@ export default function PropertyWiseReportDetailPage() {
   }
 
   const p = report?.property;
+
+  if (openNotice) {
+    return (
+      <div className="min-h-screen bg-slate-50">
+        <AdminHeader admin={admin} />
+        <main className="mx-auto max-w-3xl px-6 py-10">
+          <CollectionIssueNoticeView notice={openNotice} onClose={() => setOpenNotice(null)} />
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -252,6 +284,59 @@ export default function PropertyWiseReportDetailPage() {
                       <p className="font-semibold text-slate-700">{fmtDateTime(v.captured_at)} - {v.captured_by_display_name} ({v.captured_by_role})</p>
                       {v.gps_lat && v.gps_lng && (
                         <p className="mt-1 text-slate-500">GPS: {v.gps_lat}, {v.gps_lng}</p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+
+            {/* Collection issues raised by Tax Collectors, and the notices issued against them */}
+            <section className="mb-6 rounded-xl border border-slate-200 bg-white p-6">
+              <h2 className="mb-1 flex items-center gap-2 text-sm font-semibold text-slate-700">
+                <ScrollText className="h-4 w-4" />
+                Collection Issues &amp; Notices Issued ({report.collectionIssues.reduce((n, i) => n + i.notices.length, 0)} notice
+                {report.collectionIssues.reduce((n, i) => n + i.notices.length, 0) === 1 ? "" : "s"})
+              </h2>
+              <p className="mb-4 text-xs text-slate-400">Every problem a Tax Collector reported while collecting from this holder, and each notice the City Manager issued for it.</p>
+              {report.collectionIssues.length === 0 ? (
+                <p className="text-sm text-slate-400">No collection issue has been raised against this holding.</p>
+              ) : (
+                <div className="space-y-3">
+                  {report.collectionIssues.map((i) => (
+                    <div key={i.id} className="rounded-md border border-slate-200 p-3 text-xs">
+                      <div className="mb-1 flex items-center justify-between gap-2">
+                        <span className="font-semibold text-slate-700">{COLLECTION_ISSUE_TYPE_LABELS[i.issue_type]}</span>
+                        {i.notices.length === 0 ? (
+                          <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold uppercase text-amber-700">Awaiting notice</span>
+                        ) : (
+                          <span className="rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-semibold uppercase text-green-700">Notice issued</span>
+                        )}
+                      </div>
+                      <p className="text-slate-500">
+                        Raised {fmtDateTime(i.reported_at)} by {i.reported_by_display_name}
+                        {i.notes && ` - "${i.notes}"`}
+                      </p>
+                      {i.notices.length > 0 && (
+                        <ul className="mt-2 divide-y divide-slate-100 border-t border-slate-100">
+                          {i.notices.map((n) => (
+                            <li key={n.id} className="flex items-center justify-between gap-3 py-2">
+                              <span className="text-slate-600">
+                                <span className="font-mono font-semibold text-slate-800">{n.notice_no}</span> · {NOTICE_LANGUAGE_LABELS[n.language]} · {fmtDateTime(n.generated_at)} by{" "}
+                                {n.generated_by_display_name}
+                                {n.demand_no && <span className="text-slate-400"> · Demand {n.demand_no}</span>}
+                              </span>
+                              <button
+                                onClick={() => handleReprint(n.id)}
+                                disabled={openingNoticeId === n.id}
+                                className="inline-flex shrink-0 items-center gap-1 font-semibold text-nnm-blue hover:underline disabled:opacity-60"
+                              >
+                                <Printer className="h-3.5 w-3.5" />
+                                {openingNoticeId === n.id ? "Opening…" : "View / Reprint"}
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
                       )}
                     </div>
                   ))}

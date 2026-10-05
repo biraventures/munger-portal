@@ -1,4 +1,5 @@
 import { getAdminToken } from "./admin-auth";
+import type { CollectionIssueWithNotices } from "./admin-api";
 
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_PROPERTY_TAX_API_URL || "http://localhost:4000/api/v1";
@@ -107,6 +108,8 @@ export interface PropertyReport {
   discrepancies: PropertyDiscrepancySummary[];
   resurveyFlags: PropertyResurveyFlagSummary[];
   fieldVerifications: PropertyFieldVerificationSummary[];
+  /** Every collection issue raised against this holding, each with the notices issued for it. */
+  collectionIssues: CollectionIssueWithNotices[];
 }
 
 export async function fetchPropertyReport(holdingNo: string): Promise<PropertyReport> {

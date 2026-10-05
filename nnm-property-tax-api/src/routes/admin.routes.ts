@@ -91,7 +91,7 @@ import {
 } from "../controllers/migratedHoldingSurvey.controller";
 import { listResurveyFlagsHandler, reviewResurveyFlagHandler, exportResurveyFlagsHandler } from "../controllers/propertyResurveyFlag.controller";
 import { listAllCollectionIssues } from "../controllers/collectionIssue.controller";
-import { postGenerateCollectionIssueNotice, getCollectionIssueNotices } from "../controllers/collectionIssueNotice.controller";
+import { postGenerateCollectionIssueNotice, getCollectionIssueNotices, getReprintCollectionIssueNotice } from "../controllers/collectionIssueNotice.controller";
 import { listTaxCollectorsWithAssignmentHandler, listCityManagersHandler, assignCityManagerHandler, setTaxCollectorWardsHandler } from "../controllers/taxCollectorAssignment.controller";
 import { listAdminAccounts, setAdminAccountActive } from "../controllers/adminAccounts.controller";
 import { listEntryRevertEventsHandler, exportEntryRevertEventsHandler } from "../controllers/entryRevertEvent.controller";
@@ -388,6 +388,7 @@ adminRouter.get("/property-resurvey-flags", requireResurveyFlagReviewRole, listR
 adminRouter.get("/collection-issues", requireAdminRole("tax_daroga", "commissioner", "city_manager"), listAllCollectionIssues);
 adminRouter.post("/collection-issues/:id/generate-notice", requireAdminRole("city_manager"), postGenerateCollectionIssueNotice);
 adminRouter.get("/collection-issues/:id/notices", requireAdminRole("tax_daroga", "commissioner", "city_manager"), getCollectionIssueNotices);
+adminRouter.get("/collection-issue-notices/:id/reprint", requireAdminRole("tax_daroga", "commissioner", "deputy_commissioner", "city_manager"), getReprintCollectionIssueNotice);
 adminRouter.post("/property-resurvey-flags/:id/review", requireResurveyFlagReviewRole, reviewResurveyFlagHandler);
 adminRouter.get("/property-resurvey-flags/export", requireAdminRole("commissioner"), exportResurveyFlagsHandler);
 
