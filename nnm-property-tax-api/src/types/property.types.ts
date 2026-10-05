@@ -50,6 +50,9 @@ export interface PropertyRow {
   surveyor_name: string | null;
   surveyor_id_number: string | null;
   survey_date: string | null;
+  /** GPS of the holding (migration 101); numeric comes back as string from pg. */
+  latitude: string | null;
+  longitude: string | null;
 }
 
 export interface FloorRow {
@@ -169,6 +172,8 @@ export interface PropertySearchResult {
     pendingArrearsTotal: string;
 	autoPenalty: string;
     totalPayable: string;
+    /** Live unsettled demand notices - so a lookup never reads as plain "no dues" while one is outstanding. */
+    pendingDemandNotices: { demandNo: string; noticeDate: Date; assessmentYear: string | null; totalAmountDemanded: string }[];
   };
   floors?: FloorRow[];
   taxCalc?: TaxCalculationResult;

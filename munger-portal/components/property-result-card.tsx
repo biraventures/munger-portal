@@ -176,7 +176,13 @@ export function PropertyResultCard({ record }: PropertyResultCardProps) {
         </div>
 
         <div className="flex w-full flex-col items-end gap-3 sm:w-auto sm:max-w-xs">
-          {nothingDue ? (
+          {nothingDue && record.pendingDemandNotices.length > 0 ? (
+            <span className="max-w-xs rounded-md border border-amber-200 bg-amber-50 px-4 py-2.5 text-right text-sm text-amber-800">
+              A demand notice (₹{Number(record.pendingDemandNotices[0]!.totalAmountDemanded).toLocaleString("en-IN")}
+              {record.pendingDemandNotices[0]!.assessmentYear ? `, ${record.pendingDemandNotices[0]!.assessmentYear}` : ""}) is
+              pending against this holding. Please contact the Nagar Nigam office to confirm the amount due.
+            </span>
+          ) : nothingDue ? (
             <span className="inline-flex items-center gap-2 rounded-md border border-green-200 bg-green-50 px-6 py-2.5 text-sm font-semibold text-green-800">
               <CheckCircle2 className="h-4 w-4" />
               No dues pending

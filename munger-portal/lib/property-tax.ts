@@ -19,6 +19,8 @@ export interface PropertyRecord {
   /** True when tax_paid_till_year has already reached this holding's current assessment_year — the current-year figures above are informational, not owed. */
   currentCyclePaid: boolean;
   paidThroughYear: string | null;
+  /** Live unsettled demand notices issued against this holding. */
+  pendingDemandNotices: { demandNo: string; noticeDate: string; assessmentYear: string | null; totalAmountDemanded: string }[];
 }
 
 export function totalPayable(record: PropertyRecord): number {
@@ -74,6 +76,7 @@ interface ApiPropertyResponse {
     autoPenalty: string;
     currentCyclePaid: boolean;
     paidThroughYear: string | null;
+    pendingDemandNotices?: { demandNo: string; noticeDate: string; assessmentYear: string | null; totalAmountDemanded: string }[];
   };
 }
 
@@ -132,6 +135,7 @@ export async function searchPropertyByHoldingNumber(
         totalPayable: parseFloat(p.totalPayable) || 0,
         currentCyclePaid: p.currentCyclePaid ?? false,
         paidThroughYear: p.paidThroughYear ?? null,
+        pendingDemandNotices: p.pendingDemandNotices ?? [],
       },
     ],
   };

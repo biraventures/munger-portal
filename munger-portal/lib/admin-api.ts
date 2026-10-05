@@ -1796,10 +1796,18 @@ export async function reportCollectionIssue(holdingNo: string, issueType: Collec
   return data.issue;
 }
 
-export async function fetchCollectionIssuesForHolding(holdingNo: string): Promise<CollectionIssue[]> {
+export async function fetchCollectionIssuesForHolding(holdingNo: string): Promise<CollectionIssueWithNotices[]> {
   const res = await fetch(`${API_BASE_URL}/properties/${encodeURIComponent(holdingNo)}/collection-issues`, { headers: authHeaders() });
   if (!res.ok) throw new Error("Could not load collection issues.");
-  const data: { issues: CollectionIssue[] } = await res.json();
+  const data: { issues: CollectionIssueWithNotices[] } = await res.json();
+  return data.issues;
+}
+
+/** The signed-in Tax Collector's own reported issues, each with any notices raised on them. */
+export async function fetchMyCollectionIssues(): Promise<CollectionIssueWithNotices[]> {
+  const res = await fetch(`${API_BASE_URL}/admin/collection-issues/mine`, { headers: authHeaders() });
+  if (!res.ok) throw new Error("Could not load your reported issues.");
+  const data: { issues: CollectionIssueWithNotices[] } = await res.json();
   return data.issues;
 }
 

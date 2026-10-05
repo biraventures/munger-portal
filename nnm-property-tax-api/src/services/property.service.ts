@@ -1,4 +1,5 @@
 import { propertyRepository } from "../repositories/property.repository";
+import { demandNoticeRepository } from "../repositories/demandNotice.repository";
 import { calculateTax } from "./taxCalculation.service";
 import { calculateRebateOrLateFee, calculateSolidWasteCharge } from "./charges.service";
 import { summarizeArrears } from "./arrears.service";
@@ -78,10 +79,22 @@ export async function searchPropertyByHoldingNo(holdingNoRaw: string): Promise<P
 		arrears.totalPending + arrears.penalty + (currentCyclePaid ? 0 : currentYearTiming.net + currentCycleOtherCharges),
 	);
 
+  // Live (unsettled, not superseded, not cancelled) demand notices. Surfaced
+  // so the public lookup never reads as plain "no dues" while a notice is
+  // still outstanding against the holding (e.g. after a receipt cancellation).
+  const pendingNotices = await demandNoticeRepository.findUnsettledForHolding(property.holding_no);
+  const pendingDemandNotices = pendingNotices.map((n) => ({
+    demandNo: n.demand_no,
+    noticeDate: n.notice_date,
+    assessmentYear: n.assessment_year,
+    totalAmountDemanded: n.total_amount_demanded,
+  }));
+
   return {
     found: true,
     property: {
       ...property,
+      pendingDemandNotices,
       currentTax: calc.currentTax,
       rebate: calc.rebate,
       arv: calc.arv,

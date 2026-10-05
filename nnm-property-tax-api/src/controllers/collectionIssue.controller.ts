@@ -38,7 +38,7 @@ export const postReportCollectionIssue = asyncHandler(async (req: Request, res: 
 export const listCollectionIssuesForHolding = asyncHandler(async (req: Request, res: Response) => {
   const parsed = z.object({ holdingNo: holdingNoSchema }).safeParse(req.params);
   if (!parsed.success) throw ApiError.badRequest("Invalid holding number");
-  const issues = await collectionIssueRepository.listForHolding(parsed.data.holdingNo);
+  const issues = await collectionIssueRepository.listForHoldingWithNotices(parsed.data.holdingNo);
   res.status(200).json({ issues });
 });
 
@@ -55,5 +55,12 @@ export const listAllCollectionIssues = asyncHandler(async (req: Request, res: Re
   const parsed = listQuerySchema.safeParse(req.query);
   if (!parsed.success) throw ApiError.badRequest("Invalid status");
   const issues = await collectionIssueRepository.listWithNotices(parsed.data.status);
+  res.status(200).json({ issues });
+});
+
+/** GET /api/v1/admin/collection-issues/mine - the signed-in Tax Collector's own reported issues with any notices raised on them. */
+export const listMyCollectionIssues = asyncHandler(async (req: Request, res: Response) => {
+  if (!req.admin) throw new ApiError(401, "Not signed in.");
+  const issues = await collectionIssueRepository.listForReporterWithNotices(req.admin.username);
   res.status(200).json({ issues });
 });

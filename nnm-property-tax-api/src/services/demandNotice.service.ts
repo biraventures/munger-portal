@@ -1,5 +1,6 @@
 import { propertyRepository } from "../repositories/property.repository";
 import { demandNoticeRepository } from "../repositories/demandNotice.repository";
+import { cancellationRequestRepository } from "../repositories/cancellationRequest.repository";
 import { calculateTax } from "./taxCalculation.service";
 import { calculateRebateOrLateFee, calculateSolidWasteCharge } from "./charges.service";
 import { summarizeArrears } from "./arrears.service";
@@ -295,12 +296,19 @@ export interface DemandNoticeHistoryEntry {
   reminderNumber: number;
   reminderLabel: string | null;
   superseded: boolean;
+  cancelled: boolean;
+  /** A cancellation request for this notice is awaiting approval. */
+  cancellationPending: boolean;
 }
 
 /** Every demand notice ever issued for a holding, most recent first — the read-only document history list, not the payment picker. */
 export async function listDemandNoticeHistory(holdingNo: string): Promise<DemandNoticeHistoryEntry[]> {
   const notices = await demandNoticeRepository.findAllForHolding(holdingNo);
+  const pending = await cancellationRequestRepository.listPendingTargetsForHolding(holdingNo);
+  const pendingNotices = new Set(pending.filter((p) => p.request_type === "demand_notice").map((p) => p.target_id));
   return notices.map((n) => ({
+    cancelled: n.cancelled,
+    cancellationPending: !n.cancelled && pendingNotices.has(n.demand_no),
     demandNo: n.demand_no,
     formattedDemandNo: formatDocNumber(n.demand_no, "Demand", n.notice_date),
     date: `${String(n.notice_date.getDate()).padStart(2, "0")}-${String(n.notice_date.getMonth() + 1).padStart(2, "0")}-${n.notice_date.getFullYear()}`,

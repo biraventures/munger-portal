@@ -249,6 +249,8 @@ export interface DemandNoticeHistoryEntry {
   reminderNumber: number;
   reminderLabel: string | null;
   superseded: boolean;
+  cancelled: boolean;
+  cancellationPending: boolean;
 }
 
 export async function fetchDemandNoticeHistory(holdingNo: string): Promise<DemandNoticeHistoryEntry[]> {
@@ -302,6 +304,9 @@ export interface PaymentHistoryEntry {
   date: string;
   amountReceived: string;
   paymentMode: string;
+  cancelled: boolean;
+  cancelledReason: string | null;
+  cancellationPending: boolean;
 }
 
 export async function fetchPaymentHistory(holdingNo: string): Promise<PaymentHistoryEntry[]> {

@@ -70,6 +70,15 @@ export const collectionIssueRepository = {
     return rows;
   },
 
+  /** Every issue one Tax Collector has reported, each with its notices - so they can see what came of them. */
+  async listForReporterWithNotices(username: string): Promise<CollectionIssueWithNotices[]> {
+    const { rows } = await pool.query<CollectionIssueWithNotices>(
+      `${WITH_NOTICES_SELECT} WHERE ci.reported_by_username = $1 GROUP BY ci.id ORDER BY ci.reported_at DESC`,
+      [username],
+    );
+    return rows;
+  },
+
   /** Oversight worklist - every issue reported, most recent first, optionally narrowed to one Tax Collector. */
   async list(filters: { reportedByUsername?: string }): Promise<CollectionIssueRow[]> {
     if (filters.reportedByUsername) {

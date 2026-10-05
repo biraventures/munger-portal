@@ -38,6 +38,21 @@ function cellNumber(value: ExcelJS.CellValue): number | null {
 }
 
 /**
+ * Reads the optional Latitude/Longitude columns. Blank / "NA" / out-of-range
+ * values give null for both (never a half pair). If the two are obviously
+ * swapped (|lat| > 90 while |lng| <= 90) they are swapped back - the field
+ * survey sheets frequently have the columns the wrong way round.
+ */
+function parseGps(latRaw: ExcelJS.CellValue, lngRaw: ExcelJS.CellValue): { lat: number | null; lng: number | null } {
+  let lat = cellNumber(latRaw);
+  let lng = cellNumber(lngRaw);
+  if (lat === null || lng === null) return { lat: null, lng: null };
+  if (Math.abs(lat) > 90 && Math.abs(lng) <= 90) [lat, lng] = [lng, lat];
+  if (Math.abs(lat) > 90 || Math.abs(lng) > 180 || (lat === 0 && lng === 0)) return { lat: null, lng: null };
+  return { lat, lng };
+}
+
+/**
  * Handles every date shape actually present in the real backup: a
  * native JS Date (from an Excel-formatted date cell - ExcelJS already
  * resolves these correctly, no ambiguity), a "dd-mm-yyyy HH:MM[:SS]"
@@ -188,6 +203,7 @@ export async function importPropertiesXlsx(fileBuffer: Buffer, actorDisplayName:
       const holdingCreationYear = cellText(row.HoldingCreationYear) || assessmentYear;
 
       const relationType = cellText(row.RelationType);
+      const gps = parseGps(row.Latitude, row.Longitude);
 
       await pool.query(
         `INSERT INTO properties (
@@ -197,8 +213,8 @@ export async function importPropertiesXlsx(fileBuffer: Buffer, actorDisplayName:
           solid_waste_charge, penal_charge, water_charge, boring_charge, form_fee, misc_cost,
           misc_cost_reason, misc_rebate, misc_rebate_reason, arv, tax_payable, holding_creation_year,
           tax_paid_till_year, present_holding_name, present_category, created_by, created_date,
-          last_modified_by, last_modified_date
-        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39)`,
+          last_modified_by, last_modified_date, latitude, longitude
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40,$41)`,
         [
           holdingNo,
           cellText(row.OldHoldingNo) || null,
@@ -239,6 +255,8 @@ export async function importPropertiesXlsx(fileBuffer: Buffer, actorDisplayName:
           parseFlexibleDateTime(row.CreatedDate) ?? new Date().toISOString(),
           cellText(row.LastModifiedBy) || null,
           parseFlexibleDateTime(row.LastModifiedDate),
+          gps.lat,
+          gps.lng,
         ],
       );
       result.propertiesCreated++;

@@ -1,12 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { AlertCircle, AlertTriangle, CheckCircle2, FileWarning, Receipt, Search, ShieldAlert } from "lucide-react";
 import { sanitizeHoldingNoInput } from "@/lib/holding-no";
 import { AdminHeader } from "@/components/admin-header";
 import { useAdminGuard } from "@/lib/use-admin-guard";
 import { FieldVerificationCapture } from "@/components/admin/field-verification-capture";
+import { CollectionIssueList } from "@/components/admin/collection-issue-list";
 import { ReceiptView } from "@/components/operator/receipt-view";
 import type { ReceiptData } from "@/lib/payment-api";
 import {
@@ -15,6 +16,9 @@ import {
   submitPaymentAdmin,
   requestCancellationAdmin,
   reportCollectionIssue,
+  fetchCollectionIssuesForHolding,
+  fetchMyCollectionIssues,
+  type CollectionIssueWithNotices,
   COLLECTION_ISSUE_TYPE_LABELS,
   type TaxCollectorPropertySearchResult,
   type UnsettledDemandNoticeAdmin,
@@ -23,6 +27,48 @@ import {
 
 const inputClass = "w-full rounded-md border border-slate-300 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-nnm-blue focus:ring-offset-1";
 const PAYMENT_MODES = ["Cash", "Cheque", "Online / UPI", "Card", "Demand Draft"];
+
+/** Every property field worth showing the collector, in reading order. Aadhaar is masked to the last 4 digits. */
+const DETAIL_FIELDS: [string, string][] = [
+  ["owner_name", "Owner"],
+  ["relation_type", "Relation"],
+  ["relation_name", "Relation name"],
+  ["mobile_no", "Mobile no."],
+  ["aadhaar_number", "Aadhaar"],
+  ["address", "Address"],
+  ["ward", "Ward"],
+  ["zone", "Zone"],
+  ["pincode", "Pincode"],
+  ["old_holding_no", "Old holding no."],
+  ["old_pid", "Old PID"],
+  ["khesra_no", "Khesra no."],
+  ["survey_sheet_no", "Survey sheet no."],
+  ["khata_no", "Khata no."],
+  ["road_type", "Road type"],
+  ["area_sqft", "Total area (sqft)"],
+  ["vacant_area_sqft", "Vacant area (sqft)"],
+  ["present_holding_name", "Present holding name"],
+  ["present_category", "Present category"],
+  ["assessment_year", "Assessment year"],
+  ["holding_creation_year", "Holding created in"],
+  ["tax_paid_till_year", "Tax paid till year"],
+  ["solid_waste_charge_type", "Solid waste type"],
+  ["rain_water_harvesting", "Rain water harvesting"],
+  ["solar_rooftop", "Solar rooftop"],
+  ["is_bwg", "Bulk waste generator"],
+  ["latitude", "Latitude"],
+  ["longitude", "Longitude"],
+];
+
+function detailVal(key: string, v: unknown): string {
+  if (v === null || v === undefined || v === "") return "-";
+  if (typeof v === "boolean") return v ? "Yes" : "No";
+  if (key === "aadhaar_number") {
+    const d = String(v).replace(/\D/g, "");
+    return d.length >= 4 ? `XXXX XXXX ${d.slice(-4)}` : "-";
+  }
+  return String(v);
+}
 
 function displayVal(v: unknown): string {
   if (v === null || v === undefined || v === "") return "-";
@@ -52,7 +98,18 @@ export default function TaxCollectorPage() {
   const [reportingIssue, setReportingIssue] = useState(false);
   const [issueSuccess, setIssueSuccess] = useState(false);
 
+  const [holdingIssues, setHoldingIssues] = useState<CollectionIssueWithNotices[] | null>(null);
+  const [myIssues, setMyIssues] = useState<CollectionIssueWithNotices[] | null>(null);
+
+  useEffect(() => {
+    if (admin?.role !== "tax_collector") return;
+    fetchMyCollectionIssues()
+      .then(setMyIssues)
+      .catch(() => setMyIssues([]));
+  }, [admin]);
+
   function resetForNewSearch() {
+    setHoldingIssues(null);
     setResult(null);
     setNotices(null);
     setReceipt(null);
@@ -72,6 +129,8 @@ export default function TaxCollectorPage() {
       await reportCollectionIssue(result.property.holding_no, issueType, issueNotes.trim() || undefined);
       setIssueSuccess(true);
       setIssueNotes("");
+      fetchCollectionIssuesForHolding(result.property.holding_no).then(setHoldingIssues).catch(() => undefined);
+      fetchMyCollectionIssues().then(setMyIssues).catch(() => undefined);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not submit this report.");
     } finally {
@@ -88,6 +147,9 @@ export default function TaxCollectorPage() {
       const res = await fetchPropertyForCollector(holdingNoInput.trim());
       setResult(res);
       if (res.found) {
+        fetchCollectionIssuesForHolding(res.property!.holding_no)
+          .then(setHoldingIssues)
+          .catch(() => setHoldingIssues([]));
         const list = await fetchUnsettledDemandNoticesAdmin(holdingNoInput.trim());
         setNotices(list);
         if (list.length > 0) setSelectedDemandNo(list[0]!.demandNo);
@@ -194,27 +256,11 @@ export default function TaxCollectorPage() {
             <div className="rounded-xl border border-slate-200 bg-white p-5">
               <h2 className="mb-3 text-base font-semibold text-slate-900">{property.holding_no}</h2>
               <div className="grid grid-cols-1 gap-1.5 text-sm sm:grid-cols-2">
-                <p>
-                  <span className="text-slate-500">Owner:</span> {displayVal(property.owner_name)}
-                </p>
-                <p>
-                  <span className="text-slate-500">Address:</span> {displayVal(property.address)}
-                </p>
-                <p>
-                  <span className="text-slate-500">Ward:</span> {displayVal(property.ward)}
-                </p>
-                <p>
-                  <span className="text-slate-500">Road type:</span> {displayVal(property.road_type)}
-                </p>
-                <p>
-                  <span className="text-slate-500">Total area (sqft):</span> {displayVal(property.area_sqft)}
-                </p>
-                <p>
-                  <span className="text-slate-500">Assessment year:</span> {displayVal(property.assessment_year)}
-                </p>
-                <p>
-                  <span className="text-slate-500">Tax paid till year:</span> {displayVal(property.tax_paid_till_year)}
-                </p>
+                {DETAIL_FIELDS.map(([key, label]) => (
+                  <p key={key}>
+                    <span className="text-slate-500">{label}:</span> {detailVal(key, property[key])}
+                  </p>
+                ))}
                 <p>
                   <span className="text-slate-500">Current annual tax:</span> ₹{displayVal(property.currentTax)}
                 </p>
@@ -226,6 +272,11 @@ export default function TaxCollectorPage() {
                   </p>
                 )}
               </div>
+            </div>
+
+            <div className="rounded-xl border border-slate-200 bg-white p-5">
+              <h3 className="mb-3 text-sm font-semibold text-slate-700">Collection issues &amp; notices for this holding</h3>
+              <CollectionIssueList issues={holdingIssues} emptyText="No collection issue has been reported for this holding." />
             </div>
 
             <FieldVerificationCapture holdingNo={property.holding_no} />
@@ -407,6 +458,11 @@ export default function TaxCollectorPage() {
             </div>
           </div>
         )}
+
+        <div className="mt-8 rounded-xl border border-slate-200 bg-white p-5">
+          <h3 className="mb-3 text-sm font-semibold text-slate-700">Issues I have reported &amp; notices raised</h3>
+          <CollectionIssueList issues={myIssues} showHolding emptyText="You have not reported any collection issue yet." />
+        </div>
       </main>
     </div>
   );

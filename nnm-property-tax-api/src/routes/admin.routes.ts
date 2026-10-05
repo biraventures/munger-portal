@@ -90,7 +90,7 @@ import {
   exportMigratedHoldingsHandler,
 } from "../controllers/migratedHoldingSurvey.controller";
 import { listResurveyFlagsHandler, reviewResurveyFlagHandler, exportResurveyFlagsHandler } from "../controllers/propertyResurveyFlag.controller";
-import { listAllCollectionIssues } from "../controllers/collectionIssue.controller";
+import { listAllCollectionIssues, listMyCollectionIssues } from "../controllers/collectionIssue.controller";
 import { postGenerateCollectionIssueNotice, getCollectionIssueNotices, getReprintCollectionIssueNotice } from "../controllers/collectionIssueNotice.controller";
 import { listTaxCollectorsWithAssignmentHandler, listCityManagersHandler, assignCityManagerHandler, setTaxCollectorWardsHandler } from "../controllers/taxCollectorAssignment.controller";
 import { listAdminAccounts, setAdminAccountActive } from "../controllers/adminAccounts.controller";
@@ -385,10 +385,11 @@ const requireResurveyFlagReviewRole = requireAdminRole("tax_daroga", "commission
 adminRouter.get("/property-resurvey-flags", requireResurveyFlagReviewRole, listResurveyFlagsHandler);
 
 // Collection issues oversight - same reviewer roles as resurvey flags.
+adminRouter.get("/collection-issues/mine", requireAdminRole("tax_collector"), listMyCollectionIssues);
 adminRouter.get("/collection-issues", requireAdminRole("tax_daroga", "commissioner", "city_manager"), listAllCollectionIssues);
 adminRouter.post("/collection-issues/:id/generate-notice", requireAdminRole("city_manager"), postGenerateCollectionIssueNotice);
 adminRouter.get("/collection-issues/:id/notices", requireAdminRole("tax_daroga", "commissioner", "city_manager"), getCollectionIssueNotices);
-adminRouter.get("/collection-issue-notices/:id/reprint", requireAdminRole("tax_daroga", "commissioner", "deputy_commissioner", "city_manager"), getReprintCollectionIssueNotice);
+adminRouter.get("/collection-issue-notices/:id/reprint", requireAdminRole("tax_collector", "tax_daroga", "commissioner", "deputy_commissioner", "city_manager"), getReprintCollectionIssueNotice);
 adminRouter.post("/property-resurvey-flags/:id/review", requireResurveyFlagReviewRole, reviewResurveyFlagHandler);
 adminRouter.get("/property-resurvey-flags/export", requireAdminRole("commissioner"), exportResurveyFlagsHandler);
 

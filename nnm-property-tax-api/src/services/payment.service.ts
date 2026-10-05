@@ -146,12 +146,22 @@ export interface PaymentHistoryEntry {
   date: string;
   amountReceived: string;
   paymentMode: string;
+  /** Already cancelled - no further cancellation can be requested. */
+  cancelled: boolean;
+  cancelledReason: string | null;
+  /** A cancellation request for this receipt is awaiting approval. */
+  cancellationPending: boolean;
 }
 
 /** Every payment ever collected for a holding, most recent first — the read-only document history list. */
 export async function listPaymentHistory(holdingNo: string): Promise<PaymentHistoryEntry[]> {
   const txns = await paymentRepository.findAllForHolding(holdingNo);
+  const pending = await cancellationRequestRepository.listPendingTargetsForHolding(holdingNo);
+  const pendingReceipts = new Set(pending.filter((p) => p.request_type === "receipt").map((p) => p.target_id));
   return txns.map((t) => ({
+    cancelled: t.cancelled,
+    cancelledReason: t.cancelled_reason,
+    cancellationPending: !t.cancelled && pendingReceipts.has(t.receipt_no),
     receiptNo: t.receipt_no,
     formattedReceiptNo: formatDocNumber(t.receipt_no, "Payment", t.txn_date),
     date: `${String(t.txn_date.getDate()).padStart(2, "0")}-${String(t.txn_date.getMonth() + 1).padStart(2, "0")}-${t.txn_date.getFullYear()}`,
