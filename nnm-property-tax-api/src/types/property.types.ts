@@ -24,6 +24,8 @@ export interface PropertyRow {
   solid_waste_charge_type: string | null;
   solid_waste_months: number;
   solid_waste_charge: string;
+  /** Registered as a Bulk Waste Generator (SPCB) - solid waste user charge is not levied (migration 098). */
+  is_bwg: boolean;
   penal_charge: string;
   water_charge: string;
   boring_charge: string;

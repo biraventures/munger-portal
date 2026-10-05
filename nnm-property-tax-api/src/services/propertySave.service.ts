@@ -37,6 +37,11 @@ export async function applyPropertySave(
   actorDisplayName: string,
   isNew: boolean,
 ) {
+  // A save that doesn't mention isBwg at all (e.g. an older queued
+  // change request) must keep the holding's existing BWG status rather
+  // than silently reset it and start charging solid waste again.
+  const isBwg = input.isBwg ?? (isNew ? false : Boolean((await propertyRepository.findByHoldingNo(holdingNo))?.is_bwg));
+
   const draftProperty = {
     road_type: input.roadType,
     area_sqft: String(input.areaSqft),
@@ -44,6 +49,7 @@ export async function applyPropertySave(
     assessment_year: input.assessmentYear,
     solid_waste_charge_type: input.solidWasteChargeType ?? null,
     solid_waste_months: input.solidWasteMonths ?? 12,
+    is_bwg: isBwg,
 	holding_creation_year: input.holdingCreationYear,
   } as unknown as PropertyRow;
 
@@ -110,6 +116,7 @@ export async function applyPropertySave(
       solidWasteChargeType: input.solidWasteChargeType ?? null,
       solidWasteMonths: input.solidWasteMonths ?? 12,
       solidWasteCharge,
+      isBwg,
       penalCharge: input.penalCharge ?? 0,
       waterCharge: input.waterCharge ?? 0,
       boringCharge: input.boringCharge ?? 0,
@@ -193,6 +200,7 @@ export async function savePropertyByHoldingNo(
     assessment_year: input.assessmentYear,
     solid_waste_charge_type: input.solidWasteChargeType ?? null,
     solid_waste_months: input.solidWasteMonths ?? 12,
+    is_bwg: input.isBwg ?? Boolean(existing.is_bwg),
   } as unknown as PropertyRow;
   const draftFloors = input.floors.map((f) => ({
     floor_label: f.floorLabel,

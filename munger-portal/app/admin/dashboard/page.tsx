@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Users, FileClock, FileWarning, LayoutGrid, ShoppingBag, Store, BarChart3, Award, Archive, Download, XCircle, ShieldCheck, Trash2, RefreshCw, Upload, MapPin, Map as MapIcon, ClipboardCheck, UserCheck, ClipboardList, Receipt, RotateCcw, AlertTriangle, List, Flag, Home } from "lucide-react";
+import { Users, FileClock, FileWarning, LayoutGrid, ShoppingBag, Store, BarChart3, Award, Archive, Download, XCircle, ShieldCheck, Trash2, RefreshCw, Upload, MapPin, Map as MapIcon, ClipboardCheck, UserCheck, ClipboardList, Receipt, RotateCcw, AlertTriangle, List, Flag, Home, FileText } from "lucide-react";
 import { AdminHeader } from "@/components/admin-header";
 import { DashboardSummaryWidget } from "@/components/dashboard-summary-widget";
 import { useAdminGuard } from "@/lib/use-admin-guard";
@@ -103,6 +103,7 @@ export default function AdminDashboardPage() {
   const showCollectionIssues = admin.role === "tax_daroga" || admin.role === "commissioner" || admin.role === "city_manager";
   const showTaxCollectorAssignments = isCommissioner;
   const showRevertAuditTrail = isCommissioner;
+  const showPublicDocuments = isCommissioner;
   const showManageLogins = isCommissioner;
   const showEmployeeDatabaseEntry = admin.role === "establishment_clerk";
   const showEmployeeDatabaseList = admin.role === "establishment_clerk";
@@ -406,6 +407,16 @@ export default function AdminDashboardPage() {
                   </span>
                   <h3 className="mb-1.5 text-base font-semibold text-slate-900">Revert Audit Trail</h3>
                   <p className="text-sm text-slate-500">Property mutations and shop agreements sent back to operators for correction.</p>
+                </Link>
+              )}
+
+              {showPublicDocuments && (
+                <Link href="/admin/public-documents" className={cardClass}>
+                  <span className={iconWrapClass}>
+                    <FileText className="h-6 w-6" strokeWidth={1.8} />
+                  </span>
+                  <h3 className="mb-1.5 text-base font-semibold text-slate-900">Website Documents &amp; Reports</h3>
+                  <p className="text-sm text-slate-500">Upload reports and documents to publish on the public website.</p>
                 </Link>
               )}
             </div>

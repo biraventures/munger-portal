@@ -140,6 +140,13 @@ import {
   getTradeLicenseStats,
 } from "../controllers/tradeLicenseApplication.controller";
 import { requireAdmin, requireAdminRole } from "../middleware/requireAdmin";
+import {
+  listAllPublicDocumentsHandler,
+  uploadPublicDocumentHandler,
+  getAnyPublicDocumentFileHandler,
+  patchPublicDocumentHandler,
+  deletePublicDocumentHandler,
+} from "../controllers/publicDocument.controller";
 
 export const adminRouter = Router();
 
@@ -266,6 +273,13 @@ adminRouter.get("/employees/progress", requireAdminRole("commissioner"), getEmpl
 
 adminRouter.get("/shops", listAllShops);
 adminRouter.post("/shops/bulk-upload", requireAdminRole("commissioner"), uploadShopsCsvHandler);
+
+// Public website documents/reports - Commissioner only.
+adminRouter.get("/public-documents", requireAdminRole("commissioner"), listAllPublicDocumentsHandler);
+adminRouter.post("/public-documents", requireAdminRole("commissioner"), uploadPublicDocumentHandler);
+adminRouter.get("/public-documents/:id/file", requireAdminRole("commissioner"), getAnyPublicDocumentFileHandler);
+adminRouter.patch("/public-documents/:id", requireAdminRole("commissioner"), patchPublicDocumentHandler);
+adminRouter.delete("/public-documents/:id", requireAdminRole("commissioner"), deletePublicDocumentHandler);
 adminRouter.delete("/shops/:shopNo", requireAdminRole("commissioner"), deleteShopHandler);
 
 // Shop-wise report (Commissioner/City Manager): full detail + agreement

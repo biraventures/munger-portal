@@ -111,7 +111,20 @@ async function finalizeAndApplyCancellation(requestId: number, reviewedBy: strin
       if (!cancelledTxn) throw ApiError.badRequest("Could not cancel this receipt - it may already be cancelled.");
 
       if (txn.demand_no) {
+        const notice = await demandNoticeRepository.findByDemandNo(txn.demand_no);
         await demandNoticeRepository.revertToUnsettled(txn.demand_no, client);
+
+        // The other half of undoing this payment - submitPayment advanced
+        // the property's own tax_paid_till_year to the notice's
+        // assessment_year (see payment.service.ts); revertToUnsettled above
+        // only reopens the notice itself, so without this the property's
+        // ledger still shows that year as paid and nothing appears pending,
+        // even though the receipt is now cancelled. Guarded against
+        // clobbering a later, unrelated payment - see
+        // paymentRepository.revertTaxPaidTillYear.
+        if (notice?.assessment_year) {
+          await paymentRepository.revertTaxPaidTillYear(txn.holding_no, txn.previous_tax_paid_till_year, notice.assessment_year, client);
+        }
       }
     }
 

@@ -27,6 +27,7 @@ interface MasterFormState {
   rainWaterHarvesting: boolean;
   solidWasteChargeType: string;
   solidWasteMonths: string;
+  isBwg: boolean;
   holdingCreationYear: string;
   taxPaidTillYear: string;
   miscCost: string;
@@ -65,6 +66,7 @@ function blankMaster(defaultFinancialYear: string): MasterFormState {
     rainWaterHarvesting: false,
     solidWasteChargeType: "",
     solidWasteMonths: "12",
+    isBwg: false,
     holdingCreationYear: defaultFinancialYear,
     taxPaidTillYear: "",
     miscCost: "",
@@ -154,6 +156,7 @@ export function PropertyEditorForm({
         assessmentYear: master.assessmentYear,
         solidWasteChargeType: master.solidWasteChargeType || null,
         solidWasteMonths: Number(master.solidWasteMonths) || 12,
+        isBwg: master.isBwg,
         floors: floors.map((f) => ({
           floorLabel: f.floorLabel,
           buildupSqft: Number(f.buildupSqft) || 0,
@@ -200,6 +203,7 @@ export function PropertyEditorForm({
         rainWaterHarvesting: master.rainWaterHarvesting,
         solidWasteChargeType: master.solidWasteChargeType || null,
         solidWasteMonths: Number(master.solidWasteMonths) || 12,
+        isBwg: master.isBwg,
         holdingCreationYear: master.holdingCreationYear,
         taxPaidTillYear: master.taxPaidTillYear || null,
         miscCost: Number(master.miscCost) || 0,
@@ -285,7 +289,7 @@ export function PropertyEditorForm({
                 </span>
               </div>
             )}
-            {master.solidWasteChargeType && formOptions.solidWasteRates[master.solidWasteChargeType] !== undefined && (
+            {!master.isBwg && master.solidWasteChargeType && formOptions.solidWasteRates[master.solidWasteChargeType] !== undefined && (
               <div>
                 <span className="block text-[10px] font-semibold uppercase tracking-wide text-slate-400">
                   Solid Waste ({formOptions.solidWasteRates[master.solidWasteChargeType]}/mo)
@@ -629,6 +633,20 @@ export function PropertyEditorForm({
               Enter more than 12 to include multiple pending years (e.g. 36 for 3 years) as part of arrears.
             </p>
           </div>
+          <label className="flex items-start gap-2 text-sm text-slate-700 sm:col-span-2">
+            <input
+              type="checkbox"
+              checked={master.isBwg}
+              onChange={(e) => updateMaster("isBwg", e.target.checked)}
+              className="mt-0.5 h-4 w-4 rounded border-slate-300"
+            />
+            <span>
+              Registered as a Bulk Waste Generator (BWG) on the SPCB website
+              <span className="block text-xs text-slate-400">
+                The owner manages their own waste, so no solid waste user charge is added to the amount payable.
+              </span>
+            </span>
+          </label>
         </div>
       </section>
 

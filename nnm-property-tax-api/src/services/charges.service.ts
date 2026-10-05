@@ -10,6 +10,9 @@ import type { PropertyRow, RebateOrLateFeeResult } from "../types/property.types
 
 /** Port of calculateSolidWasteCharge_() — rate × months, by usage type. */
 export function calculateSolidWasteCharge(property: PropertyRow): number {
+  // A holding registered as a Bulk Waste Generator handles its own
+  // waste, so no solid waste user charge applies at all.
+  if (property.is_bwg) return 0;
   const type = String(property.solid_waste_charge_type || "").trim();
   const monthlyRate = SOLID_WASTE_RATE[type];
   if (monthlyRate === undefined) return 0;

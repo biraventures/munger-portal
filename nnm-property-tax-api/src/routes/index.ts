@@ -17,6 +17,7 @@ import { taxCollectorRouter } from "./taxCollector.routes";
 import { streetlightRouter } from "./streetlight.routes";
 import { streetlightPublicRouter } from "./streetlightPublic.routes";
 import { pyauRouter } from "./pyau.routes";
+import { publicDocumentRouter } from "./publicDocument.routes";
 
 export const apiRouter = Router();
 
@@ -51,6 +52,9 @@ apiRouter.use("/streetlight-grievance", streetlightPublicRouter);
 // its own dedicated JE/AE/contractor roles (kept separate from the
 // street light module's, per what was asked for).
 apiRouter.use("/pyau", pyauRouter);
+
+// Documents/reports the Commissioner publishes on the public website - read-only and unauthenticated here; managed via /admin/public-documents.
+apiRouter.use("/public-documents", publicDocumentRouter);
 
 // /admin/auth (public login) MUST be mounted before /admin (which
 // requires an admin session for everything under it) - Express tries

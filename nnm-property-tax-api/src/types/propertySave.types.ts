@@ -31,6 +31,8 @@ export interface PropertySaveInput {
   arrearTax?: number;
   solidWasteChargeType?: string | null;
   solidWasteMonths?: number;
+  /** Registered as a Bulk Waste Generator - no solid waste user charge. */
+  isBwg?: boolean;
   penalCharge?: number;
   waterCharge?: number;
   boringCharge?: number;

@@ -304,6 +304,7 @@ export async function submitPayment(
         floorBreakdown: notice.floor_breakdown,
         areaRebate: notice.area_rebate,
         areaRebateReason: notice.area_rebate_reason,
+        previousTaxPaidTillYear: property.tax_paid_till_year,
       },
       client,
     );

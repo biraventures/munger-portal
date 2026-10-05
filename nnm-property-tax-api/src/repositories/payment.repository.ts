@@ -37,6 +37,11 @@ export interface TransactionRow {
   // floor_breakdown above.
   area_rebate: string | null;
   area_rebate_reason: string | null;
+  // Snapshot of the property's tax_paid_till_year immediately before
+  // this payment advanced it (migration 097) - lets a later
+  // cancellation restore exactly this value, see
+  // revertTaxPaidTillYear below.
+  previous_tax_paid_till_year: string | null;
 }
 
 export const paymentRepository = {
@@ -94,6 +99,9 @@ export const paymentRepository = {
       // floorBreakdown above.
       areaRebate: string | null;
       areaRebateReason: string | null;
+      // Snapshot of the property's tax_paid_till_year immediately
+      // before this payment advances it - see revertTaxPaidTillYear.
+      previousTaxPaidTillYear: string | null;
     },
     client: Pool | PoolClient = pool,
   ): Promise<void> {
@@ -103,8 +111,8 @@ export const paymentRepository = {
         collected_by, counter, demand_no, arrear_periods_paid,
         tax_collector_code, tax_collector_name, tv_number, tv_date,
         arv, current_year_tax_net, previous_years_tax_base, total_fine_amount, other_charges,
-        arrear_stages_paid, floor_breakdown, area_rebate, area_rebate_reason
-      ) VALUES ($1,$2, now(), $3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)`,
+        arrear_stages_paid, floor_breakdown, area_rebate, area_rebate_reason, previous_tax_paid_till_year
+      ) VALUES ($1,$2, now(), $3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)`,
       [
         row.receiptNo,
         row.holdingNo,
@@ -127,12 +135,37 @@ export const paymentRepository = {
         row.floorBreakdown !== null ? JSON.stringify(row.floorBreakdown) : null,
         row.areaRebate,
         row.areaRebateReason,
+        row.previousTaxPaidTillYear,
       ],
     );
   },
 
   async updateTaxPaidTillYear(holdingNo: string, newYear: string, client: Pool | PoolClient = pool): Promise<void> {
     await client.query(`UPDATE properties SET tax_paid_till_year = $2 WHERE holding_no = $1`, [holdingNo, newYear]);
+  },
+
+  /**
+   * The other half of a receipt cancellation (see
+   * cancellationRequest.service.ts) - undoes the tax_paid_till_year
+   * advance that submitPayment made, restoring the value snapshotted
+   * on the transaction before that payment. Guarded by
+   * expectedCurrentYear (what this payment actually advanced it to,
+   * i.e. the cancelled notice's assessment_year): if tax_paid_till_year
+   * has since moved past that - a later, unrelated payment advanced it
+   * further - this is a no-op, so cancelling an old receipt can never
+   * claw back more recent, legitimate progress.
+   */
+  async revertTaxPaidTillYear(
+    holdingNo: string,
+    previousYear: string | null,
+    expectedCurrentYear: string,
+    client: Pool | PoolClient = pool,
+  ): Promise<void> {
+    await client.query(`UPDATE properties SET tax_paid_till_year = $2 WHERE holding_no = $1 AND tax_paid_till_year = $3`, [
+      holdingNo,
+      previousYear,
+      expectedCurrentYear,
+    ]);
   },
 
   async findByReceiptNo(receiptNo: string): Promise<TransactionRow | null> {
