@@ -2,6 +2,9 @@ export type WaterConnectionStatus = "multiple" | "single_wtp" | "single_submersi
 
 export interface PropertyRow {
   holding_no: string;
+  /** Flagged after an owner objection - no demand, no payment, hidden from public search. See propertyDispute.service.ts. */
+  is_disputed: boolean;
+  dispute_remarks: string | null;
   old_holding_no: string | null;
   old_pid: string | null;
   khesra_no: string | null;

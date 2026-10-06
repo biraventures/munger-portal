@@ -2019,3 +2019,55 @@ export async function fetchCollectionIssueNotices(collectionIssueId: number): Pr
   const data: { notices: CollectionIssueNotice[] } = await res.json();
   return data.notices;
 }
+
+
+// ---- Disputed holdings (Tax Daroga / City Manager / Commissioner) ----
+export interface DisputeStatus {
+  holdingNo: string;
+  ownerName: string;
+  ward: string | null;
+  isDisputed: boolean;
+  remarks: string | null;
+  disputedBy: string | null;
+  disputedByRole: string | null;
+  disputedAt: string | null;
+  history: { action: "flagged" | "cleared"; remarks: string; actedBy: string; actedByRole: string; actedAt: string }[];
+}
+
+export interface DisputedHoldingRow {
+  holdingNo: string;
+  ownerName: string;
+  ward: string | null;
+  remarks: string | null;
+  disputedBy: string | null;
+  disputedByRole: string | null;
+  disputedAt: string | null;
+}
+
+async function disputeJson<T>(res: Response, fallback: string): Promise<T> {
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || fallback);
+  }
+  return res.json();
+}
+
+export async function fetchDisputeStatus(holdingNo: string): Promise<DisputeStatus> {
+  const res = await fetch(`${API_BASE_URL}/admin/property-dispute/${encodeURIComponent(holdingNo)}`, { headers: authHeaders() });
+  return disputeJson(res, "Could not load this holding.");
+}
+
+export async function setHoldingDisputed(holdingNo: string, flag: boolean, remarks: string): Promise<DisputeStatus> {
+  const res = await fetch(`${API_BASE_URL}/admin/property-dispute/${encodeURIComponent(holdingNo)}/${flag ? "flag" : "clear"}`, {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify({ remarks }),
+  });
+  return disputeJson(res, "Could not save the dispute flag.");
+}
+
+export async function fetchDisputedHoldings(): Promise<DisputedHoldingRow[]> {
+  const res = await fetch(`${API_BASE_URL}/admin/disputed-holdings`, { headers: authHeaders() });
+  const data = await disputeJson<{ holdings: DisputedHoldingRow[] }>(res, "Could not load disputed holdings.");
+  return data.holdings;
+}

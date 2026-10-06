@@ -141,6 +141,7 @@ import {
   getTradeLicenseStats,
 } from "../controllers/tradeLicenseApplication.controller";
 import { requireAdmin, requireAdminRole } from "../middleware/requireAdmin";
+import { listDisputedHandler, getDisputeStatusHandler, flagDisputedHandler, clearDisputedHandler } from "../controllers/propertyDispute.controller";
 import { getStreetlightReportHandler } from "../controllers/streetlightReport.controller";
 import {
   listAllPublicDocumentsHandler,
@@ -282,6 +283,13 @@ adminRouter.get("/employees/progress", requireAdminRole("commissioner"), getEmpl
 
 adminRouter.get("/shops", listAllShops);
 adminRouter.post("/shops/bulk-upload", requireAdminRole("commissioner"), uploadShopsCsvHandler);
+
+// Disputed holdings - flagged after an owner objection (Tax Daroga, City Manager, Commissioner).
+const requireDisputeRole = requireAdminRole("tax_daroga", "city_manager", "commissioner");
+adminRouter.get("/disputed-holdings", requireDisputeRole, listDisputedHandler);
+adminRouter.get("/property-dispute/:holdingNo", requireDisputeRole, getDisputeStatusHandler);
+adminRouter.post("/property-dispute/:holdingNo/flag", requireDisputeRole, flagDisputedHandler);
+adminRouter.post("/property-dispute/:holdingNo/clear", requireDisputeRole, clearDisputedHandler);
 
 // Public website documents/reports - Commissioner only.
 adminRouter.get("/public-documents", requireAdminRole("commissioner"), listAllPublicDocumentsHandler);

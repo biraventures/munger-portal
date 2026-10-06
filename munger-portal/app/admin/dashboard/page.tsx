@@ -103,6 +103,7 @@ export default function AdminDashboardPage() {
   const showSolidWasteApprovals = admin.role === "tax_daroga" || admin.role === "city_manager";
   const showCollectionIssues = admin.role === "tax_daroga" || admin.role === "commissioner" || admin.role === "city_manager";
   const showTaxCollectorAssignments = isCommissioner;
+  const showDisputedHoldings = admin.role === "tax_daroga" || admin.role === "city_manager" || admin.role === "commissioner";
   const showRevertAuditTrail = isCommissioner;
   const showPublicDocuments = isCommissioner;
   const showManageLogins = isCommissioner;
@@ -120,7 +121,7 @@ export default function AdminDashboardPage() {
     showMutationApprovals || showCancellationRequests || showBulkDemandNotices || showAllPropertyChanges || showRenumberHolding || showBulkUploadProperties ||
     showMigratedHoldingsBulkUpload || showMigratedHoldingsAssign || showMigratedHoldingsSurveyor || showMigratedHoldingsMySurveys || showInitiateSurvey || showTaxCollectorPage ||
     showReportPropertyDiscrepancy || showMyDiscrepancyReports || showPropertyDiscrepancyRequests || showResurveyFlags || showCollectionIssues || showSolidWasteApprovals || showTaxCollectorAssignments || showRevertAuditTrail ||
-    showPropertyWiseReport;
+    showPropertyWiseReport || showDisputedHoldings;
 
   const showShopAgreementApprovals = !isTradeLicenseNodal && !isGisOnlyRole && !isNarrowlyScopedRole;
   const showShopRentalApplications = !isTradeLicenseNodal && !isGisOnlyRole && !isNarrowlyScopedRole;
@@ -402,6 +403,16 @@ export default function AdminDashboardPage() {
                   </span>
                   <h3 className="mb-1.5 text-base font-semibold text-slate-900">Property-wise Report</h3>
                   <p className="text-sm text-slate-500">Search a holding for full details, tax pending, change log, discrepancy/re-survey flags, and surveyor visits.</p>
+                </Link>
+              )}
+
+              {showDisputedHoldings && (
+                <Link href="/admin/disputed-holdings" className={cardClass}>
+                  <span className={iconWrapClass}>
+                    <AlertTriangle className="h-6 w-6" strokeWidth={1.8} />
+                  </span>
+                  <h3 className="mb-1.5 text-base font-semibold text-slate-900">Disputed Holdings</h3>
+                  <p className="text-sm text-slate-500">Flag a holding after an owner objection - no payment, no demand notice and hidden from public search until cleared.</p>
                 </Link>
               )}
 

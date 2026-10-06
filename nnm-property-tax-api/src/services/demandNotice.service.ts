@@ -7,6 +7,7 @@ import { summarizeArrears, computePartPaymentOptions, type PartPaymentOption } f
 import { parseYearStartOrNull } from "../utils/assessmentYear";
 import { num } from "../utils/num";
 import { ApiError } from "../utils/ApiError";
+import { assertNotDisputed } from "./propertyDispute.service";
 import { buildVerificationUrl } from "../utils/verificationSignature";
 import type { DemandNoticeResult, DemandNoticeReprintResult, DemandNoticeTotals } from "../types/demandNotice.types";
 import type { FrozenFloorBreakdown, TaxCalculationResult } from "../types/property.types";
@@ -53,6 +54,7 @@ function ordinal(n: number): string {
 export async function getPartPaymentOptions(holdingNo: string): Promise<{ paidTillYear: string | null; options: PartPaymentOption[] }> {
   const property = await propertyRepository.findByHoldingNo(holdingNo);
   if (!property) throw ApiError.notFound(`Property not found for Holding No: ${holdingNo}`);
+  assertNotDisputed(property);
   const stages = await propertyRepository.findTaxHistoryByHoldingNo(holdingNo);
   return { paidTillYear: property.tax_paid_till_year, options: computePartPaymentOptions(property, stages) };
 }
@@ -68,6 +70,7 @@ export async function generateDemandNotice(holdingNo: string, generatedBy: strin
   if (!property) {
     throw ApiError.notFound(`Property not found for Holding No: ${holdingNo}`);
   }
+  assertNotDisputed(property);
   const floors = await propertyRepository.findFloorsByHoldingNo(holdingNo);
   const stages = await propertyRepository.findTaxHistoryByHoldingNo(holdingNo);
 

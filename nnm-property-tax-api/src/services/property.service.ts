@@ -155,6 +155,14 @@ export async function searchPropertyForCitizen(
 
   const result = await searchPropertyByHoldingNo(holdingNoRaw);
   if (!result.found || !result.property) return notFound;
+  // Disputed holdings are not shown on the public search at all.
+  if (result.property.is_disputed) {
+    return {
+      found: false,
+      message:
+        "The details of this Holding Number are not available online. Please contact the Holding Tax Section, Municipal Corporation Office, Munger.",
+    };
+  }
 
   const storedMobile = String(result.property.mobile_no || "").trim();
   const suppliedMobile = mobileNoRaw.trim();

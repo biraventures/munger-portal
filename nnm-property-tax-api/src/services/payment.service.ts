@@ -11,6 +11,7 @@ import { amountInWords } from "../utils/amountInWords";
 import { parseYearStartOrNull } from "../utils/assessmentYear";
 import { num } from "../utils/num";
 import { ApiError } from "../utils/ApiError";
+import { assertNotDisputed } from "./propertyDispute.service";
 import { buildVerificationUrl } from "../utils/verificationSignature";
 import { formatYmdToDmy } from "../utils/formatYmdToDmy";
 import type { PaymentInput, PaymentResult } from "../types/payment.types";
@@ -179,6 +180,7 @@ export async function submitPayment(
   if (!property) {
     throw ApiError.notFound(`Property not found for Holding No: ${holdingNo}`);
   }
+  assertNotDisputed(property);
 
   const notice = await demandNoticeRepository.findByDemandNo(input.demandNo);
   if (!notice || notice.holding_no !== holdingNo) {

@@ -5,6 +5,7 @@ import { adminRepository } from "../repositories/admin.repository";
 import { paymentRepository } from "../repositories/payment.repository";
 import { env } from "../config/env";
 import { ApiError } from "../utils/ApiError";
+import { assertNotDisputed } from "./propertyDispute.service";
 
 const GATEWAY_NAME = "ICICI_PG";
 const ICICI_PG_BASE_URL = "https://pgpay.icicibank.com/pg/portal/pay/initiatePayOrder";
@@ -44,6 +45,7 @@ export async function initiateOnlinePayment(
   if (!property) {
     throw ApiError.notFound(`Property not found for Holding No: ${holdingNo}`);
   }
+  assertNotDisputed(property);
 
   // Optional, same reasoning as the operator counter-payment flow: if a
   // code WAS given it must resolve to a real active collector, so a
