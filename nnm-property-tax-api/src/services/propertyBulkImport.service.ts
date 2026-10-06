@@ -160,6 +160,12 @@ export async function importPropertiesXlsx(fileBuffer: Buffer, actorDisplayName:
   // history row for a holding each time. Skipping child rows for any
   // holding not newly created in THIS run keeps a re-run safe.
   const preExistingHoldings = new Set<string>();
+  // Holdings that already exist in the database under a slightly different spelling
+  // (e.g. "MUNG- 13054" with a space) map to the number actually stored, so receipts,
+  // demand notices and history rows attach to that holding instead of failing the
+  // holding_no foreign key.
+  const storedHoldingNo = new Map<string, string>();
+  const resolveHolding = (raw: string): string => storedHoldingNo.get(raw) ?? raw;
 
   for (const { row, excelRowNum } of readSheet(workbook.getWorksheet("Master"))) {
     try {
@@ -176,9 +182,13 @@ export async function importPropertiesXlsx(fileBuffer: Buffer, actorDisplayName:
       // re-uploaded - an exact match would miss it (the stored value
       // no longer matches the source string byte-for-byte) and
       // silently create a duplicate holding.
-      const existing = await pool.query(`SELECT 1 FROM properties WHERE REPLACE(holding_no, ' ', '') = REPLACE($1, ' ', '')`, [holdingNo]);
+      const existing = await pool.query<{ holding_no: string }>(
+        `SELECT holding_no FROM properties WHERE REPLACE(holding_no, ' ', '') = REPLACE($1, ' ', '') LIMIT 1`,
+        [holdingNo],
+      );
       if (existing.rows.length > 0) {
         preExistingHoldings.add(holdingNo);
+        storedHoldingNo.set(holdingNo, existing.rows[0]!.holding_no);
         result.errors.push({ sheet: "Master", row: excelRowNum, message: `Holding "${holdingNo}" already exists - skipped` });
         continue;
       }
@@ -312,7 +322,7 @@ export async function importPropertiesXlsx(fileBuffer: Buffer, actorDisplayName:
   for (const { row, excelRowNum } of readSheet(workbook.getWorksheet("Transactions"))) {
     try {
       const receiptNo = cellText(row.ReceiptNo);
-      const holdingNo = cellText(row.HoldingNo);
+      const holdingNo = resolveHolding(cellText(row.HoldingNo));
       const amountReceived = cellNumber(row.AmountReceived);
       if (!receiptNo || !holdingNo || amountReceived === null) {
         result.errors.push({ sheet: "Transactions", row: excelRowNum, message: "Missing ReceiptNo, HoldingNo, or AmountReceived" });
@@ -353,7 +363,7 @@ export async function importPropertiesXlsx(fileBuffer: Buffer, actorDisplayName:
   for (const { row, excelRowNum } of readSheet(workbook.getWorksheet("DemandNotices"))) {
     try {
       const demandNo = cellText(row.DemandNo);
-      const holdingNo = cellText(row.HoldingNo);
+      const holdingNo = resolveHolding(cellText(row.HoldingNo));
       if (!demandNo || !holdingNo) {
         result.errors.push({ sheet: "DemandNotices", row: excelRowNum, message: "Missing DemandNo or HoldingNo" });
         continue;
@@ -441,7 +451,7 @@ export async function importPropertiesXlsx(fileBuffer: Buffer, actorDisplayName:
   // 'Created'/'Updated' check constraint exactly.
   for (const { row, excelRowNum } of readSheet(workbook.getWorksheet("PropertyHistory"))) {
     try {
-      const holdingNo = cellText(row.HoldingNo);
+      const holdingNo = resolveHolding(cellText(row.HoldingNo));
       const version = cellNumber(row.Version);
       const action = cellText(row.Action);
       const operatorName = cellText(row.OperatorName);
