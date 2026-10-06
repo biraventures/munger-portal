@@ -22,6 +22,7 @@ function fileToBase64(file: File): Promise<string> {
 export default function PropertiesBulkUploadPage() {
   const admin = useAdminGuard();
   const [fileName, setFileName] = useState<string | null>(null);
+  const [dataSourceName, setDataSourceName] = useState("");
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<PropertyBulkImportResult | null>(null);
@@ -35,7 +36,7 @@ export default function PropertiesBulkUploadPage() {
     setUploading(true);
     try {
       const base64 = await fileToBase64(file);
-      const res = await uploadPropertiesXlsx(base64);
+      const res = await uploadPropertiesXlsx(base64, dataSourceName.trim());
       setResult(res);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not upload this file.");
@@ -77,6 +78,23 @@ export default function PropertiesBulkUploadPage() {
         </p>
 
         <div className="rounded-xl border border-slate-200 bg-white p-6">
+          <label className="mb-1 block text-sm font-semibold text-slate-700" htmlFor="data-source-name">
+            Name of this data (source of the holdings)
+          </label>
+          <p className="mb-2 text-xs text-slate-500">
+            Shown in each holding&apos;s audit trail as where it was created from, e.g. &quot;Ward 12 field survey 2025 - Excel&quot; or
+            &quot;Old property tax register - Part 1&quot;. Required.
+          </p>
+          <input
+            id="data-source-name"
+            value={dataSourceName}
+            onChange={(e) => setDataSourceName(e.target.value)}
+            maxLength={200}
+            placeholder="Name of the data being uploaded"
+            disabled={uploading}
+            className="mb-5 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+          />
+
           <label className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-700">
             <Upload className="h-4 w-4" />
             Backup .xlsx File
@@ -85,7 +103,7 @@ export default function PropertiesBulkUploadPage() {
             type="file"
             accept=".xlsx"
             onChange={handleFileSelected}
-            disabled={uploading}
+            disabled={uploading || dataSourceName.trim().length < 3}
             className="block w-full text-sm text-slate-600 file:mr-4 file:rounded-md file:border-0 file:bg-nnm-blue file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:bg-nnm-blue-dark disabled:opacity-60"
           />
 

@@ -5,6 +5,8 @@ export interface PropertyRow {
   /** Flagged after an owner objection - no demand, no payment, hidden from public search. See propertyDispute.service.ts. */
   is_disputed: boolean;
   dispute_remarks: string | null;
+  /** Name of the data set this holding was created from (bulk upload) - see migration 108. */
+  data_source: string | null;
   old_holding_no: string | null;
   old_pid: string | null;
   khesra_no: string | null;

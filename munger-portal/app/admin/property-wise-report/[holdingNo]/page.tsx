@@ -195,6 +195,44 @@ export default function PropertyWiseReportDetailPage() {
               </div>
             </section>
 
+            {/* Audit trail - creation + edits */}
+            <section className="mb-6 rounded-xl border border-slate-200 bg-white p-6">
+              <h2 className="mb-1 text-sm font-semibold text-slate-700">Audit Trail - Creation &amp; Edits ({report.propertyHistory?.length ?? 0})</h2>
+              {p.data_source ? (
+                <p className="mb-3 text-xs text-slate-500">
+                  Created from data: <b className="text-slate-700">{str(p.data_source)}</b>
+                </p>
+              ) : null}
+              {!report.propertyHistory || report.propertyHistory.length === 0 ? (
+                <p className="text-sm text-slate-400">No audit-trail entries recorded for this holding.</p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead className="text-slate-400">
+                      <tr>
+                        <th className="pb-2 pr-4">When</th>
+                        <th className="pb-2 pr-4">Action</th>
+                        <th className="pb-2 pr-4">By</th>
+                        <th className="pb-2">Basis / source</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {report.propertyHistory.map((h) => (
+                        <tr key={h.version} className="border-t border-slate-100 align-top">
+                          <td className="py-2 pr-4 whitespace-nowrap">{fmtDateTime(h.ts)}</td>
+                          <td className="py-2 pr-4">{h.action}</td>
+                          <td className="py-2 pr-4">{h.operator_name}</td>
+                          <td className="py-2">
+                            {[h.change_basis, h.change_reference].filter(Boolean).join(" - ") || "-"}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </section>
+
             {/* Dispute trail */}
             <section className="mb-6 rounded-xl border border-slate-200 bg-white p-6">
               <h2 className="mb-4 flex items-center gap-2 text-sm font-semibold text-slate-700">

@@ -6,6 +6,8 @@ import { ApiError } from "../utils/ApiError";
 
 const uploadSchema = z.object({
   fileDataBase64: z.string().min(1, "File data is required"),
+  // Name of the data set being uploaded - shown in each holding's audit trail as where it was created from.
+  dataSourceName: z.string().trim().min(3, "Enter the name of the data source (at least 3 characters).").max(200),
 });
 
 /**
@@ -27,6 +29,6 @@ export const uploadPropertiesXlsxHandler = asyncHandler(async (req: Request, res
   }
   if (fileBuffer.length === 0) throw ApiError.badRequest("The uploaded file is empty.");
 
-  const result = await importPropertiesXlsx(fileBuffer, req.admin!.displayName);
+  const result = await importPropertiesXlsx(fileBuffer, req.admin!.displayName, parsed.data.dataSourceName);
   res.status(200).json(result);
 });

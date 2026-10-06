@@ -4,6 +4,7 @@ import { changeRequestRepository } from "../repositories/changeRequest.repositor
 import { propertyDiscrepancyRepository } from "../repositories/propertyDiscrepancy.repository";
 import { shopRentalApplicationRepository } from "../repositories/shopRentalApplication.repository";
 import { tradeLicenseApplicationRepository } from "../repositories/tradeLicenseApplication.repository";
+import { searchPropertyByHoldingNo } from "./property.service";
 import { APPROVAL_STAGE_ORDER, PROPERTY_DISCREPANCY_APPROVAL_STAGE_ORDER, ADMIN_ROLE_LABELS } from "../types/admin.types";
 
 export interface DashboardSummary {
@@ -97,17 +98,34 @@ export async function listHoldingsForDashboard(page: unknown, pageSize: unknown,
   const sortKey: HoldingSortKey = HOLDING_SORT_KEYS.includes(sort as HoldingSortKey) ? (sort as HoldingSortKey) : "holdingNo";
   const sortDirection: "asc" | "desc" = sortDir === "desc" ? "desc" : "asc";
   const { rows, total } = await propertyRepository.listPaginated(p, ps, wardFilter, sortKey, sortDirection);
+  // The stored tax / solid-waste / amount-due columns go stale (uploads leave them 0; payments and
+  // solid-waste type approvals change what is due), so show the LIVE figures for the rows on this page.
+  const live = await Promise.all(
+    rows.map(async (r) => {
+      try {
+        const s = await searchPropertyByHoldingNo(r.holding_no);
+        if (!s.found || !s.property || !s.taxCalc) return null;
+        return {
+          annualTax: s.taxCalc.currentTax,
+          solidWaste: String(s.property.solidWasteCharge ?? "0.00"),
+          totalDue: String(s.property.totalPayable ?? "0.00"),
+        };
+      } catch {
+        return null;
+      }
+    }),
+  );
   return {
-    items: rows.map((r) => ({
+    items: rows.map((r, i) => ({
       holdingNo: r.holding_no,
       oldHoldingNo: r.old_holding_no,
       ownerName: r.owner_name,
       ward: r.ward,
       totalPlotArea: r.area_sqft,
       taxPaidTillYear: r.tax_paid_till_year,
-      annualTaxAmount: r.tax_payable,
-      solidWasteChargeAmount: r.solid_waste_charge,
-      totalAmountDue: r.outstanding_demand,
+      annualTaxAmount: live[i]?.annualTax ?? r.tax_payable,
+      solidWasteChargeAmount: live[i]?.solidWaste ?? r.solid_waste_charge,
+      totalAmountDue: live[i]?.totalDue ?? r.outstanding_demand,
     })),
     total,
     page: p,

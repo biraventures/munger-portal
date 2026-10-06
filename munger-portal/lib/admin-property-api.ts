@@ -117,6 +117,8 @@ export interface PropertyReport {
   collectionIssues: CollectionIssueWithNotices[];
   /** Disputed flag and its full flag/clear trail. */
   dispute?: DisputeStatus;
+  /** Audit trail: creation (with its data source) and every later edit. */
+  propertyHistory?: { version: number; action: string; change_basis: string | null; change_reference: string | null; operator_name: string; ts: string }[];
 }
 
 export async function fetchPropertyReport(holdingNo: string): Promise<PropertyReport> {

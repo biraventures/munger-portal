@@ -63,7 +63,7 @@ export const getPropertyReportHandler = asyncHandler(async (req: Request, res: R
   const propertyResult = await searchPropertyByHoldingNo(holdingNo);
   if (!propertyResult.found) throw ApiError.notFound(propertyResult.message ?? "Property not found");
 
-  const [changeRequests, discrepancies, resurveyFlags, fieldVerifications, collectionIssues, dispute] = await Promise.all([
+  const [changeRequests, discrepancies, resurveyFlags, fieldVerifications, collectionIssues, dispute, propertyHistory] = await Promise.all([
     changeRequestRepository.listForHolding(holdingNo),
     propertyDiscrepancyRepository.listForHolding(holdingNo),
     propertyResurveyFlagRepository.listForHolding(holdingNo),
@@ -71,7 +71,14 @@ export const getPropertyReportHandler = asyncHandler(async (req: Request, res: R
     collectionIssueRepository.listForHoldingWithNotices(holdingNo),
     // Disputed flag + the full trail of who flagged / cleared it, when and why.
     getDisputeStatus(holdingNo),
+    // Audit trail: creation (with the data source it came from) and every later edit.
+    pool
+      .query(
+        `SELECT version, action, change_basis, change_reference, operator_name, ts FROM property_history WHERE holding_no = $1 ORDER BY version ASC`,
+        [holdingNo],
+      )
+      .then((r) => r.rows),
   ]);
 
-  res.status(200).json({ ...propertyResult, changeRequests, discrepancies, resurveyFlags, fieldVerifications, collectionIssues, dispute });
+  res.status(200).json({ ...propertyResult, changeRequests, discrepancies, resurveyFlags, fieldVerifications, collectionIssues, dispute, propertyHistory });
 });
