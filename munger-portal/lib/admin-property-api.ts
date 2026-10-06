@@ -1,4 +1,5 @@
 import { getAdminToken } from "./admin-auth";
+import type { DisputeStatus } from "./admin-api";
 import type { CollectionIssueWithNotices } from "./admin-api";
 
 const API_BASE_URL =
@@ -114,6 +115,8 @@ export interface PropertyReport {
   fieldVerifications: PropertyFieldVerificationSummary[];
   /** Every collection issue raised against this holding, each with the notices issued for it. */
   collectionIssues: CollectionIssueWithNotices[];
+  /** Disputed flag and its full flag/clear trail. */
+  dispute?: DisputeStatus;
 }
 
 export async function fetchPropertyReport(holdingNo: string): Promise<PropertyReport> {

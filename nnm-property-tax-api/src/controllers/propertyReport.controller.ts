@@ -8,6 +8,7 @@ import { propertyDiscrepancyRepository } from "../repositories/propertyDiscrepan
 import { propertyResurveyFlagRepository } from "../repositories/propertyResurveyFlag.repository";
 import { propertyFieldVerificationRepository } from "../repositories/propertyFieldVerification.repository";
 import { collectionIssueRepository } from "../repositories/collectionIssue.repository";
+import { getDisputeStatus } from "../services/propertyDispute.service";
 import { asyncHandler } from "../middleware/asyncHandler";
 import { ApiError } from "../utils/ApiError";
 
@@ -62,13 +63,15 @@ export const getPropertyReportHandler = asyncHandler(async (req: Request, res: R
   const propertyResult = await searchPropertyByHoldingNo(holdingNo);
   if (!propertyResult.found) throw ApiError.notFound(propertyResult.message ?? "Property not found");
 
-  const [changeRequests, discrepancies, resurveyFlags, fieldVerifications, collectionIssues] = await Promise.all([
+  const [changeRequests, discrepancies, resurveyFlags, fieldVerifications, collectionIssues, dispute] = await Promise.all([
     changeRequestRepository.listForHolding(holdingNo),
     propertyDiscrepancyRepository.listForHolding(holdingNo),
     propertyResurveyFlagRepository.listForHolding(holdingNo),
     propertyFieldVerificationRepository.listForHolding(holdingNo),
     collectionIssueRepository.listForHoldingWithNotices(holdingNo),
+    // Disputed flag + the full trail of who flagged / cleared it, when and why.
+    getDisputeStatus(holdingNo),
   ]);
 
-  res.status(200).json({ ...propertyResult, changeRequests, discrepancies, resurveyFlags, fieldVerifications, collectionIssues });
+  res.status(200).json({ ...propertyResult, changeRequests, discrepancies, resurveyFlags, fieldVerifications, collectionIssues, dispute });
 });

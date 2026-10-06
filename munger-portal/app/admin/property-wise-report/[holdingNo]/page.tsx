@@ -125,6 +125,16 @@ export default function PropertyWiseReportDetailPage() {
             </h1>
             <p className="mb-6 text-sm text-slate-500">{str(p.address)}</p>
 
+            {report.dispute?.isDisputed && (
+              <div role="alert" className="mb-6 flex items-start gap-2 rounded-md border border-red-300 bg-red-50 p-4 text-sm text-red-800">
+                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                <div>
+                  <b>This holding is marked as DISPUTED</b> - hidden from public search, no demand notice and no payment until cleared.
+                  <div className="mt-1 text-xs">Reason: {str(report.dispute.remarks)}</div>
+                </div>
+              </div>
+            )}
+
             {/* Property details */}
             <section className="mb-6 rounded-xl border border-slate-200 bg-white p-6">
               <h2 className="mb-4 text-sm font-semibold text-slate-700">Property Details</h2>
@@ -183,6 +193,50 @@ export default function PropertyWiseReportDetailPage() {
               <div className={`mt-4 rounded-md p-3 text-sm font-semibold ${Number(p.totalPayable ?? 0) > 0 ? "bg-red-50 text-red-700" : "bg-green-50 text-green-700"}`}>
                 Total Payable: ₹{money(p.totalPayable)}
               </div>
+            </section>
+
+            {/* Dispute trail */}
+            <section className="mb-6 rounded-xl border border-slate-200 bg-white p-6">
+              <h2 className="mb-4 flex items-center gap-2 text-sm font-semibold text-slate-700">
+                Dispute Status &amp; Trail ({report.dispute?.history.length ?? 0})
+                {report.dispute?.isDisputed ? (
+                  <span className="rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-semibold uppercase text-red-700">Disputed</span>
+                ) : (
+                  <span className="rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-semibold uppercase text-green-700">Not disputed</span>
+                )}
+              </h2>
+              {!report.dispute || report.dispute.history.length === 0 ? (
+                <p className="text-sm text-slate-400">This holding has never been flagged as disputed.</p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead className="text-slate-400">
+                      <tr>
+                        <th className="pb-2 pr-4">When</th>
+                        <th className="pb-2 pr-4">Action</th>
+                        <th className="pb-2 pr-4">By</th>
+                        <th className="pb-2">Remarks</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {report.dispute.history.map((h, i) => (
+                        <tr key={i} className="border-t border-slate-100 align-top">
+                          <td className="py-2 pr-4 whitespace-nowrap">{fmtDateTime(h.actedAt)}</td>
+                          <td className="py-2 pr-4">
+                            <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase ${h.action === "flagged" ? "bg-red-100 text-red-700" : "bg-green-100 text-green-700"}`}>
+                              {h.action === "flagged" ? "Flagged disputed" : "Dispute cleared"}
+                            </span>
+                          </td>
+                          <td className="py-2 pr-4">
+                            {h.actedBy} <span className="text-slate-400">({h.actedByRole.replace("_", " ")})</span>
+                          </td>
+                          <td className="py-2">{h.remarks}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </section>
 
             {/* Change log */}
