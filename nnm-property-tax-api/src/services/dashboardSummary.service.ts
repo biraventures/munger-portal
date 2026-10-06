@@ -100,21 +100,28 @@ export async function listHoldingsForDashboard(page: unknown, pageSize: unknown,
   const { rows, total } = await propertyRepository.listPaginated(p, ps, wardFilter, sortKey, sortDirection);
   // The stored tax / solid-waste / amount-due columns go stale (uploads leave them 0; payments and
   // solid-waste type approvals change what is due), so show the LIVE figures for the rows on this page.
-  const live = await Promise.all(
-    rows.map(async (r) => {
+  // Look rows up a few at a time: firing all 25-100 at once exhausts the DB pool and starves every
+  // other request (including the dashboard summary).
+  const live: Array<{ annualTax: string; solidWaste: string; totalDue: string } | null> = new Array(rows.length).fill(null);
+  let next = 0;
+  const worker = async () => {
+    while (next < rows.length) {
+      const i = next++;
       try {
-        const s = await searchPropertyByHoldingNo(r.holding_no);
-        if (!s.found || !s.property || !s.taxCalc) return null;
-        return {
-          annualTax: s.taxCalc.currentTax,
-          solidWaste: String(s.property.solidWasteCharge ?? "0.00"),
-          totalDue: String(s.property.totalPayable ?? "0.00"),
-        };
+        const s = await searchPropertyByHoldingNo(rows[i]!.holding_no);
+        if (s.found && s.property && s.taxCalc) {
+          live[i] = {
+            annualTax: String(s.taxCalc.currentTax),
+            solidWaste: String(s.property.solidWasteCharge ?? "0.00"),
+            totalDue: String(s.property.totalPayable ?? "0.00"),
+          };
+        }
       } catch {
-        return null;
+        live[i] = null;
       }
-    }),
-  );
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(4, rows.length) }, worker));
   return {
     items: rows.map((r, i) => ({
       holdingNo: r.holding_no,
