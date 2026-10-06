@@ -1,5 +1,6 @@
 import ExcelJS from "exceljs";
 import { pool } from "../config/db";
+import { searchPropertyByHoldingNo } from "./property.service";
 
 export interface PropertyImportResult {
   propertiesCreated: number;
@@ -160,6 +161,7 @@ export async function importPropertiesXlsx(fileBuffer: Buffer, actorDisplayName:
   // history row for a holding each time. Skipping child rows for any
   // holding not newly created in THIS run keeps a re-run safe.
   const preExistingHoldings = new Set<string>();
+  const createdHoldings = new Set<string>();
   // Holdings that already exist in the database under a slightly different spelling
   // (e.g. "MUNG- 13054" with a space) map to the number actually stored, so receipts,
   // demand notices and history rows attach to that holding instead of failing the
@@ -270,6 +272,7 @@ export async function importPropertiesXlsx(fileBuffer: Buffer, actorDisplayName:
         ],
       );
       result.propertiesCreated++;
+      createdHoldings.add(holdingNo);
     } catch (err) {
       result.errors.push({ sheet: "Master", row: excelRowNum, message: err instanceof Error ? err.message : String(err) });
     }
@@ -489,6 +492,42 @@ export async function importPropertiesXlsx(fileBuffer: Buffer, actorDisplayName:
     }
   }
 
+  // Sheets leave TaxPayable blank, which would show "0" annual tax on the holdings list. Fill the
+  // stored figures from the live calculation for every holding created in this run.
+  try {
+    const created = [...createdHoldings];
+    await backfillStoredTaxFigures(created);
+  } catch (err) {
+    result.errors.push({ sheet: "Master", row: 0, message: `Holdings were imported but their stored tax figures could not be filled: ${err instanceof Error ? err.message : String(err)}` });
+  }
+
   return result;
+}
+
+/**
+ * Fills properties.tax_payable (annual tax), solid_waste_charge and outstanding_demand from the live
+ * calculation - the same figures the property search shows. With no argument it covers only holdings
+ * whose stored annual tax is still 0 (safe to re-run); pass holding numbers to refresh specific ones.
+ */
+export async function backfillStoredTaxFigures(holdingNos?: string[]): Promise<{ updated: number; failed: { holdingNo: string; message: string }[] }> {
+  const list =
+    holdingNos ??
+    (await pool.query<{ holding_no: string }>(`SELECT holding_no FROM properties WHERE tax_payable = 0 ORDER BY holding_no`)).rows.map((r) => r.holding_no);
+  let updated = 0;
+  const failed: { holdingNo: string; message: string }[] = [];
+  for (const holdingNo of list) {
+    try {
+      const r = await searchPropertyByHoldingNo(holdingNo);
+      if (!r.found || !r.taxCalc || !r.property || !r.arrears) continue;
+      await pool.query(
+        `UPDATE properties SET tax_payable = $2::numeric, solid_waste_charge = $3::numeric, outstanding_demand = $4::numeric WHERE holding_no = $1`,
+        [holdingNo, Number(r.taxCalc.currentTax), Number(r.property.solid_waste_charge) || 0, Number(r.arrears.totalPending) || 0],
+      );
+      updated++;
+    } catch (err) {
+      failed.push({ holdingNo, message: err instanceof Error ? err.message : String(err) });
+    }
+  }
+  return { updated, failed };
 }
 
