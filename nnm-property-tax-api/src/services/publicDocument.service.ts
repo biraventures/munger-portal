@@ -34,6 +34,7 @@ export async function uploadPublicDocument(
     isPublished: boolean;
   },
   uploadedBy: string,
+  approval?: { role: string; key: string; needsApproval: boolean },
 ): Promise<PublicDocumentMeta> {
   if (input.fileData.length === 0) throw ApiError.badRequest("The selected file is empty.");
   if (input.fileData.length > MAX_PUBLIC_DOCUMENT_BYTES) {
@@ -58,7 +59,10 @@ export async function uploadPublicDocument(
     fileName: input.fileName.replace(/[\\/"]/g, "_"),
     mimeType,
     fileData: input.fileData,
-    isPublished: input.isPublished,
+    isPublished: approval?.needsApproval ? false : input.isPublished,
     uploadedBy,
+    uploadedByRole: approval?.role ?? "commissioner",
+    uploadedByKey: approval?.key ?? null,
+    approvalStatus: approval?.needsApproval ? "pending" : "approved",
   });
 }

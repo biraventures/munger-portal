@@ -97,6 +97,12 @@ export const patchPublicDocumentHandler = asyncHandler(async (req: Request, res:
   const body = patchSchema.safeParse(req.body);
   if (!body.success) throw ApiError.badRequest("Invalid input", body.error.flatten().fieldErrors);
 
+  if (body.data.isPublished === true) {
+    const current = await publicDocumentRepository.findMetaById(params.data.id);
+    if (current && current.approval_status !== "approved") {
+      throw ApiError.badRequest("This document has not been approved by the APSWMO, so it cannot be published yet.");
+    }
+  }
   const doc = await publicDocumentRepository.update(params.data.id, body.data);
   if (!doc) throw ApiError.notFound("Document not found.");
   res.status(200).json({ document: doc });

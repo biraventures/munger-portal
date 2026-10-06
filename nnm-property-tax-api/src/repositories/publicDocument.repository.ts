@@ -3,7 +3,8 @@ import type { PublicDocumentMeta, PublicDocumentFile } from "../types/publicDocu
 
 // Explicit column list (no file_data) so a listing never pulls the file bytes into memory.
 const META_COLUMNS = `id, title, description, category, to_char(document_date, 'YYYY-MM-DD') AS document_date,
-  file_name, mime_type, file_size, is_published, uploaded_by, uploaded_at, updated_at`;
+  file_name, mime_type, file_size, is_published, uploaded_by, uploaded_at, updated_at,
+  approval_status, uploaded_by_role, uploaded_by_key, approved_by, approved_at, reject_reason`;
 
 export const publicDocumentRepository = {
   async create(input: {
@@ -16,10 +17,13 @@ export const publicDocumentRepository = {
     fileData: Buffer;
     isPublished: boolean;
     uploadedBy: string;
+    uploadedByRole?: string | null;
+    uploadedByKey?: string | null;
+    approvalStatus?: "pending" | "approved";
   }): Promise<PublicDocumentMeta> {
     const { rows } = await pool.query<PublicDocumentMeta>(
-      `INSERT INTO public_documents (title, description, category, document_date, file_name, mime_type, file_size, file_data, is_published, uploaded_by)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+      `INSERT INTO public_documents (title, description, category, document_date, file_name, mime_type, file_size, file_data, is_published, uploaded_by, uploaded_by_role, uploaded_by_key, approval_status)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
        RETURNING ${META_COLUMNS}`,
       [
         input.title,
@@ -32,6 +36,9 @@ export const publicDocumentRepository = {
         input.fileData,
         input.isPublished,
         input.uploadedBy,
+        input.uploadedByRole ?? null,
+        input.uploadedByKey ?? null,
+        input.approvalStatus ?? "approved",
       ],
     );
     return rows[0]!;
@@ -43,6 +50,33 @@ export const publicDocumentRepository = {
       `SELECT ${META_COLUMNS} FROM public_documents ORDER BY document_date DESC, id DESC`,
     );
     return rows;
+  },
+
+  /** Documents one uploader submitted (any status). */
+  async listByUploader(key: string): Promise<PublicDocumentMeta[]> {
+    const { rows } = await pool.query<PublicDocumentMeta>(
+      `SELECT ${META_COLUMNS} FROM public_documents WHERE uploaded_by_key = $1 ORDER BY id DESC`,
+      [key],
+    );
+    return rows;
+  },
+
+  async findMetaById(id: number): Promise<PublicDocumentMeta | null> {
+    const { rows } = await pool.query<PublicDocumentMeta>(`SELECT ${META_COLUMNS} FROM public_documents WHERE id = $1`, [id]);
+    return rows[0] ?? null;
+  },
+
+  /** APSWMO decision on a pending document. Approving publishes it. Returns null if it was not pending. */
+  async decide(id: number, approve: boolean, by: string, reason: string | null): Promise<PublicDocumentMeta | null> {
+    const { rows } = await pool.query<PublicDocumentMeta>(
+      `UPDATE public_documents SET
+         approval_status = CASE WHEN $2 THEN 'approved' ELSE 'rejected' END,
+         is_published = $2, approved_by = $3, approved_at = now(), reject_reason = $4, updated_at = now()
+       WHERE id = $1 AND approval_status = 'pending'
+       RETURNING ${META_COLUMNS}`,
+      [id, approve, by, reason],
+    );
+    return rows[0] ?? null;
   },
 
   /** Published only - what the public website shows. */

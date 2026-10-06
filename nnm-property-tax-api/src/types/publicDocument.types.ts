@@ -15,6 +15,12 @@ export interface PublicDocumentMeta {
   uploaded_by: string;
   uploaded_at: Date;
   updated_at: Date;
+  approval_status: "pending" | "approved" | "rejected";
+  uploaded_by_role: string | null;
+  uploaded_by_key: string | null;
+  approved_by: string | null;
+  approved_at: Date | null;
+  reject_reason: string | null;
 }
 
 export interface PublicDocumentFile {

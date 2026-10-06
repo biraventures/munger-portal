@@ -18,6 +18,7 @@ import { streetlightRouter } from "./streetlight.routes";
 import { streetlightPublicRouter } from "./streetlightPublic.routes";
 import { pyauRouter } from "./pyau.routes";
 import { publicDocumentRouter } from "./publicDocument.routes";
+import { documentManagerRouter } from "./documentManager.routes";
 
 export const apiRouter = Router();
 
@@ -55,6 +56,8 @@ apiRouter.use("/pyau", pyauRouter);
 
 // Documents/reports the Commissioner publishes on the public website - read-only and unauthenticated here; managed via /admin/public-documents.
 apiRouter.use("/public-documents", publicDocumentRouter);
+// Document upload + APSWMO approval for the admin / operator / attendance logins.
+apiRouter.use("/document-manager", documentManagerRouter);
 
 // /admin/auth (public login) MUST be mounted before /admin (which
 // requires an admin session for everything under it) - Express tries
