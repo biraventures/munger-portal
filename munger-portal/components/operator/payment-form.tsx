@@ -145,7 +145,7 @@ export function PaymentForm({
             <select value={selectedDemandNo} onChange={(e) => setSelectedDemandNo(e.target.value)} className={inputClass}>
               {notices.map((n) => (
                 <option key={n.demandNo} value={n.demandNo}>
-                  {n.formattedDemandNo} — ₹{Number(n.totalAmountDemanded).toLocaleString("en-IN")} ({n.noticeDate})
+                  {n.formattedDemandNo}{n.partPayment ? ` [PART PAYMENT up to ${n.paidThroughYear}]` : ""} — ₹{Number(n.totalAmountDemanded).toLocaleString("en-IN")} ({n.noticeDate})
                 </option>
               ))}
             </select>

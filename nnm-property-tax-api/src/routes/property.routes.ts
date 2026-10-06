@@ -17,6 +17,7 @@ import {
   getUnsettledDemandNotices,
   getDemandNoticeHistory,
   getDemandNoticeReprint,
+  getPartPaymentOptionsHandler,
 } from "../controllers/demandNotice.controller";
 import { postPreviewTax } from "../controllers/taxPreview.controller";
 import { postRequestCancellation } from "../controllers/cancellationRequest.controller";
@@ -95,6 +96,7 @@ propertyRouter.post("/:holdingNo/pay/online/initiate", postInitiateOnlinePayment
 propertyRouter.post("/:holdingNo/demand-notice", requireOperatorOrAdmin, postGenerateDemandNotice);
 
 // GET /api/v1/properties/:holdingNo/demand-notices/unsettled - for the payment picker (operator or admin)
+propertyRouter.get("/:holdingNo/part-payment-options", requireOperatorOrAdmin, getPartPaymentOptionsHandler);
 propertyRouter.get("/:holdingNo/demand-notices/unsettled", requireOperatorOrAdmin, getUnsettledDemandNotices);
 
 // Read-only document history + reprints — reachable by operator OR admin.

@@ -8,6 +8,7 @@ import { PropertyEditorForm } from "@/components/operator/property-editor-form";
 import { PaymentForm } from "@/components/operator/payment-form";
 import { ReceiptView } from "@/components/operator/receipt-view";
 import { NoticeView } from "@/components/operator/notice-view";
+import { PartPaymentPanel } from "@/components/operator/part-payment-panel";
 import { PropertyDocumentHistory } from "@/components/operator/property-document-history";
 import { EntryModeLauncher } from "@/components/operator/entry-mode-launcher";
 import { PartiallyKnownForm } from "@/components/operator/partially-known-form";
@@ -108,11 +109,11 @@ export default function OperatorPropertyTaxPage() {
     setJustCreated(null);
   }
 
-  async function handleGenerateNotice(holdingNo: string) {
+  async function handleGenerateNotice(holdingNo: string, partYears?: number) {
     setGeneratingNotice(true);
     setNoticeError(null);
     try {
-      const result = await generateDemandNotice(holdingNo);
+      const result = await generateDemandNotice(holdingNo, partYears);
       setNotice(result);
     } catch (err) {
       setNoticeError(err instanceof Error ? err.message : "Could not generate the demand notice.");
@@ -294,6 +295,13 @@ export default function OperatorPropertyTaxPage() {
                     {generatingNotice ? "Generating…" : "Generate Demand Notice"}
                   </button>
                 </div>
+
+                <PartPaymentPanel
+                  key={`pp-${mode.holdingNo}`}
+                  holdingNo={mode.holdingNo}
+                  busy={generatingNotice}
+                  onGenerate={(years) => handleGenerateNotice(mode.holdingNo, years)}
+                />
 
                 {showPayment && (
                   <PaymentForm holdingNo={mode.holdingNo} onSuccess={setReceipt} />

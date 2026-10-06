@@ -149,7 +149,9 @@ async function finalizeAndApplyCancellation(requestId: number, reviewedBy: strin
         // clobbering a later, unrelated payment - see
         // paymentRepository.revertTaxPaidTillYear.
         if (notice?.assessment_year) {
-          await paymentRepository.revertTaxPaidTillYear(txn.holding_no, taxPaidTillYearBefore(txn, notice.assessment_year), notice.assessment_year, client);
+          // A part-payment notice advanced tax_paid_till_year only to its paid_through_year.
+          const advancedTo = notice.part_payment && notice.paid_through_year ? notice.paid_through_year : notice.assessment_year;
+          await paymentRepository.revertTaxPaidTillYear(txn.holding_no, taxPaidTillYearBefore(txn, notice.assessment_year), advancedTo, client);
         }
       }
     }

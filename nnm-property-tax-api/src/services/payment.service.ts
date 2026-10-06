@@ -253,7 +253,19 @@ export async function submitPayment(
   // actually charged is the notice's frozen total, not recomputed here.
   const arrearsBefore = summarizeArrears(property, stages);
   const noticeYearNum = parseYearStartOrNull(notice.assessment_year)!;
-  const clearance = computeArrearsClearance(property, stages, noticeYearNum - 1);
+  // A part-payment notice clears arrears only up to its paid_through_year; a normal notice clears everything before its own year.
+  const isPart = notice.part_payment && !!notice.paid_through_year;
+  const paidThroughYear = isPart ? notice.paid_through_year! : notice.assessment_year;
+  const throughYearNum = isPart ? parseYearStartOrNull(notice.paid_through_year)! : noticeYearNum - 1;
+  if (isPart) {
+    const already = parseYearStartOrNull(property.tax_paid_till_year);
+    if (already !== null && already >= throughYearNum) {
+      throw ApiError.badRequest(
+        `Demand notice ${input.demandNo} is out of date - this holding is already paid till ${property.tax_paid_till_year}. Generate a fresh demand notice.`,
+      );
+    }
+  }
+  const clearance = computeArrearsClearance(property, stages, throughYearNum);
 
   const amountReceived = num(notice.total_amount_demanded);
   const receiptNoNum = await paymentRepository.getNextReceiptNo();
@@ -321,7 +333,7 @@ export async function submitPayment(
 
     // The core fix: unconditionally advance paid-through status to what
     // this notice covered — this is what was missing before.
-    await paymentRepository.updateTaxPaidTillYear(holdingNo, notice.assessment_year, client);
+    await paymentRepository.updateTaxPaidTillYear(holdingNo, paidThroughYear, client);
 
     await client.query("COMMIT");
   } catch (err) {
@@ -371,7 +383,19 @@ export async function submitPayment(
     property: { ...property, solid_waste_charge: solidWasteCharge.toFixed(2) } as unknown as Record<string, unknown>,
     floors,
     taxCalc: calc,
-    totals: {
+    totals: isPart
+      ? {
+          yearWiseArrears: num(notice.previous_years_tax_base).toFixed(2),
+          currentTax: "0.00",
+          rebate: "0.00",
+          penalty: num(notice.total_fine_amount).toFixed(2),
+          outstandingDemand: num(notice.previous_years_tax_base).toFixed(2),
+          currentTaxLateFee: "0.00",
+          currentTaxRebate: "0.00",
+          currentTotal: "0.00",
+          grandTotal: amountReceived.toFixed(2),
+        }
+      : {
       yearWiseArrears: arrearsBefore.totalPending.toFixed(2),
       currentTax: calc.currentTax,
       rebate: calc.rebate,

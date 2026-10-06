@@ -168,3 +168,51 @@ export function summarizeArrears(property: PropertyRow, stages: TaxHistoryStageR
       "Estimate from stored tax_history_stages rows only — base tax is not re-derived from Floors. Penalty (late fee) IS computed per pending year from that base. See arrears.service.ts header comment.",
   };
 }
+
+export interface PartPaymentOption {
+  years: number;
+  fromYear: string; // first unpaid year being cleared, e.g. "2019-2020"
+  toYear: string; // last year being cleared - tax_paid_till_year becomes this once paid
+  taxAmount: number;
+  penaltyAmount: number;
+  total: number; // whole rupees, rounded up
+}
+
+const yearLabel = (y: number): string => `${y}-${y + 1}`;
+
+/**
+ * Part payment: the owner clears only the first N unpaid years (counted from the year after
+ * tax_paid_till_year), with the late fee on those years as of today. Returns every option from 1
+ * year up to all pending arrear years. Empty when arrears can't be determined (no paid-till year /
+ * creation year) or nothing is pending; stops at the first year with no tax data on file rather than
+ * quoting a wrong amount.
+ */
+export function computePartPaymentOptions(property: PropertyRow, stages: TaxHistoryStageRow[]): PartPaymentOption[] {
+  const taxPaidTillYear = parseYearStartOrNull(property.tax_paid_till_year);
+  const holdingCreationYear = parseYearStartOrNull(property.holding_creation_year);
+  const lastYear = getCurrentAssessmentYearStartNum() - 1;
+  if (taxPaidTillYear === null || holdingCreationYear === null) return [];
+  const pendingStart = Math.max(taxPaidTillYear + 1, holdingCreationYear);
+  if (pendingStart > lastYear) return [];
+
+  const now = new Date();
+  const options: PartPaymentOption[] = [];
+  let tax = 0;
+  let penalty = 0;
+  for (let y = pendingStart; y <= lastYear; y++) {
+    const stage = stages.find((s) => s.start_year_used <= y && y <= s.closing_year);
+    if (!stage) break;
+    const annual = num(stage.annual_tax_amount);
+    tax += annual;
+    penalty += calculateRebateOrLateFee(annual, y, now).lateFee;
+    options.push({
+      years: y - pendingStart + 1,
+      fromYear: yearLabel(pendingStart),
+      toYear: yearLabel(y),
+      taxAmount: tax,
+      penaltyAmount: penalty,
+      total: Math.ceil(tax + penalty),
+    });
+  }
+  return options;
+}

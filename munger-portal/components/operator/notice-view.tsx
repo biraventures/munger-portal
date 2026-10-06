@@ -95,6 +95,14 @@ export function NoticeView({
           </div>
         )}
 
+        {t.partPayment && (
+          <div className="mt-2.5 rounded border border-blue-400 bg-blue-50 px-3 py-2 text-[11px] text-blue-900">
+            <b>PART PAYMENT NOTICE.</b> This notice covers only {t.partPayment.years} year(s):{" "}
+            {t.partPayment.fromYear} to {t.partPayment.toYear}. After payment, tax will be treated as paid till{" "}
+            {t.partPayment.toYear}; the remaining years up to the current year will be demanded separately.
+          </div>
+        )}
+
         {/* Not-a-receipt banner */}
         <div className="mt-2.5 rounded border-2 border-red-700 bg-red-50 px-3 py-2.5 text-center text-[13px] font-bold text-red-700">
           THIS IS NOT THE PAYMENT RECEIPT. KINDLY COLLECT THE PAYMENT RECEIPT WHEN YOU PAY THE TAX.
@@ -247,7 +255,39 @@ export function NoticeView({
           </tbody>
         </table>
 
+        {t.partPayment && (
+          <table className="mt-2.5 w-full border-collapse text-[11px]">
+            <thead>
+              <tr>
+                <th className="border border-slate-400 bg-slate-100 p-1.5 text-left">Particulars</th>
+                <th className="border border-slate-400 bg-slate-100 p-1.5 text-right">Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td className="border border-slate-400 p-1.5">
+                  Tax Amount — {t.partPayment.fromYear} to {t.partPayment.toYear} ({t.partPayment.years} year(s))
+                </td>
+                <td className="border border-slate-400 p-1.5 text-right">{t.arrearsBaseTax}</td>
+              </tr>
+              <tr>
+                <td className="border border-slate-400 p-1.5">Penalty (late fee on the above years, as on {notice.date})</td>
+                <td className="border border-slate-400 p-1.5 text-right">{t.penalty}</td>
+              </tr>
+              <tr>
+                <td className="border border-slate-400 p-1.5">
+                  <b>Total Amount Due (Part Payment)</b>
+                </td>
+                <td className="border border-slate-400 p-1.5 text-right">
+                  <b>{t.grandTotal}</b>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        )}
+
         {/* Totals table */}
+        {!t.partPayment && (
         <table className="mt-2.5 w-full border-collapse text-[11px]">
           <thead>
             <tr>
@@ -390,12 +430,14 @@ export function NoticeView({
             </tr>
           </tbody>
         </table>
+        )}
 
         {/* Demand line */}
         <div className="mt-3.5 rounded border border-amber-400 bg-amber-50 px-3 py-2.5">
           You are hereby notified that an amount of <b>Rs. {t.grandTotal}</b> is outstanding against Holding No{" "}
-          <b>{str(p.holding_no)}</b>. Please clear the dues at the earliest at the Nagar Nigam counter to avoid
-          penal charges.
+          <b>{str(p.holding_no)}</b>
+          {t.partPayment ? ` as part payment for ${t.partPayment.fromYear} to ${t.partPayment.toYear}` : ""}. Please clear the dues at the
+          earliest at the Nagar Nigam counter to avoid penal charges.
         </div>
 
         <div className="mt-4 border-t border-slate-300 pt-2 text-[9.5px] text-slate-500">

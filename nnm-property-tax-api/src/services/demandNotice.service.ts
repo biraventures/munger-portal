@@ -3,7 +3,7 @@ import { demandNoticeRepository } from "../repositories/demandNotice.repository"
 import { cancellationRequestRepository } from "../repositories/cancellationRequest.repository";
 import { calculateTax } from "./taxCalculation.service";
 import { calculateRebateOrLateFee, calculateSolidWasteCharge } from "./charges.service";
-import { summarizeArrears } from "./arrears.service";
+import { summarizeArrears, computePartPaymentOptions, type PartPaymentOption } from "./arrears.service";
 import { parseYearStartOrNull } from "../utils/assessmentYear";
 import { num } from "../utils/num";
 import { ApiError } from "../utils/ApiError";
@@ -49,7 +49,21 @@ function ordinal(n: number): string {
  * after its due date) — kept separate from the arrears' penalty so the
  * two fine sources stay distinguishable on the notice.
  */
-export async function generateDemandNotice(holdingNo: string, generatedBy: string): Promise<DemandNoticeResult> {
+/** What a part payment would cost for each possible number of years (1..all pending arrear years), as of today. */
+export async function getPartPaymentOptions(holdingNo: string): Promise<{ paidTillYear: string | null; options: PartPaymentOption[] }> {
+  const property = await propertyRepository.findByHoldingNo(holdingNo);
+  if (!property) throw ApiError.notFound(`Property not found for Holding No: ${holdingNo}`);
+  const stages = await propertyRepository.findTaxHistoryByHoldingNo(holdingNo);
+  return { paidTillYear: property.tax_paid_till_year, options: computePartPaymentOptions(property, stages) };
+}
+
+/**
+ * `partYears` (optional) makes this a PART-PAYMENT notice: only the first N unpaid years after
+ * tax_paid_till_year, with their tax and late fee as of today. Current-year tax and other charges
+ * (solid waste, water, ...) are left for the next full notice; paying it advances tax_paid_till_year
+ * to the last year covered.
+ */
+export async function generateDemandNotice(holdingNo: string, generatedBy: string, partYears?: number): Promise<DemandNoticeResult> {
   const property = await propertyRepository.findByHoldingNo(holdingNo);
   if (!property) {
     throw ApiError.notFound(`Property not found for Holding No: ${holdingNo}`);
@@ -60,6 +74,18 @@ export async function generateDemandNotice(holdingNo: string, generatedBy: strin
   const calc = calculateTax(property, floors);
   const solidWasteCharge = calculateSolidWasteCharge(property);
   const arrears = summarizeArrears(property, stages);
+
+  let part: PartPaymentOption | null = null;
+  if (partYears !== undefined) {
+    const options = computePartPaymentOptions(property, stages);
+    if (options.length === 0) {
+      throw ApiError.badRequest(
+        `Part payment is not available for Holding No ${holdingNo}: there are no pending earlier years, or its tax-paid-till year is not recorded.`,
+      );
+    }
+    part = options.find((o) => o.years === partYears) ?? null;
+    if (!part) throw ApiError.badRequest(`Choose between 1 and ${options.length} year(s) for part payment of Holding No ${holdingNo}.`);
+  }
 
   const currentYearStartNum = parseYearStartOrNull(property.assessment_year);
   const netCurrentBeforeTiming = num(calc.currentTax) - num(calc.rebate);
@@ -75,17 +101,19 @@ export async function generateDemandNotice(holdingNo: string, generatedBy: strin
   // taxpayer would be asked to pay twice.
   const paidTillNum = parseYearStartOrNull(property.tax_paid_till_year);
   const currentCyclePaid = currentYearStartNum !== null && paidTillNum !== null && paidTillNum >= currentYearStartNum;
-  if (currentCyclePaid && arrears.totalPending + arrears.penalty <= 0) {
+  if (!part && currentCyclePaid && arrears.totalPending + arrears.penalty <= 0) {
     throw ApiError.badRequest(
       `No pending demand. All dues of Holding No ${holdingNo} are cleared till ${property.tax_paid_till_year}. A demand notice cannot be generated.`,
     );
   }
 
-  const currentTotal = timing.net;
-  const yearWiseArrears = arrears.totalPending;
-  const totalFineAmount = timing.lateFee; // current year's OWN late fee only — arrears' penalty is separate, see header note
-  const otherCharges =
-    solidWasteCharge +
+  const currentTotal = part ? 0 : timing.net;
+  const yearWiseArrears = part ? part.taxAmount : arrears.totalPending;
+  const arrearsPenalty = part ? part.penaltyAmount : arrears.penalty;
+  const totalFineAmount = part ? 0 : timing.lateFee; // current year's OWN late fee only — arrears' penalty is separate, see header note
+  const otherCharges = part
+    ? 0
+    : solidWasteCharge +
     num(property.penal_charge) +
     num(property.water_charge) +
     num(property.boring_charge) +
@@ -96,7 +124,7 @@ export async function generateDemandNotice(holdingNo: string, generatedBy: strin
   // this can never under-collect by a fraction. Only the final total
   // is rounded; the itemized breakdown below keeps full precision for
   // transparency about how that total was reached.
-  const grandTotal = Math.ceil(currentTotal + yearWiseArrears + arrears.penalty + otherCharges - num(property.misc_rebate));
+  const grandTotal = part ? part.total : Math.ceil(currentTotal + yearWiseArrears + arrearsPenalty + otherCharges - num(property.misc_rebate));
 
   // Same reverse-solved-area fallback notice-view.tsx/receipt-view.tsx
   // use for display - frozen here so a reprint shows the identical
@@ -120,26 +148,27 @@ export async function generateDemandNotice(holdingNo: string, generatedBy: strin
   // but this doesn't assume that; it picks up everything currently
   // outstanding, however that came about.
   const previousUnsettled = await demandNoticeRepository.findUnsettledForHolding(holdingNo);
-  const reminderNumber = previousUnsettled.length > 0 ? Math.max(...previousUnsettled.map((n) => n.reminder_number)) + 1 : 0;
+  const reminderNumber = !part && previousUnsettled.length > 0 ? Math.max(...previousUnsettled.map((n) => n.reminder_number)) + 1 : 0;
   const previousUnsettledDemandNos = previousUnsettled.length > 0 ? previousUnsettled.map((n) => n.demand_no).join(", ") : null;
   const reminderLabel = reminderNumber > 0 ? `${ordinal(reminderNumber)} Reminder` : null;
   const previousUnsettledDemandNosFormatted = previousUnsettled.map((n) => formatDocNumber(n.demand_no, "Demand", n.notice_date));
 
   const totals: DemandNoticeTotals = {
-    currentTaxBase: netCurrentBeforeTiming.toFixed(2),
+    currentTaxBase: part ? "0.00" : netCurrentBeforeTiming.toFixed(2),
     // Plinth-area/rain-water rebate - already subtracted into
     // currentTaxBase above; surfaced separately too so the print
     // template can show it as its own line (see migration 089).
-    currentTaxAreaRebate: calc.rebate,
-    currentTaxAreaRebateReason: calc.rebateReason,
-    currentTaxRebate: timing.rebate.toFixed(2),
-    penalty: arrears.penalty.toFixed(2),
+    currentTaxAreaRebate: part ? "0.00" : calc.rebate,
+    currentTaxAreaRebateReason: part ? "" : calc.rebateReason,
+    currentTaxRebate: part ? "0.00" : timing.rebate.toFixed(2),
+    penalty: arrearsPenalty.toFixed(2),
     outstandingDemand: yearWiseArrears.toFixed(2),
     yearWiseArrears: yearWiseArrears.toFixed(2),
     arrearsBaseTax: yearWiseArrears.toFixed(2),
     totalFineAmount: totalFineAmount.toFixed(2),
     otherCharges: otherCharges.toFixed(2),
     grandTotal: grandTotal.toFixed(2),
+    ...(part ? { partPayment: { years: part.years, fromYear: part.fromYear, toYear: part.toYear } } : {}),
   };
 
   await demandNoticeRepository.insertDemandNotice({
@@ -149,15 +178,17 @@ export async function generateDemandNotice(holdingNo: string, generatedBy: strin
     arv: num(calc.arv),
     currentYearTaxNet: currentTotal,
     previousYearsTaxBase: yearWiseArrears,
-    totalFineAmount: totalFineAmount + arrears.penalty,
+    totalFineAmount: totalFineAmount + arrearsPenalty,
     otherCharges,
     totalAmountDemanded: grandTotal,
     assessmentYear: property.assessment_year,
     reminderNumber,
     previousUnsettledDemandNos,
     floorBreakdown,
-    areaRebate: num(calc.rebate),
-    areaRebateReason: calc.rebateReason,
+    areaRebate: part ? 0 : num(calc.rebate),
+    areaRebateReason: part ? "" : calc.rebateReason,
+    partPayment: !!part,
+    paidThroughYear: part ? part.toYear : null,
     // Frozen full renderable payload (migration 092) - the exact same
     // property/taxCalc/totals/previousUnsettledDemandNosFormatted this
     // function returns below, serialized verbatim, so a reprint can
@@ -380,6 +411,8 @@ export interface UnsettledDemandNotice {
   noticeDate: string;
   assessmentYear: string | null;
   totalAmountDemanded: string;
+  partPayment: boolean;
+  paidThroughYear: string | null;
 }
 
 /** For the payment counter's demand-notice picker — every notice for this holding not yet paid against. */
@@ -391,5 +424,7 @@ export async function listUnsettledDemandNotices(holdingNo: string): Promise<Uns
     noticeDate: `${String(r.notice_date.getDate()).padStart(2, "0")}-${String(r.notice_date.getMonth() + 1).padStart(2, "0")}-${r.notice_date.getFullYear()}`,
     assessmentYear: r.assessment_year,
     totalAmountDemanded: r.total_amount_demanded,
+    partPayment: r.part_payment,
+    paidThroughYear: r.paid_through_year,
   }));
 }

@@ -13,6 +13,8 @@ export interface DemandNoticeTotals {
   totalFineAmount: string;
   otherCharges: string;
   grandTotal: string;
+  // Present only on a part-payment notice (first N unpaid years only).
+  partPayment?: { years: number; fromYear: string; toYear: string };
 }
 
 export interface DemandNoticeResult {
