@@ -175,6 +175,13 @@ export function PropertyResultCard({ record }: PropertyResultCardProps) {
           </div>
         </div>
 
+        {record.solidWasteTypeMissing && (
+          <div role="alert" className="w-full rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            <p>This holding number&apos;s solid waste user type is not known. Contact Nagar Nigam Munger for entering missing details.</p>
+            <p lang="hi" className="mt-1">इस होल्डिंग नंबर का ठोस अपशिष्ट उपयोगकर्ता प्रकार ज्ञात नहीं है। छूटी हुई जानकारी दर्ज कराने के लिए नगर निगम मुंगेर से संपर्क करें।</p>
+          </div>
+        )}
+
         <div className="flex w-full flex-col items-end gap-3 sm:w-auto sm:max-w-xs">
           {nothingDue && record.pendingDemandNotices.length > 0 ? (
             <span className="max-w-xs rounded-md border border-amber-200 bg-amber-50 px-4 py-2.5 text-right text-sm text-amber-800">

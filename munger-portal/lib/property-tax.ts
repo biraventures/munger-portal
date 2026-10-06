@@ -19,6 +19,8 @@ export interface PropertyRecord {
   /** True when tax_paid_till_year has already reached this holding's current assessment_year — the current-year figures above are informational, not owed. */
   currentCyclePaid: boolean;
   paidThroughYear: string | null;
+  /** True when this holding has no recognised solid waste user type on record. */
+  solidWasteTypeMissing: boolean;
   /** Live unsettled demand notices issued against this holding. */
   pendingDemandNotices: { demandNo: string; noticeDate: string; assessmentYear: string | null; totalAmountDemanded: string }[];
 }
@@ -76,6 +78,7 @@ interface ApiPropertyResponse {
     autoPenalty: string;
     currentCyclePaid: boolean;
     paidThroughYear: string | null;
+    solidWasteTypeMissing?: boolean;
     pendingDemandNotices?: { demandNo: string; noticeDate: string; assessmentYear: string | null; totalAmountDemanded: string }[];
   };
 }
@@ -135,6 +138,7 @@ export async function searchPropertyByHoldingNumber(
         totalPayable: parseFloat(p.totalPayable) || 0,
         currentCyclePaid: p.currentCyclePaid ?? false,
         paidThroughYear: p.paidThroughYear ?? null,
+        solidWasteTypeMissing: p.solidWasteTypeMissing ?? false,
         pendingDemandNotices: p.pendingDemandNotices ?? [],
       },
     ],

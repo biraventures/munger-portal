@@ -1001,6 +1001,78 @@ export async function fetchPropertyForCollector(holdingNo: string): Promise<TaxC
   return res.json();
 }
 
+export type WaterConnectionStatus = "multiple" | "single_wtp" | "single_submersible" | "connected_no_water" | "none";
+
+export const WATER_CONNECTION_LABELS: Record<WaterConnectionStatus, string> = {
+  multiple: "Yes - has multiple connections",
+  single_wtp: "Yes - single connection from WTP",
+  single_submersible: "Yes - from submersible pyau",
+  connected_no_water: "Yes - but no water since connection",
+  none: "No connection",
+};
+
+/** Tax Collector records the mandatory field details (solid waste user type when missing, tap water connection). */
+export async function saveCollectorDetails(
+  holdingNo: string,
+  input: { solidWasteChargeType?: string; waterConnectionStatus?: WaterConnectionStatus; waterConnectionCount?: number },
+): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/properties/${encodeURIComponent(holdingNo)}/collector-details`, {
+    method: "PUT",
+    headers: authHeaders(),
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || "Could not save these details.");
+  }
+}
+
+export interface SolidWasteRequest {
+  id: number;
+  holding_no: string;
+  requested_type: string;
+  requested_by_display_name: string;
+  requested_at: string;
+  stage: "tax_daroga" | "city_manager" | "approved" | "rejected";
+  daroga_by: string | null;
+  city_manager_by: string | null;
+  rejected_by: string | null;
+  reject_reason: string | null;
+}
+
+export interface SolidWasteRequestForApproval extends SolidWasteRequest {
+  owner_name: string;
+  address: string;
+  ward: string | null;
+  current_type: string | null;
+}
+
+export async function fetchLatestSolidWasteRequest(holdingNo: string): Promise<SolidWasteRequest | null> {
+  const res = await fetch(`${API_BASE_URL}/properties/${encodeURIComponent(holdingNo)}/solid-waste-request`, { headers: authHeaders() });
+  if (!res.ok) return null;
+  const data: { request: SolidWasteRequest | null } = await res.json();
+  return data.request;
+}
+
+export async function fetchSolidWasteRequestsToApprove(): Promise<SolidWasteRequestForApproval[]> {
+  const res = await fetch(`${API_BASE_URL}/admin/solid-waste-requests`, { headers: authHeaders() });
+  if (!res.ok) throw new Error("Could not load solid waste approvals.");
+  const data: { requests: SolidWasteRequestForApproval[] } = await res.json();
+  return data.requests;
+}
+
+export async function decideSolidWasteRequest(id: number, action: "approve" | "reject", reason?: string): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/admin/solid-waste-requests/${id}/${action}`, {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify({ reason }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || "Could not record this decision.");
+  }
+}
+
 export interface UnsettledDemandNoticeAdmin {
   demandNo: string;
   formattedDemandNo: string;

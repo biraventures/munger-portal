@@ -90,6 +90,7 @@ import {
   exportMigratedHoldingsHandler,
 } from "../controllers/migratedHoldingSurvey.controller";
 import { listResurveyFlagsHandler, reviewResurveyFlagHandler, exportResurveyFlagsHandler } from "../controllers/propertyResurveyFlag.controller";
+import { listMySolidWasteRequests, postApproveSolidWasteRequest, postRejectSolidWasteRequest } from "../controllers/solidWasteRequest.controller";
 import { listAllCollectionIssues, listMyCollectionIssues } from "../controllers/collectionIssue.controller";
 import { postGenerateCollectionIssueNotice, getCollectionIssueNotices, getReprintCollectionIssueNotice } from "../controllers/collectionIssueNotice.controller";
 import { listTaxCollectorsWithAssignmentHandler, listCityManagersHandler, assignCityManagerHandler, setTaxCollectorWardsHandler } from "../controllers/taxCollectorAssignment.controller";
@@ -385,6 +386,9 @@ const requireResurveyFlagReviewRole = requireAdminRole("tax_daroga", "commission
 adminRouter.get("/property-resurvey-flags", requireResurveyFlagReviewRole, listResurveyFlagsHandler);
 
 // Collection issues oversight - same reviewer roles as resurvey flags.
+adminRouter.get("/solid-waste-requests", requireAdminRole("tax_daroga", "city_manager"), listMySolidWasteRequests);
+adminRouter.post("/solid-waste-requests/:id/approve", requireAdminRole("tax_daroga", "city_manager"), postApproveSolidWasteRequest);
+adminRouter.post("/solid-waste-requests/:id/reject", requireAdminRole("tax_daroga", "city_manager"), postRejectSolidWasteRequest);
 adminRouter.get("/collection-issues/mine", requireAdminRole("tax_collector"), listMyCollectionIssues);
 adminRouter.get("/collection-issues", requireAdminRole("tax_daroga", "commissioner", "city_manager"), listAllCollectionIssues);
 adminRouter.post("/collection-issues/:id/generate-notice", requireAdminRole("city_manager"), postGenerateCollectionIssueNotice);

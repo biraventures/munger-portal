@@ -3,6 +3,8 @@ import { z } from "zod";
 import { holdingNoSchema } from "../utils/holdingNoSchema";
 import { tvNumberSchema } from "../utils/tvNumberSchema";
 import { submitPayment, getReceiptForReprint, listPaymentHistory } from "../services/payment.service";
+import { propertyRepository } from "../repositories/property.repository";
+import { isSolidWasteTypeMissing } from "../services/property.service";
 import { asyncHandler } from "../middleware/asyncHandler";
 import { ApiError } from "../utils/ApiError";
 
@@ -49,6 +51,19 @@ export const postPayment = asyncHandler(async (req: Request, res: Response) => {
   const bodyParsed = paymentSchema.safeParse(req.body);
   if (!bodyParsed.success) {
     throw ApiError.badRequest("Invalid payment data", bodyParsed.error.flatten().fieldErrors);
+  }
+
+  // A Tax Collector must have recorded the mandatory field details first.
+  if (req.admin) {
+    const prop = await propertyRepository.findByHoldingNo(paramsParsed.data.holdingNo);
+    if (prop) {
+      const missing: string[] = [];
+      if (isSolidWasteTypeMissing(prop)) missing.push("solid waste user type");
+      if (!prop.water_connection_status) missing.push("tap water connection status");
+      if (missing.length > 0) {
+        throw ApiError.badRequest(`Please record the ${missing.join(" and ")} for this holding before collecting payment.`);
+      }
+    }
   }
 
   const collectedBy = req.admin?.displayName ?? req.operator!.displayName;

@@ -5,6 +5,8 @@ import { postFlagForResurvey, listResurveyFlagsForHoldingHandler } from "../cont
 import { postReportPropertyDiscrepancy } from "../controllers/propertyDiscrepancy.controller";
 import { postReportCollectionIssue, listCollectionIssuesForHolding } from "../controllers/collectionIssue.controller";
 import { postRecordFieldVerification, listFieldVerifications } from "../controllers/propertyFieldVerification.controller";
+import { getLatestSolidWasteRequest } from "../controllers/solidWasteRequest.controller";
+import { putCollectorDetails } from "../controllers/propertyCollectorDetails.controller";
 import { saveProperty, postResubmitChangeRequest } from "../controllers/propertySave.controller";
 import { getRevertedChangeRequests } from "../controllers/changeRequest.controller";
 import { postPayment, getPaymentHistory, getReceiptReprint } from "../controllers/payment.controller";
@@ -108,6 +110,10 @@ propertyRouter.get("/:holdingNo/resurvey-flags", requireOperatorOrAdmin, listRes
 
 // POST /api/v1/properties/:holdingNo/discrepancy - a Tax Collector submits the complete corrected property details found during field collection
 propertyRouter.post("/:holdingNo/discrepancy", requireOperatorOrAdmin, postReportPropertyDiscrepancy);
+
+// PUT /api/v1/properties/:holdingNo/collector-details - a Tax Collector records solid waste user type + tap water connection status
+propertyRouter.get("/:holdingNo/solid-waste-request", requireOperatorOrAdmin, getLatestSolidWasteRequest);
+propertyRouter.put("/:holdingNo/collector-details", requireOperatorOrAdmin, putCollectorDetails);
 
 // POST /api/v1/properties/:holdingNo/collection-issue - a Tax Collector reports the taxpayer is creating a problem during collection
 propertyRouter.post("/:holdingNo/collection-issue", requireOperatorOrAdmin, postReportCollectionIssue);

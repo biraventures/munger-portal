@@ -5,7 +5,14 @@ import { calculateRebateOrLateFee, calculateSolidWasteCharge } from "./charges.s
 import { summarizeArrears } from "./arrears.service";
 import { parseYearStartOrNull } from "../utils/assessmentYear";
 import { num } from "../utils/num";
-import type { PropertySearchResult } from "../types/property.types";
+import { SOLID_WASTE_RATE } from "../constants/taxRates";
+import type { PropertyRow, PropertySearchResult } from "../types/property.types";
+
+/** Solid waste user type is mandatory unless the holding is a registered Bulk Waste Generator. */
+export function isSolidWasteTypeMissing(property: Pick<PropertyRow, "is_bwg" | "solid_waste_charge_type">): boolean {
+  if (property.is_bwg) return false;
+  return SOLID_WASTE_RATE[String(property.solid_waste_charge_type || "").trim()] === undefined;
+}
 
 /**
  * Port of searchProperty() from Code.gs (Code.gs:1027). Tax is
@@ -95,6 +102,7 @@ export async function searchPropertyByHoldingNo(holdingNoRaw: string): Promise<P
     property: {
       ...property,
       pendingDemandNotices,
+      solidWasteTypeMissing: isSolidWasteTypeMissing(property),
       currentTax: calc.currentTax,
       rebate: calc.rebate,
       arv: calc.arv,

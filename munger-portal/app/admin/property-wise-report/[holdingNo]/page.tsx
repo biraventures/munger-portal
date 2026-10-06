@@ -12,6 +12,7 @@ import {
   NOTICE_LANGUAGE_LABELS,
   type GeneratedCollectionIssueNotice,
 } from "@/lib/admin-api";
+import { FieldVerificationPhotos } from "@/components/admin/field-verification-photos";
 import { CollectionIssueNoticeView } from "@/components/admin/collection-issue-notice-view";
 
 const ALLOWED_ROLES = ["commissioner", "deputy_commissioner", "city_manager"];
@@ -273,7 +274,7 @@ export default function PropertyWiseReportDetailPage() {
             <section className="mb-6 rounded-xl border border-slate-200 bg-white p-6">
               <h2 className="mb-4 flex items-center gap-2 text-sm font-semibold text-slate-700">
                 <MapPin className="h-4 w-4" />
-                Surveyor Field Visits ({report.fieldVerifications.length})
+                Field Visits, Photos & Documents ({report.fieldVerifications.length})
               </h2>
               {report.fieldVerifications.length === 0 ? (
                 <p className="text-sm text-slate-400">No field visit has been logged for this holding.</p>
@@ -285,6 +286,7 @@ export default function PropertyWiseReportDetailPage() {
                       {v.gps_lat && v.gps_lng && (
                         <p className="mt-1 text-slate-500">GPS: {v.gps_lat}, {v.gps_lng}</p>
                       )}
+                      <FieldVerificationPhotos visit={v} />
                     </div>
                   ))}
                 </div>

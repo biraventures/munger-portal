@@ -20,6 +20,31 @@ export const propertyRepository = {
     return maxNum;
   },
 
+  /** Tax Collector field entry: water connection + (optionally) solid waste type/charge, with an audit stamp. */
+  async updateCollectorDetails(
+    holdingNo: string,
+    d: {
+      waterConnectionStatus: string | null;
+      waterConnectionCount: number | null;
+      solidWasteChargeType: string | null;
+      solidWasteCharge: number | null;
+      updatedBy: string;
+    },
+  ): Promise<void> {
+    await pool.query(
+      `UPDATE properties SET
+         water_connection_status = COALESCE($2::text, water_connection_status),
+         water_connection_count = CASE WHEN $2::text IS NULL THEN water_connection_count ELSE $3::int END,
+         solid_waste_charge_type = COALESCE($4::text, solid_waste_charge_type),
+         solid_waste_charge = COALESCE($5::numeric, solid_waste_charge),
+         solid_waste_months = CASE WHEN $4::text IS NULL THEN solid_waste_months ELSE COALESCE(NULLIF(solid_waste_months, 0), 12) END,
+         collector_details_by = $6::text, collector_details_at = now(),
+         last_modified_by = LEFT($6::text, 64), last_modified_date = now()
+       WHERE holding_no = $1`,
+      [holdingNo, d.waterConnectionStatus, d.waterConnectionCount, d.solidWasteChargeType, d.solidWasteCharge, d.updatedBy],
+    );
+  },
+
   async findByHoldingNo(holdingNo: string): Promise<PropertyRow | null> {
     const { rows } = await pool.query<PropertyRow>(
       `SELECT * FROM properties WHERE holding_no = $1 LIMIT 1`,

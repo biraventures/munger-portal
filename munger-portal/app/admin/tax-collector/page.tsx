@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { AlertCircle, AlertTriangle, CheckCircle2, FileWarning, Receipt, Search, ShieldAlert } from "lucide-react";
+import { fetchFormOptions, type FormOptions } from "@/lib/operator-api";
 import { sanitizeHoldingNoInput } from "@/lib/holding-no";
 import { AdminHeader } from "@/components/admin-header";
 import { useAdminGuard } from "@/lib/use-admin-guard";
@@ -18,6 +19,11 @@ import {
   reportCollectionIssue,
   fetchCollectionIssuesForHolding,
   fetchMyCollectionIssues,
+  saveCollectorDetails,
+  fetchLatestSolidWasteRequest,
+  type SolidWasteRequest,
+  WATER_CONNECTION_LABELS,
+  type WaterConnectionStatus,
   type CollectionIssueWithNotices,
   COLLECTION_ISSUE_TYPE_LABELS,
   type TaxCollectorPropertySearchResult,
@@ -53,6 +59,9 @@ const DETAIL_FIELDS: [string, string][] = [
   ["holding_creation_year", "Holding created in"],
   ["tax_paid_till_year", "Tax paid till year"],
   ["solid_waste_charge_type", "Solid waste type"],
+  ["solid_waste_charge", "Solid waste charge (₹/yr)"],
+  ["water_connection_status", "Tap water connection"],
+  ["water_connection_count", "No. of water connections"],
   ["rain_water_harvesting", "Rain water harvesting"],
   ["solar_rooftop", "Solar rooftop"],
   ["is_bwg", "Bulk waste generator"],
@@ -63,6 +72,7 @@ const DETAIL_FIELDS: [string, string][] = [
 function detailVal(key: string, v: unknown): string {
   if (v === null || v === undefined || v === "") return "-";
   if (typeof v === "boolean") return v ? "Yes" : "No";
+  if (key === "water_connection_status") return WATER_CONNECTION_LABELS[v as WaterConnectionStatus] ?? String(v);
   if (key === "aadhaar_number") {
     const d = String(v).replace(/\D/g, "");
     return d.length >= 4 ? `XXXX XXXX ${d.slice(-4)}` : "-";
@@ -108,7 +118,62 @@ export default function TaxCollectorPage() {
       .catch(() => setMyIssues([]));
   }, [admin]);
 
+  const [formOptions, setFormOptions] = useState<FormOptions | null>(null);
+  const [swType, setSwType] = useState("");
+  const [waterStatus, setWaterStatus] = useState<WaterConnectionStatus | "">("");
+  const [waterCount, setWaterCount] = useState("");
+  const [savingDetails, setSavingDetails] = useState(false);
+  const [swRequest, setSwRequest] = useState<SolidWasteRequest | null>(null);
+  const [detailsMsg, setDetailsMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetchFormOptions().then(setFormOptions).catch(() => undefined);
+  }, []);
+
+  async function reloadProperty(holdingNo: string) {
+    const res = await fetchPropertyForCollector(holdingNo);
+    setResult(res);
+    setSwRequest(await fetchLatestSolidWasteRequest(holdingNo));
+  }
+
+  async function handleSaveDetails() {
+    if (!result?.property) return;
+    const p = result.property;
+    const needSw = !!p.solidWasteTypeMissing && !swOpen;
+    const needWater = !p.water_connection_status;
+    const input: { solidWasteChargeType?: string; waterConnectionStatus?: WaterConnectionStatus; waterConnectionCount?: number } = {};
+    if (needSw) {
+      if (!swType) return setError("Select the solid waste user type.");
+      input.solidWasteChargeType = swType;
+    }
+    if (needWater) {
+      if (!waterStatus) return setError("Select the tap water connection status.");
+      input.waterConnectionStatus = waterStatus;
+      if (waterStatus === "multiple") {
+        const n = Number(waterCount);
+        if (!Number.isInteger(n) || n < 2) return setError("Enter the number of connections (2 or more).");
+        input.waterConnectionCount = n;
+      }
+    }
+    setSavingDetails(true);
+    setError(null);
+    try {
+      await saveCollectorDetails(p.holding_no, input);
+      setDetailsMsg("Details saved.");
+      await reloadProperty(p.holding_no);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not save these details.");
+    } finally {
+      setSavingDetails(false);
+    }
+  }
+
   function resetForNewSearch() {
+    setSwType("");
+    setSwRequest(null);
+    setWaterStatus("");
+    setWaterCount("");
+    setDetailsMsg(null);
     setHoldingIssues(null);
     setResult(null);
     setNotices(null);
@@ -147,6 +212,7 @@ export default function TaxCollectorPage() {
       const res = await fetchPropertyForCollector(holdingNoInput.trim());
       setResult(res);
       if (res.found) {
+        fetchLatestSolidWasteRequest(res.property!.holding_no).then(setSwRequest).catch(() => undefined);
         fetchCollectionIssuesForHolding(res.property!.holding_no)
           .then(setHoldingIssues)
           .catch(() => setHoldingIssues([]));
@@ -216,6 +282,7 @@ export default function TaxCollectorPage() {
   }
 
   const property = result?.property;
+  const swOpen = !!swRequest && (swRequest.stage === "tax_daroga" || swRequest.stage === "city_manager");
   const floors = result?.floors ?? [];
 
   return (
@@ -273,6 +340,65 @@ export default function TaxCollectorPage() {
                 )}
               </div>
             </div>
+
+            {((!!property.solidWasteTypeMissing && !swOpen) || !property.water_connection_status || (!!property.solidWasteTypeMissing && swOpen)) && (
+              <div className="rounded-xl border border-amber-300 bg-amber-50 p-5">
+                <h3 className="mb-1 text-sm font-semibold text-amber-900">Mandatory details - needed before collecting payment</h3>
+                <p className="mb-3 text-xs text-amber-800">These are missing for this holding. Please enter them from the field.</p>
+                {!!property.solidWasteTypeMissing && swOpen && swRequest && (
+                  <p className="mb-3 rounded-md border border-amber-200 bg-white p-3 text-xs text-amber-900">
+                    Solid waste user type <b>{swRequest.requested_type}</b> submitted - {swRequest.stage === "tax_daroga" ? "waiting for Tax Daroga verification" : "verified by Tax Daroga, waiting for City Manager approval"}. Payment can be collected once it is approved.
+                  </p>
+                )}
+                {!!property.solidWasteTypeMissing && !swOpen && swRequest?.stage === "rejected" && (
+                  <p className="mb-3 rounded-md border border-red-200 bg-white p-3 text-xs text-red-700">
+                    Earlier entry ({swRequest.requested_type}) was rejected by {swRequest.rejected_by}: {swRequest.reject_reason}. Please enter it again.
+                  </p>
+                )}
+                {!!property.solidWasteTypeMissing && !swOpen && (
+                  <div className="mb-3">
+                    <label className="mb-1 block text-xs font-medium text-slate-700">Solid waste user type (needs Tax Daroga + City Manager approval; amount is set automatically)</label>
+                    <select value={swType} onChange={(e) => setSwType(e.target.value)} className={inputClass}>
+                      <option value="">Select user type…</option>
+                      {(formOptions?.solidWasteChargeTypes ?? []).map((t) => (
+                        <option key={t} value={t}>
+                          {t} - ₹{formOptions?.solidWasteRates[t] ?? 0}/month
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+                {!property.water_connection_status && (
+                  <div className="mb-3">
+                    <label className="mb-1 block text-xs font-medium text-slate-700">Does the holding have a tap water connection?</label>
+                    <select value={waterStatus} onChange={(e) => setWaterStatus(e.target.value as WaterConnectionStatus | "")} className={inputClass}>
+                      <option value="">Select…</option>
+                      {(Object.keys(WATER_CONNECTION_LABELS) as WaterConnectionStatus[]).map((k) => (
+                        <option key={k} value={k}>
+                          {WATER_CONNECTION_LABELS[k]}
+                        </option>
+                      ))}
+                    </select>
+                    {waterStatus === "multiple" && (
+                      <input
+                        type="number"
+                        min={2}
+                        value={waterCount}
+                        onChange={(e) => setWaterCount(e.target.value)}
+                        placeholder="Number of connections"
+                        className={`${inputClass} mt-2`}
+                      />
+                    )}
+                  </div>
+                )}
+                {detailsMsg && <p className="mb-2 text-xs text-green-700">{detailsMsg}</p>}
+                {((!!property.solidWasteTypeMissing && !swOpen) || !property.water_connection_status) && (
+                <button onClick={handleSaveDetails} disabled={savingDetails} className="rounded-md bg-nnm-blue px-4 py-2 text-sm font-semibold text-white hover:bg-nnm-blue-dark disabled:opacity-60">
+                  {savingDetails ? "Saving…" : "Save details"}
+                </button>
+                )}
+              </div>
+            )}
 
             <div className="rounded-xl border border-slate-200 bg-white p-5">
               <h3 className="mb-3 text-sm font-semibold text-slate-700">Collection issues &amp; notices for this holding</h3>
@@ -338,7 +464,8 @@ export default function TaxCollectorPage() {
                     </div>
                     <button
                       onClick={handleCollectPayment}
-                      disabled={collecting}
+                      disabled={collecting || !!property.solidWasteTypeMissing || !property.water_connection_status}
+                      title={property.solidWasteTypeMissing || !property.water_connection_status ? "Enter the mandatory details above first" : undefined}
                       className="rounded-md bg-nnm-blue px-4 py-2 text-sm font-semibold text-white hover:bg-nnm-blue-dark disabled:opacity-60"
                     >
                       {collecting ? "Recording…" : "Collect Payment & Issue Receipt"}

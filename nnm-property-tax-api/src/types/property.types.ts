@@ -1,3 +1,5 @@
+export type WaterConnectionStatus = "multiple" | "single_wtp" | "single_submersible" | "connected_no_water" | "none";
+
 export interface PropertyRow {
   holding_no: string;
   old_holding_no: string | null;
@@ -53,6 +55,11 @@ export interface PropertyRow {
   /** GPS of the holding (migration 101); numeric comes back as string from pg. */
   latitude: string | null;
   longitude: string | null;
+  /** Tap water connection, recorded by a Tax Collector (migration 103). */
+  water_connection_status: WaterConnectionStatus | null;
+  water_connection_count: number | null;
+  collector_details_by: string | null;
+  collector_details_at: Date | null;
 }
 
 export interface FloorRow {
@@ -173,6 +180,8 @@ export interface PropertySearchResult {
 	autoPenalty: string;
     totalPayable: string;
     /** Live unsettled demand notices - so a lookup never reads as plain "no dues" while one is outstanding. */
+    /** True when the holding is not a Bulk Waste Generator and has no recognised solid waste user type on record. */
+    solidWasteTypeMissing: boolean;
     pendingDemandNotices: { demandNo: string; noticeDate: Date; assessmentYear: string | null; totalAmountDemanded: string }[];
   };
   floors?: FloorRow[];

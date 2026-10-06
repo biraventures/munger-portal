@@ -69,6 +69,18 @@ export async function generateDemandNotice(holdingNo: string, generatedBy: strin
       ? calculateRebateOrLateFee(netCurrentBeforeTiming, currentYearStartNum, now)
       : { rebate: 0, lateFee: 0, net: netCurrentBeforeTiming };
 
+  // Nothing to demand: the current cycle is already paid (tax_paid_till_year
+  // has reached the assessment year) and no earlier year is pending. A notice
+  // here would be an unsettled demand for money already collected - i.e. the
+  // taxpayer would be asked to pay twice.
+  const paidTillNum = parseYearStartOrNull(property.tax_paid_till_year);
+  const currentCyclePaid = currentYearStartNum !== null && paidTillNum !== null && paidTillNum >= currentYearStartNum;
+  if (currentCyclePaid && arrears.totalPending + arrears.penalty <= 0) {
+    throw ApiError.badRequest(
+      `No pending demand. All dues of Holding No ${holdingNo} are cleared till ${property.tax_paid_till_year}. A demand notice cannot be generated.`,
+    );
+  }
+
   const currentTotal = timing.net;
   const yearWiseArrears = arrears.totalPending;
   const totalFineAmount = timing.lateFee; // current year's OWN late fee only — arrears' penalty is separate, see header note

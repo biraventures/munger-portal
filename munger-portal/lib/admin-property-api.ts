@@ -97,6 +97,10 @@ export interface PropertyFieldVerificationSummary {
   captured_by_display_name: string;
   captured_by_role: string;
   captured_at: string;
+  holding_photo_path?: string | null;
+  aadhaar_photo_path?: string | null;
+  previous_receipt_photo_path?: string | null;
+  land_document_photo_path?: string | null;
 }
 
 export interface PropertyReport {
