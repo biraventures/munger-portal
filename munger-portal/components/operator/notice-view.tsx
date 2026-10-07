@@ -1,5 +1,6 @@
 "use client";
 
+import { HindiTaxTerms } from "./hindi-tax-terms";
 import { useRef } from "react";
 import { Printer } from "lucide-react";
 import type { DemandNoticeData, DemandNoticeReprintData } from "@/lib/demand-notice-api";
@@ -439,6 +440,8 @@ export function NoticeView({
           {t.partPayment ? ` as part payment for ${t.partPayment.fromYear} to ${t.partPayment.toYear}` : ""}. Please clear the dues at the
           earliest at the Nagar Nigam counter to avoid penal charges.
         </div>
+
+        <HindiTaxTerms />
 
         <div className="mt-4 border-t border-slate-300 pt-2 text-[9.5px] text-slate-500">
           This is a computer generated demand notice. This notice is not a payment receipt.
