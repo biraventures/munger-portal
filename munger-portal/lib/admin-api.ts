@@ -643,21 +643,23 @@ export async function deletePropertyHolding(holdingNo: string, confirmationPhras
 }
 
 export interface PropertyBulkImportResult {
-  propertiesCreated: number;
-  floorsCreated: number;
-  transactionsCreated: number;
-  demandNoticesCreated: number;
-  taxHistoryStagesCreated: number;
-  propertyHistoryCreated: number;
+  batchId: number;
+  totalHoldings: number;
+  ready: number;
+  withWarnings: number;
+  withBlockers: number;
   errors: { sheet: string; row: number; message: string }[];
 }
 
-/** Commissioner only. fileDataBase64 is the raw base64 content of the .xlsx file (no data-URL prefix). */
-export async function uploadPropertiesXlsx(fileDataBase64: string, dataSourceName: string): Promise<PropertyBulkImportResult> {
+/**
+ * Commissioner / Tax Daroga / City Manager. fileDataBase64 is the raw base64 content of the .xlsx file (no data-URL prefix).
+ * The file is NOT imported - it is parked for review by Tax Daroga / City Manager.
+ */
+export async function uploadPropertiesXlsx(fileDataBase64: string, dataSourceName: string, fileName?: string): Promise<PropertyBulkImportResult> {
   const res = await fetch(`${API_BASE_URL}/admin/properties/bulk-upload`, {
     method: "POST",
     headers: authHeaders(),
-    body: JSON.stringify({ fileDataBase64, dataSourceName }),
+    body: JSON.stringify({ fileDataBase64, dataSourceName, fileName }),
   });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));

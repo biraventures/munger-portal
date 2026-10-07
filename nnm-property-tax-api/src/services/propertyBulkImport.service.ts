@@ -19,7 +19,7 @@ export interface PropertyImportResult {
  * formulas, but being defensive here is cheap and avoids a confusing
  * "[object Object]" ending up in a text column.
  */
-function cellText(value: ExcelJS.CellValue): string {
+export function cellText(value: ExcelJS.CellValue): string {
   if (value === null || value === undefined) return "";
   if (value instanceof Date) return value.toISOString();
   if (typeof value === "object") {
@@ -31,7 +31,7 @@ function cellText(value: ExcelJS.CellValue): string {
   return String(value).trim();
 }
 
-function cellNumber(value: ExcelJS.CellValue): number | null {
+export function cellNumber(value: ExcelJS.CellValue): number | null {
   const text = cellText(value);
   if (!text) return null;
   const n = parseFloat(text);
@@ -44,7 +44,7 @@ function cellNumber(value: ExcelJS.CellValue): number | null {
  * swapped (|lat| > 90 while |lng| <= 90) they are swapped back - the field
  * survey sheets frequently have the columns the wrong way round.
  */
-function parseGps(latRaw: ExcelJS.CellValue, lngRaw: ExcelJS.CellValue): { lat: number | null; lng: number | null } {
+export function parseGps(latRaw: ExcelJS.CellValue, lngRaw: ExcelJS.CellValue): { lat: number | null; lng: number | null } {
   let lat = cellNumber(latRaw);
   let lng = cellNumber(lngRaw);
   if (lat === null || lng === null) return { lat: null, lng: null };
@@ -94,7 +94,7 @@ function parseYesNo(value: ExcelJS.CellValue): boolean {
 }
 
 /** Reads a worksheet into an array of {header: cellText} row objects, using row 1 as headers. Skips fully-blank rows. */
-function readSheet(ws: ExcelJS.Worksheet | undefined): { row: Record<string, ExcelJS.CellValue>; excelRowNum: number }[] {
+export function readSheet(ws: ExcelJS.Worksheet | undefined): { row: Record<string, ExcelJS.CellValue>; excelRowNum: number }[] {
   if (!ws) return [];
   const headers: string[] = [];
   ws.getRow(1).eachCell({ includeEmpty: true }, (cell, colNum) => {

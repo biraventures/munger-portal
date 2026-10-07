@@ -1,10 +1,12 @@
 import { createApp } from "./app";
 import { env } from "./config/env";
 import { checkDbConnection, pool } from "./config/db";
+import { clearInterruptedIntegrations } from "./services/propertyImportStaging.service";
 
 async function main() {
   await checkDbConnection();
   console.log("Connected to PostgreSQL");
+  await clearInterruptedIntegrations();
 
   const app = createApp();
   const server = app.listen(env.PORT, () => {

@@ -56,7 +56,17 @@ import {
   deleteWardBoundaryHandler,
   exportGeoData,
 } from "../controllers/geo.controller";
-import { uploadPropertiesXlsxHandler } from "../controllers/propertyBulkImport.controller";
+import {
+  uploadPropertiesXlsxHandler,
+  listImportBatchesHandler,
+  getImportBatchHandler,
+  getImportHoldingHandler,
+  excludeImportHoldingsHandler,
+  restoreImportHoldingsHandler,
+  reviewImportHoldingsHandler,
+  integrateImportHandler,
+  discardImportHandler,
+} from "../controllers/propertyBulkImport.controller";
 import { searchPropertiesHandler, getPropertyReportHandler } from "../controllers/propertyReport.controller";
 import { getShopsPendingPublication, postApproveShopPublication } from "../controllers/shopPublicationApproval.controller";
 import {
@@ -315,7 +325,18 @@ adminRouter.post("/properties/fix-holding-no-spaces", requireAdminRole("commissi
 adminRouter.get("/properties/spaced-holdings", requireAdminRole("commissioner"), getSpacedHoldings);
 adminRouter.post("/properties/spaced-holdings/delete-all", requireAdminRole("commissioner"), postDeleteSpacedHoldings);
 adminRouter.post("/properties/remove-duplicate-floors", requireAdminRole("commissioner"), postRemoveDuplicateFloors);
-adminRouter.post("/properties/bulk-upload", requireAdminRole("commissioner"), uploadPropertiesXlsxHandler);
+// Bulk holding uploads are staged for review, not imported. Tax Daroga and City Manager review the staged
+// holdings (Tax Daroga can keep holdings out); the FINAL approval - integrating into the live data (all /
+// selected / all except some) or discarding - is the City Manager's alone. The Commissioner sees progress only.
+adminRouter.post("/properties/bulk-upload", requireAdminRole("commissioner", "tax_daroga", "city_manager"), uploadPropertiesXlsxHandler);
+adminRouter.get("/property-imports", requireAdminRole("tax_daroga", "city_manager", "commissioner"), listImportBatchesHandler);
+adminRouter.get("/property-imports/:id", requireAdminRole("tax_daroga", "city_manager", "commissioner"), getImportBatchHandler);
+adminRouter.get("/property-imports/:id/holdings/:holdingNo", requireAdminRole("tax_daroga", "city_manager"), getImportHoldingHandler);
+adminRouter.post("/property-imports/:id/exclude", requireAdminRole("tax_daroga", "city_manager"), excludeImportHoldingsHandler);
+adminRouter.post("/property-imports/:id/restore", requireAdminRole("tax_daroga", "city_manager"), restoreImportHoldingsHandler);
+adminRouter.post("/property-imports/:id/review", requireAdminRole("tax_daroga"), reviewImportHoldingsHandler);
+adminRouter.post("/property-imports/:id/integrate", requireAdminRole("city_manager"), integrateImportHandler);
+adminRouter.post("/property-imports/:id/discard", requireAdminRole("city_manager"), discardImportHandler);
 
 // Property-wise report (Commissioner/DMC/City Manager): search by
 // holding no/owner/address, then full detail + tax pending + change

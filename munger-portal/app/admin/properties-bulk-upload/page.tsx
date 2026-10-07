@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { Upload, AlertCircle, CheckCircle2, Loader2 } from "lucide-react";
 import { AdminHeader } from "@/components/admin-header";
 import { useAdminGuard } from "@/lib/use-admin-guard";
@@ -36,7 +37,7 @@ export default function PropertiesBulkUploadPage() {
     setUploading(true);
     try {
       const base64 = await fileToBase64(file);
-      const res = await uploadPropertiesXlsx(base64, dataSourceName.trim());
+      const res = await uploadPropertiesXlsx(base64, dataSourceName.trim(), file.name);
       setResult(res);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not upload this file.");
@@ -50,14 +51,14 @@ export default function PropertiesBulkUploadPage() {
     return <div className="flex min-h-screen items-center justify-center text-sm text-slate-400">Loading…</div>;
   }
 
-  if (admin.role !== "commissioner") {
+  if (!["commissioner", "tax_daroga", "city_manager"].includes(admin.role)) {
     return (
       <div className="min-h-screen bg-slate-50">
         <AdminHeader admin={admin} />
         <main className="mx-auto max-w-2xl px-6 py-10">
           <div role="alert" className="flex items-center gap-2 rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-700">
             <AlertCircle className="h-4 w-4 shrink-0" />
-            Bulk property upload is restricted to the Municipal Commissioner.
+            Bulk property upload is restricted to the Municipal Commissioner, Tax Daroga and City Manager.
           </div>
         </main>
       </div>
@@ -72,9 +73,9 @@ export default function PropertiesBulkUploadPage() {
         <h1 className="mb-1 text-2xl font-semibold text-slate-900">Bulk Upload Properties</h1>
         <p className="mb-6 text-sm text-slate-500">
           Upload a Google-Sheets-style backup export (.xlsx) with Master, Floors, Transactions, PropertyHistory,
-          DemandNotices, and TaxHistoryStages sheets - the same shape this system was originally migrated from. Holdings
-          that already exist are skipped, not overwritten or duplicated, so it&apos;s safe to re-run this with the same or
-          an overlapping file.
+          DemandNotices, and TaxHistoryStages sheets - the same shape this system was originally migrated from. The file is
+          checked and kept for review - nothing goes live until the Tax Daroga has reviewed it and the City Manager gives final approval (all holdings,
+          selected holdings, or all except a few). Holdings that already exist are never overwritten.
         </p>
 
         <div className="rounded-xl border border-slate-200 bg-white p-6">
@@ -110,7 +111,7 @@ export default function PropertiesBulkUploadPage() {
           {uploading && (
             <div className="mt-4 flex items-center gap-2 text-sm text-slate-500">
               <Loader2 className="h-4 w-4 animate-spin" />
-              Importing {fileName}… this can take a little while for a large backup.
+              Reading and checking {fileName}… this can take a little while for a large file.
             </div>
           )}
 
@@ -125,38 +126,37 @@ export default function PropertiesBulkUploadPage() {
             <div className="mt-4 space-y-3">
               <div role="status" className="flex items-center gap-2 rounded-md border border-green-200 bg-green-50 p-3 text-sm text-green-800">
                 <CheckCircle2 className="h-4 w-4 shrink-0" />
-                Import complete.
+                File received and kept for review. No holding has gone live yet.
               </div>
-              <div className="grid grid-cols-2 gap-2 rounded-md border border-slate-200 p-4 text-sm sm:grid-cols-3">
+              <div className="grid grid-cols-2 gap-2 rounded-md border border-slate-200 p-4 text-sm sm:grid-cols-4">
                 <div>
-                  <span className="block text-xs text-slate-400">Properties</span>
-                  <span className="font-semibold">{result.propertiesCreated}</span>
+                  <span className="block text-xs text-slate-400">Holdings in file</span>
+                  <span className="font-semibold">{result.totalHoldings}</span>
                 </div>
                 <div>
-                  <span className="block text-xs text-slate-400">Floors</span>
-                  <span className="font-semibold">{result.floorsCreated}</span>
+                  <span className="block text-xs text-slate-400">No issues</span>
+                  <span className="font-semibold text-green-700">{result.ready}</span>
                 </div>
                 <div>
-                  <span className="block text-xs text-slate-400">Transactions</span>
-                  <span className="font-semibold">{result.transactionsCreated}</span>
+                  <span className="block text-xs text-slate-400">With warnings</span>
+                  <span className="font-semibold text-amber-700">{result.withWarnings}</span>
                 </div>
                 <div>
-                  <span className="block text-xs text-slate-400">Demand Notices</span>
-                  <span className="font-semibold">{result.demandNoticesCreated}</span>
-                </div>
-                <div>
-                  <span className="block text-xs text-slate-400">Tax History Stages</span>
-                  <span className="font-semibold">{result.taxHistoryStagesCreated}</span>
-                </div>
-                <div>
-                  <span className="block text-xs text-slate-400">Property History</span>
-                  <span className="font-semibold">{result.propertyHistoryCreated}</span>
+                  <span className="block text-xs text-slate-400">Cannot be imported</span>
+                  <span className="font-semibold text-red-700">{result.withBlockers}</span>
                 </div>
               </div>
+              {admin.role === "commissioner" ? (
+                <p className="text-sm text-slate-600">The Tax Daroga will review this upload and the City Manager will give final approval. You can follow the progress under Uploaded Holdings.</p>
+              ) : (
+                <Link href={`/admin/holding-imports/${result.batchId}`} className="inline-block rounded-md bg-nnm-blue px-4 py-2 text-sm font-semibold text-white hover:bg-nnm-blue-dark">
+                  Open this upload for review
+                </Link>
+              )}
 
               {result.errors.length > 0 && (
                 <details className="rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
-                  <summary className="cursor-pointer font-semibold">{result.errors.length} row(s) skipped or failed - click to view</summary>
+                  <summary className="cursor-pointer font-semibold">{result.errors.length} row(s) could not be staged - click to view</summary>
                   <ul className="mt-2 max-h-64 space-y-1 overflow-y-auto">
                     {result.errors.map((e, i) => (
                       <li key={i}>

@@ -88,7 +88,8 @@ export default function AdminDashboardPage() {
   const showBulkDemandNotices = !isRestrictedRole;
   const showAllPropertyChanges = isCommissioner;
   const showRenumberHolding = isCommissioner;
-  const showBulkUploadProperties = isCommissioner;
+  const showBulkUploadProperties = isCommissioner || admin.role === "tax_daroga" || admin.role === "city_manager";
+  const showHoldingImportReview = admin.role === "tax_daroga" || admin.role === "city_manager" || admin.role === "commissioner";
   const showMigratedHoldingsBulkUpload = isCommissioner;
   const showMigratedHoldingsAssign = admin.role === "deputy_commissioner" || admin.role === "city_manager";
   const showMigratedHoldingsSurveyor = admin.role === "tax_daroga";
@@ -121,7 +122,7 @@ export default function AdminDashboardPage() {
     showMutationApprovals || showCancellationRequests || showBulkDemandNotices || showAllPropertyChanges || showRenumberHolding || showBulkUploadProperties ||
     showMigratedHoldingsBulkUpload || showMigratedHoldingsAssign || showMigratedHoldingsSurveyor || showMigratedHoldingsMySurveys || showInitiateSurvey || showTaxCollectorPage ||
     showReportPropertyDiscrepancy || showMyDiscrepancyReports || showPropertyDiscrepancyRequests || showResurveyFlags || showCollectionIssues || showSolidWasteApprovals || showTaxCollectorAssignments || showRevertAuditTrail ||
-    showPropertyWiseReport || showDisputedHoldings;
+    showPropertyWiseReport || showDisputedHoldings || showHoldingImportReview;
 
   const showShopAgreementApprovals = !isTradeLicenseNodal && !isGisOnlyRole && !isNarrowlyScopedRole;
   const showShopRentalApplications = !isTradeLicenseNodal && !isGisOnlyRole && !isNarrowlyScopedRole;
@@ -403,6 +404,22 @@ export default function AdminDashboardPage() {
                   </span>
                   <h3 className="mb-1.5 text-base font-semibold text-slate-900">Property-wise Report</h3>
                   <p className="text-sm text-slate-500">Search a holding for full details, tax pending, change log, discrepancy/re-survey flags, and surveyor visits.</p>
+                </Link>
+              )}
+
+              {showHoldingImportReview && (
+                <Link href="/admin/holding-imports" className={cardClass}>
+                  <span className={iconWrapClass}>
+                    <ClipboardCheck className="h-6 w-6" strokeWidth={1.8} />
+                  </span>
+                  <h3 className="mb-1.5 text-base font-semibold text-slate-900">{isCommissioner ? "Uploaded Holdings - Progress" : "Uploaded Holdings - Review"}</h3>
+                  <p className="text-sm text-slate-500">
+                    {isCommissioner
+                      ? "Follow how much of each bulk upload has been integrated into the live data."
+                      : admin.role === "city_manager"
+                        ? "Give final approval - integrate uploaded holdings into the live data: all, selected, or all except a few."
+                        : "Review bulk-uploaded holdings and keep out any that should not go live. The City Manager gives final approval."}
+                  </p>
                 </Link>
               )}
 
