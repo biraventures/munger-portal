@@ -8,6 +8,7 @@ import { PropertyEditorForm } from "@/components/operator/property-editor-form";
 import { PaymentForm } from "@/components/operator/payment-form";
 import { ReceiptView } from "@/components/operator/receipt-view";
 import { NoticeView } from "@/components/operator/notice-view";
+import { PartPaymentPanel } from "@/components/operator/part-payment-panel";
 import { PropertyDocumentHistory } from "@/components/operator/property-document-history";
 import { EntryModeLauncher } from "@/components/operator/entry-mode-launcher";
 import { PartiallyKnownForm } from "@/components/operator/partially-known-form";
@@ -43,6 +44,7 @@ function mapToFormState(property: Record<string, unknown>, floors: Record<string
       rainWaterHarvesting: Boolean(property.rain_water_harvesting),
       solidWasteChargeType: str(property.solid_waste_charge_type),
       solidWasteMonths: str(property.solid_waste_months || "12"),
+      isBwg: Boolean(property.is_bwg),
       holdingCreationYear: str(property.holding_creation_year),
       taxPaidTillYear: str(property.tax_paid_till_year),
       miscCost: str(property.misc_cost),
@@ -91,6 +93,7 @@ export default function OperatorPropertyTaxPage() {
   const [generatingNotice, setGeneratingNotice] = useState(false);
   const [noticeError, setNoticeError] = useState<string | null>(null);
   const [justCreated, setJustCreated] = useState<string | null>(null);
+  const [dispute, setDispute] = useState<{ remarks: string } | null>(null);
 
   useEffect(() => {
     fetchFormOptions()
@@ -105,13 +108,14 @@ export default function OperatorPropertyTaxPage() {
     setNotice(null);
     setNoticeError(null);
     setJustCreated(null);
+    setDispute(null);
   }
 
-  async function handleGenerateNotice(holdingNo: string) {
+  async function handleGenerateNotice(holdingNo: string, partYears?: number) {
     setGeneratingNotice(true);
     setNoticeError(null);
     try {
-      const result = await generateDemandNotice(holdingNo);
+      const result = await generateDemandNotice(holdingNo, partYears);
       setNotice(result);
     } catch (err) {
       setNoticeError(err instanceof Error ? err.message : "Could not generate the demand notice.");
@@ -130,6 +134,7 @@ export default function OperatorPropertyTaxPage() {
         setMode({ kind: "idle" });
         return;
       }
+      setDispute(result.property.is_disputed ? { remarks: String(result.property.dispute_remarks ?? "") } : null);
       setMode({ kind: "edit", holdingNo, data: mapToFormState(result.property, result.floors ?? []) });
     } finally {
       setSearching(false);
@@ -270,8 +275,19 @@ export default function OperatorPropertyTaxPage() {
                   </div>
                 )}
 
+                {dispute && (
+                  <div role="alert" className="flex items-start gap-2 rounded-md border border-red-300 bg-red-50 p-4 text-sm text-red-800">
+                    <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                    <div>
+                      <b>This holding is marked as DISPUTED.</b> No demand notice can be generated and no payment can be accepted until the
+                      Tax Daroga, City Manager or Commissioner clears the dispute.
+                      {dispute.remarks ? <div className="mt-1 text-xs">Reason: {dispute.remarks}</div> : null}
+                    </div>
+                  </div>
+                )}
+
                 <div className="flex flex-wrap gap-3">
-                  {!showPayment && (
+                  {!showPayment && !dispute && (
                     <button
                       onClick={() => setShowPayment(true)}
                       className="inline-flex items-center gap-2 rounded-md bg-nnm-gold px-6 py-3 text-sm font-semibold text-[#20240a] hover:brightness-95"
@@ -282,7 +298,7 @@ export default function OperatorPropertyTaxPage() {
                   )}
                   <button
                     onClick={() => handleGenerateNotice(mode.holdingNo)}
-                    disabled={generatingNotice}
+                    disabled={generatingNotice || !!dispute}
                     className="inline-flex items-center gap-2 rounded-md border border-nnm-blue px-6 py-3 text-sm font-semibold text-nnm-blue hover:bg-blue-50 disabled:opacity-60"
                   >
                     {generatingNotice ? (
@@ -294,7 +310,16 @@ export default function OperatorPropertyTaxPage() {
                   </button>
                 </div>
 
-                {showPayment && (
+                {!dispute && (
+                  <PartPaymentPanel
+                    key={`pp-${mode.holdingNo}`}
+                    holdingNo={mode.holdingNo}
+                    busy={generatingNotice}
+                    onGenerate={(years) => handleGenerateNotice(mode.holdingNo, years)}
+                  />
+                )}
+
+                {showPayment && !dispute && (
                   <PaymentForm holdingNo={mode.holdingNo} onSuccess={setReceipt} />
                 )}
 

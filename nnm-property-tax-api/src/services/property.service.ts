@@ -1,10 +1,18 @@
 import { propertyRepository } from "../repositories/property.repository";
+import { demandNoticeRepository } from "../repositories/demandNotice.repository";
 import { calculateTax } from "./taxCalculation.service";
 import { calculateRebateOrLateFee, calculateSolidWasteCharge } from "./charges.service";
 import { summarizeArrears } from "./arrears.service";
 import { parseYearStartOrNull } from "../utils/assessmentYear";
 import { num } from "../utils/num";
-import type { PropertySearchResult } from "../types/property.types";
+import { SOLID_WASTE_RATE } from "../constants/taxRates";
+import type { PropertyRow, PropertySearchResult } from "../types/property.types";
+
+/** Solid waste user type is mandatory unless the holding is a registered Bulk Waste Generator. */
+export function isSolidWasteTypeMissing(property: Pick<PropertyRow, "is_bwg" | "solid_waste_charge_type">): boolean {
+  if (property.is_bwg) return false;
+  return SOLID_WASTE_RATE[String(property.solid_waste_charge_type || "").trim()] === undefined;
+}
 
 /**
  * Port of searchProperty() from Code.gs (Code.gs:1027). Tax is
@@ -78,10 +86,23 @@ export async function searchPropertyByHoldingNo(holdingNoRaw: string): Promise<P
 		arrears.totalPending + arrears.penalty + (currentCyclePaid ? 0 : currentYearTiming.net + currentCycleOtherCharges),
 	);
 
+  // Live (unsettled, not superseded, not cancelled) demand notices. Surfaced
+  // so the public lookup never reads as plain "no dues" while a notice is
+  // still outstanding against the holding (e.g. after a receipt cancellation).
+  const pendingNotices = await demandNoticeRepository.findUnsettledForHolding(property.holding_no);
+  const pendingDemandNotices = pendingNotices.map((n) => ({
+    demandNo: n.demand_no,
+    noticeDate: n.notice_date,
+    assessmentYear: n.assessment_year,
+    totalAmountDemanded: n.total_amount_demanded,
+  }));
+
   return {
     found: true,
     property: {
       ...property,
+      pendingDemandNotices,
+      solidWasteTypeMissing: isSolidWasteTypeMissing(property),
       currentTax: calc.currentTax,
       rebate: calc.rebate,
       arv: calc.arv,
@@ -134,6 +155,14 @@ export async function searchPropertyForCitizen(
 
   const result = await searchPropertyByHoldingNo(holdingNoRaw);
   if (!result.found || !result.property) return notFound;
+  // Disputed holdings are not shown on the public search at all.
+  if (result.property.is_disputed) {
+    return {
+      found: false,
+      message:
+        "The details of this Holding Number are not available online. Please contact the Holding Tax Section, Municipal Corporation Office, Munger.",
+    };
+  }
 
   const storedMobile = String(result.property.mobile_no || "").trim();
   const suppliedMobile = mobileNoRaw.trim();

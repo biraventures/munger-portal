@@ -65,6 +65,9 @@ export interface StreetLight {
   installationAgencyId: number | null;
   switchStatus: "working" | "not_working" | "automatic" | "joint" | null;
   active: boolean;
+  noOfLights: number | null;
+  maintenanceAgencyId: number | null;
+  remarks: string | null;
 }
 
 export async function fetchLights(lightType?: "streetlight" | "high_mast"): Promise<StreetLight[]> {
@@ -128,6 +131,27 @@ export interface LightsCsvImportResult {
 /** The ward-wise field-inventory import - see the backend's lightCsvImport.service.ts for the exact expected columns. */
 export async function uploadLightsCsv(csvContent: string): Promise<LightsCsvImportResult> {
   const res = await fetch(`${API_BASE_URL}/streetlight/lights/bulk-upload`, {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify({ csvContent }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || "Upload failed.");
+  }
+  return res.json();
+}
+
+/**
+ * The High Mast summary import - columns Sl no, Ward, Location name,
+ * Installed by Agency name, No of lights, Functional status,
+ * Maintenance agency, Latitude, Longitude, Remarks (see the backend's
+ * highMastBulkImport.service.ts for exact header matching). Distinct
+ * from uploadLightsCsv above, which expects a per-light serial number
+ * already assigned - this source has none, so one is generated per row.
+ */
+export async function uploadHighMastBulkCsv(csvContent: string): Promise<LightsCsvImportResult> {
+  const res = await fetch(`${API_BASE_URL}/streetlight/lights/high-mast-bulk-upload`, {
     method: "POST",
     headers: authHeaders(),
     body: JSON.stringify({ csvContent }),

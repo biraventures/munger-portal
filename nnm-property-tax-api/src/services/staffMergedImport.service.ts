@@ -92,6 +92,7 @@ export async function importStaffMergedCsv(csvContent: string): Promise<StaffMer
     const rowNum = i + 2;
     const name = (r["Name"] || "").trim();
     const externalId = (r["Unique ID"] || "").trim() || null;
+    const fatherName = (r["Father Name"] || "").trim() || null;
     const locationWard = r["Location/Ward"] || "";
     const shiftName = (r["Shift"] || "").trim().toLowerCase();
     const roleName = (r["Role"] || "").trim();
@@ -124,11 +125,11 @@ export async function importStaffMergedCsv(csvContent: string): Promise<StaffMer
 
     let staffId: number;
     if (existing) {
-      const updated = await fieldStaffRepository.update(existing.id, { name, wardId: ward.id, shiftId, active: true });
+      const updated = await fieldStaffRepository.update(existing.id, { name, wardId: ward.id, shiftId, active: true, fatherName });
       staffId = updated!.id;
       result.updated++;
     } else {
-      const created = await fieldStaffRepository.create({ name, externalId, wardId: ward.id, shiftId });
+      const created = await fieldStaffRepository.create({ name, externalId, wardId: ward.id, shiftId, fatherName });
       staffId = created.id;
       result.created++;
     }

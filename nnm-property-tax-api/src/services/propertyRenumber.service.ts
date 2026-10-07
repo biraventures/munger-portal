@@ -11,7 +11,8 @@ const PROPERTY_COLUMNS = [
   "solid_waste_charge", "penal_charge", "water_charge", "boring_charge", "form_fee", "misc_cost",
   "misc_cost_reason", "misc_rebate", "misc_rebate_reason", "arv", "tax_payable", "holding_creation_year",
   "tax_paid_till_year", "present_holding_name", "present_category", "created_by", "created_date",
-  "last_modified_by", "last_modified_date",
+  "last_modified_by", "last_modified_date", "is_bwg", "latitude", "longitude",
+  "is_disputed", "dispute_remarks", "disputed_by", "disputed_by_role", "disputed_at", "data_source",
 ];
 
 /**
@@ -77,6 +78,7 @@ async function moveHoldingNo(client: PoolClient, oldHoldingNo: string, newHoldin
   // Soft references (no FK, just a matching string).
   await client.query(`UPDATE trade_license_applications SET holding_no = $1 WHERE holding_no = $2`, [newHoldingNo, oldHoldingNo]);
   await client.query(`UPDATE cancellation_requests SET holding_no = $1 WHERE holding_no = $2`, [newHoldingNo, oldHoldingNo]);
+  await client.query(`UPDATE property_dispute_log SET holding_no = $1 WHERE holding_no = $2`, [newHoldingNo, oldHoldingNo]);
 
   await client.query(`DELETE FROM properties WHERE holding_no = $1`, [oldHoldingNo]);
 }

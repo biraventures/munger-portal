@@ -61,12 +61,13 @@ export const fieldDriverRepository = {
     shiftId: number | null;
     assetId: number | null;
     supervisorId: number | null;
+    fatherName?: string | null;
   }): Promise<FieldDriverRow> {
     const { rows } = await pool.query<FieldDriverRow>(
-      `INSERT INTO field_drivers (name, external_id, dl_number, ward_id, shift_id, asset_id, supervisor_id)
-       VALUES ($1,$2,$3,$4,$5,$6,$7)
+      `INSERT INTO field_drivers (name, external_id, dl_number, ward_id, shift_id, asset_id, supervisor_id, father_name)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
        RETURNING *`,
-      [input.name, input.externalId, input.dlNumber, input.wardId, input.shiftId, input.assetId, input.supervisorId],
+      [input.name, input.externalId, input.dlNumber, input.wardId, input.shiftId, input.assetId, input.supervisorId, input.fatherName ?? null],
     );
     return rows[0]!;
   },
@@ -101,15 +102,30 @@ export const fieldDriverRepository = {
       supervisorId: number | null;
       active: boolean;
       externalId?: string | null;
+      fatherName?: string | null;
     },
   ): Promise<FieldDriverRow | null> {
     const { rows } = await pool.query<FieldDriverRow>(
       `UPDATE field_drivers
        SET name = COALESCE($2, name), dl_number = $3, ward_id = COALESCE($4, ward_id),
            shift_id = $5, asset_id = $6, supervisor_id = $7, active = $8,
-           external_id = CASE WHEN $9::boolean THEN $10 ELSE external_id END
+           external_id = CASE WHEN $9::boolean THEN $10 ELSE external_id END,
+           father_name = CASE WHEN $11::boolean THEN $12 ELSE father_name END
        WHERE id = $1 RETURNING *`,
-      [id, input.name ?? null, input.dlNumber, input.wardId ?? null, input.shiftId, input.assetId, input.supervisorId, input.active, input.externalId !== undefined, input.externalId ?? null],
+      [
+        id,
+        input.name ?? null,
+        input.dlNumber,
+        input.wardId ?? null,
+        input.shiftId,
+        input.assetId,
+        input.supervisorId,
+        input.active,
+        input.externalId !== undefined,
+        input.externalId ?? null,
+        input.fatherName !== undefined,
+        input.fatherName ?? null,
+      ],
     );
     return rows[0] ?? null;
   },
@@ -129,6 +145,12 @@ export const fieldDriverRepository = {
       `UPDATE field_drivers SET asset_id = $2, supervisor_id = $3 WHERE id = $1 RETURNING *`,
       [id, input.assetId, input.supervisorId],
     );
+    return rows[0] ?? null;
+  },
+
+  /** The manual Hindi-name override - see migration 094. null clears it, reverting display to the auto-transliterated name. */
+  async setNameHi(id: number, nameHi: string | null): Promise<FieldDriverRow | null> {
+    const { rows } = await pool.query<FieldDriverRow>(`UPDATE field_drivers SET name_hi = $2 WHERE id = $1 RETURNING *`, [id, nameHi]);
     return rows[0] ?? null;
   },
 

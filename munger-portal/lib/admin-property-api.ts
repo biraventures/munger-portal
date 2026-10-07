@@ -1,4 +1,6 @@
 import { getAdminToken } from "./admin-auth";
+import type { DisputeStatus } from "./admin-api";
+import type { CollectionIssueWithNotices } from "./admin-api";
 
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_PROPERTY_TAX_API_URL || "http://localhost:4000/api/v1";
@@ -96,6 +98,10 @@ export interface PropertyFieldVerificationSummary {
   captured_by_display_name: string;
   captured_by_role: string;
   captured_at: string;
+  holding_photo_path?: string | null;
+  aadhaar_photo_path?: string | null;
+  previous_receipt_photo_path?: string | null;
+  land_document_photo_path?: string | null;
 }
 
 export interface PropertyReport {
@@ -107,6 +113,12 @@ export interface PropertyReport {
   discrepancies: PropertyDiscrepancySummary[];
   resurveyFlags: PropertyResurveyFlagSummary[];
   fieldVerifications: PropertyFieldVerificationSummary[];
+  /** Every collection issue raised against this holding, each with the notices issued for it. */
+  collectionIssues: CollectionIssueWithNotices[];
+  /** Disputed flag and its full flag/clear trail. */
+  dispute?: DisputeStatus;
+  /** Audit trail: creation (with its data source) and every later edit. */
+  propertyHistory?: { version: number; action: string; change_basis: string | null; change_reference: string | null; operator_name: string; ts: string }[];
 }
 
 export async function fetchPropertyReport(holdingNo: string): Promise<PropertyReport> {

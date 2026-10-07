@@ -3,6 +3,7 @@ import { z } from "zod";
 import { holdingNoSchema } from "../utils/holdingNoSchema";
 import {
   generateDemandNotice,
+  getPartPaymentOptions,
   bulkGenerateMissingDemandNotices,
   listUnsettledDemandNotices,
   getDemandNoticeForReprint,
@@ -30,7 +31,9 @@ export const postGenerateDemandNotice = asyncHandler(async (req: Request, res: R
   }
 
   const generatedBy = req.admin?.displayName ?? req.operator!.displayName;
-  const result = await generateDemandNotice(paramsParsed.data.holdingNo, generatedBy);
+  const bodyParsed = z.object({ partYears: z.coerce.number().int().min(1).max(60).optional() }).safeParse(req.body ?? {});
+  if (!bodyParsed.success) throw ApiError.badRequest("Invalid number of years for part payment");
+  const result = await generateDemandNotice(paramsParsed.data.holdingNo, generatedBy, bodyParsed.data.partYears);
   res.status(200).json(result);
 });
 
@@ -90,4 +93,13 @@ export const postBulkGenerateDemandNotices = asyncHandler(async (req: Request, r
   const generatedBy = req.admin ? req.admin.displayName : "System (Bulk Batch)";
   const result = await bulkGenerateMissingDemandNotices(generatedBy);
   res.status(200).json(result);
+});
+/**
+ * GET /api/v1/properties/:holdingNo/part-payment-options
+ * Operator or admin. The tax + penalty (as of today) for clearing the first 1..N unpaid years.
+ */
+export const getPartPaymentOptionsHandler = asyncHandler(async (req: Request, res: Response) => {
+  const paramsParsed = holdingNoParamSchema.safeParse(req.params);
+  if (!paramsParsed.success) throw ApiError.badRequest("Invalid holding number");
+  res.status(200).json(await getPartPaymentOptions(paramsParsed.data.holdingNo));
 });

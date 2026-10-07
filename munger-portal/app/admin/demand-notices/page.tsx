@@ -102,13 +102,38 @@ export default function AdminDemandNoticesPage() {
 
           {result && (
             <div className="space-y-5">
-              <div className="flex items-start gap-2.5 rounded-md border border-green-200 bg-green-50 p-4 text-sm text-green-800">
+              <div
+                className={`flex items-start gap-2.5 rounded-md border p-4 text-sm ${
+                  result.processed === 0 && result.errors.length > 0 ? "border-red-200 bg-red-50 text-red-800" : "border-green-200 bg-green-50 text-green-800"
+                }`}
+              >
                 <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
                 <div>
                   <p className="font-semibold">
                     {result.processed} notice{result.processed === 1 ? "" : "s"} generated
-                    {result.errors.length > 0 ? `, ${result.errors.length} error(s)` : ""}.
+                    {result.errors.length > 0 ? `, ${result.errors.length} holding(s) skipped or failed` : ""}.
                   </p>
+                  {result.processed === 0 && result.errors.length === 0 && (
+                    <p className="mt-1 text-xs">No holding is eligible: every holding with floor data already has a demand notice.</p>
+                  )}
+                  {result.errors.length > 0 && (
+                    <ul className="mt-2 list-disc space-y-0.5 pl-5 text-xs">
+                      {Object.entries(
+                        result.errors.reduce<Record<string, number>>((acc, e) => {
+                          const key = e.message.replace(/Holding No [^ ]+/g, "Holding No …");
+                          acc[key] = (acc[key] ?? 0) + 1;
+                          return acc;
+                        }, {}),
+                      )
+                        .sort((x, y) => y[1] - x[1])
+                        .slice(0, 5)
+                        .map(([msg, n]) => (
+                          <li key={msg}>
+                            {n} × {msg}
+                          </li>
+                        ))}
+                    </ul>
+                  )}
                 </div>
               </div>
 

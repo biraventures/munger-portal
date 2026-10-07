@@ -1,5 +1,12 @@
+export type WaterConnectionStatus = "multiple" | "single_wtp" | "single_submersible" | "connected_no_water" | "none";
+
 export interface PropertyRow {
   holding_no: string;
+  /** Flagged after an owner objection - no demand, no payment, hidden from public search. See propertyDispute.service.ts. */
+  is_disputed: boolean;
+  dispute_remarks: string | null;
+  /** Name of the data set this holding was created from (bulk upload) - see migration 108. */
+  data_source: string | null;
   old_holding_no: string | null;
   old_pid: string | null;
   khesra_no: string | null;
@@ -24,6 +31,8 @@ export interface PropertyRow {
   solid_waste_charge_type: string | null;
   solid_waste_months: number;
   solid_waste_charge: string;
+  /** Registered as a Bulk Waste Generator (SPCB) - solid waste user charge is not levied (migration 098). */
+  is_bwg: boolean;
   penal_charge: string;
   water_charge: string;
   boring_charge: string;
@@ -48,6 +57,14 @@ export interface PropertyRow {
   surveyor_name: string | null;
   surveyor_id_number: string | null;
   survey_date: string | null;
+  /** GPS of the holding (migration 101); numeric comes back as string from pg. */
+  latitude: string | null;
+  longitude: string | null;
+  /** Tap water connection, recorded by a Tax Collector (migration 103). */
+  water_connection_status: WaterConnectionStatus | null;
+  water_connection_count: number | null;
+  collector_details_by: string | null;
+  collector_details_at: Date | null;
 }
 
 export interface FloorRow {
@@ -167,6 +184,10 @@ export interface PropertySearchResult {
     pendingArrearsTotal: string;
 	autoPenalty: string;
     totalPayable: string;
+    /** Live unsettled demand notices - so a lookup never reads as plain "no dues" while one is outstanding. */
+    /** True when the holding is not a Bulk Waste Generator and has no recognised solid waste user type on record. */
+    solidWasteTypeMissing: boolean;
+    pendingDemandNotices: { demandNo: string; noticeDate: Date; assessmentYear: string | null; totalAmountDemanded: string }[];
   };
   floors?: FloorRow[];
   taxCalc?: TaxCalculationResult;

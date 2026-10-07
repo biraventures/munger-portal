@@ -29,7 +29,9 @@ export const listAllStaffHandler = asyncHandler(async (_req: Request, res: Respo
     staff: staff.map((s) => ({
       id: s.id,
       name: s.name,
+      nameHi: s.name_hi,
       externalId: s.external_id,
+      fatherName: s.father_name,
       wardId: s.ward_id,
       shiftId: s.shift_id,
       active: s.active,
@@ -38,6 +40,23 @@ export const listAllStaffHandler = asyncHandler(async (_req: Request, res: Respo
       suspendedReason: s.suspended_reason,
       suspendedAt: s.suspended_at,
     })),
+  });
+});
+
+/**
+ * GET /api/v1/attendance/staff/names - a minimal id/name/nameHi/ward
+ * list for the Hindi-name correction screen, open to
+ * NAME_CORRECTION_ROLES (attendance_admin, sanitation_officer,
+ * apswmo, sanitation_prabhari). Deliberately separate from
+ * listAllStaffHandler ("/staff/all") rather than widening that
+ * endpoint's existing attendance_admin/sanitation_officer-only scope
+ * - apswmo and sanitation_prabhari get just enough to review and fix
+ * a wrong Hindi-name guess, nothing else about the roster.
+ */
+export const listStaffNamesHandler = asyncHandler(async (_req: Request, res: Response) => {
+  const staff = await fieldStaffRepository.listAll();
+  res.status(200).json({
+    staff: staff.map((s) => ({ id: s.id, name: s.name, nameHi: s.name_hi, wardId: s.ward_id })),
   });
 });
 
@@ -126,9 +145,10 @@ export const deleteStaffHandler = asyncHandler(async (req: Request, res: Respons
 const staffDetailsSchema = z.object({
   name: z.string().trim().min(1, "Name is required"),
   externalId: z.string().trim().nullish(),
+  fatherName: z.string().trim().nullish(),
 });
 
-/** PATCH /api/v1/attendance/staff/:id/details - name and Unique ID (external_id), the two identifying fields no other action (Transfer, Roles, Deactivate) covers. */
+/** PATCH /api/v1/attendance/staff/:id/details - name, Unique ID (external_id), and father's name - the identifying fields no other action (Transfer, Roles, Deactivate) covers. */
 export const updateStaffDetailsHandler = asyncHandler(async (req: Request, res: Response) => {
   const paramsParsed = staffIdParamSchema.safeParse(req.params);
   if (!paramsParsed.success) throw ApiError.badRequest("Invalid staff id");
@@ -150,10 +170,41 @@ export const updateStaffDetailsHandler = asyncHandler(async (req: Request, res: 
     shiftId: existing.shift_id,
     active: existing.active,
     externalId,
+    fatherName: bodyParsed.data.fatherName === undefined ? undefined : bodyParsed.data.fatherName?.trim() || null,
   });
   res.status(200).json({
-    staff: { id: updated!.id, name: updated!.name, externalId: updated!.external_id, wardId: updated!.ward_id, shiftId: updated!.shift_id, active: updated!.active },
+    staff: {
+      id: updated!.id,
+      name: updated!.name,
+      externalId: updated!.external_id,
+      fatherName: updated!.father_name,
+      wardId: updated!.ward_id,
+      shiftId: updated!.shift_id,
+      active: updated!.active,
+    },
   });
+});
+
+const nameHiBodySchema = z.object({ nameHi: z.string().trim().max(255).nullish() });
+
+/**
+ * PATCH /api/v1/attendance/staff/:id/name-hi - corrects the auto-
+ * transliterated Hindi display name (see migration 094 and the
+ * frontend's hindi-name-transliterate.ts). Open to attendance_admin,
+ * sanitation_officer, apswmo, and sanitation_prabhari - a wider set
+ * than updateStaffDetailsHandler's name/Unique-ID edit, since fixing
+ * a wrongly-guessed Hindi name is low-risk and these are exactly the
+ * roles who review the roster day to day.
+ */
+export const setStaffNameHiHandler = asyncHandler(async (req: Request, res: Response) => {
+  const paramsParsed = staffIdParamSchema.safeParse(req.params);
+  if (!paramsParsed.success) throw ApiError.badRequest("Invalid staff id");
+  const bodyParsed = nameHiBodySchema.safeParse(req.body);
+  if (!bodyParsed.success) throw ApiError.badRequest("Invalid input", bodyParsed.error.flatten().fieldErrors);
+
+  const updated = await fieldStaffRepository.setNameHi(paramsParsed.data.id, bodyParsed.data.nameHi?.trim() || null);
+  if (!updated) throw ApiError.notFound("Staff member not found");
+  res.status(200).json({ staff: { id: updated.id, name: updated.name, nameHi: updated.name_hi } });
 });
 
 const suspendStaffSchema = z.object({ reason: z.string().trim().min(1, "A reason is required to suspend a worker.").max(2000) });
@@ -315,7 +366,9 @@ export const listAllDriversHandler = asyncHandler(async (_req: Request, res: Res
     drivers: drivers.map((d) => ({
       id: d.id,
       name: d.name,
+      nameHi: d.name_hi,
       externalId: d.external_id,
+      fatherName: d.father_name,
       dlNumber: d.dl_number,
       wardId: d.ward_id,
       shiftId: d.shift_id,
@@ -323,6 +376,14 @@ export const listAllDriversHandler = asyncHandler(async (_req: Request, res: Res
       assetId: d.asset_id,
       supervisorId: d.supervisor_id,
     })),
+  });
+});
+
+/** GET /api/v1/attendance/drivers/names - see listStaffNamesHandler's comment; same purpose, driver table. */
+export const listDriverNamesHandler = asyncHandler(async (_req: Request, res: Response) => {
+  const drivers = await fieldDriverRepository.listAll();
+  res.status(200).json({
+    drivers: drivers.map((d) => ({ id: d.id, name: d.name, nameHi: d.name_hi, wardId: d.ward_id })),
   });
 });
 
@@ -389,9 +450,10 @@ const driverDetailsSchema = z.object({
   name: z.string().trim().min(1, "Name is required"),
   externalId: z.string().trim().nullish(),
   dlNumber: z.string().trim().nullish(),
+  fatherName: z.string().trim().nullish(),
 });
 
-/** PATCH /api/v1/attendance/drivers/:id/details - name, Unique ID (external_id), and driving license number - the identifying fields no other action (Transfer, Assign, Deactivate) covers. */
+/** PATCH /api/v1/attendance/drivers/:id/details - name, Unique ID (external_id), driving license number, and father's name - the identifying fields no other action (Transfer, Assign, Deactivate) covers. */
 export const updateDriverDetailsHandler = asyncHandler(async (req: Request, res: Response) => {
   const paramsParsed = staffIdParamSchema.safeParse(req.params);
   if (!paramsParsed.success) throw ApiError.badRequest("Invalid driver id");
@@ -416,12 +478,14 @@ export const updateDriverDetailsHandler = asyncHandler(async (req: Request, res:
     supervisorId: existing.supervisor_id,
     active: existing.active,
     externalId,
+    fatherName: bodyParsed.data.fatherName === undefined ? undefined : bodyParsed.data.fatherName?.trim() || null,
   });
   res.status(200).json({
     driver: {
       id: updated!.id,
       name: updated!.name,
       externalId: updated!.external_id,
+      fatherName: updated!.father_name,
       dlNumber: updated!.dl_number,
       wardId: updated!.ward_id,
       shiftId: updated!.shift_id,
@@ -430,6 +494,18 @@ export const updateDriverDetailsHandler = asyncHandler(async (req: Request, res:
       supervisorId: updated!.supervisor_id,
     },
   });
+});
+
+/** PATCH /api/v1/attendance/drivers/:id/name-hi - see setStaffNameHiHandler's comment; same roles, same purpose, driver table. */
+export const setDriverNameHiHandler = asyncHandler(async (req: Request, res: Response) => {
+  const paramsParsed = staffIdParamSchema.safeParse(req.params);
+  if (!paramsParsed.success) throw ApiError.badRequest("Invalid driver id");
+  const bodyParsed = nameHiBodySchema.safeParse(req.body);
+  if (!bodyParsed.success) throw ApiError.badRequest("Invalid input", bodyParsed.error.flatten().fieldErrors);
+
+  const updated = await fieldDriverRepository.setNameHi(paramsParsed.data.id, bodyParsed.data.nameHi?.trim() || null);
+  if (!updated) throw ApiError.notFound("Driver not found");
+  res.status(200).json({ driver: { id: updated.id, name: updated.name, nameHi: updated.name_hi } });
 });
 
 const transferDriverSchema = z.object({
@@ -541,13 +617,23 @@ export const listAllAssistantsHandler = asyncHandler(async (_req: Request, res: 
     assistants: assistants.map((a) => ({
       id: a.id,
       name: a.name,
+      nameHi: a.name_hi,
       externalId: a.external_id,
+      fatherName: a.father_name,
       driverId: a.driver_id,
       wardId: a.ward_id,
       shiftId: a.shift_id,
       active: a.active,
       supervisorId: a.supervisor_id,
     })),
+  });
+});
+
+/** GET /api/v1/attendance/assistants/names - see listStaffNamesHandler's comment; same purpose, assistant table. */
+export const listAssistantNamesHandler = asyncHandler(async (_req: Request, res: Response) => {
+  const assistants = await fieldAssistantRepository.listAll();
+  res.status(200).json({
+    assistants: assistants.map((a) => ({ id: a.id, name: a.name, nameHi: a.name_hi, wardId: a.ward_id })),
   });
 });
 
@@ -609,9 +695,10 @@ export const setAssistantActiveHandler = asyncHandler(async (req: Request, res: 
 const assistantDetailsSchema = z.object({
   name: z.string().trim().min(1, "Name is required"),
   externalId: z.string().trim().nullish(),
+  fatherName: z.string().trim().nullish(),
 });
 
-/** PATCH /api/v1/attendance/assistants/:id/details - name and Unique ID (external_id), the identifying fields no other action (Transfer, Deactivate) covers. */
+/** PATCH /api/v1/attendance/assistants/:id/details - name, Unique ID (external_id), and father's name - the identifying fields no other action (Transfer, Deactivate) covers. */
 export const updateAssistantDetailsHandler = asyncHandler(async (req: Request, res: Response) => {
   const paramsParsed = staffIdParamSchema.safeParse(req.params);
   if (!paramsParsed.success) throw ApiError.badRequest("Invalid assistant id");
@@ -635,12 +722,14 @@ export const updateAssistantDetailsHandler = asyncHandler(async (req: Request, r
     supervisorId: existing.supervisor_id,
     active: existing.active,
     externalId,
+    fatherName: bodyParsed.data.fatherName === undefined ? undefined : bodyParsed.data.fatherName?.trim() || null,
   });
   res.status(200).json({
     assistant: {
       id: updated!.id,
       name: updated!.name,
       externalId: updated!.external_id,
+      fatherName: updated!.father_name,
       driverId: updated!.driver_id,
       wardId: updated!.ward_id,
       shiftId: updated!.shift_id,
@@ -648,6 +737,18 @@ export const updateAssistantDetailsHandler = asyncHandler(async (req: Request, r
       supervisorId: updated!.supervisor_id,
     },
   });
+});
+
+/** PATCH /api/v1/attendance/assistants/:id/name-hi - see setStaffNameHiHandler's comment; same roles, same purpose, assistant table. */
+export const setAssistantNameHiHandler = asyncHandler(async (req: Request, res: Response) => {
+  const paramsParsed = staffIdParamSchema.safeParse(req.params);
+  if (!paramsParsed.success) throw ApiError.badRequest("Invalid assistant id");
+  const bodyParsed = nameHiBodySchema.safeParse(req.body);
+  if (!bodyParsed.success) throw ApiError.badRequest("Invalid input", bodyParsed.error.flatten().fieldErrors);
+
+  const updated = await fieldAssistantRepository.setNameHi(paramsParsed.data.id, bodyParsed.data.nameHi?.trim() || null);
+  if (!updated) throw ApiError.notFound("Assistant not found");
+  res.status(200).json({ assistant: { id: updated.id, name: updated.name, nameHi: updated.name_hi } });
 });
 
 const transferAssistantSchema = z.object({

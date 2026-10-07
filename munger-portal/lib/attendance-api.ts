@@ -80,6 +80,7 @@ export async function fetchAttendanceShifts(): Promise<AttendanceShift[]> {
 export interface WardWorkerToday {
   staffId: number;
   name: string;
+  nameHi: string | null;
   shiftName: string | null;
   inTime: string | null;
   outTime: string | null;
@@ -149,6 +150,7 @@ export async function markStaffAbsentByOfficer(staffId: number, date?: string, r
 export interface WardDriverToday {
   driverId: number;
   name: string;
+  nameHi: string | null;
   vehicleNumber: string | null;
   shiftName: string | null;
   inTime: string | null;
@@ -207,6 +209,7 @@ export async function markDriverOut(driverId: number): Promise<{ outTime: string
 export interface WardAssistantToday {
   assistantId: number;
   name: string;
+  nameHi: string | null;
   driverId: number;
   shiftName: string | null;
   inTime: string | null;
@@ -708,7 +711,9 @@ export async function fetchAttendanceDashboardSummary(): Promise<AttendanceDashb
 export interface FieldStaffSummary {
   id: number;
   name: string;
+  nameHi: string | null;
   externalId: string | null;
+  fatherName: string | null;
   wardId: number;
   shiftId: number | null;
   active: boolean;
@@ -719,6 +724,21 @@ export async function fetchAllFieldStaff(): Promise<FieldStaffSummary[]> {
   const res = await fetch(`${API_BASE_URL}/attendance/staff/all`, { headers: authHeaders() });
   if (!res.ok) throw new Error("Could not load staff list.");
   const data: { staff: FieldStaffSummary[] } = await res.json();
+  return data.staff;
+}
+
+export interface NameCorrectionEntry {
+  id: number;
+  name: string;
+  nameHi: string | null;
+  wardId: number;
+}
+
+/** attendance_admin, sanitation_officer, apswmo, or sanitation_prabhari - the Hindi-name correction screen's minimal staff list (@see /attendance/correct-names). */
+export async function fetchFieldStaffNames(): Promise<NameCorrectionEntry[]> {
+  const res = await fetch(`${API_BASE_URL}/attendance/staff/names`, { headers: authHeaders() });
+  if (!res.ok) throw new Error("Could not load staff list.");
+  const data: { staff: NameCorrectionEntry[] } = await res.json();
   return data.staff;
 }
 
@@ -763,16 +783,40 @@ export async function deleteFieldStaff(id: number): Promise<void> {
   }
 }
 
-/** attendance_admin OR sanitation_officer - edits a staff member's name and Unique ID. */
-export async function updateFieldStaffDetails(id: number, name: string, externalId: string | null): Promise<FieldStaffSummary> {
+/** attendance_admin OR sanitation_officer - edits a staff member's name, Unique ID, and father's name. */
+export async function updateFieldStaffDetails(
+  id: number,
+  name: string,
+  externalId: string | null,
+  fatherName?: string | null,
+): Promise<FieldStaffSummary> {
   const res = await fetch(`${API_BASE_URL}/attendance/staff/${id}/details`, {
     method: "PATCH",
     headers: authHeaders(),
-    body: JSON.stringify({ name, externalId }),
+    body: JSON.stringify({ name, externalId, fatherName }),
   });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     throw new Error(body.error || "Could not update this staff member.");
+  }
+  return (await res.json()).staff;
+}
+
+/**
+ * Corrects the auto-transliterated Hindi display name (null clears
+ * the override, reverting to the on-the-fly guess). Open to
+ * attendance_admin, sanitation_officer, apswmo, and
+ * sanitation_prabhari - wider than updateFieldStaffDetails above.
+ */
+export async function updateFieldStaffNameHi(id: number, nameHi: string | null): Promise<FieldStaffSummary> {
+  const res = await fetch(`${API_BASE_URL}/attendance/staff/${id}/name-hi`, {
+    method: "PATCH",
+    headers: authHeaders(),
+    body: JSON.stringify({ nameHi }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || "Could not update this staff member's Hindi name.");
   }
   return (await res.json()).staff;
 }
@@ -869,7 +913,9 @@ export async function purgeAllFieldRecords(confirmationPhrase: string): Promise<
 export interface FieldDriverSummary {
   id: number;
   name: string;
+  nameHi: string | null;
   externalId: string | null;
+  fatherName: string | null;
   dlNumber: string | null;
   wardId: number;
   shiftId: number | null;
@@ -882,6 +928,14 @@ export async function fetchAllFieldDrivers(): Promise<FieldDriverSummary[]> {
   const res = await fetch(`${API_BASE_URL}/attendance/drivers/all`, { headers: authHeaders() });
   if (!res.ok) throw new Error("Could not load driver list.");
   const data: { drivers: FieldDriverSummary[] } = await res.json();
+  return data.drivers;
+}
+
+/** attendance_admin, sanitation_officer, apswmo, or sanitation_prabhari - see fetchFieldStaffNames's comment; same purpose, driver table. */
+export async function fetchFieldDriverNames(): Promise<NameCorrectionEntry[]> {
+  const res = await fetch(`${API_BASE_URL}/attendance/drivers/names`, { headers: authHeaders() });
+  if (!res.ok) throw new Error("Could not load driver list.");
+  const data: { drivers: NameCorrectionEntry[] } = await res.json();
   return data.drivers;
 }
 
@@ -945,16 +999,36 @@ export async function transferFieldDriver(id: number, wardId: number, shiftId: n
   return data.driver;
 }
 
-/** attendance_admin OR sanitation_officer - edits a driver's name, Unique ID, and driving license number. */
-export async function updateFieldDriverDetails(id: number, name: string, externalId: string | null, dlNumber: string | null): Promise<FieldDriverSummary> {
+/** attendance_admin OR sanitation_officer - edits a driver's name, Unique ID, driving license number, and father's name. */
+export async function updateFieldDriverDetails(
+  id: number,
+  name: string,
+  externalId: string | null,
+  dlNumber: string | null,
+  fatherName?: string | null,
+): Promise<FieldDriverSummary> {
   const res = await fetch(`${API_BASE_URL}/attendance/drivers/${id}/details`, {
     method: "PATCH",
     headers: authHeaders(),
-    body: JSON.stringify({ name, externalId, dlNumber }),
+    body: JSON.stringify({ name, externalId, dlNumber, fatherName }),
   });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     throw new Error(body.error || "Could not update this driver.");
+  }
+  return (await res.json()).driver;
+}
+
+/** Corrects the auto-transliterated Hindi display name - see updateFieldStaffNameHi's comment; same roles, driver table. */
+export async function updateFieldDriverNameHi(id: number, nameHi: string | null): Promise<FieldDriverSummary> {
+  const res = await fetch(`${API_BASE_URL}/attendance/drivers/${id}/name-hi`, {
+    method: "PATCH",
+    headers: authHeaders(),
+    body: JSON.stringify({ nameHi }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || "Could not update this driver's Hindi name.");
   }
   return (await res.json()).driver;
 }
@@ -1223,7 +1297,9 @@ export async function logAssetReading(assetId: number, input: { logDate: string;
 export interface FieldAssistantSummary {
   id: number;
   name: string;
+  nameHi: string | null;
   externalId: string | null;
+  fatherName: string | null;
   driverId: number;
   wardId: number;
   shiftId: number | null;
@@ -1235,6 +1311,14 @@ export async function fetchAllFieldAssistants(): Promise<FieldAssistantSummary[]
   const res = await fetch(`${API_BASE_URL}/attendance/assistants/all`, { headers: authHeaders() });
   if (!res.ok) throw new Error("Could not load assistant list.");
   const data: { assistants: FieldAssistantSummary[] } = await res.json();
+  return data.assistants;
+}
+
+/** attendance_admin, sanitation_officer, apswmo, or sanitation_prabhari - see fetchFieldStaffNames's comment; same purpose, assistant table. */
+export async function fetchFieldAssistantNames(): Promise<NameCorrectionEntry[]> {
+  const res = await fetch(`${API_BASE_URL}/attendance/assistants/names`, { headers: authHeaders() });
+  if (!res.ok) throw new Error("Could not load assistant list.");
+  const data: { assistants: NameCorrectionEntry[] } = await res.json();
   return data.assistants;
 }
 
@@ -1282,16 +1366,35 @@ export async function transferFieldAssistant(id: number, wardId: number, shiftId
   return data.assistant;
 }
 
-/** attendance_admin OR sanitation_officer - edits an assistant's name and Unique ID. */
-export async function updateFieldAssistantDetails(id: number, name: string, externalId: string | null): Promise<FieldAssistantSummary> {
+/** attendance_admin OR sanitation_officer - edits an assistant's name, Unique ID, and father's name. */
+export async function updateFieldAssistantDetails(
+  id: number,
+  name: string,
+  externalId: string | null,
+  fatherName?: string | null,
+): Promise<FieldAssistantSummary> {
   const res = await fetch(`${API_BASE_URL}/attendance/assistants/${id}/details`, {
     method: "PATCH",
     headers: authHeaders(),
-    body: JSON.stringify({ name, externalId }),
+    body: JSON.stringify({ name, externalId, fatherName }),
   });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     throw new Error(body.error || "Could not update this assistant.");
+  }
+  return (await res.json()).assistant;
+}
+
+/** Corrects the auto-transliterated Hindi display name - see updateFieldStaffNameHi's comment; same roles, assistant table. */
+export async function updateFieldAssistantNameHi(id: number, nameHi: string | null): Promise<FieldAssistantSummary> {
+  const res = await fetch(`${API_BASE_URL}/attendance/assistants/${id}/name-hi`, {
+    method: "PATCH",
+    headers: authHeaders(),
+    body: JSON.stringify({ nameHi }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || "Could not update this assistant's Hindi name.");
   }
   return (await res.json()).assistant;
 }

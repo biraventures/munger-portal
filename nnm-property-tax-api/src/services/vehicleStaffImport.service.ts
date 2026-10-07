@@ -116,6 +116,7 @@ export async function importVehicleStaffCsv(csvContent: string): Promise<Vehicle
     const rowNum = i + 2;
     const name = (r["Driver Name"] || "").trim();
     const externalId = (r["Unique ID"] || "").trim() || null;
+    const fatherName = (r["Father's Name"] || "").trim() || null;
     const role = (r["Role"] || "").trim().toLowerCase();
     const location = r["Location"] || "";
     const shiftName = (r["Shift"] || "").trim().toLowerCase();
@@ -167,11 +168,12 @@ export async function importVehicleStaffCsv(csvContent: string): Promise<Vehicle
           assetId: assetId ?? existing.asset_id,
           supervisorId: existing.supervisor_id,
           active: true,
+          fatherName,
         });
         lastDriver = updated;
         result.driversUpdated++;
       } else {
-        const created = await fieldDriverRepository.create({ name, externalId, dlNumber, wardId: ward.id, shiftId, assetId, supervisorId: null });
+        const created = await fieldDriverRepository.create({ name, externalId, dlNumber, wardId: ward.id, shiftId, assetId, supervisorId: null, fatherName });
         lastDriver = created;
         result.driversCreated++;
       }
@@ -184,10 +186,18 @@ export async function importVehicleStaffCsv(csvContent: string): Promise<Vehicle
         ? await fieldAssistantRepository.findByExternalId(externalId)
         : await fieldAssistantRepository.findByNameAndWard(name, ward.id);
       if (existing) {
-        await fieldAssistantRepository.update(existing.id, { name, driverId: lastDriver.id, wardId: ward.id, shiftId, supervisorId: existing.supervisor_id, active: true });
+        await fieldAssistantRepository.update(existing.id, {
+          name,
+          driverId: lastDriver.id,
+          wardId: ward.id,
+          shiftId,
+          supervisorId: existing.supervisor_id,
+          active: true,
+          fatherName,
+        });
         result.assistantsUpdated++;
       } else {
-        await fieldAssistantRepository.create({ name, externalId, driverId: lastDriver.id, wardId: ward.id, shiftId, supervisorId: null });
+        await fieldAssistantRepository.create({ name, externalId, driverId: lastDriver.id, wardId: ward.id, shiftId, supervisorId: null, fatherName });
         result.assistantsCreated++;
       }
     } else {

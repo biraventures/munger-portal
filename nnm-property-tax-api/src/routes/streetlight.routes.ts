@@ -6,6 +6,7 @@ import {
   listLightsHandler,
   createLightHandler,
   uploadLightsCsvHandler,
+  uploadHighMastBulkHandler,
   setLightActiveHandler,
   setLightGpsHandler,
   listContractorWardsHandler,
@@ -96,6 +97,7 @@ streetlightRouter.patch(
 streetlightRouter.get("/lights", requireAttendanceRole(), listLightsHandler);
 streetlightRouter.post("/lights", requireAttendanceRole([...REGISTRY_MANAGE_ROLES]), createLightHandler);
 streetlightRouter.post("/lights/bulk-upload", requireAttendanceRole([...REGISTRY_MANAGE_ROLES]), uploadLightsCsvHandler);
+streetlightRouter.post("/lights/high-mast-bulk-upload", requireAttendanceRole([...REGISTRY_MANAGE_ROLES]), uploadHighMastBulkHandler);
 streetlightRouter.patch("/lights/:id/active", requireAttendanceRole([...REGISTRY_MANAGE_ROLES]), setLightActiveHandler);
 // Optional per-light GPS location, set straight from the status dashboard next to a light's serial number -
 // available to whoever can already see that dashboard (REGISTRY_MANAGE_ROLES already covers OVERSIGHT_ROLES'

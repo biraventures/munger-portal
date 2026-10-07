@@ -1,5 +1,6 @@
 import { getAdminToken, type AdminRole } from "./admin-auth";
 import type { DemandNoticeReprintData } from "./demand-notice-api";
+import type { ReceiptData } from "./payment-api";
 
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_PROPERTY_TAX_API_URL || "http://localhost:4000/api/v1";
@@ -378,6 +379,10 @@ export interface DashboardSummary {
     pending: number;
     byStage: { stage: string; label: string; count: number }[];
   };
+  propertyDiscrepancies: {
+    pending: number;
+    byStage: { stage: string; label: string; count: number }[];
+  };
   shops: { total: number };
   shopApplications: { received: number; pending: number };
   tradeLicense: { received: number; pending: number; issued: number };
@@ -398,12 +403,18 @@ export interface PaginatedResult<T> {
 
 export interface HoldingListItem {
   holdingNo: string;
+  oldHoldingNo: string | null;
   ownerName: string;
   ward: string | null;
+  totalPlotArea: string | number | null;
   taxPaidTillYear: string | null;
   annualTaxAmount: string | number | null;
   solidWasteChargeAmount: string | number | null;
+  totalAmountDue: string | number | null;
 }
+
+export type HoldingSortKey = "holdingNo" | "taxAmount" | "totalAmount" | "taxPaidTillYear" | "plotArea" | "ward";
+export type SortDirection = "asc" | "desc";
 
 export interface PropertyChangeListItem {
   id: number;
@@ -460,8 +471,26 @@ async function fetchDashboardListAdmin<T>(
   return res.json();
 }
 
-export const fetchDashboardHoldingsAdmin = (page: number, pageSize: number, ward?: string) =>
-  fetchDashboardListAdmin<HoldingListItem>("holdings", page, pageSize, ward ? { ward } : undefined);
+export const fetchDashboardHoldingsAdmin = (
+  page: number,
+  pageSize: number,
+  ward?: string,
+  sort?: HoldingSortKey,
+  sortDir?: SortDirection,
+) =>
+  fetchDashboardListAdmin<HoldingListItem>("holdings", page, pageSize, {
+    ...(ward ? { ward } : {}),
+    ...(sort ? { sort } : {}),
+    ...(sortDir ? { sortDir } : {}),
+  });
+
+/** Every ward value on file - the Property-wise Report's ward filter dropdown. */
+export async function fetchHoldingWardsAdmin(): Promise<string[]> {
+  const res = await fetch(`${API_BASE_URL}/dashboard-summary/holdings/wards`, { headers: authHeaders() });
+  if (!res.ok) throw new Error("Could not load the ward list.");
+  const data: { wards: string[] } = await res.json();
+  return data.wards;
+}
 export const fetchDashboardPropertyChangesAdmin = (page: number, pageSize: number) =>
   fetchDashboardListAdmin<PropertyChangeListItem>("property-changes", page, pageSize);
 export const fetchDashboardShopsAdmin = (page: number, pageSize: number) =>
@@ -614,21 +643,23 @@ export async function deletePropertyHolding(holdingNo: string, confirmationPhras
 }
 
 export interface PropertyBulkImportResult {
-  propertiesCreated: number;
-  floorsCreated: number;
-  transactionsCreated: number;
-  demandNoticesCreated: number;
-  taxHistoryStagesCreated: number;
-  propertyHistoryCreated: number;
+  batchId: number;
+  totalHoldings: number;
+  ready: number;
+  withWarnings: number;
+  withBlockers: number;
   errors: { sheet: string; row: number; message: string }[];
 }
 
-/** Commissioner only. fileDataBase64 is the raw base64 content of the .xlsx file (no data-URL prefix). */
-export async function uploadPropertiesXlsx(fileDataBase64: string): Promise<PropertyBulkImportResult> {
+/**
+ * Commissioner / Tax Daroga / City Manager. fileDataBase64 is the raw base64 content of the .xlsx file (no data-URL prefix).
+ * The file is NOT imported - it is parked for review by Tax Daroga / City Manager.
+ */
+export async function uploadPropertiesXlsx(fileDataBase64: string, dataSourceName: string, fileName?: string): Promise<PropertyBulkImportResult> {
   const res = await fetch(`${API_BASE_URL}/admin/properties/bulk-upload`, {
     method: "POST",
     headers: authHeaders(),
-    body: JSON.stringify({ fileDataBase64 }),
+    body: JSON.stringify({ fileDataBase64, dataSourceName, fileName }),
   });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
@@ -972,6 +1003,78 @@ export async function fetchPropertyForCollector(holdingNo: string): Promise<TaxC
   return res.json();
 }
 
+export type WaterConnectionStatus = "multiple" | "single_wtp" | "single_submersible" | "connected_no_water" | "none";
+
+export const WATER_CONNECTION_LABELS: Record<WaterConnectionStatus, string> = {
+  multiple: "Yes - has multiple connections",
+  single_wtp: "Yes - single connection from WTP",
+  single_submersible: "Yes - from submersible pyau",
+  connected_no_water: "Yes - but no water since connection",
+  none: "No connection",
+};
+
+/** Tax Collector records the mandatory field details (solid waste user type when missing, tap water connection). */
+export async function saveCollectorDetails(
+  holdingNo: string,
+  input: { solidWasteChargeType?: string; waterConnectionStatus?: WaterConnectionStatus; waterConnectionCount?: number },
+): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/properties/${encodeURIComponent(holdingNo)}/collector-details`, {
+    method: "PUT",
+    headers: authHeaders(),
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || "Could not save these details.");
+  }
+}
+
+export interface SolidWasteRequest {
+  id: number;
+  holding_no: string;
+  requested_type: string;
+  requested_by_display_name: string;
+  requested_at: string;
+  stage: "tax_daroga" | "city_manager" | "approved" | "rejected";
+  daroga_by: string | null;
+  city_manager_by: string | null;
+  rejected_by: string | null;
+  reject_reason: string | null;
+}
+
+export interface SolidWasteRequestForApproval extends SolidWasteRequest {
+  owner_name: string;
+  address: string;
+  ward: string | null;
+  current_type: string | null;
+}
+
+export async function fetchLatestSolidWasteRequest(holdingNo: string): Promise<SolidWasteRequest | null> {
+  const res = await fetch(`${API_BASE_URL}/properties/${encodeURIComponent(holdingNo)}/solid-waste-request`, { headers: authHeaders() });
+  if (!res.ok) return null;
+  const data: { request: SolidWasteRequest | null } = await res.json();
+  return data.request;
+}
+
+export async function fetchSolidWasteRequestsToApprove(): Promise<SolidWasteRequestForApproval[]> {
+  const res = await fetch(`${API_BASE_URL}/admin/solid-waste-requests`, { headers: authHeaders() });
+  if (!res.ok) throw new Error("Could not load solid waste approvals.");
+  const data: { requests: SolidWasteRequestForApproval[] } = await res.json();
+  return data.requests;
+}
+
+export async function decideSolidWasteRequest(id: number, action: "approve" | "reject", reason?: string): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/admin/solid-waste-requests/${id}/${action}`, {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify({ reason }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || "Could not record this decision.");
+  }
+}
+
 export interface UnsettledDemandNoticeAdmin {
   demandNo: string;
   formattedDemandNo: string;
@@ -998,7 +1101,7 @@ export async function generateDemandNoticeAdmin(holdingNo: string): Promise<Reco
   return res.json();
 }
 
-export async function submitPaymentAdmin(holdingNo: string, input: { amount: number; paymentMode: string; demandNo?: string; counter?: string }): Promise<Record<string, unknown>> {
+export async function submitPaymentAdmin(holdingNo: string, input: { amount: number; paymentMode: string; demandNo?: string; counter?: string }): Promise<ReceiptData> {
   const res = await fetch(`${API_BASE_URL}/properties/${encodeURIComponent(holdingNo)}/payments`, {
     method: "POST",
     headers: authHeaders(),
@@ -1739,6 +1842,20 @@ export interface CollectionIssue {
   reported_at: string;
 }
 
+/** One notice as listed under its collection issue - see CollectionIssueNotice for the full row. */
+export interface CollectionIssueNoticeSummary {
+  id: number;
+  notice_no: string;
+  language: "en" | "hi";
+  demand_no: string | null;
+  generated_by_display_name: string;
+  generated_at: string;
+}
+
+export interface CollectionIssueWithNotices extends CollectionIssue {
+  notices: CollectionIssueNoticeSummary[];
+}
+
 export async function reportCollectionIssue(holdingNo: string, issueType: CollectionIssueType, notes?: string): Promise<CollectionIssue> {
   const res = await fetch(`${API_BASE_URL}/properties/${encodeURIComponent(holdingNo)}/collection-issue`, {
     method: "POST",
@@ -1753,10 +1870,18 @@ export async function reportCollectionIssue(holdingNo: string, issueType: Collec
   return data.issue;
 }
 
-export async function fetchCollectionIssuesForHolding(holdingNo: string): Promise<CollectionIssue[]> {
+export async function fetchCollectionIssuesForHolding(holdingNo: string): Promise<CollectionIssueWithNotices[]> {
   const res = await fetch(`${API_BASE_URL}/properties/${encodeURIComponent(holdingNo)}/collection-issues`, { headers: authHeaders() });
   if (!res.ok) throw new Error("Could not load collection issues.");
-  const data: { issues: CollectionIssue[] } = await res.json();
+  const data: { issues: CollectionIssueWithNotices[] } = await res.json();
+  return data.issues;
+}
+
+/** The signed-in Tax Collector's own reported issues, each with any notices raised on them. */
+export async function fetchMyCollectionIssues(): Promise<CollectionIssueWithNotices[]> {
+  const res = await fetch(`${API_BASE_URL}/admin/collection-issues/mine`, { headers: authHeaders() });
+  if (!res.ok) throw new Error("Could not load your reported issues.");
+  const data: { issues: CollectionIssueWithNotices[] } = await res.json();
   return data.issues;
 }
 
@@ -1819,10 +1944,11 @@ export async function fetchFieldVerificationsForHolding(holdingNo: string): Prom
 }
 
 /** Oversight worklist - Tax Daroga, Commissioner, and City Manager (who also generates notices from here). */
-export async function fetchAllCollectionIssues(): Promise<CollectionIssue[]> {
-  const res = await fetch(`${API_BASE_URL}/admin/collection-issues`, { headers: authHeaders() });
+export async function fetchAllCollectionIssues(status?: "pending" | "noticed"): Promise<CollectionIssueWithNotices[]> {
+  const qs = status ? `?status=${status}` : "";
+  const res = await fetch(`${API_BASE_URL}/admin/collection-issues${qs}`, { headers: authHeaders() });
   if (!res.ok) throw new Error("Could not load collection issues.");
-  const data: { issues: CollectionIssue[] } = await res.json();
+  const data: { issues: CollectionIssueWithNotices[] } = await res.json();
   return data.issues;
 }
 
@@ -1862,6 +1988,18 @@ export interface GeneratedCollectionIssueNotice {
   noticeDate: string;
   complianceDays: number;
   language: NoticeLanguage;
+  /** True when this is a reprint of a notice issued before copies were kept - rebuilt from current records, so property details may differ from the original. */
+  reconstructed?: boolean;
+}
+
+/** An already-issued notice, exactly as it was issued - read-only, never creates a new notice. */
+export async function reprintCollectionIssueNotice(noticeId: number): Promise<GeneratedCollectionIssueNotice> {
+  const res = await fetch(`${API_BASE_URL}/admin/collection-issue-notices/${noticeId}/reprint`, { headers: authHeaders() });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || "Could not load this notice.");
+  }
+  return res.json();
 }
 
 export async function generateCollectionIssueNotice(collectionIssueId: number, language: NoticeLanguage = "en"): Promise<GeneratedCollectionIssueNotice> {
@@ -1882,4 +2020,56 @@ export async function fetchCollectionIssueNotices(collectionIssueId: number): Pr
   if (!res.ok) throw new Error("Could not load notices for this issue.");
   const data: { notices: CollectionIssueNotice[] } = await res.json();
   return data.notices;
+}
+
+
+// ---- Disputed holdings (Tax Daroga / City Manager / Commissioner) ----
+export interface DisputeStatus {
+  holdingNo: string;
+  ownerName: string;
+  ward: string | null;
+  isDisputed: boolean;
+  remarks: string | null;
+  disputedBy: string | null;
+  disputedByRole: string | null;
+  disputedAt: string | null;
+  history: { action: "flagged" | "cleared"; remarks: string; actedBy: string; actedByRole: string; actedAt: string }[];
+}
+
+export interface DisputedHoldingRow {
+  holdingNo: string;
+  ownerName: string;
+  ward: string | null;
+  remarks: string | null;
+  disputedBy: string | null;
+  disputedByRole: string | null;
+  disputedAt: string | null;
+}
+
+async function disputeJson<T>(res: Response, fallback: string): Promise<T> {
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || fallback);
+  }
+  return res.json();
+}
+
+export async function fetchDisputeStatus(holdingNo: string): Promise<DisputeStatus> {
+  const res = await fetch(`${API_BASE_URL}/admin/property-dispute/${encodeURIComponent(holdingNo)}`, { headers: authHeaders() });
+  return disputeJson(res, "Could not load this holding.");
+}
+
+export async function setHoldingDisputed(holdingNo: string, flag: boolean, remarks: string): Promise<DisputeStatus> {
+  const res = await fetch(`${API_BASE_URL}/admin/property-dispute/${encodeURIComponent(holdingNo)}/${flag ? "flag" : "clear"}`, {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify({ remarks }),
+  });
+  return disputeJson(res, "Could not save the dispute flag.");
+}
+
+export async function fetchDisputedHoldings(): Promise<DisputedHoldingRow[]> {
+  const res = await fetch(`${API_BASE_URL}/admin/disputed-holdings`, { headers: authHeaders() });
+  const data = await disputeJson<{ holdings: DisputedHoldingRow[] }>(res, "Could not load disputed holdings.");
+  return data.holdings;
 }

@@ -1,18 +1,30 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { AlertCircle, AlertTriangle, CheckCircle2, FileWarning, Receipt, Search, ShieldAlert } from "lucide-react";
+import { fetchFormOptions, type FormOptions } from "@/lib/operator-api";
 import { sanitizeHoldingNoInput } from "@/lib/holding-no";
 import { AdminHeader } from "@/components/admin-header";
 import { useAdminGuard } from "@/lib/use-admin-guard";
 import { FieldVerificationCapture } from "@/components/admin/field-verification-capture";
+import { CollectionIssueList } from "@/components/admin/collection-issue-list";
+import { ReceiptView } from "@/components/operator/receipt-view";
+import type { ReceiptData } from "@/lib/payment-api";
 import {
   fetchPropertyForCollector,
   fetchUnsettledDemandNoticesAdmin,
   submitPaymentAdmin,
   requestCancellationAdmin,
   reportCollectionIssue,
+  fetchCollectionIssuesForHolding,
+  fetchMyCollectionIssues,
+  saveCollectorDetails,
+  fetchLatestSolidWasteRequest,
+  type SolidWasteRequest,
+  WATER_CONNECTION_LABELS,
+  type WaterConnectionStatus,
+  type CollectionIssueWithNotices,
   COLLECTION_ISSUE_TYPE_LABELS,
   type TaxCollectorPropertySearchResult,
   type UnsettledDemandNoticeAdmin,
@@ -21,6 +33,52 @@ import {
 
 const inputClass = "w-full rounded-md border border-slate-300 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-nnm-blue focus:ring-offset-1";
 const PAYMENT_MODES = ["Cash", "Cheque", "Online / UPI", "Card", "Demand Draft"];
+
+/** Every property field worth showing the collector, in reading order. Aadhaar is masked to the last 4 digits. */
+const DETAIL_FIELDS: [string, string][] = [
+  ["owner_name", "Owner"],
+  ["relation_type", "Relation"],
+  ["relation_name", "Relation name"],
+  ["mobile_no", "Mobile no."],
+  ["aadhaar_number", "Aadhaar"],
+  ["address", "Address"],
+  ["ward", "Ward"],
+  ["zone", "Zone"],
+  ["pincode", "Pincode"],
+  ["old_holding_no", "Old holding no."],
+  ["old_pid", "Old PID"],
+  ["khesra_no", "Khesra no."],
+  ["survey_sheet_no", "Survey sheet no."],
+  ["khata_no", "Khata no."],
+  ["road_type", "Road type"],
+  ["area_sqft", "Total area (sqft)"],
+  ["vacant_area_sqft", "Vacant area (sqft)"],
+  ["present_holding_name", "Present holding name"],
+  ["present_category", "Present category"],
+  ["assessment_year", "Assessment year"],
+  ["holding_creation_year", "Holding created in"],
+  ["tax_paid_till_year", "Tax paid till year"],
+  ["solid_waste_charge_type", "Solid waste type"],
+  ["solid_waste_charge", "Solid waste charge (₹/yr)"],
+  ["water_connection_status", "Tap water connection"],
+  ["water_connection_count", "No. of water connections"],
+  ["rain_water_harvesting", "Rain water harvesting"],
+  ["solar_rooftop", "Solar rooftop"],
+  ["is_bwg", "Bulk waste generator"],
+  ["latitude", "Latitude"],
+  ["longitude", "Longitude"],
+];
+
+function detailVal(key: string, v: unknown): string {
+  if (v === null || v === undefined || v === "") return "-";
+  if (typeof v === "boolean") return v ? "Yes" : "No";
+  if (key === "water_connection_status") return WATER_CONNECTION_LABELS[v as WaterConnectionStatus] ?? String(v);
+  if (key === "aadhaar_number") {
+    const d = String(v).replace(/\D/g, "");
+    return d.length >= 4 ? `XXXX XXXX ${d.slice(-4)}` : "-";
+  }
+  return String(v);
+}
 
 function displayVal(v: unknown): string {
   if (v === null || v === undefined || v === "") return "-";
@@ -38,7 +96,7 @@ export default function TaxCollectorPage() {
   const [selectedDemandNo, setSelectedDemandNo] = useState("");
   const [paymentMode, setPaymentMode] = useState(PAYMENT_MODES[0]);
   const [collecting, setCollecting] = useState(false);
-  const [receipt, setReceipt] = useState<Record<string, unknown> | null>(null);
+  const [receipt, setReceipt] = useState<ReceiptData | null>(null);
 
   const [requestingCancel, setRequestingCancel] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
@@ -50,7 +108,73 @@ export default function TaxCollectorPage() {
   const [reportingIssue, setReportingIssue] = useState(false);
   const [issueSuccess, setIssueSuccess] = useState(false);
 
+  const [holdingIssues, setHoldingIssues] = useState<CollectionIssueWithNotices[] | null>(null);
+  const [myIssues, setMyIssues] = useState<CollectionIssueWithNotices[] | null>(null);
+
+  useEffect(() => {
+    if (admin?.role !== "tax_collector") return;
+    fetchMyCollectionIssues()
+      .then(setMyIssues)
+      .catch(() => setMyIssues([]));
+  }, [admin]);
+
+  const [formOptions, setFormOptions] = useState<FormOptions | null>(null);
+  const [swType, setSwType] = useState("");
+  const [waterStatus, setWaterStatus] = useState<WaterConnectionStatus | "">("");
+  const [waterCount, setWaterCount] = useState("");
+  const [savingDetails, setSavingDetails] = useState(false);
+  const [swRequest, setSwRequest] = useState<SolidWasteRequest | null>(null);
+  const [detailsMsg, setDetailsMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetchFormOptions().then(setFormOptions).catch(() => undefined);
+  }, []);
+
+  async function reloadProperty(holdingNo: string) {
+    const res = await fetchPropertyForCollector(holdingNo);
+    setResult(res);
+    setSwRequest(await fetchLatestSolidWasteRequest(holdingNo));
+  }
+
+  async function handleSaveDetails() {
+    if (!result?.property) return;
+    const p = result.property;
+    const needSw = !!p.solidWasteTypeMissing && !swOpen;
+    const needWater = !p.water_connection_status;
+    const input: { solidWasteChargeType?: string; waterConnectionStatus?: WaterConnectionStatus; waterConnectionCount?: number } = {};
+    if (needSw) {
+      if (!swType) return setError("Select the solid waste user type.");
+      input.solidWasteChargeType = swType;
+    }
+    if (needWater) {
+      if (!waterStatus) return setError("Select the tap water connection status.");
+      input.waterConnectionStatus = waterStatus;
+      if (waterStatus === "multiple") {
+        const n = Number(waterCount);
+        if (!Number.isInteger(n) || n < 2) return setError("Enter the number of connections (2 or more).");
+        input.waterConnectionCount = n;
+      }
+    }
+    setSavingDetails(true);
+    setError(null);
+    try {
+      await saveCollectorDetails(p.holding_no, input);
+      setDetailsMsg("Details saved.");
+      await reloadProperty(p.holding_no);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not save these details.");
+    } finally {
+      setSavingDetails(false);
+    }
+  }
+
   function resetForNewSearch() {
+    setSwType("");
+    setSwRequest(null);
+    setWaterStatus("");
+    setWaterCount("");
+    setDetailsMsg(null);
+    setHoldingIssues(null);
     setResult(null);
     setNotices(null);
     setReceipt(null);
@@ -70,6 +194,8 @@ export default function TaxCollectorPage() {
       await reportCollectionIssue(result.property.holding_no, issueType, issueNotes.trim() || undefined);
       setIssueSuccess(true);
       setIssueNotes("");
+      fetchCollectionIssuesForHolding(result.property.holding_no).then(setHoldingIssues).catch(() => undefined);
+      fetchMyCollectionIssues().then(setMyIssues).catch(() => undefined);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not submit this report.");
     } finally {
@@ -86,6 +212,10 @@ export default function TaxCollectorPage() {
       const res = await fetchPropertyForCollector(holdingNoInput.trim());
       setResult(res);
       if (res.found) {
+        fetchLatestSolidWasteRequest(res.property!.holding_no).then(setSwRequest).catch(() => undefined);
+        fetchCollectionIssuesForHolding(res.property!.holding_no)
+          .then(setHoldingIssues)
+          .catch(() => setHoldingIssues([]));
         const list = await fetchUnsettledDemandNoticesAdmin(holdingNoInput.trim());
         setNotices(list);
         if (list.length > 0) setSelectedDemandNo(list[0]!.demandNo);
@@ -152,6 +282,7 @@ export default function TaxCollectorPage() {
   }
 
   const property = result?.property;
+  const swOpen = !!swRequest && (swRequest.stage === "tax_daroga" || swRequest.stage === "city_manager");
   const floors = result?.floors ?? [];
 
   return (
@@ -192,27 +323,11 @@ export default function TaxCollectorPage() {
             <div className="rounded-xl border border-slate-200 bg-white p-5">
               <h2 className="mb-3 text-base font-semibold text-slate-900">{property.holding_no}</h2>
               <div className="grid grid-cols-1 gap-1.5 text-sm sm:grid-cols-2">
-                <p>
-                  <span className="text-slate-500">Owner:</span> {displayVal(property.owner_name)}
-                </p>
-                <p>
-                  <span className="text-slate-500">Address:</span> {displayVal(property.address)}
-                </p>
-                <p>
-                  <span className="text-slate-500">Ward:</span> {displayVal(property.ward)}
-                </p>
-                <p>
-                  <span className="text-slate-500">Road type:</span> {displayVal(property.road_type)}
-                </p>
-                <p>
-                  <span className="text-slate-500">Total area (sqft):</span> {displayVal(property.area_sqft)}
-                </p>
-                <p>
-                  <span className="text-slate-500">Assessment year:</span> {displayVal(property.assessment_year)}
-                </p>
-                <p>
-                  <span className="text-slate-500">Tax paid till year:</span> {displayVal(property.tax_paid_till_year)}
-                </p>
+                {DETAIL_FIELDS.map(([key, label]) => (
+                  <p key={key}>
+                    <span className="text-slate-500">{label}:</span> {detailVal(key, property[key])}
+                  </p>
+                ))}
                 <p>
                   <span className="text-slate-500">Current annual tax:</span> ₹{displayVal(property.currentTax)}
                 </p>
@@ -224,6 +339,70 @@ export default function TaxCollectorPage() {
                   </p>
                 )}
               </div>
+            </div>
+
+            {((!!property.solidWasteTypeMissing && !swOpen) || !property.water_connection_status || (!!property.solidWasteTypeMissing && swOpen)) && (
+              <div className="rounded-xl border border-amber-300 bg-amber-50 p-5">
+                <h3 className="mb-1 text-sm font-semibold text-amber-900">Mandatory details - needed before collecting payment</h3>
+                <p className="mb-3 text-xs text-amber-800">These are missing for this holding. Please enter them from the field.</p>
+                {!!property.solidWasteTypeMissing && swOpen && swRequest && (
+                  <p className="mb-3 rounded-md border border-amber-200 bg-white p-3 text-xs text-amber-900">
+                    Solid waste user type <b>{swRequest.requested_type}</b> submitted - {swRequest.stage === "tax_daroga" ? "waiting for Tax Daroga verification" : "verified by Tax Daroga, waiting for City Manager approval"}. Payment can be collected once it is approved.
+                  </p>
+                )}
+                {!!property.solidWasteTypeMissing && !swOpen && swRequest?.stage === "rejected" && (
+                  <p className="mb-3 rounded-md border border-red-200 bg-white p-3 text-xs text-red-700">
+                    Earlier entry ({swRequest.requested_type}) was rejected by {swRequest.rejected_by}: {swRequest.reject_reason}. Please enter it again.
+                  </p>
+                )}
+                {!!property.solidWasteTypeMissing && !swOpen && (
+                  <div className="mb-3">
+                    <label className="mb-1 block text-xs font-medium text-slate-700">Solid waste user type (needs Tax Daroga + City Manager approval; amount is set automatically)</label>
+                    <select value={swType} onChange={(e) => setSwType(e.target.value)} className={inputClass}>
+                      <option value="">Select user type…</option>
+                      {(formOptions?.solidWasteChargeTypes ?? []).map((t) => (
+                        <option key={t} value={t}>
+                          {t} - ₹{formOptions?.solidWasteRates[t] ?? 0}/month
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+                {!property.water_connection_status && (
+                  <div className="mb-3">
+                    <label className="mb-1 block text-xs font-medium text-slate-700">Does the holding have a tap water connection?</label>
+                    <select value={waterStatus} onChange={(e) => setWaterStatus(e.target.value as WaterConnectionStatus | "")} className={inputClass}>
+                      <option value="">Select…</option>
+                      {(Object.keys(WATER_CONNECTION_LABELS) as WaterConnectionStatus[]).map((k) => (
+                        <option key={k} value={k}>
+                          {WATER_CONNECTION_LABELS[k]}
+                        </option>
+                      ))}
+                    </select>
+                    {waterStatus === "multiple" && (
+                      <input
+                        type="number"
+                        min={2}
+                        value={waterCount}
+                        onChange={(e) => setWaterCount(e.target.value)}
+                        placeholder="Number of connections"
+                        className={`${inputClass} mt-2`}
+                      />
+                    )}
+                  </div>
+                )}
+                {detailsMsg && <p className="mb-2 text-xs text-green-700">{detailsMsg}</p>}
+                {((!!property.solidWasteTypeMissing && !swOpen) || !property.water_connection_status) && (
+                <button onClick={handleSaveDetails} disabled={savingDetails} className="rounded-md bg-nnm-blue px-4 py-2 text-sm font-semibold text-white hover:bg-nnm-blue-dark disabled:opacity-60">
+                  {savingDetails ? "Saving…" : "Save details"}
+                </button>
+                )}
+              </div>
+            )}
+
+            <div className="rounded-xl border border-slate-200 bg-white p-5">
+              <h3 className="mb-3 text-sm font-semibold text-slate-700">Collection issues &amp; notices for this holding</h3>
+              <CollectionIssueList issues={holdingIssues} emptyText="No collection issue has been reported for this holding." />
             </div>
 
             <FieldVerificationCapture holdingNo={property.holding_no} />
@@ -285,7 +464,8 @@ export default function TaxCollectorPage() {
                     </div>
                     <button
                       onClick={handleCollectPayment}
-                      disabled={collecting}
+                      disabled={collecting || !!property.solidWasteTypeMissing || !property.water_connection_status}
+                      title={property.solidWasteTypeMissing || !property.water_connection_status ? "Enter the mandatory details above first" : undefined}
                       className="rounded-md bg-nnm-blue px-4 py-2 text-sm font-semibold text-white hover:bg-nnm-blue-dark disabled:opacity-60"
                     >
                       {collecting ? "Recording…" : "Collect Payment & Issue Receipt"}
@@ -296,27 +476,31 @@ export default function TaxCollectorPage() {
             )}
 
             {receipt && (
-              <div role="status" className="rounded-xl border border-green-200 bg-green-50 p-5">
-                <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-green-800">
-                  <CheckCircle2 className="h-4 w-4" />
-                  Payment recorded
-                </div>
-                <p className="text-sm text-green-700">Receipt No: {String(receipt.receiptNo)}</p>
+              <div className="space-y-4">
+                <ReceiptView
+                  receipt={receipt}
+                  onNewPayment={() => {
+                    setReceipt(null);
+                    setCancelReason("");
+                    setCancelSuccess(false);
+                    setRequestingCancel(false);
+                  }}
+                />
 
                 {cancelSuccess ? (
-                  <p className="mt-3 flex items-center gap-1.5 text-sm text-green-800">
+                  <p className="flex items-center gap-1.5 rounded-xl border border-green-200 bg-green-50 p-4 text-sm text-green-800">
                     <CheckCircle2 className="h-4 w-4" />
                     Cancellation requested - it will go to Tax Daroga for review.
                   </p>
                 ) : !requestingCancel ? (
                   <button
                     onClick={() => setRequestingCancel(true)}
-                    className="mt-3 rounded-md border border-red-300 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-50"
+                    className="rounded-md border border-red-300 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-50"
                   >
                     Generated by mistake? Request cancellation
                   </button>
                 ) : (
-                  <div className="mt-3 rounded-md border border-red-200 bg-white p-3">
+                  <div className="rounded-md border border-red-200 bg-white p-3">
                     <textarea
                       value={cancelReason}
                       onChange={(e) => setCancelReason(e.target.value)}
@@ -401,6 +585,11 @@ export default function TaxCollectorPage() {
             </div>
           </div>
         )}
+
+        <div className="mt-8 rounded-xl border border-slate-200 bg-white p-5">
+          <h3 className="mb-3 text-sm font-semibold text-slate-700">Issues I have reported &amp; notices raised</h3>
+          <CollectionIssueList issues={myIssues} showHolding emptyText="You have not reported any collection issue yet." />
+        </div>
       </main>
     </div>
   );

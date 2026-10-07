@@ -144,7 +144,8 @@ export function PropertyDocumentHistory({ holdingNo }: { holdingNo: string }) {
                   <div>
                     <span className="block font-mono font-semibold text-slate-800">{n.date}</span>
                     <span className="text-slate-500">
-                      ₹{Number(n.totalAmountDemanded).toLocaleString("en-IN")} — {n.settled ? "settled" : "unsettled"}
+                      ₹{Number(n.totalAmountDemanded).toLocaleString("en-IN")} — {n.cancelled ? <span className="font-semibold text-red-600">cancelled</span> : n.settled ? "settled" : n.superseded ? "superseded" : "unsettled"}
+                      {n.cancellationPending && <span className="ml-1 font-semibold text-amber-600">(cancellation pending approval)</span>}
                     </span>
                   </div>
                   <div className="flex items-center gap-1.5">
@@ -156,7 +157,7 @@ export function PropertyDocumentHistory({ holdingNo }: { holdingNo: string }) {
                       {loadingItem === `notice-${n.demandNo}` ? <Loader2 className="h-3 w-3 animate-spin" /> : <Printer className="h-3 w-3" />}
                       View
                     </button>
-                    {!n.settled && (
+                    {!n.settled && !n.cancelled && !n.cancellationPending && (
                       <button
                         onClick={() => openCancel("demand_notice", n.demandNo)}
                         className="inline-flex items-center gap-1 rounded border border-red-300 px-2 py-1 font-semibold text-red-600 hover:bg-red-50"
@@ -192,6 +193,8 @@ export function PropertyDocumentHistory({ holdingNo }: { holdingNo: string }) {
                     <span className="block font-mono font-semibold text-slate-800">{p.date}</span>
                     <span className="text-slate-500">
                       ₹{Number(p.amountReceived).toLocaleString("en-IN")} — {p.paymentMode}
+                      {p.cancelled && <span className="ml-1 font-semibold text-red-600">· cancelled</span>}
+                      {p.cancellationPending && <span className="ml-1 font-semibold text-amber-600">· cancellation pending approval</span>}
                     </span>
                   </div>
                   <div className="flex items-center gap-1.5">
@@ -203,13 +206,15 @@ export function PropertyDocumentHistory({ holdingNo }: { holdingNo: string }) {
                       {loadingItem === `receipt-${p.receiptNo}` ? <Loader2 className="h-3 w-3 animate-spin" /> : <Printer className="h-3 w-3" />}
                       View
                     </button>
-                    <button
-                      onClick={() => openCancel("receipt", p.receiptNo)}
-                      className="inline-flex items-center gap-1 rounded border border-red-300 px-2 py-1 font-semibold text-red-600 hover:bg-red-50"
-                    >
-                      <XCircle className="h-3 w-3" />
-                      Cancel
-                    </button>
+                    {!p.cancelled && !p.cancellationPending && (
+                      <button
+                        onClick={() => openCancel("receipt", p.receiptNo)}
+                        className="inline-flex items-center gap-1 rounded border border-red-300 px-2 py-1 font-semibold text-red-600 hover:bg-red-50"
+                      >
+                        <XCircle className="h-3 w-3" />
+                        Cancel
+                      </button>
+                    )}
                   </div>
                 </li>
               ))}

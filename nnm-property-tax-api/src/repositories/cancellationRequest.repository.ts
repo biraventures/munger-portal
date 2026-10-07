@@ -75,6 +75,15 @@ export const cancellationRequestRepository = {
     return rows[0] ?? null;
   },
 
+  /** Targets (receipts / demand notices) of this holding that already have a cancellation request awaiting review - so the UI can stop offering Cancel on them. */
+  async listPendingTargetsForHolding(holdingNo: string): Promise<{ request_type: "demand_notice" | "receipt"; target_id: string }[]> {
+    const { rows } = await pool.query<{ request_type: "demand_notice" | "receipt"; target_id: string }>(
+      `SELECT request_type, target_id FROM cancellation_requests WHERE holding_no = $1 AND status = 'pending'`,
+      [holdingNo],
+    );
+    return rows;
+  },
+
   /** Tax Daroga's own queue - pending requests still at the first stage. */
   async listPendingAtTaxDarogaStage(): Promise<CancellationRequestRow[]> {
     const { rows } = await pool.query<CancellationRequestRow>(

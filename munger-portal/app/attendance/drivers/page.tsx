@@ -6,6 +6,7 @@ import { AlertCircle, Loader2, LogIn, LogOut, UserX, Users, BookOpen } from "luc
 import { AttendanceHeader } from "@/components/attendance/attendance-header";
 import { useAttendanceGuard } from "@/lib/use-attendance-guard";
 import { useAttendanceLang, type AttendanceLang } from "@/lib/attendance-i18n";
+import { transliterateName } from "@/lib/hindi-name-transliterate";
 import { fetchWardDriversToday, markDriverIn, markDriverAbsent, markDriverOut, type WardDriverToday } from "@/lib/attendance-api";
 
 const STRINGS = {
@@ -195,7 +196,7 @@ export default function DriverSupervisorAttendancePage() {
               <div key={d.driverId} className="flex items-center justify-between rounded-xl border border-slate-200 bg-white p-4">
                 <div>
                   <div className="flex items-center gap-2">
-                    <span className="font-semibold text-slate-900">{d.name}</span>
+                    <span className="font-semibold text-slate-900">{lang === "hi" ? (d.nameHi || transliterateName(d.name)) : d.name}</span>
                     {statusBadge(d.status, lang)}
                   </div>
                   <div className="mt-0.5 text-xs text-slate-400">

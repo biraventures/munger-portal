@@ -41,6 +41,9 @@ export function SiteHeader() {
             <Link href="/#services" className="text-[14.5px] font-semibold text-ink-soft hover:text-nnm-blue">
               Services
             </Link>
+            <Link href="/documents" className="text-[14.5px] font-semibold text-ink-soft hover:text-nnm-blue">
+              Documents
+            </Link>
             <Link href="/#contact" className="text-[14.5px] font-semibold text-ink-soft hover:text-nnm-blue">
               Contact
             </Link>

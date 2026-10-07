@@ -8,6 +8,7 @@ import { lightFaultPenaltyRepository } from "../repositories/lightFaultPenalty.r
 import { reportFaultByStaff, markFaultRepaired, linkFaultToLight, getLightRepairHistorySummary } from "../services/lightFault.service";
 import { accrueAllOverduePenalties, accruePenaltiesForFault } from "../services/penaltyAccrual.service";
 import { importLightsCsv } from "../services/lightCsvImport.service";
+import { importHighMastBulkCsv } from "../services/highMastBulkImport.service";
 import {
   buildWardStatusDashboard,
   buildStreetStatusDashboard,
@@ -70,6 +71,9 @@ export const listLightsHandler = asyncHandler(async (req: Request, res: Response
       installationAgencyId: l.installation_agency_id,
       switchStatus: l.switch_status,
       active: l.active,
+      noOfLights: l.no_of_lights,
+      maintenanceAgencyId: l.maintenance_agency_id,
+      remarks: l.remarks,
     })),
   });
 });
@@ -165,6 +169,14 @@ export const uploadLightsCsvHandler = asyncHandler(async (req: Request, res: Res
   const parsed = csvUploadSchema.safeParse(req.body);
   if (!parsed.success) throw ApiError.badRequest("Invalid input", parsed.error.flatten().fieldErrors);
   const result = await importLightsCsv(parsed.data.csvContent);
+  res.status(200).json(result);
+});
+
+/** POST /api/v1/streetlight/lights/high-mast-bulk-upload - the High Mast summary import (see highMastBulkImport.service.ts for the exact expected columns - Sl no, Ward, Location name, Installed by Agency name, No of lights, Functional status, Maintenance agency, Latitude, Longitude, Remarks). No serial number column in this source, so one is generated per row; additive like the other bulk upload, nothing existing is deactivated/replaced. */
+export const uploadHighMastBulkHandler = asyncHandler(async (req: Request, res: Response) => {
+  const parsed = csvUploadSchema.safeParse(req.body);
+  if (!parsed.success) throw ApiError.badRequest("Invalid input", parsed.error.flatten().fieldErrors);
+  const result = await importHighMastBulkCsv(parsed.data.csvContent);
   res.status(200).json(result);
 });
 

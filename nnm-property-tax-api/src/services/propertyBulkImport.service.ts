@@ -1,5 +1,6 @@
 import ExcelJS from "exceljs";
 import { pool } from "../config/db";
+import { searchPropertyByHoldingNo } from "./property.service";
 
 export interface PropertyImportResult {
   propertiesCreated: number;
@@ -18,7 +19,7 @@ export interface PropertyImportResult {
  * formulas, but being defensive here is cheap and avoids a confusing
  * "[object Object]" ending up in a text column.
  */
-function cellText(value: ExcelJS.CellValue): string {
+export function cellText(value: ExcelJS.CellValue): string {
   if (value === null || value === undefined) return "";
   if (value instanceof Date) return value.toISOString();
   if (typeof value === "object") {
@@ -30,11 +31,26 @@ function cellText(value: ExcelJS.CellValue): string {
   return String(value).trim();
 }
 
-function cellNumber(value: ExcelJS.CellValue): number | null {
+export function cellNumber(value: ExcelJS.CellValue): number | null {
   const text = cellText(value);
   if (!text) return null;
   const n = parseFloat(text);
   return Number.isNaN(n) ? null : n;
+}
+
+/**
+ * Reads the optional Latitude/Longitude columns. Blank / "NA" / out-of-range
+ * values give null for both (never a half pair). If the two are obviously
+ * swapped (|lat| > 90 while |lng| <= 90) they are swapped back - the field
+ * survey sheets frequently have the columns the wrong way round.
+ */
+export function parseGps(latRaw: ExcelJS.CellValue, lngRaw: ExcelJS.CellValue): { lat: number | null; lng: number | null } {
+  let lat = cellNumber(latRaw);
+  let lng = cellNumber(lngRaw);
+  if (lat === null || lng === null) return { lat: null, lng: null };
+  if (Math.abs(lat) > 90 && Math.abs(lng) <= 90) [lat, lng] = [lng, lat];
+  if (Math.abs(lat) > 90 || Math.abs(lng) > 180 || (lat === 0 && lng === 0)) return { lat: null, lng: null };
+  return { lat, lng };
 }
 
 /**
@@ -78,7 +94,7 @@ function parseYesNo(value: ExcelJS.CellValue): boolean {
 }
 
 /** Reads a worksheet into an array of {header: cellText} row objects, using row 1 as headers. Skips fully-blank rows. */
-function readSheet(ws: ExcelJS.Worksheet | undefined): { row: Record<string, ExcelJS.CellValue>; excelRowNum: number }[] {
+export function readSheet(ws: ExcelJS.Worksheet | undefined): { row: Record<string, ExcelJS.CellValue>; excelRowNum: number }[] {
   if (!ws) return [];
   const headers: string[] = [];
   ws.getRow(1).eachCell({ includeEmpty: true }, (cell, colNum) => {
@@ -120,7 +136,8 @@ function readSheet(ws: ExcelJS.Worksheet | undefined): { row: Record<string, Exc
  * interrupted partway through, or to import a later backup that
  * overlaps with an earlier one.
  */
-export async function importPropertiesXlsx(fileBuffer: Buffer, actorDisplayName: string): Promise<PropertyImportResult> {
+export async function importPropertiesXlsx(fileBuffer: Buffer, actorDisplayName: string, dataSourceName?: string): Promise<PropertyImportResult> {
+  const dataSource = dataSourceName?.trim() || null;
   const workbook = new ExcelJS.Workbook();
   await workbook.xlsx.load(fileBuffer as unknown as ArrayBuffer);
 
@@ -145,6 +162,13 @@ export async function importPropertiesXlsx(fileBuffer: Buffer, actorDisplayName:
   // history row for a holding each time. Skipping child rows for any
   // holding not newly created in THIS run keeps a re-run safe.
   const preExistingHoldings = new Set<string>();
+  const createdHoldings = new Set<string>();
+  // Holdings that already exist in the database under a slightly different spelling
+  // (e.g. "MUNG- 13054" with a space) map to the number actually stored, so receipts,
+  // demand notices and history rows attach to that holding instead of failing the
+  // holding_no foreign key.
+  const storedHoldingNo = new Map<string, string>();
+  const resolveHolding = (raw: string): string => storedHoldingNo.get(raw) ?? raw;
 
   for (const { row, excelRowNum } of readSheet(workbook.getWorksheet("Master"))) {
     try {
@@ -161,9 +185,13 @@ export async function importPropertiesXlsx(fileBuffer: Buffer, actorDisplayName:
       // re-uploaded - an exact match would miss it (the stored value
       // no longer matches the source string byte-for-byte) and
       // silently create a duplicate holding.
-      const existing = await pool.query(`SELECT 1 FROM properties WHERE REPLACE(holding_no, ' ', '') = REPLACE($1, ' ', '')`, [holdingNo]);
+      const existing = await pool.query<{ holding_no: string }>(
+        `SELECT holding_no FROM properties WHERE REPLACE(holding_no, ' ', '') = REPLACE($1, ' ', '') LIMIT 1`,
+        [holdingNo],
+      );
       if (existing.rows.length > 0) {
         preExistingHoldings.add(holdingNo);
+        storedHoldingNo.set(holdingNo, existing.rows[0]!.holding_no);
         result.errors.push({ sheet: "Master", row: excelRowNum, message: `Holding "${holdingNo}" already exists - skipped` });
         continue;
       }
@@ -188,6 +216,7 @@ export async function importPropertiesXlsx(fileBuffer: Buffer, actorDisplayName:
       const holdingCreationYear = cellText(row.HoldingCreationYear) || assessmentYear;
 
       const relationType = cellText(row.RelationType);
+      const gps = parseGps(row.Latitude, row.Longitude);
 
       await pool.query(
         `INSERT INTO properties (
@@ -197,8 +226,8 @@ export async function importPropertiesXlsx(fileBuffer: Buffer, actorDisplayName:
           solid_waste_charge, penal_charge, water_charge, boring_charge, form_fee, misc_cost,
           misc_cost_reason, misc_rebate, misc_rebate_reason, arv, tax_payable, holding_creation_year,
           tax_paid_till_year, present_holding_name, present_category, created_by, created_date,
-          last_modified_by, last_modified_date
-        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39)`,
+          last_modified_by, last_modified_date, latitude, longitude, data_source
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40,$41,$42)`,
         [
           holdingNo,
           cellText(row.OldHoldingNo) || null,
@@ -239,9 +268,13 @@ export async function importPropertiesXlsx(fileBuffer: Buffer, actorDisplayName:
           parseFlexibleDateTime(row.CreatedDate) ?? new Date().toISOString(),
           cellText(row.LastModifiedBy) || null,
           parseFlexibleDateTime(row.LastModifiedDate),
+          gps.lat,
+          gps.lng,
+          dataSource,
         ],
       );
       result.propertiesCreated++;
+      createdHoldings.add(holdingNo);
     } catch (err) {
       result.errors.push({ sheet: "Master", row: excelRowNum, message: err instanceof Error ? err.message : String(err) });
     }
@@ -294,7 +327,7 @@ export async function importPropertiesXlsx(fileBuffer: Buffer, actorDisplayName:
   for (const { row, excelRowNum } of readSheet(workbook.getWorksheet("Transactions"))) {
     try {
       const receiptNo = cellText(row.ReceiptNo);
-      const holdingNo = cellText(row.HoldingNo);
+      const holdingNo = resolveHolding(cellText(row.HoldingNo));
       const amountReceived = cellNumber(row.AmountReceived);
       if (!receiptNo || !holdingNo || amountReceived === null) {
         result.errors.push({ sheet: "Transactions", row: excelRowNum, message: "Missing ReceiptNo, HoldingNo, or AmountReceived" });
@@ -335,7 +368,7 @@ export async function importPropertiesXlsx(fileBuffer: Buffer, actorDisplayName:
   for (const { row, excelRowNum } of readSheet(workbook.getWorksheet("DemandNotices"))) {
     try {
       const demandNo = cellText(row.DemandNo);
-      const holdingNo = cellText(row.HoldingNo);
+      const holdingNo = resolveHolding(cellText(row.HoldingNo));
       if (!demandNo || !holdingNo) {
         result.errors.push({ sheet: "DemandNotices", row: excelRowNum, message: "Missing DemandNo or HoldingNo" });
         continue;
@@ -423,7 +456,7 @@ export async function importPropertiesXlsx(fileBuffer: Buffer, actorDisplayName:
   // 'Created'/'Updated' check constraint exactly.
   for (const { row, excelRowNum } of readSheet(workbook.getWorksheet("PropertyHistory"))) {
     try {
-      const holdingNo = cellText(row.HoldingNo);
+      const holdingNo = resolveHolding(cellText(row.HoldingNo));
       const version = cellNumber(row.Version);
       const action = cellText(row.Action);
       const operatorName = cellText(row.OperatorName);
@@ -461,6 +494,61 @@ export async function importPropertiesXlsx(fileBuffer: Buffer, actorDisplayName:
     }
   }
 
+  // Audit trail: every holding created by this upload gets a 'Created' entry recording where the data came
+  // from (skipped when the sheet's own PropertyHistory already supplied history for that holding).
+  if (createdHoldings.size > 0) {
+    try {
+      await pool.query(
+        `INSERT INTO property_history (holding_no, version, action, change_basis, change_reference, operator_name, ts, snapshot)
+         SELECT h, 1, 'Created', 'Bulk upload', $2::text, $3::text, now(),
+                jsonb_build_object('source', $2::text, 'uploadedBy', $3::text, 'method', 'Bulk upload of holding data')
+         FROM unnest($1::text[]) AS h
+         WHERE NOT EXISTS (SELECT 1 FROM property_history ph WHERE ph.holding_no = h)`,
+        [[...createdHoldings], dataSource ?? "Bulk upload (source not named)", actorDisplayName],
+      );
+    } catch (err) {
+      result.errors.push({ sheet: "PropertyHistory", row: 0, message: `Holdings were imported but their audit-trail entry could not be written: ${err instanceof Error ? err.message : String(err)}` });
+    }
+  }
+
+  // Sheets leave TaxPayable blank, which would show "0" annual tax on the holdings list. Fill the
+  // stored figures from the live calculation for every holding created in this run.
+  try {
+    const created = [...createdHoldings];
+    await backfillStoredTaxFigures(created);
+  } catch (err) {
+    result.errors.push({ sheet: "Master", row: 0, message: `Holdings were imported but their stored tax figures could not be filled: ${err instanceof Error ? err.message : String(err)}` });
+  }
+
   return result;
+}
+
+/**
+ * Fills properties.tax_payable (annual tax), solid_waste_charge and outstanding_demand from the live
+ * calculation - the same figures the property search shows. With no argument it refreshes EVERY holding
+ * (safe to re-run); pass holding numbers to refresh specific ones.
+ */
+export async function backfillStoredTaxFigures(holdingNos?: string[]): Promise<{ updated: number; failed: { holdingNo: string; message: string }[] }> {
+  const list =
+    holdingNos ??
+    (await pool.query<{ holding_no: string }>(`SELECT holding_no FROM properties ORDER BY holding_no`)).rows.map((r) => r.holding_no);
+  let updated = 0;
+  const failed: { holdingNo: string; message: string }[] = [];
+  for (const holdingNo of list) {
+    try {
+      const r = await searchPropertyByHoldingNo(holdingNo);
+      if (!r.found || !r.taxCalc || !r.property || !r.arrears) continue;
+      await pool.query(
+        `UPDATE properties SET tax_payable = $2::numeric, solid_waste_charge = $3::numeric, outstanding_demand = $4::numeric WHERE holding_no = $1`,
+        // The LIVE figures (same as the property report / demand notice) - NOT r.property.solid_waste_charge,
+        // which is just the stored column echoed back (0 for uploaded holdings).
+        [holdingNo, Number(r.taxCalc.currentTax), Number(r.property.solidWasteCharge) || 0, Number(r.property.totalPayable) || 0],
+      );
+      updated++;
+    } catch (err) {
+      failed.push({ holdingNo, message: err instanceof Error ? err.message : String(err) });
+    }
+  }
+  return { updated, failed };
 }
 

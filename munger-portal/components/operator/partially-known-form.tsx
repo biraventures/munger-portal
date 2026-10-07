@@ -37,6 +37,7 @@ export function PartiallyKnownForm({
   const [taxPaidTillYear, setTaxPaidTillYear] = useState("");
   const [solidWasteChargeType, setSolidWasteChargeType] = useState("");
   const [solidWasteMonths, setSolidWasteMonths] = useState("12");
+  const [isBwg, setIsBwg] = useState(false);
   const [markForSurvey, setMarkForSurvey] = useState(true);
   const [phases, setPhases] = useState<PhaseArvEntry[]>([
     makeBlankPhaseArv(formOptions.periodsOfAssessment, []),
@@ -89,6 +90,7 @@ export function PartiallyKnownForm({
         taxPaidTillYear: taxPaidTillYear || null,
         solidWasteChargeType: solidWasteChargeType || null,
         solidWasteMonths: Number(solidWasteMonths) || 12,
+        isBwg,
         taxHistoryStages: validPhases.map((p) => ({
           periodOfAssessment: p.periodOfAssessment,
           arvInPeriod: Number(p.arvInPeriod),
@@ -266,6 +268,20 @@ export function PartiallyKnownForm({
               Enter more than 12 to include multiple pending years (e.g. 36 for 3 years) as part of arrears.
             </p>
           </div>
+          <label className="flex items-start gap-2 text-sm text-slate-700 sm:col-span-2">
+            <input
+              type="checkbox"
+              checked={isBwg}
+              onChange={(e) => setIsBwg(e.target.checked)}
+              className="mt-0.5 h-4 w-4 rounded border-slate-300"
+            />
+            <span>
+              Registered as a Bulk Waste Generator (BWG) on the SPCB website
+              <span className="block text-xs text-slate-400">
+                The owner manages their own waste, so no solid waste user charge is added to the amount payable.
+              </span>
+            </span>
+          </label>
         </div>
       </section>
 

@@ -4,6 +4,8 @@ import { demandNoticeRepository } from "../repositories/demandNotice.repository"
 import { paymentRepository } from "../repositories/payment.repository";
 import { adminRepository } from "../repositories/admin.repository";
 import { ApiError } from "../utils/ApiError";
+import { parseYearStartOrNull } from "../utils/assessmentYear";
+import type { TransactionRow } from "../repositories/payment.repository";
 import type { CancellationRequestRow } from "../repositories/cancellationRequest.repository";
 
 /**
@@ -81,6 +83,30 @@ export async function listCancellationRequests(status?: "pending" | "approved" |
 }
 
 /**
+ * What tax_paid_till_year should go back to when this receipt is
+ * cancelled: the value snapshotted just before the payment (migration
+ * 097), or - for receipts issued before that snapshot existed - the
+ * year before the earliest period the receipt covered (its earliest
+ * arrear period, or the notice's own year when no arrears were paid).
+ */
+function taxPaidTillYearBefore(txn: TransactionRow, noticeAssessmentYear: string): string | null {
+  if (txn.previous_tax_paid_till_year) return txn.previous_tax_paid_till_year;
+  const noticeStart = parseYearStartOrNull(noticeAssessmentYear);
+  if (noticeStart === null) return null;
+  let first = noticeStart;
+  const stages = Array.isArray(txn.arrear_stages_paid) ? txn.arrear_stages_paid : [];
+  for (const s of stages) {
+    const y = parseInt(String(s.period).slice(0, 4), 10);
+    if (!Number.isNaN(y) && y < first) first = y;
+  }
+  if (stages.length === 0 && txn.arrear_periods_paid) {
+    const y = parseInt(txn.arrear_periods_paid.slice(0, 4), 10);
+    if (!Number.isNaN(y) && y < first) first = y;
+  }
+  return `${first - 1}-${first}`;
+}
+
+/**
  * Atomically finalizes a request as approved AND applies the
  * cancellation (cancels the receipt/demand notice, reverting a
  * settled demand notice back to payable if its receipt is what's
@@ -111,7 +137,22 @@ async function finalizeAndApplyCancellation(requestId: number, reviewedBy: strin
       if (!cancelledTxn) throw ApiError.badRequest("Could not cancel this receipt - it may already be cancelled.");
 
       if (txn.demand_no) {
+        const notice = await demandNoticeRepository.findByDemandNo(txn.demand_no);
         await demandNoticeRepository.revertToUnsettled(txn.demand_no, client);
+
+        // The other half of undoing this payment - submitPayment advanced
+        // the property's own tax_paid_till_year to the notice's
+        // assessment_year (see payment.service.ts); revertToUnsettled above
+        // only reopens the notice itself, so without this the property's
+        // ledger still shows that year as paid and nothing appears pending,
+        // even though the receipt is now cancelled. Guarded against
+        // clobbering a later, unrelated payment - see
+        // paymentRepository.revertTaxPaidTillYear.
+        if (notice?.assessment_year) {
+          // A part-payment notice advanced tax_paid_till_year only to its paid_through_year.
+          const advancedTo = notice.part_payment && notice.paid_through_year ? notice.paid_through_year : notice.assessment_year;
+          await paymentRepository.revertTaxPaidTillYear(txn.holding_no, taxPaidTillYearBefore(txn, notice.assessment_year), advancedTo, client);
+        }
       }
     }
 

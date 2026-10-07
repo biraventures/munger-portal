@@ -10,6 +10,7 @@ import {
   createLight,
   setLightActive,
   uploadLightsCsv,
+  uploadHighMastBulkCsv,
   fetchInstallationAgencies,
   createInstallationAgency,
   setInstallationAgencyActive,
@@ -61,6 +62,11 @@ export default function ManageLightsPage() {
   const [uploading, setUploading] = useState(false);
   const [uploadResult, setUploadResult] = useState<LightsCsvImportResult | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
+
+  // High Mast summary CSV upload (no serial number column - see uploadHighMastBulkCsv)
+  const [hmUploading, setHmUploading] = useState(false);
+  const [hmUploadResult, setHmUploadResult] = useState<LightsCsvImportResult | null>(null);
+  const [hmUploadError, setHmUploadError] = useState<string | null>(null);
 
   // Agency management (MC only)
   const [newAgencyName, setNewAgencyName] = useState("");
@@ -133,6 +139,25 @@ export default function ManageLightsPage() {
       setUploadError(err instanceof Error ? err.message : "Upload failed.");
     } finally {
       setUploading(false);
+      e.target.value = "";
+    }
+  }
+
+  async function handleHmFileSelected(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setHmUploading(true);
+    setHmUploadError(null);
+    setHmUploadResult(null);
+    try {
+      const text = await file.text();
+      const result = await uploadHighMastBulkCsv(text);
+      setHmUploadResult(result);
+      await loadLights();
+    } catch (err) {
+      setHmUploadError(err instanceof Error ? err.message : "Upload failed.");
+    } finally {
+      setHmUploading(false);
       e.target.value = "";
     }
   }
@@ -372,6 +397,77 @@ export default function ManageLightsPage() {
           </section>
         )}
 
+        {canManage && (
+          <section className="mb-8 rounded-xl border border-slate-200 bg-white p-6">
+            <h2 className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-700">
+              <Upload className="h-4 w-4" />
+              Bulk Upload - High Mast Summary (CSV)
+            </h2>
+            <p className="mb-3 text-xs text-slate-500">
+              Upload the High Mast summary CSV - this format has no serial number column, so one is generated automatically for
+              each row. Wards, installation agencies, and maintenance agencies not already on file are created automatically.
+              Lights whose functional status is marked as not working in the file are logged with an open fault immediately.
+              This adds to the registry - it does not replace or deactivate existing entries.
+            </p>
+            <details className="mb-4 rounded-md border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
+              <summary className="cursor-pointer font-semibold text-slate-700">Expected CSV columns (matched by header name)</summary>
+              <ul className="mt-2 list-inside list-disc space-y-0.5">
+                <li>Sl no (ignored - a serial number is generated instead)</li>
+                <li>Ward</li>
+                <li>Location name</li>
+                <li>Installed by Agency name</li>
+                <li>No of lights - how many lamps are mounted on this tower</li>
+                <li>Functional status - &quot;Working&quot; or &quot;Not Working&quot;</li>
+                <li>Maintenance agency</li>
+                <li>Latitude</li>
+                <li>Longitude</li>
+                <li>Remarks</li>
+              </ul>
+              <p className="mt-2 text-slate-500">
+                Header names are matched flexibly (a few common spelling/spacing variants, including &quot;Lattitude&quot;, are
+                recognized), not by exact position. GPS coordinates are required for every row - a row without valid
+                coordinates is skipped.
+              </p>
+            </details>
+            <input
+              type="file"
+              accept=".csv"
+              onChange={handleHmFileSelected}
+              disabled={hmUploading}
+              className="block w-full text-sm text-slate-600 file:mr-4 file:rounded-md file:border-0 file:bg-nnm-blue file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:bg-nnm-blue-dark disabled:opacity-60"
+            />
+            {hmUploading && (
+              <div className="mt-4 flex items-center gap-2 text-sm text-slate-500">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Processing upload - this may take a moment for large files...
+              </div>
+            )}
+            {hmUploadError && (
+              <div role="alert" className="mt-4 flex items-center gap-2 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+                <AlertCircle className="h-4 w-4 shrink-0" />
+                {hmUploadError}
+              </div>
+            )}
+            {hmUploadResult && (
+              <div className="mt-4 rounded-md border border-slate-200 bg-slate-50 p-4 text-sm">
+                <p className="mb-2 font-semibold text-slate-700">Created {hmUploadResult.created} light(s).</p>
+                {hmUploadResult.errors.length > 0 && (
+                  <div>
+                    <p className="mb-1 font-semibold text-amber-700">{hmUploadResult.errors.length} row(s) skipped:</p>
+                    <ul className="max-h-32 list-inside list-disc space-y-0.5 overflow-y-auto text-xs text-amber-700">
+                      {hmUploadResult.errors.map((e, i) => (
+                        <li key={i}>
+                          Row {e.row}: {e.message}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            )}
+          </section>
+        )}
+
         <section className="rounded-xl border border-slate-200 bg-white p-6">
           <div className="mb-4 flex items-center justify-between gap-3">
             <h2 className="text-sm font-semibold text-slate-700">
@@ -404,7 +500,10 @@ export default function ManageLightsPage() {
                     <th className="px-3 py-2 font-medium">Ward</th>
                     <th className="px-3 py-2 font-medium">Locality</th>
                     <th className="px-3 py-2 font-medium">Agency</th>
+                    <th className="px-3 py-2 font-medium">Maint. Agency</th>
+                    <th className="px-3 py-2 font-medium"># Lights</th>
                     <th className="px-3 py-2 font-medium">Switch</th>
+                    <th className="px-3 py-2 font-medium">Remarks</th>
                     <th className="px-3 py-2 font-medium"></th>
                   </tr>
                 </thead>
@@ -418,7 +517,12 @@ export default function ManageLightsPage() {
                         {l.localityName || "-"}
                       </td>
                       <td className="px-3 py-2 text-xs">{agencyName(l.installationAgencyId)}</td>
+                      <td className="px-3 py-2 text-xs">{agencyName(l.maintenanceAgencyId)}</td>
+                      <td className="px-3 py-2 text-xs">{l.noOfLights ?? "-"}</td>
                       <td className="px-3 py-2 text-xs">{l.switchStatus ? SWITCH_LABELS[l.switchStatus] : "-"}</td>
+                      <td className="px-3 py-2 max-w-[10rem] truncate text-xs text-slate-500" title={l.remarks ?? undefined}>
+                        {l.remarks || "-"}
+                      </td>
                       <td className="px-3 py-2 text-right">
                         {canManage && (
                           <button onClick={() => handleToggleActive(l.id, !l.active)} className="text-xs font-medium text-slate-500 hover:underline">

@@ -2,10 +2,18 @@
 
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { AlertCircle, Home, Loader2, MapPin } from "lucide-react";
+import { AlertCircle, Home, Loader2, MapPin, Printer, ScrollText } from "lucide-react";
 import { AdminHeader } from "@/components/admin-header";
 import { useAdminGuard } from "@/lib/use-admin-guard";
 import { fetchPropertyReport, type PropertyReport } from "@/lib/admin-property-api";
+import {
+  reprintCollectionIssueNotice,
+  COLLECTION_ISSUE_TYPE_LABELS,
+  NOTICE_LANGUAGE_LABELS,
+  type GeneratedCollectionIssueNotice,
+} from "@/lib/admin-api";
+import { FieldVerificationPhotos } from "@/components/admin/field-verification-photos";
+import { CollectionIssueNoticeView } from "@/components/admin/collection-issue-notice-view";
 
 const ALLOWED_ROLES = ["commissioner", "deputy_commissioner", "city_manager"];
 
@@ -37,6 +45,20 @@ export default function PropertyWiseReportDetailPage() {
 
   const [report, setReport] = useState<PropertyReport | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [openNotice, setOpenNotice] = useState<GeneratedCollectionIssueNotice | null>(null);
+  const [openingNoticeId, setOpeningNoticeId] = useState<number | null>(null);
+
+  async function handleReprint(noticeId: number) {
+    setOpeningNoticeId(noticeId);
+    setError(null);
+    try {
+      setOpenNotice(await reprintCollectionIssueNotice(noticeId));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not load this notice.");
+    } finally {
+      setOpeningNoticeId(null);
+    }
+  }
 
   useEffect(() => {
     if (!admin || !ALLOWED_ROLES.includes(admin.role)) return;
@@ -65,6 +87,17 @@ export default function PropertyWiseReportDetailPage() {
 
   const p = report?.property;
 
+  if (openNotice) {
+    return (
+      <div className="min-h-screen bg-slate-50">
+        <AdminHeader admin={admin} />
+        <main className="mx-auto max-w-3xl px-6 py-10">
+          <CollectionIssueNoticeView notice={openNotice} onClose={() => setOpenNotice(null)} />
+        </main>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-slate-50">
       <AdminHeader admin={admin} />
@@ -91,6 +124,16 @@ export default function PropertyWiseReportDetailPage() {
               {holdingNo} - {str(p.owner_name)}
             </h1>
             <p className="mb-6 text-sm text-slate-500">{str(p.address)}</p>
+
+            {report.dispute?.isDisputed && (
+              <div role="alert" className="mb-6 flex items-start gap-2 rounded-md border border-red-300 bg-red-50 p-4 text-sm text-red-800">
+                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                <div>
+                  <b>This holding is marked as DISPUTED</b> - hidden from public search, no demand notice and no payment until cleared.
+                  <div className="mt-1 text-xs">Reason: {str(report.dispute.remarks)}</div>
+                </div>
+              </div>
+            )}
 
             {/* Property details */}
             <section className="mb-6 rounded-xl border border-slate-200 bg-white p-6">
@@ -150,6 +193,88 @@ export default function PropertyWiseReportDetailPage() {
               <div className={`mt-4 rounded-md p-3 text-sm font-semibold ${Number(p.totalPayable ?? 0) > 0 ? "bg-red-50 text-red-700" : "bg-green-50 text-green-700"}`}>
                 Total Payable: ₹{money(p.totalPayable)}
               </div>
+            </section>
+
+            {/* Audit trail - creation + edits */}
+            <section className="mb-6 rounded-xl border border-slate-200 bg-white p-6">
+              <h2 className="mb-1 text-sm font-semibold text-slate-700">Audit Trail - Creation &amp; Edits ({report.propertyHistory?.length ?? 0})</h2>
+              {p.data_source ? (
+                <p className="mb-3 text-xs text-slate-500">
+                  Created from data: <b className="text-slate-700">{str(p.data_source)}</b>
+                </p>
+              ) : null}
+              {!report.propertyHistory || report.propertyHistory.length === 0 ? (
+                <p className="text-sm text-slate-400">No audit-trail entries recorded for this holding.</p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead className="text-slate-400">
+                      <tr>
+                        <th className="pb-2 pr-4">When</th>
+                        <th className="pb-2 pr-4">Action</th>
+                        <th className="pb-2 pr-4">By</th>
+                        <th className="pb-2">Basis / source</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {report.propertyHistory.map((h) => (
+                        <tr key={h.version} className="border-t border-slate-100 align-top">
+                          <td className="py-2 pr-4 whitespace-nowrap">{fmtDateTime(h.ts)}</td>
+                          <td className="py-2 pr-4">{h.action}</td>
+                          <td className="py-2 pr-4">{h.operator_name}</td>
+                          <td className="py-2">
+                            {[h.change_basis, h.change_reference].filter(Boolean).join(" - ") || "-"}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </section>
+
+            {/* Dispute trail */}
+            <section className="mb-6 rounded-xl border border-slate-200 bg-white p-6">
+              <h2 className="mb-4 flex items-center gap-2 text-sm font-semibold text-slate-700">
+                Dispute Status &amp; Trail ({report.dispute?.history.length ?? 0})
+                {report.dispute?.isDisputed ? (
+                  <span className="rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-semibold uppercase text-red-700">Disputed</span>
+                ) : (
+                  <span className="rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-semibold uppercase text-green-700">Not disputed</span>
+                )}
+              </h2>
+              {!report.dispute || report.dispute.history.length === 0 ? (
+                <p className="text-sm text-slate-400">This holding has never been flagged as disputed.</p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead className="text-slate-400">
+                      <tr>
+                        <th className="pb-2 pr-4">When</th>
+                        <th className="pb-2 pr-4">Action</th>
+                        <th className="pb-2 pr-4">By</th>
+                        <th className="pb-2">Remarks</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {report.dispute.history.map((h, i) => (
+                        <tr key={i} className="border-t border-slate-100 align-top">
+                          <td className="py-2 pr-4 whitespace-nowrap">{fmtDateTime(h.actedAt)}</td>
+                          <td className="py-2 pr-4">
+                            <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase ${h.action === "flagged" ? "bg-red-100 text-red-700" : "bg-green-100 text-green-700"}`}>
+                              {h.action === "flagged" ? "Flagged disputed" : "Dispute cleared"}
+                            </span>
+                          </td>
+                          <td className="py-2 pr-4">
+                            {h.actedBy} <span className="text-slate-400">({h.actedByRole.replace("_", " ")})</span>
+                          </td>
+                          <td className="py-2">{h.remarks}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </section>
 
             {/* Change log */}
@@ -241,7 +366,7 @@ export default function PropertyWiseReportDetailPage() {
             <section className="mb-6 rounded-xl border border-slate-200 bg-white p-6">
               <h2 className="mb-4 flex items-center gap-2 text-sm font-semibold text-slate-700">
                 <MapPin className="h-4 w-4" />
-                Surveyor Field Visits ({report.fieldVerifications.length})
+                Field Visits, Photos & Documents ({report.fieldVerifications.length})
               </h2>
               {report.fieldVerifications.length === 0 ? (
                 <p className="text-sm text-slate-400">No field visit has been logged for this holding.</p>
@@ -252,6 +377,60 @@ export default function PropertyWiseReportDetailPage() {
                       <p className="font-semibold text-slate-700">{fmtDateTime(v.captured_at)} - {v.captured_by_display_name} ({v.captured_by_role})</p>
                       {v.gps_lat && v.gps_lng && (
                         <p className="mt-1 text-slate-500">GPS: {v.gps_lat}, {v.gps_lng}</p>
+                      )}
+                      <FieldVerificationPhotos visit={v} />
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+
+            {/* Collection issues raised by Tax Collectors, and the notices issued against them */}
+            <section className="mb-6 rounded-xl border border-slate-200 bg-white p-6">
+              <h2 className="mb-1 flex items-center gap-2 text-sm font-semibold text-slate-700">
+                <ScrollText className="h-4 w-4" />
+                Collection Issues &amp; Notices Issued ({report.collectionIssues.reduce((n, i) => n + i.notices.length, 0)} notice
+                {report.collectionIssues.reduce((n, i) => n + i.notices.length, 0) === 1 ? "" : "s"})
+              </h2>
+              <p className="mb-4 text-xs text-slate-400">Every problem a Tax Collector reported while collecting from this holder, and each notice the City Manager issued for it.</p>
+              {report.collectionIssues.length === 0 ? (
+                <p className="text-sm text-slate-400">No collection issue has been raised against this holding.</p>
+              ) : (
+                <div className="space-y-3">
+                  {report.collectionIssues.map((i) => (
+                    <div key={i.id} className="rounded-md border border-slate-200 p-3 text-xs">
+                      <div className="mb-1 flex items-center justify-between gap-2">
+                        <span className="font-semibold text-slate-700">{COLLECTION_ISSUE_TYPE_LABELS[i.issue_type]}</span>
+                        {i.notices.length === 0 ? (
+                          <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold uppercase text-amber-700">Awaiting notice</span>
+                        ) : (
+                          <span className="rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-semibold uppercase text-green-700">Notice issued</span>
+                        )}
+                      </div>
+                      <p className="text-slate-500">
+                        Raised {fmtDateTime(i.reported_at)} by {i.reported_by_display_name}
+                        {i.notes && ` - "${i.notes}"`}
+                      </p>
+                      {i.notices.length > 0 && (
+                        <ul className="mt-2 divide-y divide-slate-100 border-t border-slate-100">
+                          {i.notices.map((n) => (
+                            <li key={n.id} className="flex items-center justify-between gap-3 py-2">
+                              <span className="text-slate-600">
+                                <span className="font-mono font-semibold text-slate-800">{n.notice_no}</span> · {NOTICE_LANGUAGE_LABELS[n.language]} · {fmtDateTime(n.generated_at)} by{" "}
+                                {n.generated_by_display_name}
+                                {n.demand_no && <span className="text-slate-400"> · Demand {n.demand_no}</span>}
+                              </span>
+                              <button
+                                onClick={() => handleReprint(n.id)}
+                                disabled={openingNoticeId === n.id}
+                                className="inline-flex shrink-0 items-center gap-1 font-semibold text-nnm-blue hover:underline disabled:opacity-60"
+                              >
+                                <Printer className="h-3.5 w-3.5" />
+                                {openingNoticeId === n.id ? "Opening…" : "View / Reprint"}
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
                       )}
                     </div>
                   ))}

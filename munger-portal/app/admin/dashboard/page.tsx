@@ -2,12 +2,13 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Users, FileClock, FileWarning, LayoutGrid, ShoppingBag, Store, BarChart3, Award, Archive, Download, XCircle, ShieldCheck, Trash2, RefreshCw, Upload, MapPin, Map as MapIcon, ClipboardCheck, UserCheck, ClipboardList, Receipt, RotateCcw, AlertTriangle, List, Flag, Home } from "lucide-react";
+import { Users, FileClock, FileWarning, LayoutGrid, ShoppingBag, Store, BarChart3, Award, Archive, Download, XCircle, ShieldCheck, Trash2, RefreshCw, Upload, MapPin, Map as MapIcon, ClipboardCheck, UserCheck, ClipboardList, Receipt, RotateCcw, AlertTriangle, List, Flag, Home, FileText } from "lucide-react";
 import { AdminHeader } from "@/components/admin-header";
 import { DashboardSummaryWidget } from "@/components/dashboard-summary-widget";
 import { useAdminGuard } from "@/lib/use-admin-guard";
 import {
   fetchChangeRequests,
+  fetchDiscrepancyRequests,
   fetchDashboardSummaryAdmin,
   fetchDashboardHoldingsAdmin,
   fetchDashboardPropertyChangesAdmin,
@@ -23,6 +24,7 @@ import { ADMIN_ROLE_LABELS } from "@/lib/admin-auth";
 export default function AdminDashboardPage() {
   const admin = useAdminGuard();
   const [myStagePendingCount, setMyStagePendingCount] = useState<number | null>(null);
+  const [myDiscrepancyPendingCount, setMyDiscrepancyPendingCount] = useState<number | null>(null);
   const [myShopStagePendingCount, setMyShopStagePendingCount] = useState<number | null>(null);
   const [myRentalAppPendingCount, setMyRentalAppPendingCount] = useState<number | null>(null);
   const [myTradeLicensePendingCount, setMyTradeLicensePendingCount] = useState<number | null>(null);
@@ -32,6 +34,9 @@ export default function AdminDashboardPage() {
     fetchChangeRequests({ status: "pending", myStage: true })
       .then((r) => setMyStagePendingCount(r.requests.length))
       .catch(() => setMyStagePendingCount(null));
+    fetchDiscrepancyRequests({ status: "pending", myStage: true })
+      .then((r) => setMyDiscrepancyPendingCount(r.requests.length))
+      .catch(() => setMyDiscrepancyPendingCount(null));
     fetchShopAgreementRequests({ status: "pending", myStage: true })
       .then((r) => setMyShopStagePendingCount(r.requests.length))
       .catch(() => setMyShopStagePendingCount(null));
@@ -83,7 +88,8 @@ export default function AdminDashboardPage() {
   const showBulkDemandNotices = !isRestrictedRole;
   const showAllPropertyChanges = isCommissioner;
   const showRenumberHolding = isCommissioner;
-  const showBulkUploadProperties = isCommissioner;
+  const showBulkUploadProperties = isCommissioner || admin.role === "tax_daroga" || admin.role === "city_manager";
+  const showHoldingImportReview = admin.role === "tax_daroga" || admin.role === "city_manager" || admin.role === "commissioner";
   const showMigratedHoldingsBulkUpload = isCommissioner;
   const showMigratedHoldingsAssign = admin.role === "deputy_commissioner" || admin.role === "city_manager";
   const showMigratedHoldingsSurveyor = admin.role === "tax_daroga";
@@ -95,9 +101,12 @@ export default function AdminDashboardPage() {
   const DISCREPANCY_CHAIN_ROLES = ["tax_surveyor", "tax_daroga", "city_manager", "deputy_commissioner", "commissioner"];
   const showPropertyDiscrepancyRequests = DISCREPANCY_CHAIN_ROLES.includes(admin.role);
   const showResurveyFlags = admin.role === "tax_daroga" || admin.role === "commissioner";
+  const showSolidWasteApprovals = admin.role === "tax_daroga" || admin.role === "city_manager";
   const showCollectionIssues = admin.role === "tax_daroga" || admin.role === "commissioner" || admin.role === "city_manager";
   const showTaxCollectorAssignments = isCommissioner;
+  const showDisputedHoldings = admin.role === "tax_daroga" || admin.role === "city_manager" || admin.role === "commissioner";
   const showRevertAuditTrail = isCommissioner;
+  const showPublicDocuments = isCommissioner;
   const showManageLogins = isCommissioner;
   const showEmployeeDatabaseEntry = admin.role === "establishment_clerk";
   const showEmployeeDatabaseList = admin.role === "establishment_clerk";
@@ -106,12 +115,14 @@ export default function AdminDashboardPage() {
   const isStreetlightReporterRole =
     admin.role === "tax_daroga" || admin.role === "tax_surveyor" || admin.role === "tax_collector" || admin.role === "stall_prabhari" || admin.role === "je_mechanical" || admin.role === "ae_mechanical" ||
     admin.role === "commissioner" || admin.role === "deputy_commissioner" || admin.role === "city_manager";
+  const showStreetlightReports =
+    admin.role === "commissioner" || admin.role === "deputy_commissioner" || admin.role === "city_manager" || admin.role === "je_mechanical" || admin.role === "ae_mechanical";
   const showPropertyWiseReport = admin.role === "commissioner" || admin.role === "deputy_commissioner" || admin.role === "city_manager";
   const propertyGroupVisible =
     showMutationApprovals || showCancellationRequests || showBulkDemandNotices || showAllPropertyChanges || showRenumberHolding || showBulkUploadProperties ||
     showMigratedHoldingsBulkUpload || showMigratedHoldingsAssign || showMigratedHoldingsSurveyor || showMigratedHoldingsMySurveys || showInitiateSurvey || showTaxCollectorPage ||
-    showReportPropertyDiscrepancy || showMyDiscrepancyReports || showPropertyDiscrepancyRequests || showResurveyFlags || showCollectionIssues || showTaxCollectorAssignments || showRevertAuditTrail ||
-    showPropertyWiseReport;
+    showReportPropertyDiscrepancy || showMyDiscrepancyReports || showPropertyDiscrepancyRequests || showResurveyFlags || showCollectionIssues || showSolidWasteApprovals || showTaxCollectorAssignments || showRevertAuditTrail ||
+    showPropertyWiseReport || showDisputedHoldings || showHoldingImportReview;
 
   const showShopAgreementApprovals = !isTradeLicenseNodal && !isGisOnlyRole && !isNarrowlyScopedRole;
   const showShopRentalApplications = !isTradeLicenseNodal && !isGisOnlyRole && !isNarrowlyScopedRole;
@@ -158,6 +169,18 @@ export default function AdminDashboardPage() {
   const groupHeadingClass = "mb-4 mt-10 text-lg font-semibold text-slate-800 first:mt-0";
   const cardClass = "flex flex-col rounded-xl border border-slate-200 bg-white p-6 transition-shadow hover:shadow-md";
   const iconWrapClass = "mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-blue-50 text-nnm-blue";
+  // A request waiting at this admin's own desk is easy to miss among a
+  // full grid of cards - turning the card red (not just its count) is
+  // the explicit reminder, for exactly the handful of cards below that
+  // report a "waiting on your desk" count.
+  const pendingCardClass = "flex flex-col rounded-xl border-2 border-red-300 bg-red-50 p-6 transition-shadow hover:shadow-md";
+  const pendingIconWrapClass = "mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-red-100 text-red-600";
+  function deskCardClass(pendingCount: number | null): string {
+    return pendingCount && pendingCount > 0 ? pendingCardClass : cardClass;
+  }
+  function deskIconWrapClass(pendingCount: number | null): string {
+    return pendingCount && pendingCount > 0 ? pendingIconWrapClass : iconWrapClass;
+  }
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -183,8 +206,8 @@ export default function AdminDashboardPage() {
             <h2 className={groupHeadingClass}>Property Tax</h2>
             <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
               {showMutationApprovals && (
-                <Link href="/admin/change-requests" className={cardClass}>
-                  <span className={iconWrapClass}>
+                <Link href="/admin/change-requests" className={deskCardClass(myStagePendingCount)}>
+                  <span className={deskIconWrapClass(myStagePendingCount)}>
                     <FileClock className="h-6 w-6" strokeWidth={1.8} />
                   </span>
                   <h3 className="mb-1.5 text-base font-semibold text-slate-900">Mutation Approvals</h3>
@@ -327,12 +350,16 @@ export default function AdminDashboardPage() {
               )}
 
               {showPropertyDiscrepancyRequests && (
-                <Link href="/admin/property-discrepancy-requests" className={cardClass}>
-                  <span className={iconWrapClass}>
+                <Link href="/admin/property-discrepancy-requests" className={deskCardClass(myDiscrepancyPendingCount)}>
+                  <span className={deskIconWrapClass(myDiscrepancyPendingCount)}>
                     <ClipboardCheck className="h-6 w-6" strokeWidth={1.8} />
                   </span>
                   <h3 className="mb-1.5 text-base font-semibold text-slate-900">Property Discrepancy Approvals</h3>
-                  <p className="text-sm text-slate-500">Review a Tax Collector&apos;s field-found correction at your stage.</p>
+                  <p className="text-sm text-slate-500">
+                    {myDiscrepancyPendingCount === null
+                      ? "Review a Tax Collector's field-found correction at your stage."
+                      : `${myDiscrepancyPendingCount} request${myDiscrepancyPendingCount === 1 ? "" : "s"} currently waiting on your desk.`}
+                  </p>
                 </Link>
               )}
 
@@ -343,6 +370,18 @@ export default function AdminDashboardPage() {
                   </span>
                   <h3 className="mb-1.5 text-base font-semibold text-slate-900">Re-Survey Flags</h3>
                   <p className="text-sm text-slate-500">Holdings flagged by Tax Collectors as looking different on the ground.</p>
+                </Link>
+              )}
+
+              {showSolidWasteApprovals && (
+                <Link href="/admin/solid-waste-approvals" className={cardClass}>
+                  <span className={iconWrapClass}>
+                    <ClipboardCheck className="h-6 w-6" strokeWidth={1.8} />
+                  </span>
+                  <h3 className="mb-1.5 text-base font-semibold text-slate-900">Solid Waste User Type Approvals</h3>
+                  <p className="text-sm text-slate-500">
+                    {admin.role === "tax_daroga" ? "Verify solid waste user types entered by Tax Collectors." : "Give final approval to verified solid waste user types."}
+                  </p>
                 </Link>
               )}
 
@@ -368,6 +407,32 @@ export default function AdminDashboardPage() {
                 </Link>
               )}
 
+              {showHoldingImportReview && (
+                <Link href="/admin/holding-imports" className={cardClass}>
+                  <span className={iconWrapClass}>
+                    <ClipboardCheck className="h-6 w-6" strokeWidth={1.8} />
+                  </span>
+                  <h3 className="mb-1.5 text-base font-semibold text-slate-900">{isCommissioner ? "Uploaded Holdings - Progress" : "Uploaded Holdings - Review"}</h3>
+                  <p className="text-sm text-slate-500">
+                    {isCommissioner
+                      ? "Follow how much of each bulk upload has been integrated into the live data."
+                      : admin.role === "city_manager"
+                        ? "Give final approval - integrate uploaded holdings into the live data: all, selected, or all except a few."
+                        : "Review bulk-uploaded holdings and keep out any that should not go live. The City Manager gives final approval."}
+                  </p>
+                </Link>
+              )}
+
+              {showDisputedHoldings && (
+                <Link href="/admin/disputed-holdings" className={cardClass}>
+                  <span className={iconWrapClass}>
+                    <AlertTriangle className="h-6 w-6" strokeWidth={1.8} />
+                  </span>
+                  <h3 className="mb-1.5 text-base font-semibold text-slate-900">Disputed Holdings</h3>
+                  <p className="text-sm text-slate-500">Flag a holding after an owner objection - no payment, no demand notice and hidden from public search until cleared.</p>
+                </Link>
+              )}
+
               {showTaxCollectorAssignments && (
                 <Link href="/admin/tax-collector-assignments" className={cardClass}>
                   <span className={iconWrapClass}>
@@ -387,6 +452,16 @@ export default function AdminDashboardPage() {
                   <p className="text-sm text-slate-500">Property mutations and shop agreements sent back to operators for correction.</p>
                 </Link>
               )}
+
+              {showPublicDocuments && (
+                <Link href="/admin/public-documents" className={cardClass}>
+                  <span className={iconWrapClass}>
+                    <FileText className="h-6 w-6" strokeWidth={1.8} />
+                  </span>
+                  <h3 className="mb-1.5 text-base font-semibold text-slate-900">Website Documents &amp; Reports</h3>
+                  <p className="text-sm text-slate-500">Upload reports and documents to publish on the public website.</p>
+                </Link>
+              )}
             </div>
           </>
         )}
@@ -396,8 +471,8 @@ export default function AdminDashboardPage() {
             <h2 className={groupHeadingClass}>Shops</h2>
             <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
               {showShopAgreementApprovals && (
-                <Link href="/admin/shop-agreement-requests" className={cardClass}>
-                  <span className={iconWrapClass}>
+                <Link href="/admin/shop-agreement-requests" className={deskCardClass(myShopStagePendingCount)}>
+                  <span className={deskIconWrapClass(myShopStagePendingCount)}>
                     <ShoppingBag className="h-6 w-6" strokeWidth={1.8} />
                   </span>
                   <h3 className="mb-1.5 text-base font-semibold text-slate-900">Shop Agreement Approvals</h3>
@@ -410,8 +485,8 @@ export default function AdminDashboardPage() {
               )}
 
               {showShopRentalApplications && (
-                <Link href="/admin/shop-rental-applications" className={cardClass}>
-                  <span className={iconWrapClass}>
+                <Link href="/admin/shop-rental-applications" className={deskCardClass(myRentalAppPendingCount)}>
+                  <span className={deskIconWrapClass(myRentalAppPendingCount)}>
                     <Store className="h-6 w-6" strokeWidth={1.8} />
                   </span>
                   <h3 className="mb-1.5 text-base font-semibold text-slate-900">Shop Rental Applications</h3>
@@ -541,8 +616,8 @@ export default function AdminDashboardPage() {
             <h2 className={groupHeadingClass}>Trade License</h2>
             <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
               {showTradeLicenseApplications && (
-                <Link href="/admin/trade-license-requests" className={cardClass}>
-                  <span className={iconWrapClass}>
+                <Link href="/admin/trade-license-requests" className={deskCardClass(myTradeLicensePendingCount)}>
+                  <span className={deskIconWrapClass(myTradeLicensePendingCount)}>
                     <Award className="h-6 w-6" strokeWidth={1.8} />
                   </span>
                   <h3 className="mb-1.5 text-base font-semibold text-slate-900">Trade License Applications</h3>
@@ -578,6 +653,16 @@ export default function AdminDashboardPage() {
                   </span>
                   <h3 className="mb-1.5 text-base font-semibold text-slate-900">Report Streetlight Fault</h3>
                   <p className="text-sm text-slate-500">Report a damaged or non-functional streetlight noticed in the field.</p>
+                </Link>
+              )}
+
+              {showStreetlightReports && (
+                <Link href="/admin/streetlight-reports" className={cardClass}>
+                  <span className={iconWrapClass}>
+                    <BarChart3 className="h-6 w-6" strokeWidth={1.8} />
+                  </span>
+                  <h3 className="mb-1.5 text-base font-semibold text-slate-900">Street Light Reports</h3>
+                  <p className="text-sm text-slate-500">Ward-wise, street-wise and agency-wise reports, downloadable for Excel.</p>
                 </Link>
               )}
             </div>

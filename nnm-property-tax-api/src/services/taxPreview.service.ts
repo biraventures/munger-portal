@@ -17,6 +17,7 @@ export function previewPropertyTax(input: TaxPreviewInput): { taxCalc: TaxCalcul
     assessment_year: input.assessmentYear,
     solid_waste_charge_type: input.solidWasteChargeType ?? null,
     solid_waste_months: input.solidWasteMonths ?? 12,
+    is_bwg: Boolean(input.isBwg),
   } as unknown as PropertyRow;
 
   const draftFloors = input.floors.map((f) => ({

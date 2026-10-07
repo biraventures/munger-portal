@@ -8,6 +8,7 @@ import type { AttendanceTokenPayload } from "../types/attendance.types";
 export interface WardWorkerToday {
   staffId: number;
   name: string;
+  nameHi: string | null;
   shiftName: string | null;
   inTime: string | null;
   outTime: string | null;
@@ -30,6 +31,7 @@ export async function getWardWorkersToday(wardId: number): Promise<WardWorkerTod
     return {
       staffId: s.id,
       name: s.name,
+      nameHi: s.name_hi,
       shiftName: shift ? shift.shift_name : null,
       inTime: rec?.in_time ? istTimeString(rec.in_time) : null,
       outTime: rec?.out_time ? istTimeString(rec.out_time) : null,

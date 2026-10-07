@@ -56,7 +56,17 @@ import {
   deleteWardBoundaryHandler,
   exportGeoData,
 } from "../controllers/geo.controller";
-import { uploadPropertiesXlsxHandler } from "../controllers/propertyBulkImport.controller";
+import {
+  uploadPropertiesXlsxHandler,
+  listImportBatchesHandler,
+  getImportBatchHandler,
+  getImportHoldingHandler,
+  excludeImportHoldingsHandler,
+  restoreImportHoldingsHandler,
+  reviewImportHoldingsHandler,
+  integrateImportHandler,
+  discardImportHandler,
+} from "../controllers/propertyBulkImport.controller";
 import { searchPropertiesHandler, getPropertyReportHandler } from "../controllers/propertyReport.controller";
 import { getShopsPendingPublication, postApproveShopPublication } from "../controllers/shopPublicationApproval.controller";
 import {
@@ -90,8 +100,9 @@ import {
   exportMigratedHoldingsHandler,
 } from "../controllers/migratedHoldingSurvey.controller";
 import { listResurveyFlagsHandler, reviewResurveyFlagHandler, exportResurveyFlagsHandler } from "../controllers/propertyResurveyFlag.controller";
-import { listAllCollectionIssues } from "../controllers/collectionIssue.controller";
-import { postGenerateCollectionIssueNotice, getCollectionIssueNotices } from "../controllers/collectionIssueNotice.controller";
+import { listMySolidWasteRequests, postApproveSolidWasteRequest, postRejectSolidWasteRequest } from "../controllers/solidWasteRequest.controller";
+import { listAllCollectionIssues, listMyCollectionIssues } from "../controllers/collectionIssue.controller";
+import { postGenerateCollectionIssueNotice, getCollectionIssueNotices, getReprintCollectionIssueNotice } from "../controllers/collectionIssueNotice.controller";
 import { listTaxCollectorsWithAssignmentHandler, listCityManagersHandler, assignCityManagerHandler, setTaxCollectorWardsHandler } from "../controllers/taxCollectorAssignment.controller";
 import { listAdminAccounts, setAdminAccountActive } from "../controllers/adminAccounts.controller";
 import { listEntryRevertEventsHandler, exportEntryRevertEventsHandler } from "../controllers/entryRevertEvent.controller";
@@ -140,6 +151,15 @@ import {
   getTradeLicenseStats,
 } from "../controllers/tradeLicenseApplication.controller";
 import { requireAdmin, requireAdminRole } from "../middleware/requireAdmin";
+import { listDisputedHandler, getDisputeStatusHandler, flagDisputedHandler, clearDisputedHandler } from "../controllers/propertyDispute.controller";
+import { getStreetlightReportHandler } from "../controllers/streetlightReport.controller";
+import {
+  listAllPublicDocumentsHandler,
+  uploadPublicDocumentHandler,
+  getAnyPublicDocumentFileHandler,
+  patchPublicDocumentHandler,
+  deletePublicDocumentHandler,
+} from "../controllers/publicDocument.controller";
 
 export const adminRouter = Router();
 
@@ -251,6 +271,13 @@ adminRouter.post("/streetlight-faults", requireStreetlightReporterRole, reportSt
 adminRouter.get("/lights/:id/repair-history-summary", requireAdminRole("commissioner"), getLightRepairHistorySummaryAdminHandler);
 adminRouter.get("/streetlight-faults", listStreetlightFaultsHandler);
 
+// Ward-wise / street-wise / agency-wise street light reports (on-screen + CSV download).
+adminRouter.get(
+  "/streetlight-reports/:kind",
+  requireAdminRole("commissioner", "deputy_commissioner", "city_manager", "je_mechanical", "ae_mechanical"),
+  getStreetlightReportHandler,
+);
+
 // Municipal employee database - Establishment Clerk enters records,
 // City Manager verifies, Commissioner sees overall progress. See
 // employee.controller.ts.
@@ -266,6 +293,20 @@ adminRouter.get("/employees/progress", requireAdminRole("commissioner"), getEmpl
 
 adminRouter.get("/shops", listAllShops);
 adminRouter.post("/shops/bulk-upload", requireAdminRole("commissioner"), uploadShopsCsvHandler);
+
+// Disputed holdings - flagged after an owner objection (Tax Daroga, City Manager, Commissioner).
+const requireDisputeRole = requireAdminRole("tax_daroga", "city_manager", "commissioner");
+adminRouter.get("/disputed-holdings", requireDisputeRole, listDisputedHandler);
+adminRouter.get("/property-dispute/:holdingNo", requireDisputeRole, getDisputeStatusHandler);
+adminRouter.post("/property-dispute/:holdingNo/flag", requireDisputeRole, flagDisputedHandler);
+adminRouter.post("/property-dispute/:holdingNo/clear", requireDisputeRole, clearDisputedHandler);
+
+// Public website documents/reports - Commissioner only.
+adminRouter.get("/public-documents", requireAdminRole("commissioner"), listAllPublicDocumentsHandler);
+adminRouter.post("/public-documents", requireAdminRole("commissioner"), uploadPublicDocumentHandler);
+adminRouter.get("/public-documents/:id/file", requireAdminRole("commissioner"), getAnyPublicDocumentFileHandler);
+adminRouter.patch("/public-documents/:id", requireAdminRole("commissioner"), patchPublicDocumentHandler);
+adminRouter.delete("/public-documents/:id", requireAdminRole("commissioner"), deletePublicDocumentHandler);
 adminRouter.delete("/shops/:shopNo", requireAdminRole("commissioner"), deleteShopHandler);
 
 // Shop-wise report (Commissioner/City Manager): full detail + agreement
@@ -284,7 +325,18 @@ adminRouter.post("/properties/fix-holding-no-spaces", requireAdminRole("commissi
 adminRouter.get("/properties/spaced-holdings", requireAdminRole("commissioner"), getSpacedHoldings);
 adminRouter.post("/properties/spaced-holdings/delete-all", requireAdminRole("commissioner"), postDeleteSpacedHoldings);
 adminRouter.post("/properties/remove-duplicate-floors", requireAdminRole("commissioner"), postRemoveDuplicateFloors);
-adminRouter.post("/properties/bulk-upload", requireAdminRole("commissioner"), uploadPropertiesXlsxHandler);
+// Bulk holding uploads are staged for review, not imported. Tax Daroga and City Manager review the staged
+// holdings (Tax Daroga can keep holdings out); the FINAL approval - integrating into the live data (all /
+// selected / all except some) or discarding - is the City Manager's alone. The Commissioner sees progress only.
+adminRouter.post("/properties/bulk-upload", requireAdminRole("commissioner", "tax_daroga", "city_manager"), uploadPropertiesXlsxHandler);
+adminRouter.get("/property-imports", requireAdminRole("tax_daroga", "city_manager", "commissioner"), listImportBatchesHandler);
+adminRouter.get("/property-imports/:id", requireAdminRole("tax_daroga", "city_manager", "commissioner"), getImportBatchHandler);
+adminRouter.get("/property-imports/:id/holdings/:holdingNo", requireAdminRole("tax_daroga", "city_manager"), getImportHoldingHandler);
+adminRouter.post("/property-imports/:id/exclude", requireAdminRole("tax_daroga", "city_manager"), excludeImportHoldingsHandler);
+adminRouter.post("/property-imports/:id/restore", requireAdminRole("tax_daroga", "city_manager"), restoreImportHoldingsHandler);
+adminRouter.post("/property-imports/:id/review", requireAdminRole("tax_daroga"), reviewImportHoldingsHandler);
+adminRouter.post("/property-imports/:id/integrate", requireAdminRole("city_manager"), integrateImportHandler);
+adminRouter.post("/property-imports/:id/discard", requireAdminRole("city_manager"), discardImportHandler);
 
 // Property-wise report (Commissioner/DMC/City Manager): search by
 // holding no/owner/address, then full detail + tax pending + change
@@ -363,9 +415,14 @@ const requireResurveyFlagReviewRole = requireAdminRole("tax_daroga", "commission
 adminRouter.get("/property-resurvey-flags", requireResurveyFlagReviewRole, listResurveyFlagsHandler);
 
 // Collection issues oversight - same reviewer roles as resurvey flags.
+adminRouter.get("/solid-waste-requests", requireAdminRole("tax_daroga", "city_manager"), listMySolidWasteRequests);
+adminRouter.post("/solid-waste-requests/:id/approve", requireAdminRole("tax_daroga", "city_manager"), postApproveSolidWasteRequest);
+adminRouter.post("/solid-waste-requests/:id/reject", requireAdminRole("tax_daroga", "city_manager"), postRejectSolidWasteRequest);
+adminRouter.get("/collection-issues/mine", requireAdminRole("tax_collector"), listMyCollectionIssues);
 adminRouter.get("/collection-issues", requireAdminRole("tax_daroga", "commissioner", "city_manager"), listAllCollectionIssues);
 adminRouter.post("/collection-issues/:id/generate-notice", requireAdminRole("city_manager"), postGenerateCollectionIssueNotice);
 adminRouter.get("/collection-issues/:id/notices", requireAdminRole("tax_daroga", "commissioner", "city_manager"), getCollectionIssueNotices);
+adminRouter.get("/collection-issue-notices/:id/reprint", requireAdminRole("tax_collector", "tax_daroga", "commissioner", "deputy_commissioner", "city_manager"), getReprintCollectionIssueNotice);
 adminRouter.post("/property-resurvey-flags/:id/review", requireResurveyFlagReviewRole, reviewResurveyFlagHandler);
 adminRouter.get("/property-resurvey-flags/export", requireAdminRole("commissioner"), exportResurveyFlagsHandler);
 

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { AlertCircle, BarChart3, Camera, Download, Loader2, MessageSquare, Users, UserCog, Truck, Trash2 } from "lucide-react";
+import { AlertCircle, BarChart3, Camera, Download, Loader2, MessageSquare, Users, UserCog, Truck, Trash2, ListFilter } from "lucide-react";
 import { AttendanceHeader } from "@/components/attendance/attendance-header";
 import { useAttendanceGuard } from "@/lib/use-attendance-guard";
 import { fetchAttendanceDashboardSummary, type AttendanceDashboardSummary } from "@/lib/attendance-api";
@@ -132,6 +132,18 @@ export default function AttendanceManagementPage() {
               </span>
               <h3 className="mb-1.5 text-base font-semibold text-slate-900">Manage Users</h3>
               <p className="text-sm text-slate-500">Create Jamadar/Supervisor/Officer logins, activate or deactivate accounts.</p>
+            </Link>
+          )}
+
+          {(user.role === "attendance_admin" || user.role === "sanitation_officer") && (
+            <Link href="/attendance/staff-directory" className="flex flex-col rounded-xl border border-slate-200 bg-white p-6 transition-shadow hover:shadow-md">
+              <span className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-blue-50 text-nnm-blue">
+                <ListFilter className="h-6 w-6" strokeWidth={1.8} />
+              </span>
+              <h3 className="mb-1.5 text-base font-semibold text-slate-900">Staff / Driver / Assistant Directory</h3>
+              <p className="text-sm text-slate-500">
+                Every field staff member, driver, and assistant in one filterable, sortable list - full details, full edit.
+              </p>
             </Link>
           )}
 

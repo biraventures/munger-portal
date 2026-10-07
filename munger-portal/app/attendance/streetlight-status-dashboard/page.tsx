@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { AlertCircle, BarChart3, ChevronLeft, ChevronDown, ChevronRight, CheckCircle2, XCircle, PlusCircle, Pencil, Trash2, X, MapPin, LocateFixed } from "lucide-react";
 import { AttendanceHeader } from "@/components/attendance/attendance-header";
 import { useAttendanceGuard } from "@/lib/use-attendance-guard";
+import { fetchAttendanceWards, type AttendanceWard } from "@/lib/attendance-api";
 import {
   fetchWardStatusDashboard,
   fetchStreetStatusDashboard,
@@ -42,6 +43,8 @@ export default function StreetlightStatusDashboardPage() {
   const attendance = useAttendanceGuard();
   const [wards, setWards] = useState<WardStatus[] | null>(null);
   const [streets, setStreets] = useState<StreetStatus[] | null>(null);
+  const [allWards, setAllWards] = useState<AttendanceWard[]>([]);
+  const [jumpToWard, setJumpToWard] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [openWard, setOpenWard] = useState<string | null>(null);
   const [expandedSegmentId, setExpandedSegmentId] = useState<number | null>(null);
@@ -95,6 +98,11 @@ export default function StreetlightStatusDashboardPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [attendance, agencyFilter]);
 
+  useEffect(() => {
+    if (!attendance) return;
+    fetchAttendanceWards().then(setAllWards).catch(() => setAllWards([]));
+  }, [attendance]);
+
   const wardTotals = useMemo(() => {
     if (!wards) return null;
     return wards.reduce((acc, w) => ({ total: acc.total + w.totalLights, working: acc.working + w.working, notWorking: acc.notWorking + w.notWorking }), { total: 0, working: 0, notWorking: 0 });
@@ -105,7 +113,14 @@ export default function StreetlightStatusDashboardPage() {
     return streets.filter((s) => s.wardName === openWard);
   }, [streets, openWard]);
 
-  const openWardId = useMemo(() => wards?.find((w) => w.wardName === openWard)?.wardId ?? null, [wards, openWard]);
+  // Falls back to the full wards master list because a ward with no streetlights entered yet
+  // never appears in `wards` (the status-dashboard query only returns wards that already have
+  // at least one light - see buildWardStatusDashboard's `HAVING COUNT(l.id) > 0`), but it can
+  // still be opened via the "Jump to a ward" selector below to add its first street.
+  const openWardId = useMemo(
+    () => wards?.find((w) => w.wardName === openWard)?.wardId ?? allWards.find((w) => w.wardName === openWard)?.id ?? null,
+    [wards, allWards, openWard],
+  );
 
   const streetTotalsForWard = useMemo(() => {
     if (streetsInOpenWard.length === 0) return null;
@@ -484,6 +499,27 @@ export default function StreetlightStatusDashboardPage() {
               {label}
             </button>
           ))}
+        </div>
+
+        <div className="mb-6 flex items-center gap-2">
+          <span className="text-xs font-medium text-slate-500">Jump to ward:</span>
+          <select
+            value={jumpToWard}
+            onChange={(e) => {
+              const name = e.target.value;
+              setJumpToWard("");
+              if (name) openWardView(name);
+            }}
+            className="rounded-md border border-slate-300 px-2 py-1.5 text-xs"
+          >
+            <option value="">Select a ward...</option>
+            {allWards.map((w) => (
+              <option key={w.id} value={w.wardName}>
+                {w.wardName}
+                {!wards?.some((dw) => dw.wardId === w.id) ? " (no lights yet)" : ""}
+              </option>
+            ))}
+          </select>
         </div>
 
         {error && (

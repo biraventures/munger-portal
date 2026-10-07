@@ -20,6 +20,31 @@ export const propertyRepository = {
     return maxNum;
   },
 
+  /** Tax Collector field entry: water connection + (optionally) solid waste type/charge, with an audit stamp. */
+  async updateCollectorDetails(
+    holdingNo: string,
+    d: {
+      waterConnectionStatus: string | null;
+      waterConnectionCount: number | null;
+      solidWasteChargeType: string | null;
+      solidWasteCharge: number | null;
+      updatedBy: string;
+    },
+  ): Promise<void> {
+    await pool.query(
+      `UPDATE properties SET
+         water_connection_status = COALESCE($2::text, water_connection_status),
+         water_connection_count = CASE WHEN $2::text IS NULL THEN water_connection_count ELSE $3::int END,
+         solid_waste_charge_type = COALESCE($4::text, solid_waste_charge_type),
+         solid_waste_charge = COALESCE($5::numeric, solid_waste_charge),
+         solid_waste_months = CASE WHEN $4::text IS NULL THEN solid_waste_months ELSE COALESCE(NULLIF(solid_waste_months, 0), 12) END,
+         collector_details_by = $6::text, collector_details_at = now(),
+         last_modified_by = LEFT($6::text, 64), last_modified_date = now()
+       WHERE holding_no = $1`,
+      [holdingNo, d.waterConnectionStatus, d.waterConnectionCount, d.solidWasteChargeType, d.solidWasteCharge, d.updatedBy],
+    );
+  },
+
   async findByHoldingNo(holdingNo: string): Promise<PropertyRow | null> {
     const { rows } = await pool.query<PropertyRow>(
       `SELECT * FROM properties WHERE holding_no = $1 LIMIT 1`,
@@ -97,13 +122,41 @@ export const propertyRepository = {
     return rows.map((r) => r.ward);
   },
 
-  /** Paginated holding list — for the dashboard overview widget's holdings tab. Optional ward filter for ward-wise viewing. */
-  async listPaginated(page: number, pageSize: number, ward?: string): Promise<{ rows: PropertyRow[]; total: number }> {
+  /**
+   * Paginated holding list — for the dashboard overview widget's
+   * holdings tab, and for the Property-wise Report's full listing.
+   * Optional ward filter for ward-wise viewing. `sort` is restricted
+   * to this fixed allowlist (never interpolated from the raw request
+   * value) so it can't become a SQL-injection vector; an unrecognized
+   * key falls back to the default holding_no ordering.
+   */
+  async listPaginated(
+    page: number,
+    pageSize: number,
+    ward?: string,
+    sort?: string,
+    sortDir?: "asc" | "desc",
+  ): Promise<{ rows: PropertyRow[]; total: number }> {
     const offset = (page - 1) * pageSize;
+    const sortColumn =
+      {
+        holdingNo: "holding_no",
+        taxAmount: "tax_payable",
+        totalAmount: "outstanding_demand",
+        taxPaidTillYear: "tax_paid_till_year",
+        plotArea: "area_sqft",
+        ward: "ward",
+      }[sort ?? "holdingNo"] ?? "holding_no";
+    const direction = sortDir === "desc" ? "DESC" : "ASC";
+    // Always a tie-break on holding_no, ASC, after the requested sort -
+    // keeps paging stable when many rows share the same sort value
+    // (e.g. many holdings with no tax_paid_till_year at all).
+    const orderBy = sortColumn === "holding_no" ? `holding_no ${direction}` : `${sortColumn} ${direction} NULLS LAST, holding_no ASC`;
+
     if (ward) {
       const [{ rows }, { rows: countRows }] = await Promise.all([
         pool.query<PropertyRow>(
-          `SELECT * FROM properties WHERE ward = $1 ORDER BY holding_no ASC LIMIT $2 OFFSET $3`,
+          `SELECT * FROM properties WHERE ward = $1 ORDER BY ${orderBy} LIMIT $2 OFFSET $3`,
           [ward, pageSize, offset],
         ),
         pool.query<{ count: string }>(`SELECT COUNT(*) AS count FROM properties WHERE ward = $1`, [ward]),
@@ -111,7 +164,7 @@ export const propertyRepository = {
       return { rows, total: parseInt(countRows[0]?.count ?? "0", 10) };
     }
     const [{ rows }, total] = await Promise.all([
-      pool.query<PropertyRow>(`SELECT * FROM properties ORDER BY holding_no ASC LIMIT $1 OFFSET $2`, [pageSize, offset]),
+      pool.query<PropertyRow>(`SELECT * FROM properties ORDER BY ${orderBy} LIMIT $1 OFFSET $2`, [pageSize, offset]),
       this.countAll(),
     ]);
     return { rows, total };

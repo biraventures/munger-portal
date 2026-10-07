@@ -42,6 +42,9 @@ export interface DemandNoticeRow {
   // word-for-word, line-for-line identical document. Null for notices
   // generated before this column existed - see getDemandNoticeForReprint.
   snapshot: DemandNoticeSnapshot | null;
+  // Part-payment notice (migration 106): paying it advances tax_paid_till_year to paid_through_year.
+  part_payment: boolean;
+  paid_through_year: string | null;
 }
 
 export const demandNoticeRepository = {
@@ -87,6 +90,8 @@ export const demandNoticeRepository = {
     areaRebateReason: string;
     // Frozen full renderable payload (migration 092) - see DemandNoticeSnapshot's comment.
     snapshot: DemandNoticeSnapshot;
+    partPayment?: boolean;
+    paidThroughYear?: string | null;
   }): Promise<void> {
     await pool.query(
       `INSERT INTO demand_notices (
@@ -94,8 +99,8 @@ export const demandNoticeRepository = {
         current_year_tax_net, previous_years_tax_base, total_fine_amount,
         other_charges, total_amount_demanded, assessment_year,
         reminder_number, previous_unsettled_demand_nos, floor_breakdown,
-        area_rebate, area_rebate_reason, snapshot
-      ) VALUES ($1,$2, now(), $3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`,
+        area_rebate, area_rebate_reason, snapshot, part_payment, paid_through_year
+      ) VALUES ($1,$2, now(), $3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)`,
       [
         row.demandNo,
         row.holdingNo,
@@ -113,6 +118,8 @@ export const demandNoticeRepository = {
         row.areaRebate,
         row.areaRebateReason || null,
         JSON.stringify(row.snapshot),
+        row.partPayment ?? false,
+        row.paidThroughYear ?? null,
       ],
     );
   },

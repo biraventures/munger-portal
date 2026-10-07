@@ -1,0 +1,15 @@
+-- Fixes a cancellation-approval bug: cancelling a receipt correctly
+-- reopens its demand notice (demand_notices.settled -> FALSE) and
+-- marks the transaction cancelled, but never rewound the PROPERTY's
+-- own tax_paid_till_year - the field that actually drives whether the
+-- property shows anything pending (see property.service.ts's comment
+-- on summarizeArrears / currentCyclePaid, and migration 007). So a
+-- cancelled payment's year stayed marked paid in the property's own
+-- ledger even though the receipt was voided and the notice reopened.
+--
+-- This column snapshots what tax_paid_till_year was immediately
+-- BEFORE this payment advanced it (see payment.service.ts's
+-- submitPayment), so a later cancellation can restore exactly that
+-- value - see paymentRepository.revertTaxPaidTillYear and
+-- cancellationRequest.service.ts.
+ALTER TABLE transactions ADD COLUMN previous_tax_paid_till_year VARCHAR(9);

@@ -7,6 +7,8 @@ import { changeRequestRepository } from "../repositories/changeRequest.repositor
 import { propertyDiscrepancyRepository } from "../repositories/propertyDiscrepancy.repository";
 import { propertyResurveyFlagRepository } from "../repositories/propertyResurveyFlag.repository";
 import { propertyFieldVerificationRepository } from "../repositories/propertyFieldVerification.repository";
+import { collectionIssueRepository } from "../repositories/collectionIssue.repository";
+import { getDisputeStatus } from "../services/propertyDispute.service";
 import { asyncHandler } from "../middleware/asyncHandler";
 import { ApiError } from "../utils/ApiError";
 
@@ -49,7 +51,8 @@ const holdingNoParamSchema = z.object({ holdingNo: holdingNoSchema });
  * every mutation ever requested against it (the "log of changes made
  * or pending"), every discrepancy reported, every re-survey flag
  * raised, and every field-verification visit logged by a surveyor.
- * Five existing read paths joined into one call, same approach as
+ * Plus every collection issue a Tax Collector raised against it, with the
+ * notices the City Manager issued for each. Six existing read paths joined into one call, same approach as
  * shopReport.controller.ts's getShopReportHandler.
  */
 export const getPropertyReportHandler = asyncHandler(async (req: Request, res: Response) => {
@@ -60,12 +63,22 @@ export const getPropertyReportHandler = asyncHandler(async (req: Request, res: R
   const propertyResult = await searchPropertyByHoldingNo(holdingNo);
   if (!propertyResult.found) throw ApiError.notFound(propertyResult.message ?? "Property not found");
 
-  const [changeRequests, discrepancies, resurveyFlags, fieldVerifications] = await Promise.all([
+  const [changeRequests, discrepancies, resurveyFlags, fieldVerifications, collectionIssues, dispute, propertyHistory] = await Promise.all([
     changeRequestRepository.listForHolding(holdingNo),
     propertyDiscrepancyRepository.listForHolding(holdingNo),
     propertyResurveyFlagRepository.listForHolding(holdingNo),
     propertyFieldVerificationRepository.listForHolding(holdingNo),
+    collectionIssueRepository.listForHoldingWithNotices(holdingNo),
+    // Disputed flag + the full trail of who flagged / cleared it, when and why.
+    getDisputeStatus(holdingNo),
+    // Audit trail: creation (with the data source it came from) and every later edit.
+    pool
+      .query(
+        `SELECT version, action, change_basis, change_reference, operator_name, ts FROM property_history WHERE holding_no = $1 ORDER BY version ASC`,
+        [holdingNo],
+      )
+      .then((r) => r.rows),
   ]);
 
-  res.status(200).json({ ...propertyResult, changeRequests, discrepancies, resurveyFlags, fieldVerifications });
+  res.status(200).json({ ...propertyResult, changeRequests, discrepancies, resurveyFlags, fieldVerifications, collectionIssues, dispute, propertyHistory });
 });

@@ -20,10 +20,16 @@ export const fieldStaffRepository = {
     return rows;
   },
 
-  async create(input: { name: string; externalId: string | null; wardId: number; shiftId: number | null }): Promise<FieldStaffRow> {
+  async create(input: {
+    name: string;
+    externalId: string | null;
+    wardId: number;
+    shiftId: number | null;
+    fatherName?: string | null;
+  }): Promise<FieldStaffRow> {
     const { rows } = await pool.query<FieldStaffRow>(
-      `INSERT INTO field_staff (name, external_id, ward_id, shift_id) VALUES ($1,$2,$3,$4) RETURNING *`,
-      [input.name, input.externalId, input.wardId, input.shiftId],
+      `INSERT INTO field_staff (name, external_id, ward_id, shift_id, father_name) VALUES ($1,$2,$3,$4,$5) RETURNING *`,
+      [input.name, input.externalId, input.wardId, input.shiftId, input.fatherName ?? null],
     );
     return rows[0]!;
   },
@@ -76,7 +82,14 @@ export const fieldStaffRepository = {
 
   async update(
     id: number,
-    input: { name?: string; wardId?: number; shiftId: number | null; active: boolean; externalId?: string | null },
+    input: {
+      name?: string;
+      wardId?: number;
+      shiftId: number | null;
+      active: boolean;
+      externalId?: string | null;
+      fatherName?: string | null;
+    },
   ): Promise<FieldStaffRow | null> {
     const { rows } = await pool.query<FieldStaffRow>(
       `UPDATE field_staff SET
@@ -84,10 +97,27 @@ export const fieldStaffRepository = {
          ward_id = COALESCE($3, ward_id),
          shift_id = $4,
          active = $5,
-         external_id = CASE WHEN $6::boolean THEN $7 ELSE external_id END
+         external_id = CASE WHEN $6::boolean THEN $7 ELSE external_id END,
+         father_name = CASE WHEN $8::boolean THEN $9 ELSE father_name END
        WHERE id = $1 RETURNING *`,
-      [id, input.name ?? null, input.wardId ?? null, input.shiftId, input.active, input.externalId !== undefined, input.externalId ?? null],
+      [
+        id,
+        input.name ?? null,
+        input.wardId ?? null,
+        input.shiftId,
+        input.active,
+        input.externalId !== undefined,
+        input.externalId ?? null,
+        input.fatherName !== undefined,
+        input.fatherName ?? null,
+      ],
     );
+    return rows[0] ?? null;
+  },
+
+  /** The manual Hindi-name override - see migration 094. null clears it, reverting display to the auto-transliterated name. */
+  async setNameHi(id: number, nameHi: string | null): Promise<FieldStaffRow | null> {
+    const { rows } = await pool.query<FieldStaffRow>(`UPDATE field_staff SET name_hi = $2 WHERE id = $1 RETURNING *`, [id, nameHi]);
     return rows[0] ?? null;
   },
 

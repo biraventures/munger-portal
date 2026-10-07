@@ -46,6 +46,8 @@ export interface DemandNoticeData {
     totalFineAmount: string;
     otherCharges: string;
     grandTotal: string;
+    /** Present only on a part-payment notice (first N unpaid years only). */
+    partPayment?: { years: number; fromYear: string; toYear: string };
   };
 }
 
@@ -65,13 +67,15 @@ export interface DemandNoticeReprintData extends DemandNoticeData {
   cancelledReason: string | null;
 }
 
-export async function generateDemandNotice(holdingNo: string): Promise<DemandNoticeData> {
+/** partYears: make it a part-payment notice clearing only the first N unpaid years. */
+export async function generateDemandNotice(holdingNo: string, partYears?: number): Promise<DemandNoticeData> {
   const token = getOperatorToken();
   if (!token) throw new Error("Not logged in — please log in again.");
 
   const res = await fetch(`${API_BASE_URL}/properties/${encodeURIComponent(holdingNo)}/demand-notice`, {
     method: "POST",
-    headers: { Authorization: `Bearer ${token}` },
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify(partYears ? { partYears } : {}),
   });
 
   if (!res.ok) {
@@ -88,6 +92,8 @@ export interface UnsettledDemandNotice {
   noticeDate: string;
   assessmentYear: string | null;
   totalAmountDemanded: string;
+  partPayment?: boolean;
+  paidThroughYear?: string | null;
 }
 
 /** GET /api/v1/properties/:holdingNo/demand-notices/unsettled — feeds the payment counter's demand-notice picker. */
@@ -102,4 +108,26 @@ export async function fetchUnsettledDemandNotices(holdingNo: string): Promise<Un
   if (!res.ok) throw new Error("Could not load demand notices for this property.");
   const data: { notices: UnsettledDemandNotice[] } = await res.json();
   return data.notices;
+}
+export interface PartPaymentOption {
+  years: number;
+  fromYear: string;
+  toYear: string;
+  taxAmount: number;
+  penaltyAmount: number;
+  total: number;
+}
+
+/** GET /api/v1/properties/:holdingNo/part-payment-options - tax + penalty as of today for clearing the first 1..N unpaid years. */
+export async function fetchPartPaymentOptions(holdingNo: string): Promise<{ paidTillYear: string | null; options: PartPaymentOption[] }> {
+  const token = getOperatorToken();
+  if (!token) throw new Error("Not logged in — please log in again.");
+  const res = await fetch(`${API_BASE_URL}/properties/${encodeURIComponent(holdingNo)}/part-payment-options`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || "Could not load part-payment options.");
+  }
+  return res.json();
 }

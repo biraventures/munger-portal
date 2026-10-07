@@ -11,6 +11,7 @@ import { amountInWords } from "../utils/amountInWords";
 import { parseYearStartOrNull } from "../utils/assessmentYear";
 import { num } from "../utils/num";
 import { ApiError } from "../utils/ApiError";
+import { assertNotDisputed } from "./propertyDispute.service";
 import { buildVerificationUrl } from "../utils/verificationSignature";
 import { formatYmdToDmy } from "../utils/formatYmdToDmy";
 import type { PaymentInput, PaymentResult } from "../types/payment.types";
@@ -146,12 +147,22 @@ export interface PaymentHistoryEntry {
   date: string;
   amountReceived: string;
   paymentMode: string;
+  /** Already cancelled - no further cancellation can be requested. */
+  cancelled: boolean;
+  cancelledReason: string | null;
+  /** A cancellation request for this receipt is awaiting approval. */
+  cancellationPending: boolean;
 }
 
 /** Every payment ever collected for a holding, most recent first — the read-only document history list. */
 export async function listPaymentHistory(holdingNo: string): Promise<PaymentHistoryEntry[]> {
   const txns = await paymentRepository.findAllForHolding(holdingNo);
+  const pending = await cancellationRequestRepository.listPendingTargetsForHolding(holdingNo);
+  const pendingReceipts = new Set(pending.filter((p) => p.request_type === "receipt").map((p) => p.target_id));
   return txns.map((t) => ({
+    cancelled: t.cancelled,
+    cancelledReason: t.cancelled_reason,
+    cancellationPending: !t.cancelled && pendingReceipts.has(t.receipt_no),
     receiptNo: t.receipt_no,
     formattedReceiptNo: formatDocNumber(t.receipt_no, "Payment", t.txn_date),
     date: `${String(t.txn_date.getDate()).padStart(2, "0")}-${String(t.txn_date.getMonth() + 1).padStart(2, "0")}-${t.txn_date.getFullYear()}`,
@@ -169,6 +180,7 @@ export async function submitPayment(
   if (!property) {
     throw ApiError.notFound(`Property not found for Holding No: ${holdingNo}`);
   }
+  assertNotDisputed(property);
 
   const notice = await demandNoticeRepository.findByDemandNo(input.demandNo);
   if (!notice || notice.holding_no !== holdingNo) {
@@ -243,7 +255,19 @@ export async function submitPayment(
   // actually charged is the notice's frozen total, not recomputed here.
   const arrearsBefore = summarizeArrears(property, stages);
   const noticeYearNum = parseYearStartOrNull(notice.assessment_year)!;
-  const clearance = computeArrearsClearance(property, stages, noticeYearNum - 1);
+  // A part-payment notice clears arrears only up to its paid_through_year; a normal notice clears everything before its own year.
+  const isPart = notice.part_payment && !!notice.paid_through_year;
+  const paidThroughYear = isPart ? notice.paid_through_year! : notice.assessment_year;
+  const throughYearNum = isPart ? parseYearStartOrNull(notice.paid_through_year)! : noticeYearNum - 1;
+  if (isPart) {
+    const already = parseYearStartOrNull(property.tax_paid_till_year);
+    if (already !== null && already >= throughYearNum) {
+      throw ApiError.badRequest(
+        `Demand notice ${input.demandNo} is out of date - this holding is already paid till ${property.tax_paid_till_year}. Generate a fresh demand notice.`,
+      );
+    }
+  }
+  const clearance = computeArrearsClearance(property, stages, throughYearNum);
 
   const amountReceived = num(notice.total_amount_demanded);
   const receiptNoNum = await paymentRepository.getNextReceiptNo();
@@ -304,13 +328,14 @@ export async function submitPayment(
         floorBreakdown: notice.floor_breakdown,
         areaRebate: notice.area_rebate,
         areaRebateReason: notice.area_rebate_reason,
+        previousTaxPaidTillYear: property.tax_paid_till_year,
       },
       client,
     );
 
     // The core fix: unconditionally advance paid-through status to what
     // this notice covered — this is what was missing before.
-    await paymentRepository.updateTaxPaidTillYear(holdingNo, notice.assessment_year, client);
+    await paymentRepository.updateTaxPaidTillYear(holdingNo, paidThroughYear, client);
 
     await client.query("COMMIT");
   } catch (err) {
@@ -360,7 +385,19 @@ export async function submitPayment(
     property: { ...property, solid_waste_charge: solidWasteCharge.toFixed(2) } as unknown as Record<string, unknown>,
     floors,
     taxCalc: calc,
-    totals: {
+    totals: isPart
+      ? {
+          yearWiseArrears: num(notice.previous_years_tax_base).toFixed(2),
+          currentTax: "0.00",
+          rebate: "0.00",
+          penalty: num(notice.total_fine_amount).toFixed(2),
+          outstandingDemand: num(notice.previous_years_tax_base).toFixed(2),
+          currentTaxLateFee: "0.00",
+          currentTaxRebate: "0.00",
+          currentTotal: "0.00",
+          grandTotal: amountReceived.toFixed(2),
+        }
+      : {
       yearWiseArrears: arrearsBefore.totalPending.toFixed(2),
       currentTax: calc.currentTax,
       rebate: calc.rebate,

@@ -1,5 +1,6 @@
 "use client";
 
+import { HindiTaxTerms } from "./hindi-tax-terms";
 import { useRef } from "react";
 import { Printer } from "lucide-react";
 import type { ReceiptData } from "@/lib/payment-api";
@@ -358,6 +359,15 @@ export function ReceiptView({ receipt, onNewPayment }: { receipt: ReceiptData; o
           <br />
           Receipt Generated on {receipt.date}
         </div>
+
+        <div className="mt-2.5 rounded border border-slate-400 bg-slate-50 p-2.5 text-[10px] leading-snug text-slate-700">
+          This tax payment receipt is generated against demand notice{" "}
+          <b>{receipt.demandNo ? `No. ${receipt.demandNo}` : "(demand notice number not recorded)"}</b>. By paying the mentioned tax
+          amount you have agreed to the contents of the demand notice and have no objection with respect to the measurements, the
+          holding parameters and other charges.
+        </div>
+
+        <HindiTaxTerms />
 
         <div className="mt-2.5 rounded border border-slate-300 bg-slate-50 p-2.5 text-[9.5px] leading-snug text-slate-600">
           I/We understand that after payment of online holding tax, I/We must submit the duly filled in
