@@ -85,6 +85,7 @@ export async function bulkDeleteSpacedHoldings(actorDisplayName: string): Promis
       await client.query(`DELETE FROM property_change_requests WHERE holding_no = $1`, [holdingNo]);
       await client.query(`UPDATE trade_license_applications SET holding_no = NULL WHERE holding_no = $1`, [holdingNo]);
       await client.query(`DELETE FROM cancellation_requests WHERE holding_no = $1`, [holdingNo]);
+      await client.query(`DELETE FROM property_exemption_orders WHERE holding_no = $1`, [holdingNo]);
       await client.query(`DELETE FROM properties WHERE holding_no = $1`, [holdingNo]);
 
       const version = await propertySaveRepository.nextHistoryVersion(holdingNo, client);

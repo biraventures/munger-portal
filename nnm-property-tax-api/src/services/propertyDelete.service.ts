@@ -61,6 +61,7 @@ export async function deletePropertyCompletely(holdingNo: string, confirmationPh
     await client.query(`DELETE FROM property_change_requests WHERE holding_no = $1`, [holdingNo]);
     await client.query(`UPDATE trade_license_applications SET holding_no = NULL WHERE holding_no = $1`, [holdingNo]);
     await client.query(`DELETE FROM cancellation_requests WHERE holding_no = $1`, [holdingNo]);
+    await client.query(`DELETE FROM property_exemption_orders WHERE holding_no = $1`, [holdingNo]);
     await client.query(`DELETE FROM properties WHERE holding_no = $1`, [holdingNo]);
 
     // property_history is deliberately left in place (migration 087

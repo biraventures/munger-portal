@@ -325,9 +325,15 @@ export function NoticeView({
             {Number(t.currentTaxAreaRebate) > 0 && (
               <tr>
                 <td colSpan={5} className="border-x border-slate-400 p-1.5 pl-6 italic text-slate-500">
-                  — Plinth Area / Rain Water Harvesting Rebate already applied
-                  {t.currentTaxAreaRebateReason ? ` (${t.currentTaxAreaRebateReason})` : ""} — this is why A is less than
-                  the floorwise total above
+                  {String(t.currentTaxAreaRebateReason ?? "").startsWith("Exempt from holding tax") ? (
+                    <>— {t.currentTaxAreaRebateReason} — the whole year&apos;s holding tax is waived; solid waste user charge still applies</>
+                  ) : (
+                    <>
+                      — Plinth Area / Rain Water Harvesting Rebate already applied
+                      {t.currentTaxAreaRebateReason ? ` (${t.currentTaxAreaRebateReason})` : ""} — this is why A is less than
+                      the floorwise total above
+                    </>
+                  )}
                 </td>
                 <td className="border-x border-slate-400 p-1.5 text-right italic text-slate-500">
                   −{t.currentTaxAreaRebate}

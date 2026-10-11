@@ -2,6 +2,7 @@ import type { AdminRole } from "../types/admin.types";
 import type { PropertyRow, FloorRow } from "../types/property.types";
 import type { PropertySaveInput } from "../types/propertySave.types";
 import { num } from "../utils/num";
+import { exemptionChanged } from "../utils/taxExemption";
 
 export type ApprovalTier = "minor" | "significant" | "mutation";
 
@@ -68,7 +69,11 @@ export function classifyPropertyChange(
   // off, so it changes the tax materially.
   const slumChanged = Boolean(input.isSlum ?? existingProperty.is_slum) !== Boolean(existingProperty.is_slum);
 
-  if (areaChanged || floorsStructurallyChanged || slumChanged) {
+  // Marking / removing a holding tax exemption (or changing its order details)
+  // takes the same route as the slum flag (migration 118).
+  const taxExemptionChanged = exemptionChanged(existingProperty, input.taxExemption);
+
+  if (areaChanged || floorsStructurallyChanged || slumChanged || taxExemptionChanged) {
     return "significant";
   }
 

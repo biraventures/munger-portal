@@ -22,6 +22,9 @@ const previewSchema = z.object({
   solidWasteChargeType: z.string().nullish(),
   isBwg: z.boolean().optional(),
   isSlum: z.boolean().optional(),
+  taxExemption: z
+    .object({ isExempt: z.boolean(), fromYear: z.string().regex(/^\d{4}-\d{4}$/).nullish(), category: z.string().nullish() })
+    .optional(),
   // No upper bound - an operator can enter more than 12 months to
 	// reflect multiple pending years of solid waste charge as part of
 	// arrears (see migration 018_remove_solid_waste_months_cap.sql).

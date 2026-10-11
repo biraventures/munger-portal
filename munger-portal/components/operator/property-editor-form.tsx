@@ -5,6 +5,8 @@ import { AlertCircle, CheckCircle2, Calculator, Clock, Plus, Hash } from "lucide
 import { FloorRow, makeBlankFloor, type FloorFormState } from "./floor-row";
 import { sanitizeOldHoldingNoInput } from "@/lib/holding-no";
 import { FinancialYearSelect } from "./financial-year-select";
+import { TaxExemptionSection } from "./tax-exemption-section";
+import { blankExemption, finalizeExemption, type TaxExemptionFormState } from "@/lib/tax-exemption-api";
 import { saveProperty, createNewEntryProperty, previewPropertyTax, type FormOptions, type SaveError, type SavePropertyApiResult, type TaxPreviewResult } from "@/lib/operator-api";
 
 const inputClass =
@@ -102,6 +104,7 @@ export function PropertyEditorForm({
   initialMaster,
   initialFloors,
   existingArrears,
+  initialExemption,
   formOptions,
   onSaved,
 }: {
@@ -113,6 +116,8 @@ export function PropertyEditorForm({
   initialFloors?: FloorFormState[];
   /** Pending arrears/penalty as of when this property was loaded — DB-derived, not part of the live Calculate preview. See page.tsx's mapToFormState. */
   existingArrears?: { totalPending: string; penalty: string };
+  /** The holding's exemption on record - only given when editing an existing holding. */
+  initialExemption?: TaxExemptionFormState;
   formOptions: FormOptions;
   onSaved: (holdingNo: string) => void;
 }) {
@@ -130,6 +135,9 @@ export function PropertyEditorForm({
   const [preview, setPreview] = useState<TaxPreviewResult | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState<string | null>(null);
+  // Holding tax exemption - existing holdings only (a change, so it goes through approval).
+  const canSetExemption = isEditing && !autoAssign && Boolean(holdingNo);
+  const [exemption, setExemption] = useState<TaxExemptionFormState>(initialExemption ?? blankExemption());
 
   function updateMaster<K extends keyof MasterFormState>(key: K, value: MasterFormState[K]) {
     setMaster((m) => ({ ...m, [key]: value }));
@@ -160,6 +168,9 @@ export function PropertyEditorForm({
         solidWasteMonths: Number(master.solidWasteMonths) || 12,
         isBwg: master.isBwg,
         isSlum: master.isSlum,
+        ...(canSetExemption && exemption.isExempt && exemption.fromYear
+          ? { taxExemption: { isExempt: true, fromYear: exemption.fromYear, category: exemption.category || null } }
+          : {}),
         floors: floors.map((f) => ({
           floorLabel: f.floorLabel,
           buildupSqft: Number(f.buildupSqft) || 0,
@@ -190,6 +201,8 @@ export function PropertyEditorForm({
 
     setSubmitting(true);
     try {
+      // Uploads a newly chosen order copy first; throws a readable message if details are missing.
+      const taxExemption = canSetExemption && holdingNo ? await finalizeExemption(holdingNo, exemption) : undefined;
       const payload = {
         ownerName: master.ownerName,
         relationType: master.relationType || null,
@@ -224,6 +237,7 @@ export function PropertyEditorForm({
         presentCategory: master.presentCategory || null,
         changeBasis: isEditing ? master.changeBasis : null,
         changeReference: isEditing ? master.changeReference : null,
+        ...(taxExemption ? { taxExemption } : {}),
         floors: floors.map((f) => ({
           floorLabel: f.floorLabel,
           buildupSqft: Number(f.buildupSqft) || 0,
@@ -255,7 +269,7 @@ export function PropertyEditorForm({
         onSaved(holdingNo);
       }
     } catch (err) {
-      setError(err as SaveError);
+      setError(err instanceof Error ? { message: err.message } : (err as SaveError));
     } finally {
       setSubmitting(false);
     }
@@ -667,6 +681,8 @@ export function PropertyEditorForm({
           </label>
         </div>
       </section>
+
+      {canSetExemption && <TaxExemptionSection value={exemption} onChange={setExemption} wasExempt={Boolean(initialExemption?.isExempt)} />}
 
       <div className="rounded-md border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800">
         Penalty and Outstanding Demand are no longer entered manually — they&apos;re calculated automatically from

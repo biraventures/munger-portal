@@ -1623,7 +1623,14 @@ export interface AdminFullPropertyResult {
 export async function fetchFullPropertyAdmin(holdingNo: string): Promise<AdminFullPropertyResult> {
   const res = await fetch(`${API_BASE_URL}/properties/${encodeURIComponent(holdingNo)}`, { headers: authHeaders() });
   if (res.status === 404) return { found: false };
-  if (!res.ok) throw new Error(`Search failed (${res.status})`);
+  if (!res.ok) {
+    // Show the server's own explanation - for a Tax Collector searching a holding outside
+    // their wards this names the holding's ward and that ward's Tax Collector, same as the
+    // collection page (fetchPropertyForCollector).
+    const body = await res.json().catch(() => ({}));
+    if (res.status === 403) throw new Error(body.error || "This holding is not in a ward assigned to you.");
+    throw new Error(body.error || `Search failed (${res.status})`);
+  }
   return res.json();
 }
 

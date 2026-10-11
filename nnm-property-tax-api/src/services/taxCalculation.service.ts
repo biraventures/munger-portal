@@ -11,7 +11,8 @@ import {
   VACANT_LAND_RATE,
 } from "../constants/taxRates";
 import { num } from "../utils/num";
-import { parseYearStartOrNull } from "../utils/assessmentYear";
+import { getCurrentAssessmentYearStartNum, parseYearStartOrNull } from "../utils/assessmentYear";
+import { isTaxExemptForYear, taxExemptionReason } from "../utils/taxExemption";
 import type { FloorBreakdownEntry, FloorRow, PropertyRow, TaxCalculationResult } from "../types/property.types";
 
 /**
@@ -136,6 +137,16 @@ let rebatePct = 0;
   }
   // Solar Rooftop rebate is FROZEN in the source system — intentionally
   // never applied here either, regardless of the stored value.
+
+  // Holding tax exemption (migration 118): the whole year's tax is waived from
+  // the order's year onward. Takes the place of any other relief so it is never
+  // stacked. Solid waste user charge is calculated separately and still applies.
+  const taxYear = currentAssessmentYearStart ?? getCurrentAssessmentYearStartNum();
+  if (isTaxExemptForYear(property, taxYear)) {
+    rebatePct = 1;
+    rebateReason.length = 0;
+    rebateReason.push(taxExemptionReason(property));
+  }
 
   const rebate = baseTax * rebatePct;
 

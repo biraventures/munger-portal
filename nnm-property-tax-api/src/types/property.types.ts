@@ -35,6 +35,14 @@ export interface PropertyRow {
   is_bwg: boolean;
   /** Holding is in a slum area (migration 115). The below-250-sqft relief applies only to slum holdings. */
   is_slum: boolean;
+  /** Exempt from holding tax from tax_exempt_from_year onward (migration 118). Solid waste user charge still applies. */
+  is_tax_exempt?: boolean;
+  tax_exempt_category?: string | null;
+  tax_exempt_order_no?: string | null;
+  tax_exempt_order_date?: string | null; // YYYY-MM-DD
+  tax_exempt_from_year?: string | null; // YYYY-YYYY
+  tax_exempt_remarks?: string | null;
+  tax_exempt_order_doc_id?: string | null;
   penal_charge: string;
   water_charge: string;
   boring_charge: string;

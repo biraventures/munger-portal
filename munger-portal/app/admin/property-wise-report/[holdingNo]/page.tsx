@@ -152,6 +152,14 @@ export default function PropertyWiseReportDetailPage() {
                 <div><dt className="text-xs text-slate-400">Rain Water Harvesting</dt><dd>{p.rain_water_harvesting ? "Yes" : "No"}</dd></div>
                 <div><dt className="text-xs text-slate-400">Solar Rooftop</dt><dd>{p.solar_rooftop ? "Yes" : "No"}</dd></div>
                 <div><dt className="text-xs text-slate-400">Slum Area</dt><dd>{p.is_slum ? "Yes" : "No"}</dd></div>
+                <div className="sm:col-span-2">
+                  <dt className="text-xs text-slate-400">Holding Tax Exemption</dt>
+                  <dd>
+                    {p.is_tax_exempt
+                      ? `Exempt from ${str(p.tax_exempt_from_year)} - ${str(p.tax_exempt_category)} (Order No. ${str(p.tax_exempt_order_no)} dated ${str(p.tax_exempt_order_date)}). Solid waste charge still applies.`
+                      : "Not exempt"}
+                  </dd>
+                </div>
               </dl>
 
               {report.floors && report.floors.length > 0 && (

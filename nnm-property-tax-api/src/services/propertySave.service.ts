@@ -6,6 +6,8 @@ import { classifyPropertyChange, TIER_FINAL_STAGE } from "./changeClassification
 import { calculateTax } from "./taxCalculation.service";
 import { calculateSolidWasteCharge } from "./charges.service";
 import { ApiError } from "../utils/ApiError";
+import { exemptionDraftFields } from "../utils/taxExemption";
+import { taxExemptionRepository } from "../repositories/taxExemption.repository";
 import type { FloorRow, PropertyRow } from "../types/property.types";
 import type { PropertySaveInput } from "../types/propertySave.types";
 import type { ChangeRequestRow } from "../types/changeRequest.types";
@@ -54,6 +56,7 @@ export async function applyPropertySave(
     solid_waste_months: input.solidWasteMonths ?? 12,
     is_bwg: isBwg,
     is_slum: isSlum,
+    ...exemptionDraftFields(isNew ? undefined : input.taxExemption, existingRow),
 	holding_creation_year: input.holdingCreationYear,
   } as unknown as PropertyRow;
 
@@ -143,6 +146,12 @@ export async function applyPropertySave(
     isNew,
   );
 
+  // Holding tax exemption (migration 118) - only ever applied to an existing
+  // holding, i.e. after it has been through the change request chain.
+  if (!isNew && input.taxExemption !== undefined) {
+    await taxExemptionRepository.setOnProperty(holdingNo, input.taxExemption);
+  }
+
   await propertySaveRepository.replaceFloors(holdingNo, floorsWithTax);
   
   await regenerateAutomaticTaxHistoryStages(holdingNo, draftProperty, draftFloors, actorDisplayName);
@@ -187,6 +196,9 @@ export async function savePropertyByHoldingNo(
   const isNew = existing === null;
 
   if (isNew) {
+    if (input.taxExemption?.isExempt) {
+      throw ApiError.badRequest("A new holding cannot be marked exempt while it is being created. Save the holding first, then submit the exemption as a change so it goes for approval.");
+    }
     const result = await applyPropertySave(holdingNo, input, operatorDisplayName, true);
     return { applied: true, isNew: true, ...result };
   }
@@ -207,6 +219,7 @@ export async function savePropertyByHoldingNo(
     solid_waste_months: input.solidWasteMonths ?? 12,
     is_bwg: input.isBwg ?? Boolean(existing.is_bwg),
     is_slum: input.isSlum ?? Boolean(existing.is_slum),
+    ...exemptionDraftFields(input.taxExemption, existing),
   } as unknown as PropertyRow;
   const draftFloors = input.floors.map((f) => ({
     floor_label: f.floorLabel,
@@ -228,6 +241,8 @@ export async function savePropertyByHoldingNo(
   // otherwise two operators (or the same operator twice) could queue
   // conflicting proposed changes for the same property before either
   // gets reviewed.
+  await assertExemptionOrderBelongs(holdingNo, input);
+
   const alreadyPending = await changeRequestRepository.findPendingForHolding(holdingNo);
   if (alreadyPending) {
     throw ApiError.badRequest(
@@ -252,4 +267,13 @@ export async function savePropertyByHoldingNo(
     status: "pending",
     preview: { taxCalc: previewCalc, solidWasteCharge: previewSolidWaste },
   };
+}
+/** When an exemption is being marked, its uploaded order copy must exist and be for this holding. */
+export async function assertExemptionOrderBelongs(holdingNo: string, input: PropertySaveInput): Promise<void> {
+  const e = input.taxExemption;
+  if (!e?.isExempt || !e.orderDocId) return;
+  const doc = await taxExemptionRepository.findOrderMeta(String(e.orderDocId));
+  if (!doc || doc.holding_no !== holdingNo) {
+    throw ApiError.badRequest("The uploaded exemption order was not found for this holding. Upload the order copy again.");
+  }
 }

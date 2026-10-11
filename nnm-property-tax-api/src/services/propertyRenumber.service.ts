@@ -13,6 +13,9 @@ const PROPERTY_COLUMNS = [
   "tax_paid_till_year", "present_holding_name", "present_category", "created_by", "created_date",
   "last_modified_by", "last_modified_date", "is_bwg", "is_slum", "latitude", "longitude",
   "is_disputed", "dispute_remarks", "disputed_by", "disputed_by_role", "disputed_at", "data_source",
+  // Holding tax exemption (migration 118) - must move with the holding.
+  "is_tax_exempt", "tax_exempt_category", "tax_exempt_order_no", "tax_exempt_order_date",
+  "tax_exempt_from_year", "tax_exempt_remarks", "tax_exempt_order_doc_id",
 ];
 
 /**
@@ -78,6 +81,7 @@ async function moveHoldingNo(client: PoolClient, oldHoldingNo: string, newHoldin
 
   // Soft references (no FK, just a matching string).
   await client.query(`UPDATE trade_license_applications SET holding_no = $1 WHERE holding_no = $2`, [newHoldingNo, oldHoldingNo]);
+  await client.query(`UPDATE property_exemption_orders SET holding_no = $1 WHERE holding_no = $2`, [newHoldingNo, oldHoldingNo]);
   await client.query(`UPDATE cancellation_requests SET holding_no = $1 WHERE holding_no = $2`, [newHoldingNo, oldHoldingNo]);
   await client.query(`UPDATE property_dispute_log SET holding_no = $1 WHERE holding_no = $2`, [newHoldingNo, oldHoldingNo]);
 

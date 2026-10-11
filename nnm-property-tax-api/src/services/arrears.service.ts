@@ -1,6 +1,7 @@
 import { getCurrentAssessmentYearStartNum, parseYearStartOrNull } from "../utils/assessmentYear";
 import { calculateRebateOrLateFee } from "./charges.service";
 import { num } from "../utils/num";
+import { isTaxExemptForYear } from "../utils/taxExemption";
 import type { ArrearsSummary, PropertyRow, TaxHistoryStageRow } from "../types/property.types";
 
 /**
@@ -38,6 +39,15 @@ import type { ArrearsSummary, PropertyRow, TaxHistoryStageRow } from "../types/p
  * Code.gs so each pending year's BASE tax is re-derived from Floors
  * instead of trusted from stored stage rows.
  */
+/**
+ * One year's holding tax from a stage row - zero when the holding is exempt for
+ * that year (migration 118: exempt from the order's year onward; earlier years
+ * stay payable). Every arrears figure below goes through this.
+ */
+function yearTax(property: PropertyRow, stage: TaxHistoryStageRow, yearStartNum: number): number {
+  return isTaxExemptForYear(property, yearStartNum) ? 0 : num(stage.annual_tax_amount);
+}
+
 export interface ArrearClearanceStage {
   period: string; // e.g. "2018-2019" or "2018-2019 to 2020-2021"
   years: number;
@@ -79,7 +89,7 @@ export function computeArrearsClearance(
     const overlapEnd = Math.min(stage.closing_year, uptoYearNum);
     if (overlapStart > overlapEnd) continue;
     for (let y = overlapStart; y <= overlapEnd; y++) {
-      coveredYears.push({ year: y, amount: num(stage.annual_tax_amount) });
+      coveredYears.push({ year: y, amount: yearTax(property, stage, y) });
     }
   }
 
@@ -144,9 +154,6 @@ export function summarizeArrears(property: PropertyRow, stages: TaxHistoryStageR
     const overlapEnd = Math.min(stage.closing_year, lastYear);
     if (overlapStart > overlapEnd) continue;
 
-    const annualAmount = num(stage.annual_tax_amount);
-    const overlapYears = overlapEnd - overlapStart + 1;
-    totalPending += overlapYears * annualAmount;
     stagesConsidered += 1;
 
     // Late fee accrues per INDIVIDUAL year, anchored to that year's own
@@ -155,6 +162,8 @@ export function summarizeArrears(property: PropertyRow, stages: TaxHistoryStageR
     // this can't just be multiplied by overlapYears; each year's clock
     // started at a different date.
     for (let y = overlapStart; y <= overlapEnd; y++) {
+      const annualAmount = yearTax(property, stage, y);
+      totalPending += annualAmount;
       const timing = calculateRebateOrLateFee(annualAmount, y, now);
       penalty += timing.lateFee;
     }
@@ -202,7 +211,9 @@ export function computePartPaymentOptions(property: PropertyRow, stages: TaxHist
   for (let y = pendingStart; y <= lastYear; y++) {
     const stage = stages.find((s) => s.start_year_used <= y && y <= s.closing_year);
     if (!stage) break;
-    const annual = num(stage.annual_tax_amount);
+    // Exempt from here on (migration 118) - nothing more to clear, so no further options.
+    if (isTaxExemptForYear(property, y)) break;
+    const annual = yearTax(property, stage, y);
     tax += annual;
     penalty += calculateRebateOrLateFee(annual, y, now).lateFee;
     options.push({
@@ -240,6 +251,7 @@ export function pendingArrearsPeriod(property: PropertyRow, stages: TaxHistorySt
   let years = 0;
   for (let y = pendingStart; y <= lastYear; y++) {
     if (!stages.some((s) => s.start_year_used <= y && y <= s.closing_year)) continue;
+    if (isTaxExemptForYear(property, y)) continue; // nothing owed for an exempt year (migration 118)
     if (first === null) first = y;
     last = y;
     years++;
