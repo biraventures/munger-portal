@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { LayoutGrid, Truck, Droplet, Lightbulb, MapPin, ClipboardList, CheckCircle2, Trash2, Languages, FileUp } from "lucide-react";
+import { LayoutGrid, Truck, Droplet, Lightbulb, MapPin, ClipboardList, CheckCircle2, Trash2, Languages, FileUp, Users } from "lucide-react";
 import { AttendanceHeader } from "@/components/attendance/attendance-header";
 import { useAttendanceGuard } from "@/lib/use-attendance-guard";
 import { useAttendanceLang } from "@/lib/attendance-i18n";
@@ -250,6 +250,22 @@ export default function AttendanceDashboardPage() {
               <h3 className="mb-1.5 text-base font-semibold text-slate-900">{user.role === "apswmo" ? "Website Documents - Upload & Approve" : "Upload Website Document"}</h3>
               <p className="text-sm text-slate-500">
                 {user.role === "apswmo" ? "Approve documents uploaded by others, or upload your own." : user.role === "municipal_commissioner" ? "Upload a report, notice or circular to the public website." : "Upload a report, notice or circular. It goes live after APSWMO approval."}
+              </p>
+            </Link>
+          )}
+
+          {["city_manager", "deputy_municipal_commissioner", "municipal_commissioner"].includes(user.role) && (
+            <Link href="/whos-who-manager?as=attendance" className="flex flex-col rounded-xl border border-slate-200 bg-white p-6 transition-shadow hover:shadow-md">
+              <span className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-blue-50 text-nnm-blue">
+                <Users className="h-6 w-6" strokeWidth={1.8} />
+              </span>
+              <h3 className="mb-1.5 text-base font-semibold text-slate-900">Website Who&apos;s Who</h3>
+              <p className="text-sm text-slate-500">
+                {user.role === "city_manager"
+                  ? "Verify Who's Who entries made by operators and forward them to the DMC."
+                  : user.role === "deputy_municipal_commissioner"
+                    ? "Approve verified Who's Who entries and publish them on the website."
+                    : "See the Who's Who entries and where each one is in the approval chain."}
               </p>
             </Link>
           )}

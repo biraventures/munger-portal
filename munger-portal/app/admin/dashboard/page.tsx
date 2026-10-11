@@ -169,7 +169,9 @@ export default function AdminDashboardPage() {
   const showAssignCoordinates = isAtps || isCommissioner;
   const showGisMap = isAtps || isAssistantArchitect || isCommissioner;
   const showBuildingMapApproval = isAssistantArchitect;
-  const miscGroupVisible = showOperators || showManageLogins || showDocumentArchive || showAttendanceReport || showAssignCoordinates || showGisMap || showBuildingMapApproval;
+  // Who's Who: City Manager verifies, Deputy Commissioner (DMC) publishes, Commissioner views.
+  const showWhosWho = admin.role === "city_manager" || admin.role === "deputy_commissioner" || isCommissioner;
+  const miscGroupVisible = showOperators || showManageLogins || showDocumentArchive || showAttendanceReport || showAssignCoordinates || showGisMap || showBuildingMapApproval || showWhosWho;
   const employeeDatabaseGroupVisible = showEmployeeDatabaseEntry || showEmployeeDatabaseList || showEmployeeDatabaseVerify || showEmployeeDatabaseProgress;
   const streetlightGroupVisible = isStreetlightReporterRole;
 
@@ -789,6 +791,21 @@ export default function AdminDashboardPage() {
           <>
             <h2 className={groupHeadingClass}>Miscellaneous</h2>
             <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+              {showWhosWho && (
+                <Link href="/whos-who-manager?as=admin" className={cardClass}>
+                  <span className={iconWrapClass}>
+                    <UserCheck className="h-6 w-6" strokeWidth={1.8} />
+                  </span>
+                  <h3 className="mb-1.5 text-base font-semibold text-slate-900">Website Who&apos;s Who</h3>
+                  <p className="text-sm text-slate-500">
+                    {admin.role === "city_manager"
+                      ? "Verify Who's Who entries made by operators and forward them to the DMC."
+                      : admin.role === "deputy_commissioner"
+                        ? "Approve verified Who's Who entries and publish them on the website."
+                        : "See the Who's Who entries and where each one is in the approval chain."}
+                  </p>
+                </Link>
+              )}
               {showOperators && (
                 <Link href="/admin/operators" className={cardClass}>
                   <span className={iconWrapClass}>

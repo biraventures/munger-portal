@@ -19,6 +19,7 @@ import { streetlightPublicRouter } from "./streetlightPublic.routes";
 import { pyauRouter } from "./pyau.routes";
 import { publicDocumentRouter } from "./publicDocument.routes";
 import { documentManagerRouter } from "./documentManager.routes";
+import { whosWhoManagerRouter, whosWhoPublicRouter } from "./whosWho.routes";
 
 export const apiRouter = Router();
 
@@ -58,6 +59,9 @@ apiRouter.use("/pyau", pyauRouter);
 apiRouter.use("/public-documents", publicDocumentRouter);
 // Document upload + APSWMO approval for the admin / operator / attendance logins.
 apiRouter.use("/document-manager", documentManagerRouter);
+// Who's Who page: public read-only list + photos, and the operator -> City Manager -> DMC entry workflow.
+apiRouter.use("/whos-who", whosWhoPublicRouter);
+apiRouter.use("/whos-who-manager", whosWhoManagerRouter);
 
 // /admin/auth (public login) MUST be mounted before /admin (which
 // requires an admin session for everything under it) - Express tries

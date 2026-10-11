@@ -12,6 +12,9 @@ export function SiteFooter() {
           <Link href="#services" className="hover:text-white">
             Services
           </Link>
+          <Link href="/whos-who" className="whitespace-nowrap hover:text-white">
+            Who&apos;s Who
+          </Link>
           <Link href="/documents" className="hover:text-white">
             Documents
           </Link>
