@@ -3,12 +3,14 @@ import { z } from "zod";
 import { asyncHandler } from "../middleware/asyncHandler";
 import { ApiError } from "../utils/ApiError";
 import {
+  applyResidentialSolidWaste,
   discardBatch,
   excludeHoldings,
   getBatchSummary,
   getStagedHolding,
   listBatches,
   listStagedHoldings,
+  previewResidentialSolidWaste,
   restoreHoldings,
   setReviewed,
   stagePropertiesXlsx,
@@ -117,4 +119,16 @@ export const integrateImportHandler = asyncHandler(async (req: Request, res: Res
 export const discardImportHandler = asyncHandler(async (req: Request, res: Response) => {
   await discardBatch(batchId(req), req.admin!.displayName);
   res.json({ ok: true });
+});
+
+/** GET /api/v1/admin/property-imports/:id/residential-solid-waste - City Manager: what the bulk correction would touch. */
+export const previewResidentialSolidWasteHandler = asyncHandler(async (req: Request, res: Response) => {
+  res.json(await previewResidentialSolidWaste(batchId(req)));
+});
+
+/** POST /api/v1/admin/property-imports/:id/residential-solid-waste - City Manager: apply it. */
+export const applyResidentialSolidWasteHandler = asyncHandler(async (req: Request, res: Response) => {
+  const p = z.object({ includeOtherTypes: z.boolean().optional() }).safeParse(req.body ?? {});
+  if (!p.success) throw ApiError.badRequest("Invalid input");
+  res.json(await applyResidentialSolidWaste(batchId(req), Boolean(p.data.includeOtherTypes), req.admin!.displayName));
 });

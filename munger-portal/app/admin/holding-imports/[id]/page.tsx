@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { AlertCircle, CheckCircle2, Loader2, X } from "lucide-react";
 import { AdminHeader } from "@/components/admin-header";
+import { ResidentialSolidWastePanel } from "@/components/admin/residential-solid-waste-panel";
 import { useAdminGuard } from "@/lib/use-admin-guard";
 import {
   discardImport,
@@ -57,6 +58,7 @@ export default function HoldingImportReviewPage() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [detail, setDetail] = useState<StagedHoldingDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [reloadCount, setReloadCount] = useState(0);
   const wasIntegrating = useRef(false);
 
   const allowed = admin && ["tax_daroga", "city_manager", "commissioner"].includes(admin.role);
@@ -69,6 +71,7 @@ export default function HoldingImportReviewPage() {
       const r = await fetchImportBatch(batchId, { status, issues, review, ward, search, page, pageSize: 50 });
       setBatch(r.batch);
       setList(r.holdings);
+      setReloadCount((n) => n + 1);
       setError(null);
       if (wasIntegrating.current && !r.batch.integrating && r.batch.lastRunSummary) {
         const s = r.batch.lastRunSummary;
@@ -253,6 +256,17 @@ export default function HoldingImportReviewPage() {
           <p className="mb-3 rounded-md border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800">
             Review the holdings, keep out any that should not go live, and tag the rest as reviewed. Only reviewed holdings can be integrated, and the final approval is the City Manager&apos;s.
           </p>
+        )}
+        {isCityManager && batch?.status !== "discarded" && (
+          <ResidentialSolidWastePanel
+            batchId={batchId}
+            locked={locked}
+            refreshKey={reloadCount}
+            onApplied={(m) => {
+              setNotice(m);
+              void load();
+            }}
+          />
         )}
         <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white p-3">
           {isCityManager && (
@@ -455,6 +469,12 @@ export default function HoldingImportReviewPage() {
                 )}
                 {detail.error && <p className="text-red-700">{detail.error}</p>}
                 <p className="text-slate-600">{detail.reviewedAt ? `Reviewed by ${detail.reviewedBy ?? "Tax Daroga"}.` : "Not yet reviewed by the Tax Daroga."}</p>
+                {(detail.bulkEdits ?? []).map((e, k) => (
+                  <p key={k} className="rounded-md bg-emerald-50 px-2 py-1 text-xs text-emerald-900">
+                    {e.field} set to <b>{e.to}</b> (was {e.from ? <b>{e.from}</b> : "blank"}) by {e.by} on{" "}
+                    {new Date(e.at).toLocaleString("en-IN", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })} - {e.reason}.
+                  </p>
+                ))}
                 {Object.keys(detail.master).length === 0 && <p className="text-slate-500">The staged data for this holding is no longer kept (it is already live or the upload was discarded).</p>}
                 {Object.keys(detail.master).length > 0 && (
                   <div>

@@ -80,6 +80,8 @@ export interface StagedHoldingDetail {
   error: string | null;
   reviewedBy: string | null;
   reviewedAt: string | null;
+  /** Bulk corrections made during review, e.g. solid waste type set for all-residential holdings. */
+  bulkEdits?: { field: string; from: string; to: string; by: string; at: string; reason: string }[];
   master: Record<string, string>;
   sheets: Record<string, Record<string, string>[]>;
 }
@@ -120,3 +122,23 @@ export const discardImport = (id: number) => call<{ ok: boolean }>(`/admin/prope
 /** Tax Daroga only: tag holdings as reviewed (or remove the tag). Pass all:true for every pending holding without a blocking issue. */
 export const markReviewed = (id: number, reviewed: boolean, target: { holdingNos?: string[]; all?: boolean }) =>
   call<{ updated: number }>(`/admin/property-imports/${id}/review`, { method: "POST", body: JSON.stringify({ reviewed, ...target }) });
+
+export interface ResidentialSolidWastePreview {
+  targetType: string;
+  annualCharge: number;
+  allResidential: number;
+  blank: number;
+  alreadyResidential: number;
+  otherTypes: { type: string; count: number }[];
+}
+
+/** City Manager only: pending holdings whose floors are all residential, grouped by their current solid waste type. */
+export const fetchResidentialSolidWastePreview = (id: number) =>
+  call<ResidentialSolidWastePreview>(`/admin/property-imports/${id}/residential-solid-waste`);
+
+/** City Manager only: set those holdings' solid waste type to "Residential House" (blank ones, or all when includeOtherTypes). */
+export const applyResidentialSolidWaste = (id: number, includeOtherTypes: boolean) =>
+  call<{ updated: number; type: string; annualCharge: number }>(`/admin/property-imports/${id}/residential-solid-waste`, {
+    method: "POST",
+    body: JSON.stringify({ includeOtherTypes }),
+  });

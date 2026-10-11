@@ -67,6 +67,8 @@ import {
   reviewImportHoldingsHandler,
   integrateImportHandler,
   discardImportHandler,
+  previewResidentialSolidWasteHandler,
+  applyResidentialSolidWasteHandler,
 } from "../controllers/propertyBulkImport.controller";
 import { searchPropertiesHandler, getPropertyReportHandler } from "../controllers/propertyReport.controller";
 import { getShopsPendingPublication, postApproveShopPublication } from "../controllers/shopPublicationApproval.controller";
@@ -356,6 +358,9 @@ adminRouter.post("/property-imports/:id/restore", requireAdminRole("tax_daroga",
 adminRouter.post("/property-imports/:id/review", requireAdminRole("tax_daroga"), reviewImportHoldingsHandler);
 adminRouter.post("/property-imports/:id/integrate", requireAdminRole("city_manager"), integrateImportHandler);
 adminRouter.post("/property-imports/:id/discard", requireAdminRole("city_manager"), discardImportHandler);
+// City Manager: bulk-set the solid waste user charge type to "Residential House" on pending holdings whose floors are all residential.
+adminRouter.get("/property-imports/:id/residential-solid-waste", requireAdminRole("city_manager"), previewResidentialSolidWasteHandler);
+adminRouter.post("/property-imports/:id/residential-solid-waste", requireAdminRole("city_manager"), applyResidentialSolidWasteHandler);
 
 // Property-wise report (Commissioner/DMC/City Manager): search by
 // holding no/owner/address, then full detail + tax pending + change

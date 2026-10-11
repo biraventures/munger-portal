@@ -3,6 +3,7 @@ import ExcelJS from "exceljs";
 import { pool } from "../config/db";
 import { ApiError } from "../utils/ApiError";
 import { cellNumber, cellText, importPropertiesXlsx, parseGps, readSheet } from "./propertyBulkImport.service";
+import { SOLID_WASTE_RATE } from "../constants/taxRates";
 
 /**
  * Staging area for bulk holding uploads. An uploaded workbook is split per holding and parked in
@@ -270,9 +271,68 @@ export async function getStagedHolding(batchId: number, holdingNo: string) {
   return {
     holdingNo, status: row.status as string, issues: row.issues as StagedIssue[], error: row.error as string | null,
     reviewedBy: row.reviewed_by as string | null, reviewedAt: row.reviewed_at as string | null,
+    bulkEdits: (row.bulk_edits ?? []) as { field: string; from: string; to: string; by: string; at: string; reason: string }[],
     master: show(row.master as PlainRow | null),
     sheets: Object.fromEntries(Object.entries(sheets).map(([k, rows]) => [k, rows.map((x) => show(x))])),
   };
+}
+
+// ---------- bulk correction: solid waste type for all-residential holdings ----------
+
+const RESIDENTIAL_SW_TYPE = "Residential House";
+const BLANK_SW_WARNING = "Solid waste user charge type is blank.";
+// A staged holding still awaiting integration whose listed floors are ALL "Residential" usage (at least one floor).
+const ALL_RESIDENTIAL_PENDING = `batch_id = $1 AND status IN ('pending','failed') AND master IS NOT NULL
+  AND jsonb_typeof(sheets->'Floors') = 'array' AND jsonb_array_length(sheets->'Floors') > 0
+  AND NOT EXISTS (SELECT 1 FROM jsonb_array_elements(sheets->'Floors') f WHERE lower(btrim(coalesce(f->>'Usage', ''))) <> 'residential')`;
+const CURRENT_SW_TYPE = `btrim(coalesce(master->>'SolidWasteUserChargeType', ''))`;
+
+/** How many all-residential pending holdings there are, grouped by the solid waste type they currently carry. */
+export async function previewResidentialSolidWaste(batchId: number) {
+  await getBatchOrThrow(batchId);
+  const r = await pool.query<{ current_type: string; n: string }>(
+    `SELECT ${CURRENT_SW_TYPE} AS current_type, COUNT(*) AS n FROM property_import_staging WHERE ${ALL_RESIDENTIAL_PENDING} GROUP BY 1 ORDER BY 2 DESC`,
+    [batchId],
+  );
+  const rows = r.rows.map((x) => ({ type: x.current_type, count: Number(x.n) }));
+  const monthlyRate = SOLID_WASTE_RATE[RESIDENTIAL_SW_TYPE] ?? 0;
+  return {
+    targetType: RESIDENTIAL_SW_TYPE,
+    annualCharge: monthlyRate * 12,
+    allResidential: rows.reduce((a, x) => a + x.count, 0),
+    blank: rows.find((x) => x.type === "")?.count ?? 0,
+    alreadyResidential: rows.find((x) => x.type === RESIDENTIAL_SW_TYPE)?.count ?? 0,
+    otherTypes: rows.filter((x) => x.type !== "" && x.type !== RESIDENTIAL_SW_TYPE),
+  };
+}
+
+/**
+ * City Manager: set the solid waste user charge type to "Residential House" on every pending holding
+ * of this upload whose floors are all residential. Only holdings with a BLANK type are changed unless
+ * includeOtherTypes is set, in which case a different type already entered is replaced too. Each change
+ * is recorded on the holding (bulk_edits) and the "type is blank" warning is cleared.
+ */
+export async function applyResidentialSolidWaste(batchId: number, includeOtherTypes: boolean, actorName: string) {
+  const b = await getBatchOrThrow(batchId);
+  if (b.status !== "open") throw ApiError.badRequest("This upload has been discarded.");
+  if (b.integrating_since) throw ApiError.badRequest("An integration is running for this upload - try again once it finishes.");
+  const monthlyRate = SOLID_WASTE_RATE[RESIDENTIAL_SW_TYPE] ?? 0;
+  const r = await pool.query(
+    `UPDATE property_import_staging SET
+       master = master || jsonb_build_object(
+         'SolidWasteUserChargeType', $2::text,
+         'SolidWasteCharge', $3::numeric * CASE WHEN master->>'SolidWasteMonths' ~ '^[[:space:]]*[0-9]+([.][0-9]+)?[[:space:]]*$'
+                                              THEN btrim(master->>'SolidWasteMonths')::numeric ELSE 12 END),
+       issues = (SELECT coalesce(jsonb_agg(i), '[]'::jsonb) FROM jsonb_array_elements(issues) i WHERE i->>'message' <> $6),
+       bulk_edits = bulk_edits || jsonb_build_array(jsonb_build_object(
+         'field', 'Solid waste user charge type', 'from', ${CURRENT_SW_TYPE}, 'to', $2::text,
+         'by', $4::text, 'at', now(), 'reason', 'All floors residential'))
+     WHERE ${ALL_RESIDENTIAL_PENDING}
+       AND ${CURRENT_SW_TYPE} <> $2::text
+       AND (${CURRENT_SW_TYPE} = '' OR $5::boolean)`,
+    [batchId, RESIDENTIAL_SW_TYPE, monthlyRate, actorName, includeOtherTypes, BLANK_SW_WARNING],
+  );
+  return { updated: r.rowCount ?? 0, type: RESIDENTIAL_SW_TYPE, annualCharge: monthlyRate * 12 };
 }
 
 // ---------- changing status ----------
