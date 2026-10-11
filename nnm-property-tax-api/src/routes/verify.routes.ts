@@ -2,6 +2,7 @@ import { Router } from "express";
 import rateLimit from "express-rate-limit";
 import {
   getVerifyDemandNotice,
+  postVerifyDemandNoticePay,
   getVerifyReceipt,
   getVerifyShopDemand,
   getVerifyShopReceipt,
@@ -26,6 +27,7 @@ const verifyRateLimiter = rateLimit({
 verifyRouter.use(verifyRateLimiter);
 
 verifyRouter.get("/demand-notice/:demandNo", getVerifyDemandNotice);
+verifyRouter.post("/demand-notice/:demandNo/pay", postVerifyDemandNoticePay);
 verifyRouter.get("/receipt/:receiptNo", getVerifyReceipt);
 verifyRouter.get("/shop-demand/:demandNo", getVerifyShopDemand);
 verifyRouter.get("/shop-receipt/:receiptNo", getVerifyShopReceipt);

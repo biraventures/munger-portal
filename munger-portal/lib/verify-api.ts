@@ -22,7 +22,32 @@ export function verifyDemandNotice(demandNo: string, sig: string) {
     totalAmountDemanded: string;
     settled: boolean;
     settledReceiptNo: string | null;
+    /** Pay-pending-dues option, worked out by the server. */
+    payment: DemandNoticePaymentInfo | null;
   }>(`demand-notice/${encodeURIComponent(demandNo)}`, sig);
+}
+
+export interface DemandNoticePaymentInfo {
+  available: boolean;
+  reason: string | null;
+  holdingNo: string;
+  amountDue: number;
+  /** The Tax Collector who served this notice, or null when it came from the office. */
+  servedBy: { name: string; code: string } | null;
+}
+
+/** Starts the online payment of the pending dues; resolves with the gateway URL to go to. */
+export async function payDemandNoticeDues(demandNo: string, sig: string): Promise<{ orderId: string; redirectUrl: string }> {
+  const res = await fetch(`${API_BASE_URL}/verify/demand-notice/${encodeURIComponent(demandNo)}/pay?sig=${encodeURIComponent(sig)}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ acceptDeclaration: true }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || "Could not start the payment. Please try again.");
+  }
+  return res.json();
 }
 
 export function verifyReceipt(receiptNo: string, sig: string) {

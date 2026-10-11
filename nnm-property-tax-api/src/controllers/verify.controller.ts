@@ -2,6 +2,7 @@ import type { Request, Response } from "express";
 import { z } from "zod";
 import { verifyDocumentSignature } from "../utils/verificationSignature";
 import { getDemandNoticeForReprint } from "../services/demandNotice.service";
+import { getDemandNoticePaymentInfo, initiatePaymentForDemandNotice } from "../services/demandNoticePayment.service";
 import { getReceiptForReprint } from "../services/payment.service";
 import { getDemandNoticeForPrint } from "../services/shopRentDemand.service";
 import { getShopReceiptForReprint } from "../services/shopRentPayment.service";
@@ -36,7 +37,20 @@ export const getVerifyDemandNotice = asyncHandler(async (req: Request, res: Resp
   const notice = await getDemandNoticeForReprint(parsed.data.docNo).catch(() => {
     throw ApiError.notFound("This verification link is invalid or the document could not be found.");
   });
-  res.status(200).json(notice);
+  // The QR page also offers payment of the pending dues; the amount and the
+  // serving collector are worked out here, never taken from the browser.
+  const payment = await getDemandNoticePaymentInfo(parsed.data.docNo).catch(() => null);
+  res.status(200).json({ ...notice, payment });
+});
+
+/** POST /api/v1/verify/demand-notice/:demandNo/pay?sig= - starts an online payment of the holding's pending dues. */
+export const postVerifyDemandNoticePay = asyncHandler(async (req: Request, res: Response) => {
+  const parsed = docNoParamSchema.safeParse({ docNo: req.params.demandNo });
+  if (!parsed.success) throw ApiError.badRequest("Invalid demand number");
+  requireValidSignature(req, "demand-notice", parsed.data.docNo);
+  const body = z.object({ acceptDeclaration: z.boolean().refine((x) => x === true, "Please tick the declaration to continue with the payment.") }).safeParse(req.body);
+  if (!body.success) throw ApiError.badRequest(body.error.issues[0]?.message ?? "Invalid request");
+  res.status(200).json(await initiatePaymentForDemandNotice(parsed.data.docNo, body.data.acceptDeclaration));
 });
 
 export const getVerifyReceipt = asyncHandler(async (req: Request, res: Response) => {
