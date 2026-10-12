@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { LayoutGrid, Truck, Droplet, Lightbulb, MapPin, ClipboardList, CheckCircle2, Trash2, Languages, FileUp, Users } from "lucide-react";
+import { LayoutGrid, Truck, Droplet, Lightbulb, MapPin, ClipboardList, CheckCircle2, Trash2, Languages, FileUp, Users, ShieldAlert, Gavel } from "lucide-react";
 import { AttendanceHeader } from "@/components/attendance/attendance-header";
 import { useAttendanceGuard } from "@/lib/use-attendance-guard";
 import { useAttendanceLang } from "@/lib/attendance-i18n";
@@ -103,6 +103,9 @@ export default function AttendanceDashboardPage() {
     // Hindi Names) but wasn't in this list, so that role also bounced
     // straight back to the login page before ever reaching either one.
     "apswmo",
+    // Encroachment removal (City Manager) and mobile court (APSWMO) field staff - migration 122.
+    "encroachment_staff",
+    "mobile_court_staff",
   ]);
 
   const { lang } = useAttendanceLang();
@@ -266,6 +269,30 @@ export default function AttendanceDashboardPage() {
                   : user.role === "deputy_municipal_commissioner"
                     ? "Approve verified Who's Who entries and publish them on the website."
                     : "See the Who's Who entries and where each one is in the approval chain."}
+              </p>
+            </Link>
+          )}
+
+          {["city_manager", "encroachment_staff", "municipal_commissioner", "deputy_municipal_commissioner"].includes(user.role) && (
+            <Link href="/attendance/encroachment" className="flex flex-col rounded-xl border border-slate-200 bg-white p-6 transition-shadow hover:shadow-md">
+              <span className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-blue-50 text-nnm-blue">
+                <ShieldAlert className="h-6 w-6" strokeWidth={1.8} />
+              </span>
+              <h3 className="mb-1.5 text-base font-semibold text-slate-900">Encroachment Removal</h3>
+              <p className="text-sm text-slate-500">
+                Temporary encroachments (24-hour notice, then fine) and permanent encroachment cases with notice, Amin report and final order.
+              </p>
+            </Link>
+          )}
+
+          {["apswmo", "mobile_court_staff", "city_manager", "municipal_commissioner", "deputy_municipal_commissioner"].includes(user.role) && (
+            <Link href="/attendance/mobile-court" className="flex flex-col rounded-xl border border-slate-200 bg-white p-6 transition-shadow hover:shadow-md">
+              <span className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-blue-50 text-nnm-blue">
+                <Gavel className="h-6 w-6" strokeWidth={1.8} />
+              </span>
+              <h3 className="mb-1.5 text-base font-semibold text-slate-900">Mobile Court</h3>
+              <p className="text-sm text-slate-500">
+                Notices and fines for waste-management violations, with the miking videos kept for the notices.
               </p>
             </Link>
           )}

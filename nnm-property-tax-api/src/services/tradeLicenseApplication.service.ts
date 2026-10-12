@@ -27,6 +27,13 @@ export async function submitPublicTradeLicenseApplication(
   return submitTradeLicenseApplication(input, input.applicantName);
 }
 
+/** Compares the last 10 digits, so +91 / 0 prefixes and spaces don't matter. */
+function sameMobile(onFile: string | null, given: string): boolean {
+  const a = (onFile ?? "").replace(/\D/g, "").slice(-10);
+  const b = given.replace(/\D/g, "").slice(-10);
+  return a.length === 10 && a === b;
+}
+
 export interface RenewalAutofill {
   found: boolean;
   applicantName?: string;
@@ -55,16 +62,18 @@ export interface RenewalAutofill {
  * turnover, duration) — those are deliberately left for the applicant
  * to re-confirm, not silently carried over.
  */
-export async function getRenewalAutofill(holdingNo: string): Promise<RenewalAutofill> {
+export async function getRenewalAutofill(holdingNo: string, mobile: string): Promise<RenewalAutofill> {
   const previous = await tradeLicenseApplicationRepository.findLatestForHolding(holdingNo.trim());
-  if (!previous) return { found: false };
+  // Same answer whether the holding has no record, the record has no mobile on file, or the
+  // mobile is wrong - so the endpoint can't be used to find out which holdings exist or to
+  // harvest details. The caller must already know the mobile registered on the last application.
+  if (!previous || !sameMobile(previous.mobile, mobile)) return { found: false };
 
   return {
     found: true,
     applicantName: previous.applicant_name,
     relationType: previous.relation_type,
     relationName: previous.relation_name,
-    mobile: previous.mobile,
     email: previous.email,
     entityName: previous.entity_name,
     entityNameHindi: previous.entity_name_hindi,

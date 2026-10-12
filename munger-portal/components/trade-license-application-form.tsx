@@ -48,6 +48,7 @@ export function TradeLicenseApplicationForm({
 }) {
   const [form, setForm] = useState<TradeLicenseApplicationInput>(emptyForm);
   const [autofillChecking, setAutofillChecking] = useState(false);
+  const [renewalMobile, setRenewalMobile] = useState("");
   const [autofillMessage, setAutofillMessage] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -61,12 +62,16 @@ export function TradeLicenseApplicationForm({
       setAutofillMessage("Enter a holding number first.");
       return;
     }
+    if (!renewalMobile.trim()) {
+      setAutofillMessage("Enter the mobile number registered on your last application.");
+      return;
+    }
     setAutofillChecking(true);
     setAutofillMessage(null);
     try {
-      const result = await fetchRenewalAutofill(form.holdingNo);
+      const result = await fetchRenewalAutofill(form.holdingNo, renewalMobile);
       if (!result.found) {
-        setAutofillMessage("No previous application found for this holding — please fill in details manually.");
+        setAutofillMessage("No record matches this holding number and mobile number — please check them, or fill in the details manually.");
         return;
       }
       setForm((f) => ({
@@ -74,7 +79,7 @@ export function TradeLicenseApplicationForm({
         applicantName: result.applicantName ?? f.applicantName,
         relationType: result.relationType ?? f.relationType,
         relationName: result.relationName ?? f.relationName,
-        mobile: result.mobile ?? f.mobile,
+        mobile: f.mobile || renewalMobile,
         email: result.email ?? f.email,
         entityName: result.entityName ?? f.entityName,
         entityNameHindi: result.entityNameHindi ?? f.entityNameHindi,
@@ -181,6 +186,9 @@ export function TradeLicenseApplicationForm({
                 Fetch Details
               </button>
             </div>
+            <label className={`${labelClass} mt-3`}>Mobile number registered on your last application</label>
+            <input inputMode="tel" value={renewalMobile} onChange={(e) => setRenewalMobile(e.target.value)} className={inputClass} placeholder="10-digit mobile" />
+            <p className="mt-1 text-xs text-slate-500">Details are shown only when the holding number and this mobile number match our records.</p>
             {autofillMessage && <p className="mt-2 text-xs text-slate-600">{autofillMessage}</p>}
           </div>
         )}

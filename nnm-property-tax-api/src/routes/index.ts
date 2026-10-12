@@ -17,6 +17,7 @@ import { taxCollectorRouter } from "./taxCollector.routes";
 import { streetlightRouter } from "./streetlight.routes";
 import { streetlightPublicRouter } from "./streetlightPublic.routes";
 import { pyauRouter } from "./pyau.routes";
+import { enforcementRouter, encroachmentRouter, mobileCourtRouter } from "./enforcement.routes";
 import { publicDocumentRouter } from "./publicDocument.routes";
 import { documentManagerRouter } from "./documentManager.routes";
 import { whosWhoManagerRouter, whosWhoPublicRouter } from "./whosWho.routes";
@@ -42,6 +43,10 @@ apiRouter.use("/tax-collectors", taxCollectorRouter);
 apiRouter.use("/dashboard-summary", dashboardSummaryRouter);
 // Fully separate module - its own auth, its own tables, nothing shared with the property tax / shop / trade license system above.
 apiRouter.use("/attendance", attendanceRouter);
+// City Manager encroachment removal and APSWMO mobile court (migration 122) - attendance login.
+apiRouter.use("/enforcement", enforcementRouter);
+apiRouter.use("/encroachment", encroachmentRouter);
+apiRouter.use("/mobile-court", mobileCourtRouter);
 
 // Street light monitoring module - reuses the attendance_users login
 // system (new roles added there) for staff-facing endpoints, plus a

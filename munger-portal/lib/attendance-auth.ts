@@ -23,7 +23,9 @@ export type AttendanceRole =
   | "apswmo"
   | "ward_parshad"
   | "mayor"
-  | "deputy_mayor";
+  | "deputy_mayor"
+  | "encroachment_staff"
+  | "mobile_court_staff";
 
 export const ATTENDANCE_ROLE_LABELS: Record<AttendanceRole, string> = {
   jamadar: "Jamadar",
@@ -48,6 +50,8 @@ export const ATTENDANCE_ROLE_LABELS: Record<AttendanceRole, string> = {
   ward_parshad: "Ward Parshad",
   mayor: "Mayor",
   deputy_mayor: "Deputy Mayor",
+  encroachment_staff: "Encroachment Staff",
+  mobile_court_staff: "Mobile Court Staff",
 };
 
 export const ATTENDANCE_ROLE_LABELS_HI: Record<AttendanceRole, string> = {
@@ -73,6 +77,8 @@ export const ATTENDANCE_ROLE_LABELS_HI: Record<AttendanceRole, string> = {
   ward_parshad: "वार्ड पार्षद",
   mayor: "मेयर",
   deputy_mayor: "उप मेयर",
+  encroachment_staff: "अतिक्रमण स्टाफ",
+  mobile_court_staff: "मोबाइल कोर्ट स्टाफ",
 };
 
 /** Role label in the given UI language - use this instead of reading ATTENDANCE_ROLE_LABELS directly wherever a page already knows the current language. */

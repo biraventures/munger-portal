@@ -27,6 +27,8 @@ const ALL_ROLES: AttendanceRole[] = [
   "ward_parshad",
   "mayor",
   "deputy_mayor",
+  "encroachment_staff",
+  "mobile_court_staff",
 ];
 
 export default function AttendanceUsersPage() {

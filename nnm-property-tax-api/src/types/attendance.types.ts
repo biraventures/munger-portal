@@ -20,7 +20,9 @@ export type AttendanceRole =
   | "apswmo"
   | "ward_parshad"
   | "mayor"
-  | "deputy_mayor";
+  | "deputy_mayor"
+  | "encroachment_staff"
+  | "mobile_court_staff";
 
 export const ATTENDANCE_ROLES: AttendanceRole[] = [
   "jamadar",
@@ -45,6 +47,8 @@ export const ATTENDANCE_ROLES: AttendanceRole[] = [
   "ward_parshad",
   "mayor",
   "deputy_mayor",
+  "encroachment_staff",
+  "mobile_court_staff",
 ];
 
 export const ATTENDANCE_ROLE_LABELS: Record<AttendanceRole, string> = {
@@ -70,6 +74,8 @@ export const ATTENDANCE_ROLE_LABELS: Record<AttendanceRole, string> = {
   ward_parshad: "Ward Parshad",
   mayor: "Mayor",
   deputy_mayor: "Deputy Mayor",
+  encroachment_staff: "Encroachment Staff",
+  mobile_court_staff: "Mobile Court Staff",
 };
 
 /** Ward-scoped roles must have a ward_id; cross-ward roles never do. The 3 fleet roles are cross-ward - they oversee the whole vehicle/asset registry, not one ward's workers.
@@ -96,6 +102,8 @@ export const CROSS_WARD_ROLES: AttendanceRole[] = [
   "apswmo",
   "mayor",
   "deputy_mayor",
+  "encroachment_staff",
+  "mobile_court_staff",
 ];
 
 export interface AttendanceUserRow {
