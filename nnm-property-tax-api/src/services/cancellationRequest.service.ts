@@ -136,6 +136,17 @@ async function finalizeAndApplyCancellation(requestId: number, reviewedBy: strin
       const cancelledTxn = await paymentRepository.cancel(request.target_id, request.reason, client);
       if (!cancelledTxn) throw ApiError.badRequest("Could not cancel this receipt - it may already be cancelled.");
 
+      // Any notice raised for this holding AFTER this payment (e.g. the balance notice generated after a part payment, or
+      // a later full notice) assumed this receipt stood. With it cancelled the earlier years are pending again, so those
+      // newer unpaid notices are cancelled automatically - the notice this receipt paid is reopened below instead.
+      await demandNoticeRepository.cancelUnsettledGeneratedSince(
+        txn.holding_no,
+        txn.txn_date,
+        txn.demand_no,
+        `Cancelled automatically: Receipt No ${txn.receipt_no} (paid earlier dues) was cancelled, so those dues are pending again and this later notice no longer applies.`,
+        client,
+      );
+
       if (txn.demand_no) {
         const notice = await demandNoticeRepository.findByDemandNo(txn.demand_no);
         await demandNoticeRepository.revertToUnsettled(txn.demand_no, client);

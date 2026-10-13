@@ -16,11 +16,13 @@ export async function initiateOnlinePayment(
   holdingNo: string,
   amount: number,
   taxCollectorCode?: string,
+  /** The payer's tick on the declaration shown before paying (the server refuses the payment without it). */
+  acceptDeclaration = false,
 ): Promise<InitiatePaymentResult> {
   const res = await fetch(`${API_BASE_URL}/properties/${encodeURIComponent(holdingNo)}/pay/online/initiate`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ amount, taxCollectorCode: taxCollectorCode || undefined }),
+    body: JSON.stringify({ amount, taxCollectorCode: taxCollectorCode || undefined, acceptDeclaration }),
   });
 
   if (!res.ok) {

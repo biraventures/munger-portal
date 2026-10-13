@@ -12,6 +12,9 @@ export function SiteFooter() {
           <Link href="#services" className="hover:text-white">
             Services
           </Link>
+          <Link href="/whos-who" className="whitespace-nowrap hover:text-white">
+            Who&apos;s Who
+          </Link>
           <Link href="/documents" className="hover:text-white">
             Documents
           </Link>
@@ -19,6 +22,20 @@ export function SiteFooter() {
             Contact
           </Link>
         </div>
+      </div>
+      {/* Policy links sit in their own row at the very bottom of the page. */}
+      <div className="mx-auto mt-5 max-w-6xl border-t border-white/15 px-6 pt-4">
+        <nav aria-label="Policies" className="flex flex-wrap justify-center gap-x-6 gap-y-2 text-[12.5px]">
+          <Link href="/terms" className="hover:text-white">
+            Terms &amp; Conditions
+          </Link>
+          <Link href="/refund-policy" className="hover:text-white">
+            Refund &amp; Cancellation Policy
+          </Link>
+          <Link href="/privacy" className="hover:text-white">
+            Privacy Policy
+          </Link>
+        </nav>
       </div>
     </footer>
   );

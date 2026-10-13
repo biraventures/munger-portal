@@ -19,6 +19,8 @@ export interface TransactionRow {
   // payment_mode is "District Treasury".
   tv_number: string | null;
   tv_date: Date | null;
+  // Set only for public online payments - when the payer ticked the declaration before paying.
+  online_declaration_accepted_at: Date | null;
   arv: string | null;
   current_year_tax_net: string | null;
   previous_years_tax_base: string | null;

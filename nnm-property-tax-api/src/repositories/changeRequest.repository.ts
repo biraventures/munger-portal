@@ -171,6 +171,15 @@ export const changeRequestRepository = {
    * corrected data hasn't been reviewed by anyone yet, and bumps
    * revision_count for the audit trail.
    */
+  /** Moves a request up to a stricter approval tier (never down) - used when a resubmission adds a change that needs more approvals. */
+  async raiseTier(id: number, tier: string, finalStage: string): Promise<void> {
+    await pool.query(
+      `UPDATE property_change_requests SET approval_tier = $2, final_stage = $3
+       WHERE id = $1 AND array_position(ARRAY['minor','significant','mutation'], approval_tier) < array_position(ARRAY['minor','significant','mutation'], $2::text)`,
+      [id, tier, finalStage],
+    );
+  },
+
   async resubmitWithCorrections(id: number, proposedData: PropertySaveInput, changeReference: string): Promise<ChangeRequestRow | null> {
     const { rows } = await pool.query<ChangeRequestRow>(
       `UPDATE property_change_requests

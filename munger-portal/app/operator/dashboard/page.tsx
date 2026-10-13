@@ -1,6 +1,6 @@
 "use client";
 
-import { Store, Building2, ShoppingBag, Award, Download, ClipboardCheck, RotateCcw, FileUp } from "lucide-react";
+import { Store, Building2, ShoppingBag, Award, Download, ClipboardCheck, RotateCcw, FileUp, Users } from "lucide-react";
 import { OperatorHeader } from "@/components/operator-header";
 import { OperatorTaskCard } from "@/components/operator-task-card";
 import { DashboardSummaryWidget } from "@/components/dashboard-summary-widget";
@@ -46,6 +46,13 @@ export default function OperatorDashboardPage() {
             icon={FileUp}
             title="Upload Website Document"
             description="Upload a report, notice or circular. It goes live after APSWMO approval."
+          />
+
+          <OperatorTaskCard
+            href="/whos-who-manager?as=operator"
+            icon={Users}
+            title="Website Who's Who"
+            description="Enter an official's signed Who's Who form. It goes live after City Manager verification and DMC approval."
           />
 
           <OperatorTaskCard

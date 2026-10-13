@@ -189,10 +189,10 @@ export async function revertChangeRequest(id: number, comment: string): Promise<
 export interface BulkGenerateResult {
   processed: number;
   errors: { holdingNo: string; message: string }[];
-  generated: { holdingNo: string; formattedDemandNo: string; grandTotal: string }[];
+  generated: { holdingNo: string; formattedDemandNo: string; grandTotal: string; reminderLabel?: string | null }[];
 }
 
-/** POST /api/v1/admin/demand-notices/bulk-generate — every holding with Floors data but no demand notice yet. */
+/** POST /api/v1/admin/demand-notices/bulk-generate — every holding with dues and floor data that has no live demand notice from the current month. */
 export async function bulkGenerateDemandNotices(): Promise<BulkGenerateResult> {
   const res = await fetch(`${API_BASE_URL}/admin/demand-notices/bulk-generate`, {
     method: "POST",
@@ -351,6 +351,7 @@ export interface PrintableReceiptHistory {
   taxCollectorName: string | null;
   tvNumber: string | null;
   tvDate: string | null;
+  onlineDeclarationAcceptedAt?: string | null;
   breakdown: {
     arv: string;
     currentYearTaxNet: string;
@@ -651,6 +652,14 @@ export interface PropertyBulkImportResult {
   errors: { sheet: string; row: number; message: string }[];
 }
 
+/** Plain-language reason when the server's reply carries no message (e.g. a proxy rejecting the request). */
+function uploadFailureMessage(status: number): string {
+  if (status === 413) return "The file is too large for the server to accept (error 413). Ask the administrator to raise the upload size limit on the web server, or upload a smaller file.";
+  if (status === 502 || status === 503 || status === 504) return `The server did not respond in time (error ${status}). Please wait a minute and try again; if it keeps happening, tell the administrator.`;
+  if (status === 401 || status === 403) return `You are not allowed to do this, or your login has expired (error ${status}). Please sign in again.`;
+  return `Could not upload this file (error ${status}).`;
+}
+
 /**
  * Commissioner / Tax Daroga / City Manager. fileDataBase64 is the raw base64 content of the .xlsx file (no data-URL prefix).
  * The file is NOT imported - it is parked for review by Tax Daroga / City Manager.
@@ -663,7 +672,7 @@ export async function uploadPropertiesXlsx(fileDataBase64: string, dataSourceNam
   });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
-    throw new Error(body.error || "Could not upload this file.");
+    throw new Error(body.error || uploadFailureMessage(res.status));
   }
   return res.json();
 }
@@ -762,7 +771,7 @@ export async function uploadMigratedHoldingsXlsx(fileDataBase64: string): Promis
   });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
-    throw new Error(body.error || "Could not upload this file.");
+    throw new Error(body.error || uploadFailureMessage(res.status));
   }
   return res.json();
 }
@@ -998,6 +1007,10 @@ export async function fetchPropertyForCollector(holdingNo: string): Promise<TaxC
   if (res.status === 404) {
     const body = await res.json().catch(() => ({}));
     return { found: false, message: body.error || "No matching holding found." };
+  }
+  if (res.status === 403) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || "This holding is not in a ward assigned to you.");
   }
   if (!res.ok) throw new Error("Could not load this holding.");
   return res.json();
@@ -1610,7 +1623,14 @@ export interface AdminFullPropertyResult {
 export async function fetchFullPropertyAdmin(holdingNo: string): Promise<AdminFullPropertyResult> {
   const res = await fetch(`${API_BASE_URL}/properties/${encodeURIComponent(holdingNo)}`, { headers: authHeaders() });
   if (res.status === 404) return { found: false };
-  if (!res.ok) throw new Error(`Search failed (${res.status})`);
+  if (!res.ok) {
+    // Show the server's own explanation - for a Tax Collector searching a holding outside
+    // their wards this names the holding's ward and that ward's Tax Collector, same as the
+    // collection page (fetchPropertyForCollector).
+    const body = await res.json().catch(() => ({}));
+    if (res.status === 403) throw new Error(body.error || "This holding is not in a ward assigned to you.");
+    throw new Error(body.error || `Search failed (${res.status})`);
+  }
   return res.json();
 }
 
@@ -1739,8 +1759,8 @@ export interface PropertyDiscrepancyApproval {
 }
 
 /** The holding photo the Tax Collector attached at submission. */
-export async function fetchDiscrepancyPhotoBlobUrl(id: number): Promise<string> {
-  const res = await fetch(`${API_BASE_URL}/admin/property-discrepancy-requests/${id}/photo`, { headers: authHeaders() });
+export async function fetchDiscrepancyPhotoBlobUrl(id: number, kind: "holding" | "receipt" | "aadhaar" = "holding"): Promise<string> {
+  const res = await fetch(`${API_BASE_URL}/admin/property-discrepancy-requests/${id}/photo/${kind}`, { headers: authHeaders() });
   if (!res.ok) throw new Error("Could not load this photo.");
   const blob = await res.blob();
   return URL.createObjectURL(blob);

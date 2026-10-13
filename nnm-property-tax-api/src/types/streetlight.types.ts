@@ -41,6 +41,7 @@ export interface LightRow {
   verified_for_deletion_by: string | null;
   verified_for_deletion_at: string | null;
   no_of_lights: number | null;
+  no_of_functional_lights: number | null;
   maintenance_agency_id: number | null;
   remarks: string | null;
 }

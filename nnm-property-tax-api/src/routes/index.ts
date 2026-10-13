@@ -17,8 +17,10 @@ import { taxCollectorRouter } from "./taxCollector.routes";
 import { streetlightRouter } from "./streetlight.routes";
 import { streetlightPublicRouter } from "./streetlightPublic.routes";
 import { pyauRouter } from "./pyau.routes";
+import { enforcementRouter, encroachmentRouter, mobileCourtRouter } from "./enforcement.routes";
 import { publicDocumentRouter } from "./publicDocument.routes";
 import { documentManagerRouter } from "./documentManager.routes";
+import { whosWhoManagerRouter, whosWhoPublicRouter } from "./whosWho.routes";
 
 export const apiRouter = Router();
 
@@ -41,6 +43,10 @@ apiRouter.use("/tax-collectors", taxCollectorRouter);
 apiRouter.use("/dashboard-summary", dashboardSummaryRouter);
 // Fully separate module - its own auth, its own tables, nothing shared with the property tax / shop / trade license system above.
 apiRouter.use("/attendance", attendanceRouter);
+// City Manager encroachment removal and APSWMO mobile court (migration 122) - attendance login.
+apiRouter.use("/enforcement", enforcementRouter);
+apiRouter.use("/encroachment", encroachmentRouter);
+apiRouter.use("/mobile-court", mobileCourtRouter);
 
 // Street light monitoring module - reuses the attendance_users login
 // system (new roles added there) for staff-facing endpoints, plus a
@@ -58,6 +64,9 @@ apiRouter.use("/pyau", pyauRouter);
 apiRouter.use("/public-documents", publicDocumentRouter);
 // Document upload + APSWMO approval for the admin / operator / attendance logins.
 apiRouter.use("/document-manager", documentManagerRouter);
+// Who's Who page: public read-only list + photos, and the operator -> City Manager -> DMC entry workflow.
+apiRouter.use("/whos-who", whosWhoPublicRouter);
+apiRouter.use("/whos-who-manager", whosWhoManagerRouter);
 
 // /admin/auth (public login) MUST be mounted before /admin (which
 // requires an admin session for everything under it) - Express tries

@@ -1,7 +1,8 @@
 import { changeRequestRepository } from "../repositories/changeRequest.repository";
 import { propertyRepository } from "../repositories/property.repository";
 import { entryRevertEventRepository } from "../repositories/entryRevertEvent.repository";
-import { applyPropertySave } from "./propertySave.service";
+import { applyPropertySave, assertExemptionOrderBelongs } from "./propertySave.service";
+import { classifyPropertyChange, TIER_FINAL_STAGE } from "./changeClassification.service";
 import { nextApprovalStage } from "../types/admin.types";
 import { ApiError } from "../utils/ApiError";
 import type { ChangeRequestRow, ChangeRequestStatus } from "../types/changeRequest.types";
@@ -175,8 +176,20 @@ export async function resubmitCorrectedChangeRequest(id: number, proposedData: C
   if (!request) throw ApiError.notFound("Change request not found");
   if (request.status !== "reverted") throw ApiError.badRequest("This request isn't currently awaiting correction.");
 
+  await assertExemptionOrderBelongs(request.holding_no, proposedData);
+
   const resubmitted = await changeRequestRepository.resubmitWithCorrections(id, proposedData, changeReference);
   if (!resubmitted) throw ApiError.badRequest("This request is no longer awaiting correction.");
+
+  // The correction may add something that needs more approvals than the original
+  // (e.g. a holding tax exemption added on resubmission) - re-check the tier so it
+  // can never be slipped through a shorter chain.
+  const property = await propertyRepository.findByHoldingNo(request.holding_no);
+  if (property) {
+    const floors = await propertyRepository.findFloorsByHoldingNo(request.holding_no);
+    const tier = classifyPropertyChange(property, floors, proposedData);
+    await changeRequestRepository.raiseTier(id, tier, TIER_FINAL_STAGE[tier]);
+  }
 
   await entryRevertEventRepository.markResubmitted("property_mutation", id);
   return resubmitted;

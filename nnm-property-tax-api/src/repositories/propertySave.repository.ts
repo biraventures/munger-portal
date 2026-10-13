@@ -22,11 +22,11 @@ export const propertySaveRepository = {
           penalty, outstanding_demand,
           arv, tax_payable, holding_creation_year, tax_paid_till_year,
           present_holding_name, present_category,
-          created_by, created_date, last_modified_by, last_modified_date, is_bwg
+          created_by, created_date, last_modified_by, last_modified_date, is_bwg, is_slum
         ) VALUES (
           $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,
           $21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40,
-          $41, now(), $41, now(), $42
+          $41, now(), $41, now(), $42, $43
         )`,
         [
           holdingNo,
@@ -71,6 +71,7 @@ export const propertySaveRepository = {
           p.presentCategory,
           operatorDisplayName,
           p.isBwg ?? false,
+          p.isSlum ?? false,
         ],
       );
       return;
@@ -87,7 +88,7 @@ export const propertySaveRepository = {
         penalty = $33, outstanding_demand = $34,
         arv = $35, tax_payable = $36, holding_creation_year = $37, tax_paid_till_year = $38,
         present_holding_name = $39, present_category = $40,
-        last_modified_by = $41, last_modified_date = now(), is_bwg = $42
+        last_modified_by = $41, last_modified_date = now(), is_bwg = $42, is_slum = $43
       WHERE holding_no = $1`,
       [
         holdingNo,
@@ -132,6 +133,7 @@ export const propertySaveRepository = {
         p.presentCategory,
         operatorDisplayName,
         p.isBwg ?? false,
+        p.isSlum ?? false,
       ],
     );
   },

@@ -19,6 +19,7 @@ export interface AdminPropertyFormState {
   solidWasteChargeType: string;
   solidWasteMonths: string;
   isBwg: boolean;
+  isSlum: boolean;
   floors: FloorFormState[];
 }
 
@@ -36,6 +37,7 @@ export function blankAdminPropertyForm(): AdminPropertyFormState {
     solidWasteChargeType: "",
     solidWasteMonths: "12",
     isBwg: false,
+    isSlum: false,
     floors: [makeBlankFloor(0)],
   };
 }
@@ -54,6 +56,7 @@ export function propertyFormToPayload(form: AdminPropertyFormState): Record<stri
     solidWasteChargeType: form.solidWasteChargeType || null,
     solidWasteMonths: Number(form.solidWasteMonths) || 12,
     isBwg: form.isBwg,
+    isSlum: form.isSlum,
     floors: form.floors.map((f) => ({
       floorLabel: f.floorLabel,
       buildupSqft: Number(f.buildupSqft) || 0,
@@ -83,6 +86,7 @@ export function propertyFormFromProposedData(data: Record<string, unknown>): Adm
     solidWasteChargeType: String(data.solidWasteChargeType ?? ""),
     solidWasteMonths: String(data.solidWasteMonths ?? "12"),
     isBwg: Boolean(data.isBwg),
+    isSlum: Boolean(data.isSlum),
     floors:
       floors.length > 0
         ? floors.map((f, i) => ({
@@ -113,6 +117,7 @@ export function propertyFormFromExisting(property: Record<string, unknown>, floo
     solidWasteChargeType: String(property.solid_waste_charge_type ?? ""),
     solidWasteMonths: String(property.solid_waste_months ?? "12"),
     isBwg: Boolean(property.is_bwg),
+    isSlum: Boolean(property.is_slum),
     floors:
       floors.length > 0
         ? floors.map((f, i) => ({
@@ -242,6 +247,20 @@ export function AdminPropertyDetailsForm({
               Registered as a Bulk Waste Generator (BWG) on the SPCB website
               <span className="block text-xs text-slate-400">
                 The owner manages their own waste, so no solid waste user charge is added to the amount payable.
+              </span>
+            </span>
+          </label>
+          <label className="flex items-start gap-2 text-sm text-slate-700 sm:col-span-2">
+            <input
+              type="checkbox"
+              checked={form.isSlum}
+              onChange={(e) => updateField("isSlum", e.target.checked)}
+              className="mt-0.5 h-4 w-4 rounded border-slate-300"
+            />
+            <span>
+              Holding is in a slum area
+              <span className="block text-xs text-slate-400">
+                The 100% tax relief for holdings below 250 sq ft is given only to slum-area holdings. Leave unchecked for all others.
               </span>
             </span>
           </label>

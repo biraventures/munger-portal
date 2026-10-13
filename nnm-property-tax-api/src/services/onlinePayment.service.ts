@@ -30,7 +30,12 @@ export async function initiateOnlinePayment(
   holdingNo: string,
   amount: number,
   taxCollectorCode: string | null,
+  declarationAccepted: boolean,
 ): Promise<InitiateResult> {
+  if (!declarationAccepted) {
+    throw ApiError.badRequest("Please tick the declaration to continue with the payment.");
+  }
+
   if (!env.ONLINE_PAYMENT_ENABLED) {
     throw ApiError.badRequest(
       "Online payment is temporarily unavailable. Please pay at the Nagar Nigam office counter.",
@@ -66,6 +71,20 @@ export async function initiateOnlinePayment(
     taxCollector = { code: collector.tax_collector_code!, name: collector.display_name };
   }
 
+  return createGatewayOrder(holdingNo, amount, taxCollector);
+}
+
+/**
+ * Records a pending order and builds the gateway redirect for it. Shared by
+ * the normal pay flow above and the pay-from-demand-notice-QR flow, which
+ * decides the collector itself (from who served the notice) and so skips the
+ * "typed code must be tagged for this ward" check.
+ */
+export async function createGatewayOrder(
+  holdingNo: string,
+  amount: number,
+  taxCollector: { code: string; name: string } | null,
+): Promise<InitiateResult> {
   const orderId = crypto.randomUUID();
   await onlinePaymentRepository.createPendingOrder({
     orderId,

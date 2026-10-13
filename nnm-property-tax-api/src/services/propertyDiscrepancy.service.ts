@@ -3,6 +3,10 @@ import path from "node:path";
 import { propertyDiscrepancyRepository } from "../repositories/propertyDiscrepancy.repository";
 import { propertyRepository } from "../repositories/property.repository";
 import { applyPropertySave } from "./propertySave.service";
+import { renameHoldingTo } from "./propertyRenumber.service";
+import { getNextFinalizedMigratedHoldingNo } from "./holdingNumberSeries.service";
+import { migratedHoldingSurveyRepository } from "../repositories/migratedHoldingSurvey.repository";
+import { MIGRATED_HOLDING_NO_PREFIX } from "../constants/taxRates";
 import { entryRevertEventRepository } from "../repositories/entryRevertEvent.repository";
 import { nextPropertyDiscrepancyStage, PROPERTY_DISCREPANCY_APPROVAL_STAGE_ORDER } from "../types/admin.types";
 import { env } from "../config/env";
@@ -178,6 +182,20 @@ export async function approveDiscrepancyAtCurrentStage(
     : await propertyDiscrepancyRepository.finalize(id, request.current_stage, "approved");
   if (!finalized) {
     throw ApiError.badRequest("This request was already finalized by someone else, but the change was applied.");
+  }
+
+  // A house found in the MUNG-MIG- data and now fully verified becomes a
+  // regular surveyed holding: mark its old survey record finalized and
+  // move it to a fresh MNN- number, exactly as the older survey workflow
+  // does on its final approval.
+  if (request.holding_no.startsWith(MIGRATED_HOLDING_NO_PREFIX)) {
+    const survey = await migratedHoldingSurveyRepository.finalizeViaCollectorChain(request.holding_no, admin.username, admin.displayName, request.reported_by_display_name);
+    if (survey) {
+      const newHoldingNo = await getNextFinalizedMigratedHoldingNo();
+      await renameHoldingTo(request.holding_no, newHoldingNo, admin.displayName);
+      await migratedHoldingSurveyRepository.logRenumberEvent(request.holding_no, newHoldingNo, admin.displayName);
+      return { ...finalized, holding_no: newHoldingNo };
+    }
   }
   return finalized;
 }

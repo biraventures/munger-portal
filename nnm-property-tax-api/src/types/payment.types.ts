@@ -1,3 +1,4 @@
+import type { DemandNoticeResult } from "./demandNotice.types";
 export interface PaymentInput {
   paymentMode: string;
   counter?: string | null;
@@ -33,6 +34,9 @@ export interface PaymentResult {
   tvNumber: string | null;
   tvDate: string | null;
   arrearStagesPaid: ArrearStagePaidView[];
+  /** After a PART payment: the balance demand notice for the remaining years, generated automatically. */
+  followUpNotice?: DemandNoticeResult | null;
+  followUpNoticeError?: string | null;
   property: Record<string, unknown>;
   floors: unknown[];
   taxCalc: unknown;

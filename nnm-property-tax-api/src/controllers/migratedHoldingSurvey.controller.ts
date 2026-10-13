@@ -132,7 +132,8 @@ export const listMySurveysHandler = asyncHandler(async (req: Request, res: Respo
 });
 
 /** GET /api/v1/properties/migrated-holdings/pending-entry - kept for any older in-flight holdings still on the operator-entry path. New assignments go through the Tax Surveyor flow instead. */
-export const listPendingOperatorEntryHandler = asyncHandler(async (_req: Request, res: Response) => {
+export const listPendingOperatorEntryHandler = asyncHandler(async (req: Request, res: Response) => {
+  if (req.admin?.role === "tax_collector") throw new ApiError(403, "This worklist is not available to a Tax Collector.");
   const surveys = await migratedHoldingSurveyRepository.listPendingOperatorEntry();
   res.status(200).json({ surveys });
 });

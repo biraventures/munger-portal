@@ -66,6 +66,7 @@ export interface StreetLight {
   switchStatus: "working" | "not_working" | "automatic" | "joint" | null;
   active: boolean;
   noOfLights: number | null;
+  noOfFunctionalLights: number | null;
   maintenanceAgencyId: number | null;
   remarks: string | null;
 }

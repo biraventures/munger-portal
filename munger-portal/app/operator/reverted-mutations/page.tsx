@@ -5,6 +5,8 @@ import { AlertCircle, CheckCircle2, Plus, RotateCcw, Trash2 } from "lucide-react
 import { OperatorHeader } from "@/components/operator-header";
 import { useOperatorGuard } from "@/lib/use-operator-guard";
 import { fetchRevertedChangeRequests, resubmitChangeRequest, type RevertedChangeRequest } from "@/lib/operator-api";
+import { TaxExemptionSection } from "@/components/operator/tax-exemption-section";
+import { exemptionFromInput, finalizeExemption, type TaxExemptionFormState, type TaxExemptionInput } from "@/lib/tax-exemption-api";
 
 const inputClass = "w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-nnm-blue focus:ring-offset-1";
 
@@ -49,6 +51,9 @@ export default function RevertedMutationsPage() {
   const [changeReference, setChangeReference] = useState("");
   const [floors, setFloors] = useState<FloorRow[]>([]);
   const [submitting, setSubmitting] = useState(false);
+  // Only when the reverted request itself proposes an exemption change - otherwise left out of the
+  // resubmission entirely so a correction can never touch the holding's exemption by accident.
+  const [exemption, setExemption] = useState<TaxExemptionFormState | null>(null);
 
   function load() {
     fetchRevertedChangeRequests()
@@ -74,6 +79,7 @@ export default function RevertedMutationsPage() {
     setAssessmentYear(String(d.assessmentYear ?? ""));
     setChangeReference(r.change_reference);
     setFloors(floorsFromProposed(d));
+    setExemption(exemptionFromInput(d.taxExemption as TaxExemptionInput | undefined));
   }
 
   function updateFloor(i: number, patch: Partial<FloorRow>) {
@@ -89,8 +95,10 @@ export default function RevertedMutationsPage() {
     setSubmitting(true);
     setError(null);
     try {
+      const taxExemption = exemption ? await finalizeExemption(editing.holding_no, exemption) : undefined;
       await resubmitChangeRequest(editing.id, {
         ...editing.proposed_data,
+        ...(taxExemption ? { taxExemption } : {}),
         ownerName: ownerName.trim(),
         address: address.trim(),
         ward: ward.trim() || null,
@@ -104,7 +112,8 @@ export default function RevertedMutationsPage() {
       setEditing(null);
       load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not resubmit this correction.");
+      const e = err as { message?: string };
+      setError(e?.message || "Could not resubmit this correction.");
     } finally {
       setSubmitting(false);
     }
@@ -248,6 +257,12 @@ export default function RevertedMutationsPage() {
               <Plus className="h-3.5 w-3.5" />
               Add another floor
             </button>
+
+            {exemption && (
+              <div className="my-4">
+                <TaxExemptionSection value={exemption} onChange={setExemption} wasExempt={false} />
+              </div>
+            )}
 
             <button
               onClick={handleResubmit}

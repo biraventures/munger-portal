@@ -1,3 +1,4 @@
+import { collectorHoldingParam, collectorDemandNoticeParam } from "../middleware/collectorWardGuard";
 import { Router } from "express";
 import { listOperators, setOperatorActive } from "../controllers/adminOperators.controller";
 import {
@@ -66,6 +67,8 @@ import {
   reviewImportHoldingsHandler,
   integrateImportHandler,
   discardImportHandler,
+  previewResidentialSolidWasteHandler,
+  applyResidentialSolidWasteHandler,
 } from "../controllers/propertyBulkImport.controller";
 import { searchPropertiesHandler, getPropertyReportHandler } from "../controllers/propertyReport.controller";
 import { getShopsPendingPublication, postApproveShopPublication } from "../controllers/shopPublicationApproval.controller";
@@ -151,6 +154,24 @@ import {
   getTradeLicenseStats,
 } from "../controllers/tradeLicenseApplication.controller";
 import { requireAdmin, requireAdminRole } from "../middleware/requireAdmin";
+import {
+  searchMigratedHoldingsHandler,
+  createUnsurveyedHouseHandler,
+  listUnsurveyedHousesHandler,
+  getUnsurveyedHousePhotoHandler,
+  listNoticesForReceivingHandler,
+  uploadReceivingCopyHandler,
+  listReceivingCopiesHandler,
+  getReceivingCopyPhotoHandler,
+} from "../controllers/collectorField.controller";
+import {
+  getReportFilterOptionsHandler,
+  getAgencyReportHandler,
+  exportAgencyReportHandler,
+  listAgencyWardsHandler,
+  listAgencyWardHoldingsHandler,
+  prepareAgencyNoticesHandler,
+} from "../controllers/agency.controller";
 import { listDisputedHandler, getDisputeStatusHandler, flagDisputedHandler, clearDisputedHandler } from "../controllers/propertyDispute.controller";
 import { getStreetlightReportHandler } from "../controllers/streetlightReport.controller";
 import {
@@ -337,6 +358,9 @@ adminRouter.post("/property-imports/:id/restore", requireAdminRole("tax_daroga",
 adminRouter.post("/property-imports/:id/review", requireAdminRole("tax_daroga"), reviewImportHoldingsHandler);
 adminRouter.post("/property-imports/:id/integrate", requireAdminRole("city_manager"), integrateImportHandler);
 adminRouter.post("/property-imports/:id/discard", requireAdminRole("city_manager"), discardImportHandler);
+// City Manager: bulk-set the solid waste user charge type to "Residential House" on pending holdings whose floors are all residential.
+adminRouter.get("/property-imports/:id/residential-solid-waste", requireAdminRole("city_manager"), previewResidentialSolidWasteHandler);
+adminRouter.post("/property-imports/:id/residential-solid-waste", requireAdminRole("city_manager"), applyResidentialSolidWasteHandler);
 
 // Property-wise report (Commissioner/DMC/City Manager): search by
 // holding no/owner/address, then full detail + tax pending + change
@@ -395,6 +419,30 @@ adminRouter.get("/tax-collectors-with-assignment", requireAdminRole("commissione
 adminRouter.get("/city-managers", requireAdminRole("commissioner"), listCityManagersHandler);
 adminRouter.post("/tax-collectors/:username/assign-city-manager", requireAdminRole("commissioner"), assignCityManagerHandler);
 adminRouter.post("/tax-collectors/:username/wards", requireAdminRole("commissioner"), setTaxCollectorWardsHandler);
+// Agency logins (migration 114). The Project Manager (and senior officers) read collection / distribution / field
+// reports; the Team Leader prints ward-wise demand notices for holdings with dues pending.
+const requireAgencyReportRole = requireAdminRole("agency_project_manager", "commissioner", "deputy_commissioner", "city_manager", "tax_daroga", "tax_collector");
+adminRouter.get("/agency/report-filters", requireAgencyReportRole, getReportFilterOptionsHandler);
+adminRouter.get("/agency/reports", requireAgencyReportRole, getAgencyReportHandler);
+adminRouter.get("/agency/reports/export", requireAgencyReportRole, exportAgencyReportHandler);
+adminRouter.get("/agency/wards", requireAdminRole("agency_team_leader"), listAgencyWardsHandler);
+adminRouter.get("/agency/wards/:ward/holdings", requireAdminRole("agency_team_leader"), listAgencyWardHoldingsHandler);
+adminRouter.post("/agency/notices", requireAdminRole("agency_team_leader"), prepareAgencyNoticesHandler);
+
+// Tax Collector field work (see migration 113 and collectorField.controller.ts): find a house in the MUNG-MIG- data,
+// record a house found in neither database, and upload the signed receiving copy of a printed demand notice.
+// Viewing is read-only; receiving copies can never be changed or removed.
+const requireFieldViewRole = requireAdminRole("tax_collector", "tax_daroga", "city_manager", "deputy_commissioner", "commissioner");
+adminRouter.get("/migrated-holdings/search", requireAdminRole("tax_collector"), searchMigratedHoldingsHandler);
+adminRouter.post("/unsurveyed-houses", requireAdminRole("tax_collector"), createUnsurveyedHouseHandler);
+adminRouter.get("/unsurveyed-houses", requireFieldViewRole, listUnsurveyedHousesHandler);
+adminRouter.get("/unsurveyed-houses/:id/photo", requireFieldViewRole, getUnsurveyedHousePhotoHandler);
+adminRouter.param("holdingNo", collectorHoldingParam);
+adminRouter.param("demandNo", collectorDemandNoticeParam);
+adminRouter.get("/receiving-copies/notices/:holdingNo", requireAdminRole("tax_collector"), listNoticesForReceivingHandler);
+adminRouter.post("/receiving-copies/notices/:demandNo", requireAdminRole("tax_collector"), uploadReceivingCopyHandler);
+adminRouter.get("/receiving-copies", requireFieldViewRole, listReceivingCopiesHandler);
+adminRouter.get("/receiving-copies/:id/photo", requireFieldViewRole, getReceivingCopyPhotoHandler);
 adminRouter.post("/migrated-holdings/:holdingNo/assign", assignToSurveyorHandler);
 adminRouter.get("/migrated-holdings/my-assignments", listMyAssignmentsHandler);
 adminRouter.post("/migrated-holdings/:holdingNo/assign-surveyor", assignToTaxSurveyorHandler);

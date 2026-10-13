@@ -1,3 +1,4 @@
+import { normalizeWard } from "../utils/ward";
 import { propertyRepository } from "../repositories/property.repository";
 import { shopRepository } from "../repositories/shop.repository";
 import { changeRequestRepository } from "../repositories/changeRequest.repository";
@@ -94,7 +95,7 @@ type HoldingSortKey = (typeof HOLDING_SORT_KEYS)[number];
 export async function listHoldingsForDashboard(page: unknown, pageSize: unknown, ward: unknown, sort?: unknown, sortDir?: unknown) {
   const p = clampPage(page);
   const ps = clampPageSize(pageSize);
-  const wardFilter = typeof ward === "string" && ward.trim() !== "" ? ward.trim() : undefined;
+  const wardFilter = typeof ward === "string" && ward.trim() !== "" ? normalizeWard(ward) : undefined;
   const sortKey: HoldingSortKey = HOLDING_SORT_KEYS.includes(sort as HoldingSortKey) ? (sort as HoldingSortKey) : "holdingNo";
   const sortDirection: "asc" | "desc" = sortDir === "desc" ? "desc" : "asc";
   const { rows, total } = await propertyRepository.listPaginated(p, ps, wardFilter, sortKey, sortDirection);

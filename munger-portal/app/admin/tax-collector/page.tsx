@@ -65,6 +65,11 @@ const DETAIL_FIELDS: [string, string][] = [
   ["rain_water_harvesting", "Rain water harvesting"],
   ["solar_rooftop", "Solar rooftop"],
   ["is_bwg", "Bulk waste generator"],
+  ["is_slum", "Slum area holding"],
+  ["is_tax_exempt", "Exempt from holding tax"],
+  ["tax_exempt_category", "Exemption category"],
+  ["tax_exempt_from_year", "Exempt from year"],
+  ["tax_exempt_order_no", "Exemption order no."],
   ["latitude", "Latitude"],
   ["longitude", "Longitude"],
 ];

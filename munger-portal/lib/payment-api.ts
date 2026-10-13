@@ -1,4 +1,5 @@
 import { getOperatorToken } from "./auth";
+import type { DemandNoticeData } from "./demand-notice-api";
 
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_PROPERTY_TAX_API_URL || "http://localhost:4000/api/v1";
@@ -50,7 +51,12 @@ export interface ReceiptData {
   taxCollectorName: string | null;
   tvNumber: string | null;
   tvDate: string | null;
+  /** Set only for public online payments - when the payer ticked the declaration. */
+  onlineDeclarationAcceptedAt?: string | null;
   arrearStagesPaid: ArrearStagePaidView[];
+  /** After a PART payment: the balance demand notice for the remaining years, generated automatically. */
+  followUpNotice?: DemandNoticeData | null;
+  followUpNoticeError?: string | null;
   property: Record<string, string | number | boolean | null>;
   floors: unknown[];
   taxCalc: {

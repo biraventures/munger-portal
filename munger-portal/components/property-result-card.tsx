@@ -4,6 +4,7 @@ import { useState } from "react";
 import { CheckCircle2, Loader2, Users, User, AlertCircle } from "lucide-react";
 import { formatINR, totalPayable, type PropertyRecord } from "@/lib/property-tax";
 import { initiateOnlinePayment } from "@/lib/online-payment";
+import { DeclarationCheckbox } from "@/components/online-declaration";
 import { verifyTaxCollectorCode } from "@/lib/tax-collector";
 
 // Mirrors the backend's ONLINE_PAYMENT_ENABLED kill switch (see
@@ -40,6 +41,7 @@ export function PropertyResultCard({ record }: PropertyResultCardProps) {
   // paying immediately - who's paying determines whether a Tax
   // Collector code is collected and verified first.
   const [choosingPayer, setChoosingPayer] = useState(false);
+  const [declared, setDeclared] = useState(false);
   const [payerChoice, setPayerChoice] = useState<PayerChoice>(null);
 
   const [taxCollectorCodeInput, setTaxCollectorCodeInput] = useState("");
@@ -48,6 +50,7 @@ export function PropertyResultCard({ record }: PropertyResultCardProps) {
   const [verifiedCollector, setVerifiedCollector] = useState<{ code: string; name: string } | null>(null);
 
   function resetPayerChoice() {
+    setDeclared(false);
     setChoosingPayer(false);
     setPayerChoice(null);
     setTaxCollectorCodeInput("");
@@ -58,6 +61,7 @@ export function PropertyResultCard({ record }: PropertyResultCardProps) {
 
   function choosePayer(choice: PayerChoice) {
     setPayerChoice(choice);
+    setDeclared(false);
     setVerifyError(null);
     setVerifiedCollector(null);
     setTaxCollectorCodeInput("");
@@ -90,6 +94,7 @@ export function PropertyResultCard({ record }: PropertyResultCardProps) {
         record.holdingNumber,
         total,
         payerChoice === "tax_collector" ? verifiedCollector?.code : undefined,
+        declared,
       );
       window.location.href = redirectUrl;
     } catch (err) {
@@ -268,10 +273,11 @@ export function PropertyResultCard({ record }: PropertyResultCardProps) {
                     </p>
                   )}
 
+                  {verifiedCollector && <DeclarationCheckbox checked={declared} onChange={setDeclared} disabled={paying} />}
                   {verifiedCollector && (
                     <button
                       onClick={handlePay}
-                      disabled={paying}
+                      disabled={paying || !declared}
                       className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-md bg-nnm-gold px-6 py-2.5 text-sm font-semibold text-[#20240a] shadow-[0_3px_0_#96791b] transition-transform hover:-translate-y-px disabled:opacity-60"
                     >
                       {paying && <Loader2 className="h-4 w-4 animate-spin" />}
@@ -285,9 +291,10 @@ export function PropertyResultCard({ record }: PropertyResultCardProps) {
               ) : (
                 <>
                   <p className="mb-3 text-right text-xs text-ink-soft">Paying as a member of the public.</p>
+                  <DeclarationCheckbox checked={declared} onChange={setDeclared} disabled={paying} />
                   <button
                     onClick={handlePay}
-                    disabled={paying}
+                    disabled={paying || !declared}
                     className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-nnm-gold px-6 py-2.5 text-sm font-semibold text-[#20240a] shadow-[0_3px_0_#96791b] transition-transform hover:-translate-y-px disabled:opacity-60"
                   >
                     {paying && <Loader2 className="h-4 w-4 animate-spin" />}

@@ -20,7 +20,8 @@ const envSchema = z.object({
   // in onlinePayment.service.ts about the placeholder redirect). Kept
   // separate from ICICI_MERCHANT_ID so the merchant ID can stay
   // configured without the button being live.
-  ONLINE_PAYMENT_ENABLED: z.coerce.boolean().default(false),
+  // Only the words true/1/yes switch it on. (z.coerce.boolean() would treat the text "false" as true.)
+  ONLINE_PAYMENT_ENABLED: z.preprocess((v) => (typeof v === "string" ? ["true", "1", "yes"].includes(v.trim().toLowerCase()) : v), z.boolean().default(false)),
   SMTP_HOST: z.string().default("smtp.gmail.com"),
   SMTP_PORT: z.coerce.number().default(587),
   SMTP_USER: z.string().min(1, "SMTP_USER is required to send password reset emails"),

@@ -36,6 +36,11 @@ export function NoticeView({
   const p = notice.property;
   const calc = notice.taxCalc;
   const t = notice.totals;
+  const arrearsLabel = t.arrearsPeriod
+    ? t.arrearsPeriod.fromYear === t.arrearsPeriod.toYear
+      ? t.arrearsPeriod.fromYear
+      : `${t.arrearsPeriod.fromYear} to ${t.arrearsPeriod.toYear}`
+    : "";
   // Present only on a reprint (see DemandNoticeReprintData) - absent on
   // a freshly-generated notice, which by definition is none of these yet.
   const status = "cancelled" in notice ? notice : null;
@@ -104,6 +109,13 @@ export function NoticeView({
           </div>
         )}
 
+        {t.balanceAfterPartPaymentReceipt && (
+          <div className="mt-2.5 rounded border border-green-500 bg-green-50 px-3 py-2 text-[11px] text-green-900">
+            <b>BALANCE DEMAND AFTER PART PAYMENT.</b> Part payment has been received vide Receipt No {t.balanceAfterPartPaymentReceipt}. This
+            notice shows the dues that remain pending against this holding.
+          </div>
+        )}
+
         {/* Not-a-receipt banner */}
         <div className="mt-2.5 rounded border-2 border-red-700 bg-red-50 px-3 py-2.5 text-center text-[13px] font-bold text-red-700">
           THIS IS NOT THE PAYMENT RECEIPT. KINDLY COLLECT THE PAYMENT RECEIPT WHEN YOU PAY THE TAX.
@@ -139,12 +151,6 @@ export function NoticeView({
             <div>
               <b className="inline-block w-[150px]">Holding No</b> {str(p.holding_no)}
             </div>
-            <div>
-              <b className="inline-block w-[150px]">Old Holding No</b> {str(p.old_holding_no)}
-            </div>
-            <div>
-              <b className="inline-block w-[150px]">Old PID</b> {str(p.old_pid)}
-            </div>
           </div>
           <div className="flex-1 space-y-0.5">
             <div>
@@ -157,7 +163,10 @@ export function NoticeView({
               <b className="inline-block w-[150px]">Assessment Year</b> {str(p.assessment_year)}
             </div>
             <div>
-              <b className="inline-block w-[150px]">Ground Floor Built-up Area</b> {calc.vacant.groundFloorBuiltArea} sqft
+              <b className="inline-block w-[150px]">Old Holding No</b> {str(p.old_holding_no)}
+            </div>
+            <div>
+              <b className="inline-block w-[150px]">Old PID</b> {str(p.old_pid)}
             </div>
             <div>
               <b className="inline-block w-[150px]">Vacant Area (declared)</b> {calc.vacant.declaredArea} sqft
@@ -301,7 +310,7 @@ export function NoticeView({
           <tbody>
             <tr>
               <td colSpan={5} className="border-x border-slate-400 p-1.5">
-                <b>A. Tax Amount — Current Year</b>
+                <b>A. Tax Amount — Current Year{t.currentYear ? ` (${t.currentYear.year})` : ""}</b>
               </td>
               <td className="border-x border-slate-400 p-1.5 text-right">
                 <b>{t.currentTaxBase}</b>
@@ -316,9 +325,15 @@ export function NoticeView({
             {Number(t.currentTaxAreaRebate) > 0 && (
               <tr>
                 <td colSpan={5} className="border-x border-slate-400 p-1.5 pl-6 italic text-slate-500">
-                  — Plinth Area / Rain Water Harvesting Rebate already applied
-                  {t.currentTaxAreaRebateReason ? ` (${t.currentTaxAreaRebateReason})` : ""} — this is why A is less than
-                  the floorwise total above
+                  {String(t.currentTaxAreaRebateReason ?? "").startsWith("Exempt from holding tax") ? (
+                    <>— {t.currentTaxAreaRebateReason} — the whole year&apos;s holding tax is waived; solid waste user charge still applies</>
+                  ) : (
+                    <>
+                      — Plinth Area / Rain Water Harvesting Rebate already applied
+                      {t.currentTaxAreaRebateReason ? ` (${t.currentTaxAreaRebateReason})` : ""} — this is why A is less than
+                      the floorwise total above
+                    </>
+                  )}
                 </td>
                 <td className="border-x border-slate-400 p-1.5 text-right italic text-slate-500">
                   −{t.currentTaxAreaRebate}
@@ -328,7 +343,7 @@ export function NoticeView({
             {Number(t.yearWiseArrears) > 0 && (
               <tr>
                 <td colSpan={5} className="border-x border-slate-400 p-1.5">
-                  <b>B. Tax Amount — Previous Years (Outstanding Demand, before penalty)</b>
+                  <b>B. Tax Amount — Previous Years{arrearsLabel ? ` (${arrearsLabel})` : ""} (Outstanding Demand, before penalty)</b>
                 </td>
                 <td className="border-x border-slate-400 p-1.5 text-right">
                   <b>{t.arrearsBaseTax}</b>
@@ -338,7 +353,7 @@ export function NoticeView({
             {Number(t.penalty) > 0 && (
               <tr>
                 <td colSpan={5} className="border-x border-slate-400 p-1.5 pl-6 italic text-slate-500">
-                  — Penalty (late fee on arrears above, computed per pending year)
+                  — Penalty (late fee on arrears{arrearsLabel ? ` ${arrearsLabel}` : ""} above, computed per pending year)
                 </td>
                 <td className="border-x border-slate-400 p-1.5 text-right italic text-slate-500">{t.penalty}</td>
               </tr>

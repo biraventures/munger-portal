@@ -5,6 +5,39 @@ import { savePropertyByHoldingNo } from "../services/propertySave.service";
 import { resubmitCorrectedChangeRequest } from "../services/changeRequest.service";
 import { asyncHandler } from "../middleware/asyncHandler";
 import { ApiError } from "../utils/ApiError";
+import { TAX_EXEMPTION_CATEGORIES } from "../utils/taxExemption";
+
+/** Holding tax exemption (migration 118). When isExempt, every order detail and the uploaded order copy are required. */
+const taxExemptionSchema = z
+  .object({
+    isExempt: z.boolean(),
+    category: z.enum(TAX_EXEMPTION_CATEGORIES).nullish(),
+    orderNo: z.string().trim().max(100).nullish(),
+    orderDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use YYYY-MM-DD").nullish(),
+    fromYear: z.string().regex(/^\d{4}-\d{4}$/, "Use YYYY-YYYY format").nullish(),
+    remarks: z.string().trim().max(1000).nullish(),
+    orderDocId: z.coerce.string().regex(/^\d+$/).nullish(),
+  })
+  .superRefine((v, ctx) => {
+    if (!v.isExempt) return;
+    const need = (ok: unknown, path: string, message: string) => {
+      if (!ok) ctx.addIssue({ code: z.ZodIssueCode.custom, path: [path], message });
+    };
+    need(v.category, "category", "Choose the exemption category.");
+    need(v.orderNo, "orderNo", "Order number is required.");
+    need(v.orderDate, "orderDate", "Order date is required.");
+    need(v.fromYear, "fromYear", "Enter the assessment year the exemption applies from.");
+    need(v.orderDocId, "orderDocId", "Upload a copy of the exemption order.");
+    if (v.category === "Other") need(v.remarks, "remarks", "Describe the basis of exemption when the category is Other.");
+    if (v.fromYear) {
+      const [a, b] = v.fromYear.split("-").map(Number);
+      need(b === (a ?? 0) + 1, "fromYear", "From year must be two consecutive years, e.g. 2023-2024.");
+    }
+    if (v.orderDate) {
+      const today = new Date(Date.now() + 5.5 * 3600 * 1000).toISOString().slice(0, 10);
+      need(v.orderDate <= today, "orderDate", "Order date cannot be in the future.");
+    }
+  });
 
 const floorSchema = z.object({
   floorLabel: z.string().min(1),
@@ -39,6 +72,8 @@ export const propertySaveSchema = z.object({
   arrearTax: z.coerce.number().optional(),
   solidWasteChargeType: z.string().nullish(),
   isBwg: z.boolean().optional(),
+  isSlum: z.boolean().optional(),
+  taxExemption: taxExemptionSchema.optional(),
   // No upper bound - an operator can enter more than 12 months to
 	// reflect multiple pending years of solid waste charge as part of
 	// arrears (see migration 018_remove_solid_waste_months_cap.sql).

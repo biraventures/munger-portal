@@ -3,7 +3,7 @@ import { demandNoticeRepository } from "../repositories/demandNotice.repository"
 import { cancellationRequestRepository } from "../repositories/cancellationRequest.repository";
 import { calculateTax } from "./taxCalculation.service";
 import { calculateRebateOrLateFee, calculateSolidWasteCharge } from "./charges.service";
-import { summarizeArrears, computePartPaymentOptions, type PartPaymentOption } from "./arrears.service";
+import { summarizeArrears, computePartPaymentOptions, pendingArrearsPeriod, type PartPaymentOption } from "./arrears.service";
 import { parseYearStartOrNull } from "../utils/assessmentYear";
 import { num } from "../utils/num";
 import { ApiError } from "../utils/ApiError";
@@ -65,7 +65,13 @@ export async function getPartPaymentOptions(holdingNo: string): Promise<{ paidTi
  * (solid waste, water, ...) are left for the next full notice; paying it advances tax_paid_till_year
  * to the last year covered.
  */
-export async function generateDemandNotice(holdingNo: string, generatedBy: string, partYears?: number): Promise<DemandNoticeResult> {
+export async function generateDemandNotice(
+  holdingNo: string,
+  generatedBy: string,
+  partYears?: number,
+  /** Formatted receipt no. of the part payment this notice follows - makes it the balance notice for the remaining years. */
+  followsPartPaymentReceipt?: string,
+): Promise<DemandNoticeResult> {
   const property = await propertyRepository.findByHoldingNo(holdingNo);
   if (!property) {
     throw ApiError.notFound(`Property not found for Holding No: ${holdingNo}`);
@@ -156,6 +162,8 @@ export async function generateDemandNotice(holdingNo: string, generatedBy: strin
   const reminderLabel = reminderNumber > 0 ? `${ordinal(reminderNumber)} Reminder` : null;
   const previousUnsettledDemandNosFormatted = previousUnsettled.map((n) => formatDocNumber(n.demand_no, "Demand", n.notice_date));
 
+  const arrearsPeriod = part ? { fromYear: part.fromYear, toYear: part.toYear, years: part.years } : pendingArrearsPeriod(property, stages);
+
   const totals: DemandNoticeTotals = {
     currentTaxBase: part ? "0.00" : netCurrentBeforeTiming.toFixed(2),
     // Plinth-area/rain-water rebate - already subtracted into
@@ -172,6 +180,10 @@ export async function generateDemandNotice(holdingNo: string, generatedBy: strin
     otherCharges: otherCharges.toFixed(2),
     grandTotal: grandTotal.toFixed(2),
     ...(part ? { partPayment: { years: part.years, fromYear: part.fromYear, toYear: part.toYear } } : {}),
+    // The period of arrears being cleared and the current year (and whether it is cleared by THIS notice).
+    ...(arrearsPeriod ? { arrearsPeriod } : {}),
+    ...(property.assessment_year ? { currentYear: { year: property.assessment_year, included: !part } } : {}),
+    ...(followsPartPaymentReceipt ? { balanceAfterPartPaymentReceipt: followsPartPaymentReceipt } : {}),
   };
 
   await demandNoticeRepository.insertDemandNotice({
@@ -370,11 +382,13 @@ export async function listDemandNoticeHistory(holdingNo: string): Promise<Demand
 export interface BulkGenerateResult {
   processed: number;
   errors: { holdingNo: string; message: string }[];
-  generated: { holdingNo: string; formattedDemandNo: string; grandTotal: string }[];
+  generated: { holdingNo: string; formattedDemandNo: string; grandTotal: string; reminderLabel: string | null }[];
 }
 
 /**
- * Port of bulkGenerateMissingDemandNotices() from Code.gs. Unlike the
+ * Port of bulkGenerateMissingDemandNotices() from Code.gs, extended: besides holdings that never had a notice, it also
+ * raises a fresh notice for any holding with dues whose live notice was not generated in the current month (the late fee
+ * grows each month, so last month's amount is stale). See findHoldingNosNeedingDemandNotice. Unlike the
  * source (which self-limits to ~5 minutes to stay under Apps Script's
  * 6-minute execution cap and expects to be re-run for a large backlog),
  * this runs straight through in one call — Node/Postgres has no
@@ -391,14 +405,14 @@ export interface BulkGenerateResult {
  * the same demand number already assigned here.
  */
 export async function bulkGenerateMissingDemandNotices(generatedBy: string): Promise<BulkGenerateResult> {
-  const holdingNos = await demandNoticeRepository.findHoldingNosMissingDemandNotice();
+  const holdingNos = await demandNoticeRepository.findHoldingNosNeedingDemandNotice();
 
   const result: BulkGenerateResult = { processed: 0, errors: [], generated: [] };
 
   for (const holdingNo of holdingNos) {
     try {
       const notice = await generateDemandNotice(holdingNo, generatedBy);
-      result.generated.push({ holdingNo, formattedDemandNo: notice.formattedDemandNo, grandTotal: notice.totals.grandTotal });
+      result.generated.push({ holdingNo, formattedDemandNo: notice.formattedDemandNo, grandTotal: notice.totals.grandTotal, reminderLabel: notice.reminderLabel });
       result.processed++;
     } catch (err) {
       result.errors.push({ holdingNo, message: err instanceof Error ? err.message : String(err) });

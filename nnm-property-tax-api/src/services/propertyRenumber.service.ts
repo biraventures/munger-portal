@@ -11,8 +11,11 @@ const PROPERTY_COLUMNS = [
   "solid_waste_charge", "penal_charge", "water_charge", "boring_charge", "form_fee", "misc_cost",
   "misc_cost_reason", "misc_rebate", "misc_rebate_reason", "arv", "tax_payable", "holding_creation_year",
   "tax_paid_till_year", "present_holding_name", "present_category", "created_by", "created_date",
-  "last_modified_by", "last_modified_date", "is_bwg", "latitude", "longitude",
+  "last_modified_by", "last_modified_date", "is_bwg", "is_slum", "latitude", "longitude",
   "is_disputed", "dispute_remarks", "disputed_by", "disputed_by_role", "disputed_at", "data_source",
+  // Holding tax exemption (migration 118) - must move with the holding.
+  "is_tax_exempt", "tax_exempt_category", "tax_exempt_order_no", "tax_exempt_order_date",
+  "tax_exempt_from_year", "tax_exempt_remarks", "tax_exempt_order_doc_id",
 ];
 
 /**
@@ -72,11 +75,13 @@ async function moveHoldingNo(client: PoolClient, oldHoldingNo: string, newHoldin
   await client.query(`UPDATE demand_notices SET holding_no = $1 WHERE holding_no = $2`, [newHoldingNo, oldHoldingNo]);
   await client.query(`UPDATE property_history SET holding_no = $1 WHERE holding_no = $2`, [newHoldingNo, oldHoldingNo]);
   await client.query(`UPDATE property_change_requests SET holding_no = $1 WHERE holding_no = $2`, [newHoldingNo, oldHoldingNo]);
+  await client.query(`UPDATE property_discrepancy_requests SET holding_no = $1 WHERE holding_no = $2`, [newHoldingNo, oldHoldingNo]);
   await client.query(`UPDATE migrated_holding_surveys SET holding_no = $1 WHERE holding_no = $2`, [newHoldingNo, oldHoldingNo]);
   await client.query(`UPDATE migrated_holding_survey_events SET holding_no = $1 WHERE holding_no = $2`, [newHoldingNo, oldHoldingNo]);
 
   // Soft references (no FK, just a matching string).
   await client.query(`UPDATE trade_license_applications SET holding_no = $1 WHERE holding_no = $2`, [newHoldingNo, oldHoldingNo]);
+  await client.query(`UPDATE property_exemption_orders SET holding_no = $1 WHERE holding_no = $2`, [newHoldingNo, oldHoldingNo]);
   await client.query(`UPDATE cancellation_requests SET holding_no = $1 WHERE holding_no = $2`, [newHoldingNo, oldHoldingNo]);
   await client.query(`UPDATE property_dispute_log SET holding_no = $1 WHERE holding_no = $2`, [newHoldingNo, oldHoldingNo]);
 

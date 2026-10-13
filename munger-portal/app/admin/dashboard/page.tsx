@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Users, FileClock, FileWarning, LayoutGrid, ShoppingBag, Store, BarChart3, Award, Archive, Download, XCircle, ShieldCheck, Trash2, RefreshCw, Upload, MapPin, Map as MapIcon, ClipboardCheck, UserCheck, ClipboardList, Receipt, RotateCcw, AlertTriangle, List, Flag, Home, FileText } from "lucide-react";
+import { Users, FileClock, FileWarning, LayoutGrid, ShoppingBag, Store, BarChart3, Award, Archive, Download, XCircle, ShieldCheck, Trash2, RefreshCw, Upload, MapPin, Map as MapIcon, ClipboardCheck, UserCheck, ClipboardList, Receipt, RotateCcw, AlertTriangle, List, Flag, Home, FileText, Printer } from "lucide-react";
 import { AdminHeader } from "@/components/admin-header";
 import { DashboardSummaryWidget } from "@/components/dashboard-summary-widget";
 import { useAdminGuard } from "@/lib/use-admin-guard";
@@ -65,7 +65,8 @@ export default function AdminDashboardPage() {
   // a few cards within each, unlike Stall Prabhari/Trade License
   // Nodal who still see some cards in their own area.
   const isGisOnlyRole = isAtps || isAssistantArchitect;
-  const isRestrictedRole = isStallPrabhari || isTradeLicenseNodal || isGisOnlyRole || admin.role === "je_mechanical" || admin.role === "ae_mechanical" || admin.role === "establishment_clerk" || admin.role === "tax_surveyor" || admin.role === "tax_collector";
+  const isAgencyRole = admin.role === "agency_team_leader" || admin.role === "agency_project_manager";
+  const isRestrictedRole = isStallPrabhari || isTradeLicenseNodal || isGisOnlyRole || admin.role === "je_mechanical" || admin.role === "ae_mechanical" || admin.role === "establishment_clerk" || admin.role === "tax_surveyor" || admin.role === "tax_collector" || isAgencyRole;
   // Roles whose whole job is one narrow task (streetlight mechanical
   // engineers, the Establishment Clerk, the Tax Surveyor, the Tax
   // Collector) - shouldn't see property/shop/trade-license sections
@@ -74,7 +75,7 @@ export default function AdminDashboardPage() {
   // they're actually part of the approval chain for). Tax Surveyor
   // and Tax Collector still see their own dedicated cards below -
   // those are gated on the role directly, not on this exclusion.
-  const isNarrowlyScopedRole = admin.role === "je_mechanical" || admin.role === "ae_mechanical" || admin.role === "establishment_clerk" || admin.role === "tax_surveyor" || admin.role === "tax_collector";
+  const isNarrowlyScopedRole = admin.role === "je_mechanical" || admin.role === "ae_mechanical" || admin.role === "establishment_clerk" || admin.role === "tax_surveyor" || admin.role === "tax_collector" || isAgencyRole;
   const canApproveShopPublication = admin.role === "stall_prabhari" || admin.role === "city_manager" || admin.role === "deputy_commissioner";
   const canApproveDemandActions = admin.role === "stall_prabhari" || admin.role === "city_manager";
   const isCommissioner = admin.role === "commissioner";
@@ -98,6 +99,12 @@ export default function AdminDashboardPage() {
   const showTaxCollectorPage = admin.role === "tax_collector";
   const showReportPropertyDiscrepancy = admin.role === "tax_collector";
   const showMyDiscrepancyReports = admin.role === "tax_collector";
+  const showAgencyReports = ["agency_project_manager", "commissioner", "deputy_commissioner", "city_manager", "tax_daroga", "tax_collector"].includes(admin.role);
+  const showAgencyNotices = admin.role === "agency_team_leader";
+  const showUnsurveyedHouseEntry = admin.role === "tax_collector";
+  const showNoticeReceivingUpload = admin.role === "tax_collector";
+  const showUnsurveyedHouses = ["tax_collector", "tax_daroga", "city_manager", "deputy_commissioner", "commissioner"].includes(admin.role);
+  const showNoticeReceivingCopies = showUnsurveyedHouses;
   const DISCREPANCY_CHAIN_ROLES = ["tax_surveyor", "tax_daroga", "city_manager", "deputy_commissioner", "commissioner"];
   const showPropertyDiscrepancyRequests = DISCREPANCY_CHAIN_ROLES.includes(admin.role);
   const showResurveyFlags = admin.role === "tax_daroga" || admin.role === "commissioner";
@@ -121,7 +128,7 @@ export default function AdminDashboardPage() {
   const propertyGroupVisible =
     showMutationApprovals || showCancellationRequests || showBulkDemandNotices || showAllPropertyChanges || showRenumberHolding || showBulkUploadProperties ||
     showMigratedHoldingsBulkUpload || showMigratedHoldingsAssign || showMigratedHoldingsSurveyor || showMigratedHoldingsMySurveys || showInitiateSurvey || showTaxCollectorPage ||
-    showReportPropertyDiscrepancy || showMyDiscrepancyReports || showPropertyDiscrepancyRequests || showResurveyFlags || showCollectionIssues || showSolidWasteApprovals || showTaxCollectorAssignments || showRevertAuditTrail ||
+    showAgencyReports || showAgencyNotices || showReportPropertyDiscrepancy || showMyDiscrepancyReports || showUnsurveyedHouseEntry || showNoticeReceivingUpload || showUnsurveyedHouses || showNoticeReceivingCopies || showPropertyDiscrepancyRequests || showResurveyFlags || showCollectionIssues || showSolidWasteApprovals || showTaxCollectorAssignments || showRevertAuditTrail ||
     showPropertyWiseReport || showDisputedHoldings || showHoldingImportReview;
 
   const showShopAgreementApprovals = !isTradeLicenseNodal && !isGisOnlyRole && !isNarrowlyScopedRole;
@@ -162,7 +169,9 @@ export default function AdminDashboardPage() {
   const showAssignCoordinates = isAtps || isCommissioner;
   const showGisMap = isAtps || isAssistantArchitect || isCommissioner;
   const showBuildingMapApproval = isAssistantArchitect;
-  const miscGroupVisible = showOperators || showManageLogins || showDocumentArchive || showAttendanceReport || showAssignCoordinates || showGisMap || showBuildingMapApproval;
+  // Who's Who: City Manager verifies, Deputy Commissioner (DMC) publishes, Commissioner views.
+  const showWhosWho = admin.role === "city_manager" || admin.role === "deputy_commissioner" || isCommissioner;
+  const miscGroupVisible = showOperators || showManageLogins || showDocumentArchive || showAttendanceReport || showAssignCoordinates || showGisMap || showBuildingMapApproval || showWhosWho;
   const employeeDatabaseGroupVisible = showEmployeeDatabaseEntry || showEmployeeDatabaseList || showEmployeeDatabaseVerify || showEmployeeDatabaseProgress;
   const streetlightGroupVisible = isStreetlightReporterRole;
 
@@ -190,16 +199,18 @@ export default function AdminDashboardPage() {
         <h1 className="mb-1 text-2xl font-semibold text-slate-900">Welcome, {admin.displayName}</h1>
         <p className="mb-8 text-sm text-slate-500">Signed in as {ADMIN_ROLE_LABELS[admin.role]}.</p>
 
-        <DashboardSummaryWidget
-          fetchSummary={fetchDashboardSummaryAdmin}
-          fetchHoldings={fetchDashboardHoldingsAdmin}
-          fetchPropertyChanges={fetchDashboardPropertyChangesAdmin}
-          fetchShops={fetchDashboardShopsAdmin}
-          fetchShopApplications={fetchDashboardShopApplicationsAdmin}
-          fetchTradeLicenseApplications={fetchDashboardTradeLicenseApplicationsAdmin}
-          fetchTradeLicensesIssued={fetchDashboardTradeLicensesIssuedAdmin}
-          visibleTabs={isStallPrabhari ? ["shops", "shopApplications"] : isTradeLicenseNodal ? ["tradeLicenseApplications", "tradeLicensesIssued"] : undefined}
-        />
+        {!isAgencyRole && (
+          <DashboardSummaryWidget
+            fetchSummary={fetchDashboardSummaryAdmin}
+            fetchHoldings={fetchDashboardHoldingsAdmin}
+            fetchPropertyChanges={fetchDashboardPropertyChangesAdmin}
+            fetchShops={fetchDashboardShopsAdmin}
+            fetchShopApplications={fetchDashboardShopApplicationsAdmin}
+            fetchTradeLicenseApplications={fetchDashboardTradeLicenseApplicationsAdmin}
+            fetchTradeLicensesIssued={fetchDashboardTradeLicensesIssuedAdmin}
+            visibleTabs={isStallPrabhari ? ["shops", "shopApplications"] : isTradeLicenseNodal ? ["tradeLicenseApplications", "tradeLicensesIssued"] : undefined}
+          />
+        )}
 
         {propertyGroupVisible && (
           <>
@@ -336,6 +347,66 @@ export default function AdminDashboardPage() {
                   </span>
                   <h3 className="mb-1.5 text-base font-semibold text-slate-900">Report Property Discrepancy</h3>
                   <p className="text-sm text-slate-500">Found something that doesn&apos;t match the records? Submit the corrected details for review.</p>
+                </Link>
+              )}
+
+              {showUnsurveyedHouseEntry && (
+                <Link href="/admin/unsurveyed-house-entry" className={cardClass}>
+                  <span className={iconWrapClass}>
+                    <Home className="h-6 w-6" strokeWidth={1.8} />
+                  </span>
+                  <h3 className="mb-1.5 text-base font-semibold text-slate-900">House Not in Records</h3>
+                  <p className="text-sm text-slate-500">Record a house that is in neither the holding database nor the MUNG-MIG data - GPS, photo, ward, address, landmark.</p>
+                </Link>
+              )}
+
+              {showNoticeReceivingUpload && (
+                <Link href="/admin/notice-receiving-upload" className={cardClass}>
+                  <span className={iconWrapClass}>
+                    <FileText className="h-6 w-6" strokeWidth={1.8} />
+                  </span>
+                  <h3 className="mb-1.5 text-base font-semibold text-slate-900">Upload Notice Receiving Copy</h3>
+                  <p className="text-sm text-slate-500">Photograph and upload the signed copy of a printed demand notice (up to 2 per notice).</p>
+                </Link>
+              )}
+
+              {showUnsurveyedHouses && (
+                <Link href="/admin/unsurveyed-houses" className={cardClass}>
+                  <span className={iconWrapClass}>
+                    <List className="h-6 w-6" strokeWidth={1.8} />
+                  </span>
+                  <h3 className="mb-1.5 text-base font-semibold text-slate-900">Houses Not Yet Surveyed</h3>
+                  <p className="text-sm text-slate-500">Read-only list of houses found on the ground that are not in the demand register.</p>
+                </Link>
+              )}
+
+              {showNoticeReceivingCopies && (
+                <Link href="/admin/notice-receiving-copies" className={cardClass}>
+                  <span className={iconWrapClass}>
+                    <Receipt className="h-6 w-6" strokeWidth={1.8} />
+                  </span>
+                  <h3 className="mb-1.5 text-base font-semibold text-slate-900">Notice Receiving Copies</h3>
+                  <p className="text-sm text-slate-500">Read-only list of signed demand notice copies uploaded by Tax Collectors.</p>
+                </Link>
+              )}
+
+              {showAgencyReports && (
+                <Link href="/admin/agency-reports" className={cardClass}>
+                  <span className={iconWrapClass}>
+                    <BarChart3 className="h-6 w-6" strokeWidth={1.8} />
+                  </span>
+                  <h3 className="mb-1.5 text-base font-semibold text-slate-900">Collection & Field Reports</h3>
+                  <p className="text-sm text-slate-500">Collection, notice distribution, resurvey flags, new houses and collection issues - by ward and collector, daily to annual.</p>
+                </Link>
+              )}
+
+              {showAgencyNotices && (
+                <Link href="/admin/agency-notices" className={cardClass}>
+                  <span className={iconWrapClass}>
+                    <Printer className="h-6 w-6" strokeWidth={1.8} />
+                  </span>
+                  <h3 className="mb-1.5 text-base font-semibold text-slate-900">Ward-wise Demand Notices</h3>
+                  <p className="text-sm text-slate-500">Print the demand notices of all holdings with dues pending in a ward, as 1-2 PDF files.</p>
                 </Link>
               )}
 
@@ -720,6 +791,21 @@ export default function AdminDashboardPage() {
           <>
             <h2 className={groupHeadingClass}>Miscellaneous</h2>
             <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+              {showWhosWho && (
+                <Link href="/whos-who-manager?as=admin" className={cardClass}>
+                  <span className={iconWrapClass}>
+                    <UserCheck className="h-6 w-6" strokeWidth={1.8} />
+                  </span>
+                  <h3 className="mb-1.5 text-base font-semibold text-slate-900">Website Who&apos;s Who</h3>
+                  <p className="text-sm text-slate-500">
+                    {admin.role === "city_manager"
+                      ? "Verify Who's Who entries made by operators and forward them to the DMC."
+                      : admin.role === "deputy_commissioner"
+                        ? "Approve verified Who's Who entries and publish them on the website."
+                        : "See the Who's Who entries and where each one is in the approval chain."}
+                  </p>
+                </Link>
+              )}
               {showOperators && (
                 <Link href="/admin/operators" className={cardClass}>
                   <span className={iconWrapClass}>

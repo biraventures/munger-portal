@@ -60,13 +60,14 @@ export const postSubmitPublicTradeLicenseApplication = asyncHandler(async (req: 
   res.status(200).json(result);
 });
 
-const renewalAutofillQuerySchema = z.object({ holdingNo: holdingNoSchema });
+const renewalAutofillQuerySchema = z.object({ holdingNo: holdingNoSchema, mobile: z.string().transform((v) => v.replace(/[\s-]/g, "")).pipe(z.string().regex(/^(\+?91|0)?[6-9]\d{9}$/, "Enter the 10-digit mobile number registered on your last application")) });
 
-/** GET /api/v1/trade-license-applications/renewal-autofill?holdingNo=... — public. Prefills a renewal form from the last application on file for that holding. */
+/** GET /api/v1/trade-license-applications/renewal-autofill?holdingNo=...&mobile=... — public, but only answers when the mobile matches the one on the holding's last application. */
 export const getRenewalAutofillHandler = asyncHandler(async (req: Request, res: Response) => {
   const parsed = renewalAutofillQuerySchema.safeParse(req.query);
-  if (!parsed.success) throw ApiError.badRequest("Invalid holding number");
-  const result = await getRenewalAutofill(parsed.data.holdingNo);
+  if (!parsed.success) throw ApiError.badRequest(parsed.error.issues[0]?.message ?? "Invalid holding number or mobile number");
+  const result = await getRenewalAutofill(parsed.data.holdingNo, parsed.data.mobile);
+  res.locals.autofillMatched = result.found; // lets the rate limiter count only misses
   res.status(200).json(result);
 });
 

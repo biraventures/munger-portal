@@ -15,6 +15,12 @@ export interface DemandNoticeTotals {
   grandTotal: string;
   // Present only on a part-payment notice (first N unpaid years only).
   partPayment?: { years: number; fromYear: string; toYear: string };
+  // Arrear years this notice asks to be cleared (fromYear = toYear when a single year is pending). Absent when there are no arrears.
+  arrearsPeriod?: { fromYear: string; toYear: string; years: number };
+  // The current year and whether this notice clears it (false on a part-payment notice).
+  currentYear?: { year: string; included: boolean };
+  // Set on the balance notice generated automatically right after a part payment: the receipt of that payment.
+  balanceAfterPartPaymentReceipt?: string;
 }
 
 export interface DemandNoticeResult {

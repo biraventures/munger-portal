@@ -1,3 +1,4 @@
+import { normalizeWard } from "../utils/ward";
 import type { Request, Response } from "express";
 import { z } from "zod";
 import { adminRepository } from "../repositories/admin.repository";
@@ -43,7 +44,7 @@ export const assignCityManagerHandler = asyncHandler(async (req: Request, res: R
   });
 });
 
-const setWardsSchema = z.object({ wards: z.array(z.string().trim().min(1)).max(100) });
+const setWardsSchema = z.object({ wards: z.array(z.string().trim().min(1).transform(normalizeWard)).max(100) });
 
 /** POST /api/v1/admin/tax-collectors/:username/wards - Commissioner only. Replaces the Tax Collector's whole tagged-ward set. */
 export const setTaxCollectorWardsHandler = asyncHandler(async (req: Request, res: Response) => {

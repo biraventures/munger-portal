@@ -244,6 +244,25 @@ export const migratedHoldingSurveyRepository = {
     return rows[0] ?? null;
   },
 
+  /**
+   * A MUNG-MIG- holding whose real details were entered by a Tax Collector
+   * and approved through the discrepancy chain (Tax Surveyor, Tax Daroga,
+   * City Manager, Deputy Commissioner) is finalized here, from whatever
+   * state the old survey workflow had it in. Returns null when there is
+   * no survey row or it was already finalized.
+   */
+  async finalizeViaCollectorChain(holdingNo: string, finalUsername: string, finalDisplayName: string, collectorDisplayName: string): Promise<MigratedHoldingSurveyRow | null> {
+    const { rows } = await pool.query<MigratedHoldingSurveyRow>(
+      `UPDATE migrated_holding_surveys SET status = 'finalized', final_verified_by_username = $2, final_verified_by_display_name = $3, final_verified_at = now()
+       WHERE holding_no = $1 AND status <> 'finalized' RETURNING *`,
+      [holdingNo, finalUsername, finalDisplayName],
+    );
+    if (rows[0]) {
+      await logEvent(holdingNo, "finalized", { username: finalUsername, displayName: finalDisplayName, role: "deputy_commissioner" }, `Entered by Tax Collector ${collectorDisplayName} and approved through the Tax Surveyor, Tax Daroga, City Manager and Deputy Commissioner chain.`);
+    }
+    return rows[0] ?? null;
+  },
+
   /** Records the holding's renumbering to its final MNN- series number, in the event log - a distinct fact from "finalized" itself so the trail shows both the decision and the resulting number in one place. */
   async logRenumberEvent(oldHoldingNo: string, newHoldingNo: string, actorDisplayName: string): Promise<void> {
     await logEvent(newHoldingNo, "renumbered_to_mnn", { username: null, displayName: actorDisplayName, role: null }, `Renumbered from ${oldHoldingNo} to ${newHoldingNo} on final approval.`);

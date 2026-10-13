@@ -48,6 +48,12 @@ export interface DemandNoticeData {
     grandTotal: string;
     /** Present only on a part-payment notice (first N unpaid years only). */
     partPayment?: { years: number; fromYear: string; toYear: string };
+    /** Arrear years this notice clears (fromYear = toYear when only one year is pending). */
+    arrearsPeriod?: { fromYear: string; toYear: string; years: number };
+    /** The current year and whether this notice clears it (false on a part-payment notice). */
+    currentYear?: { year: string; included: boolean };
+    /** Set on the balance notice raised right after a part payment: formatted receipt no. of that payment. */
+    balanceAfterPartPaymentReceipt?: string;
   };
 }
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { AlertCircle, CheckCircle2, FileText, Loader2, Printer, Receipt, XCircle } from "lucide-react";
 import {
   fetchDemandNoticeHistory,
@@ -30,9 +30,10 @@ export function PropertyDocumentHistory({ holdingNo }: { holdingNo: string }) {
   const [cancelError, setCancelError] = useState<string | null>(null);
   const [cancelSuccess, setCancelSuccess] = useState<string | null>(null);
 
-  useEffect(() => {
-    setNoticeHistory(null);
-    setPaymentHistory(null);
+  // Loads both lists. The lists are re-read whenever the page comes back into view, a document is closed, or Refresh is
+  // pressed - a cancellation approved by the Tax Daroga in another login otherwise leaves this list showing the old
+  // status (a cancelled receipt still offering "Cancel", its notice still "settled").
+  const loadHistory = useCallback(() => {
     fetchDemandNoticeHistory(holdingNo)
       .then(setNoticeHistory)
       .catch((err) => setError(err instanceof Error ? err.message : "Could not load demand notice history."));
@@ -40,6 +41,30 @@ export function PropertyDocumentHistory({ holdingNo }: { holdingNo: string }) {
       .then(setPaymentHistory)
       .catch((err) => setError(err instanceof Error ? err.message : "Could not load payment history."));
   }, [holdingNo]);
+
+  useEffect(() => {
+    setNoticeHistory(null);
+    setPaymentHistory(null);
+    loadHistory();
+  }, [holdingNo, loadHistory]);
+
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === "visible") loadHistory();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", loadHistory);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", loadHistory);
+    };
+  }, [loadHistory]);
+
+  // Back from viewing a notice / receipt: show the latest status.
+  const viewingDocument = noticeReprint !== null || receiptReprint !== null;
+  useEffect(() => {
+    if (!viewingDocument) loadHistory();
+  }, [viewingDocument, loadHistory]);
 
   async function handleOpenNotice(demandNo: string) {
     setLoadingItem(`notice-${demandNo}`);
@@ -82,6 +107,7 @@ export function PropertyDocumentHistory({ holdingNo }: { holdingNo: string }) {
       await requestCancellation(cancelling.type, cancelling.id, cancelReason);
       setCancelSuccess(`Cancellation request submitted for ${cancelling.type === "demand_notice" ? "demand notice" : "receipt"} #${cancelling.id} - it will take effect once Tax Daroga approves it.`);
       setCancelling(null);
+      loadHistory();
     } catch (err) {
       setCancelError(err instanceof Error ? err.message : "Could not submit cancellation request.");
     } finally {
@@ -107,7 +133,12 @@ export function PropertyDocumentHistory({ holdingNo }: { holdingNo: string }) {
   return (
     <>
     <section className="rounded-xl border border-slate-200 bg-white p-6">
-      <h2 className="mb-4 text-base font-semibold text-slate-900">Document History</h2>
+      <div className="mb-4 flex items-center justify-between">
+        <h2 className="text-base font-semibold text-slate-900">Document History</h2>
+        <button onClick={loadHistory} className="text-xs font-semibold text-nnm-blue hover:underline">
+          Refresh
+        </button>
+      </div>
       <p className="mb-4 text-xs text-slate-500">Past demand notices and payment receipts. Cancellation requires Tax Daroga approval and a stated reason.</p>
 
       {cancelSuccess && (

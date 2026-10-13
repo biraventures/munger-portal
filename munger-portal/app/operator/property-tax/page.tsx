@@ -5,6 +5,7 @@ import { AlertCircle, FileWarning, Loader2, Receipt } from "lucide-react";
 import { OperatorHeader } from "@/components/operator-header";
 import { OperatorPropertySearch } from "@/components/operator/operator-property-search";
 import { PropertyEditorForm } from "@/components/operator/property-editor-form";
+import { exemptionFromProperty } from "@/lib/tax-exemption-api";
 import { PaymentForm } from "@/components/operator/payment-form";
 import { ReceiptView } from "@/components/operator/receipt-view";
 import { NoticeView } from "@/components/operator/notice-view";
@@ -45,6 +46,7 @@ function mapToFormState(property: Record<string, unknown>, floors: Record<string
       solidWasteChargeType: str(property.solid_waste_charge_type),
       solidWasteMonths: str(property.solid_waste_months || "12"),
       isBwg: Boolean(property.is_bwg),
+      isSlum: Boolean(property.is_slum),
       holdingCreationYear: str(property.holding_creation_year),
       taxPaidTillYear: str(property.tax_paid_till_year),
       miscCost: str(property.misc_cost),
@@ -78,6 +80,7 @@ function mapToFormState(property: Record<string, unknown>, floors: Record<string
       totalPending: str(property.pendingArrearsTotal),
       penalty: str(property.autoPenalty),
     },
+    exemption: exemptionFromProperty(property),
   };
 }
 
@@ -264,6 +267,7 @@ export default function OperatorPropertyTaxPage() {
                   initialMaster={mode.data.master}
                   initialFloors={mode.data.floors}
                   existingArrears={mode.data.existingArrears}
+                  initialExemption={mode.data.exemption}
                   formOptions={formOptions}
                   onSaved={() => {}}
                 />

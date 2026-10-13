@@ -1,6 +1,7 @@
 "use client";
 
 import { Suspense, useEffect, useState } from "react";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { AlertCircle, CheckCircle2, Search, AlertTriangle } from "lucide-react";
 import { sanitizeHoldingNoInput } from "@/lib/holding-no";
@@ -8,6 +9,7 @@ import { AdminHeader } from "@/components/admin-header";
 import { useAdminGuard } from "@/lib/use-admin-guard";
 import { fetchFullPropertyAdmin, reportPropertyDiscrepancy } from "@/lib/admin-api";
 import { fetchFormOptions, type FormOptions } from "@/lib/operator-api";
+import { searchMigratedHoldings, type MigHoldingHit } from "@/lib/collector-field-api";
 import { AdminPropertyDetailsForm, blankAdminPropertyForm, propertyFormFromExisting, propertyFormToPayload, type AdminPropertyFormState } from "@/components/admin/property-details-form";
 import { DiscrepancyCaptureSection, blankCaptureState, fileToBase64, type CaptureState } from "@/components/admin/discrepancy-capture-section";
 
@@ -36,6 +38,12 @@ function ReportPropertyDiscrepancyContent() {
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [migOpen, setMigOpen] = useState(false);
+  const [migQuery, setMigQuery] = useState("");
+  const [migWard, setMigWard] = useState("");
+  const [migSearching, setMigSearching] = useState(false);
+  const [migError, setMigError] = useState<string | null>(null);
+  const [migResults, setMigResults] = useState<MigHoldingHit[] | null>(null);
 
   useEffect(() => {
     fetchFormOptions().then(setFormOptions).catch(() => setFormOptions(null));
@@ -60,6 +68,19 @@ function ReportPropertyDiscrepancyContent() {
       setSearchError(err instanceof Error ? err.message : "Search failed.");
     } finally {
       setSearching(false);
+    }
+  }
+
+  async function runMigSearch() {
+    setMigSearching(true);
+    setMigError(null);
+    setMigResults(null);
+    try {
+      setMigResults(await searchMigratedHoldings(migQuery.trim(), migWard));
+    } catch (err) {
+      setMigError(err instanceof Error ? err.message : "Search failed.");
+    } finally {
+      setMigSearching(false);
     }
   }
 
@@ -170,6 +191,76 @@ function ReportPropertyDiscrepancyContent() {
             <Search className="h-4 w-4" />
             {searching ? "Searching…" : "Search"}
           </button>
+        </div>
+
+        <div className="mb-6 rounded-xl border border-slate-200 bg-white p-4">
+          <button type="button" onClick={() => setMigOpen((v) => !v)} className="text-sm font-semibold text-nnm-blue hover:underline">
+            {migOpen ? "Hide" : "House not found by holding number? Find it in the MUNG-MIG data"}
+          </button>
+          {migOpen && (
+            <div className="mt-3 space-y-3">
+              <p className="text-xs text-slate-500">
+                Search the old-record (MUNG-MIG-) holdings by owner name, address, old holding number or MUNG-MIG number. Pick the match, enter the real details, and it goes
+                through the same four-stage review. When fully approved the house becomes a regular holding.
+              </p>
+              <div className="flex flex-wrap items-end gap-2">
+                <div className="min-w-48 flex-1">
+                  <label className="mb-1 block text-xs font-medium text-slate-500">Owner name / address / number (3+ letters)</label>
+                  <input value={migQuery} onChange={(e) => setMigQuery(e.target.value)} onKeyDown={(e) => e.key === "Enter" && migQuery.trim().length >= 3 && runMigSearch()} className={inputClass} />
+                </div>
+                <div className="w-24">
+                  <label className="mb-1 block text-xs font-medium text-slate-500">Ward</label>
+                  <input value={migWard} onChange={(e) => setMigWard(e.target.value)} className={inputClass} placeholder="Any" />
+                </div>
+                <button
+                  type="button"
+                  onClick={runMigSearch}
+                  disabled={migSearching || migQuery.trim().length < 3}
+                  className="inline-flex items-center gap-1.5 rounded-md bg-nnm-blue px-4 py-2.5 text-sm font-semibold text-white hover:bg-nnm-blue-dark disabled:opacity-60"
+                >
+                  <Search className="h-4 w-4" />
+                  {migSearching ? "Searching…" : "Search"}
+                </button>
+              </div>
+              {migError && <p className="text-sm text-red-600">{migError}</p>}
+              {migResults && migResults.length === 0 && (
+                <p className="text-sm text-slate-600">
+                  Nothing found. If the house is in neither database, <Link href="/admin/unsurveyed-house-entry" className="font-semibold text-nnm-blue underline">record it as a house not in records</Link>.
+                </p>
+              )}
+              {migResults && migResults.length > 0 && (
+                <ul className="divide-y divide-slate-100 rounded-lg border border-slate-200">
+                  {migResults.map((h) => (
+                    <li key={h.holding_no} className="flex items-center justify-between gap-3 px-3 py-2 text-sm">
+                      <span>
+                        <b>{h.holding_no}</b> - {h.owner_name}
+                        <span className="block text-xs text-slate-500">
+                          {h.address ?? "no address"}
+                          {h.ward ? ` - Ward ${h.ward}` : ""}
+                          {h.old_holding_no ? ` - old no ${h.old_holding_no}` : ""}
+                          {h.pending_reports > 0 ? " - a report is already pending review" : ""}
+                        </span>
+                      </span>
+                      <button
+                        type="button"
+                        disabled={h.pending_reports > 0}
+                        onClick={() => {
+                          setHoldingNo(h.holding_no);
+                          runSearch(h.holding_no);
+                        }}
+                        className="shrink-0 rounded-md border border-nnm-blue px-3 py-1.5 text-xs font-semibold text-nnm-blue hover:bg-blue-50 disabled:opacity-40"
+                      >
+                        Use this
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <p className="text-xs text-slate-500">
+                Not in the MUNG-MIG data either? <Link href="/admin/unsurveyed-house-entry" className="font-semibold text-nnm-blue underline">Record a house not in records</Link>.
+              </p>
+            </div>
+          )}
         </div>
 
         {searchError && (

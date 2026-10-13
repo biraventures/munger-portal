@@ -417,6 +417,7 @@ export default function ManageLightsPage() {
                 <li>Location name</li>
                 <li>Installed by Agency name</li>
                 <li>No of lights - how many lamps are mounted on this tower</li>
+                <li>Number of functional lamps - how many of those lamps are working (optional; cannot be more than No of lights)</li>
                 <li>Functional status - &quot;Working&quot; or &quot;Not Working&quot;</li>
                 <li>Maintenance agency</li>
                 <li>Latitude</li>
@@ -502,6 +503,7 @@ export default function ManageLightsPage() {
                     <th className="px-3 py-2 font-medium">Agency</th>
                     <th className="px-3 py-2 font-medium">Maint. Agency</th>
                     <th className="px-3 py-2 font-medium"># Lights</th>
+                    <th className="px-3 py-2 font-medium"># Functional</th>
                     <th className="px-3 py-2 font-medium">Switch</th>
                     <th className="px-3 py-2 font-medium">Remarks</th>
                     <th className="px-3 py-2 font-medium"></th>
@@ -519,6 +521,7 @@ export default function ManageLightsPage() {
                       <td className="px-3 py-2 text-xs">{agencyName(l.installationAgencyId)}</td>
                       <td className="px-3 py-2 text-xs">{agencyName(l.maintenanceAgencyId)}</td>
                       <td className="px-3 py-2 text-xs">{l.noOfLights ?? "-"}</td>
+                      <td className="px-3 py-2 text-xs">{l.noOfFunctionalLights ?? "-"}</td>
                       <td className="px-3 py-2 text-xs">{l.switchStatus ? SWITCH_LABELS[l.switchStatus] : "-"}</td>
                       <td className="px-3 py-2 max-w-[10rem] truncate text-xs text-slate-500" title={l.remarks ?? undefined}>
                         {l.remarks || "-"}

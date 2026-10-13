@@ -48,14 +48,27 @@ export interface DemandNoticeRow {
 }
 
 export const demandNoticeRepository = {
-  /** Port of the "which holdings need one" scan in bulkGenerateMissingDemandNotices(): has Floors data, but no DemandNotices row yet. */
-  async findHoldingNosMissingDemandNotice(): Promise<string[]> {
+  /**
+   * Which holdings the bulk run should raise a demand notice for: has Floors data, is not disputed, still has something
+   * to pay (tax paid till an earlier year than its assessment year), and has NO live demand notice (not superseded, not
+   * cancelled) generated in the current calendar month. Late fee is added as the month changes, so a notice from an
+   * earlier month is stale - a fresh one is raised (it supersedes the old unsettled one as a reminder). A holding that
+   * never had a notice qualifies too. Month boundaries are in Indian time.
+   */
+  async findHoldingNosNeedingDemandNotice(): Promise<string[]> {
     const { rows } = await pool.query<{ holding_no: string }>(
       `SELECT DISTINCT p.holding_no
        FROM properties p
        JOIN floors f ON f.holding_no = p.holding_no
-       LEFT JOIN demand_notices d ON d.holding_no = p.holding_no
-       WHERE d.holding_no IS NULL
+       WHERE NOT COALESCE(p.is_disputed, FALSE)
+         AND (p.tax_paid_till_year IS NULL OR p.tax_paid_till_year < p.assessment_year)
+         AND NOT EXISTS (
+           SELECT 1 FROM demand_notices d
+            WHERE d.holding_no = p.holding_no
+              AND d.superseded = FALSE
+              AND d.cancelled = FALSE
+              AND d.notice_date >= (date_trunc('month', now() AT TIME ZONE 'Asia/Kolkata') AT TIME ZONE 'Asia/Kolkata')
+         )
        ORDER BY p.holding_no`,
     );
     return rows.map((r) => r.holding_no);
@@ -197,6 +210,23 @@ export const demandNoticeRepository = {
       [demandNo, reason],
     );
     return rows[0] ?? null;
+  },
+
+  /**
+   * Cancels every still-unpaid notice for the holding that was generated at/after `since` (other than `exceptDemandNo`).
+   * Used when a receipt is cancelled: notices raised after that payment were worked out on the assumption that it stood,
+   * so once it is cancelled they are wrong and must not be payable. Returns the demand numbers cancelled.
+   */
+  async cancelUnsettledGeneratedSince(holdingNo: string, since: Date, exceptDemandNo: string | null, reason: string, client: Pool | PoolClient = pool): Promise<string[]> {
+    const { rows } = await client.query<{ demand_no: string }>(
+      `UPDATE demand_notices
+       SET cancelled = TRUE, cancelled_reason = $4, cancelled_at = now()
+       WHERE holding_no = $1 AND notice_date >= $2 AND settled = FALSE AND cancelled = FALSE
+         AND ($3::text IS NULL OR demand_no <> $3)
+       RETURNING demand_no`,
+      [holdingNo, since, exceptDemandNo, reason],
+    );
+    return rows.map((r) => r.demand_no);
   },
 
   /** Reverts a settled notice back to unsettled and payable again - used when its receipt gets cancelled (see cancellationRequest.service.ts). */

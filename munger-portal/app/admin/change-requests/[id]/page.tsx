@@ -14,6 +14,7 @@ import {
   type ChangeRequestDetail,
 } from "@/lib/admin-api";
 import { ADMIN_ROLE_LABELS } from "@/lib/admin-auth";
+import { TaxExemptionReview } from "@/components/admin/tax-exemption-review";
 
 const FIELD_DIFF_ROWS: { label: string; currentKey: string; proposedKey: string }[] = [
   { label: "Owner Name", currentKey: "owner_name", proposedKey: "ownerName" },
@@ -31,6 +32,7 @@ const FIELD_DIFF_ROWS: { label: string; currentKey: string; proposedKey: string 
   { label: "Tax Paid Till Year", currentKey: "tax_paid_till_year", proposedKey: "taxPaidTillYear" },
   { label: "Solid Waste Charge Type", currentKey: "solid_waste_charge_type", proposedKey: "solidWasteChargeType" },
   { label: "Bulk Waste Generator (no solid waste charge)", currentKey: "is_bwg", proposedKey: "isBwg" },
+  { label: "Slum area holding", currentKey: "is_slum", proposedKey: "isSlum" },
 ];
 
 function displayVal(v: unknown): string {
@@ -185,6 +187,8 @@ export default function ChangeRequestDetailPage() {
                 </table>
               </div>
             </section>
+
+            <TaxExemptionReview current={detail.currentProperty ?? null} proposed={detail.request.proposed_data.taxExemption} />
 
             <section className="rounded-xl border border-slate-200 bg-white p-6">
               <h2 className="mb-4 text-base font-semibold text-slate-900">Approval history</h2>

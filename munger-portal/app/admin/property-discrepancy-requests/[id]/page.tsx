@@ -34,6 +34,7 @@ const FIELD_DIFF_ROWS: { label: string; currentKey: string; proposedKey: string 
   { label: "Holding Creation Year", currentKey: "holding_creation_year", proposedKey: "holdingCreationYear" },
   { label: "Solid Waste Charge Type", currentKey: "solid_waste_charge_type", proposedKey: "solidWasteChargeType" },
   { label: "Bulk Waste Generator (no solid waste charge)", currentKey: "is_bwg", proposedKey: "isBwg" },
+  { label: "Slum area holding", currentKey: "is_slum", proposedKey: "isSlum" },
 ];
 
 const DECISION_LABELS: Record<string, string> = {

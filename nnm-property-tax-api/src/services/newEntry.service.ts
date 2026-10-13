@@ -88,6 +88,7 @@ export async function saveNewEntryProperty(input: NewEntryPropertyInput, operato
     solid_waste_charge_type: input.solidWasteChargeType ?? null,
     solid_waste_months: input.solidWasteMonths ?? 12,
     is_bwg: Boolean(input.isBwg),
+    is_slum: Boolean(input.isSlum),
     holding_creation_year: input.holdingCreationYear,
   } as unknown as PropertyRow;
 
@@ -154,6 +155,7 @@ export async function saveNewEntryProperty(input: NewEntryPropertyInput, operato
       solidWasteMonths: input.solidWasteMonths ?? 12,
       solidWasteCharge,
       isBwg: Boolean(input.isBwg),
+      isSlum: Boolean(input.isSlum),
       penalCharge: input.penalCharge ?? 0,
       waterCharge: input.waterCharge ?? 0,
       boringCharge: input.boringCharge ?? 0,

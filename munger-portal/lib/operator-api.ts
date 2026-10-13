@@ -340,6 +340,7 @@ export interface PrintableReceiptHistory {
   taxCollectorName: string | null;
   tvNumber: string | null;
   tvDate: string | null;
+  onlineDeclarationAcceptedAt?: string | null;
   breakdown: {
     arv: string;
     currentYearTaxNet: string;

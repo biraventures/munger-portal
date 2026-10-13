@@ -78,9 +78,11 @@ export default function AdminDemandNoticesPage() {
         <div>
           <h1 className="mb-1 text-2xl font-semibold text-slate-900">Bulk Demand Notice Generation</h1>
           <p className="mb-6 text-sm text-slate-500">
-            Generates a demand notice for every holding that has floor data on file but has never had one — matching
-            the original bulk batch tool. This only logs each notice (holding number, demand number, amount) — it
-            does not print anything. A printable copy for any specific holding is still available from that
+            Generates a demand notice for every holding that has dues and floor data on file but has no live demand
+            notice from the current month — either it never had one, or its latest notice is from an earlier month
+            (late fee is added as the month changes, so the older amount is out of date; the new notice supersedes the
+            old one as a reminder). Holdings already notified this month, fully paid up, or disputed are left out. This
+            only logs each notice (holding number, demand number, amount) — it does not print anything. A printable copy for any specific holding is still available from that
             property&apos;s page afterward.
           </p>
 
@@ -114,7 +116,7 @@ export default function AdminDemandNoticesPage() {
                     {result.errors.length > 0 ? `, ${result.errors.length} holding(s) skipped or failed` : ""}.
                   </p>
                   {result.processed === 0 && result.errors.length === 0 && (
-                    <p className="mt-1 text-xs">No holding is eligible: every holding with floor data already has a demand notice.</p>
+                    <p className="mt-1 text-xs">No holding is eligible: every holding with dues already has a demand notice from this month.</p>
                   )}
                   {result.errors.length > 0 && (
                     <ul className="mt-2 list-disc space-y-0.5 pl-5 text-xs">
@@ -144,6 +146,7 @@ export default function AdminDemandNoticesPage() {
                       <tr className="border-b border-slate-200 bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
                         <th className="px-4 py-2.5 font-medium">Holding No</th>
                         <th className="px-4 py-2.5 font-medium">Demand No</th>
+                        <th className="px-4 py-2.5 font-medium">Type</th>
                         <th className="px-4 py-2.5 font-medium text-right">Amount</th>
                       </tr>
                     </thead>
@@ -152,6 +155,7 @@ export default function AdminDemandNoticesPage() {
                         <tr key={g.holdingNo} className="border-b border-slate-100 last:border-0">
                           <td className="px-4 py-2 font-mono">{g.holdingNo}</td>
                           <td className="px-4 py-2 font-mono text-slate-500">{g.formattedDemandNo}</td>
+                          <td className="px-4 py-2 text-xs text-slate-600">{g.reminderLabel ?? "New"}</td>
                           <td className="px-4 py-2 text-right">₹{Number(g.grandTotal).toLocaleString("en-IN")}</td>
                         </tr>
                       ))}

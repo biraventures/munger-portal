@@ -38,6 +38,7 @@ export function PartiallyKnownForm({
   const [solidWasteChargeType, setSolidWasteChargeType] = useState("");
   const [solidWasteMonths, setSolidWasteMonths] = useState("12");
   const [isBwg, setIsBwg] = useState(false);
+  const [isSlum, setIsSlum] = useState(false);
   const [markForSurvey, setMarkForSurvey] = useState(true);
   const [phases, setPhases] = useState<PhaseArvEntry[]>([
     makeBlankPhaseArv(formOptions.periodsOfAssessment, []),
@@ -91,6 +92,7 @@ export function PartiallyKnownForm({
         solidWasteChargeType: solidWasteChargeType || null,
         solidWasteMonths: Number(solidWasteMonths) || 12,
         isBwg,
+        isSlum,
         taxHistoryStages: validPhases.map((p) => ({
           periodOfAssessment: p.periodOfAssessment,
           arvInPeriod: Number(p.arvInPeriod),
@@ -279,6 +281,20 @@ export function PartiallyKnownForm({
               Registered as a Bulk Waste Generator (BWG) on the SPCB website
               <span className="block text-xs text-slate-400">
                 The owner manages their own waste, so no solid waste user charge is added to the amount payable.
+              </span>
+            </span>
+          </label>
+          <label className="flex items-start gap-2 text-sm text-slate-700 sm:col-span-2">
+            <input
+              type="checkbox"
+              checked={isSlum}
+              onChange={(e) => setIsSlum(e.target.checked)}
+              className="mt-0.5 h-4 w-4 rounded border-slate-300"
+            />
+            <span>
+              Holding is in a slum area
+              <span className="block text-xs text-slate-400">
+                The 100% tax relief for holdings below 250 sq ft is given only to slum-area holdings. Leave unchecked for all others.
               </span>
             </span>
           </label>

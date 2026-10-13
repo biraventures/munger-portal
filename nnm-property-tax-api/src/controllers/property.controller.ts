@@ -1,3 +1,4 @@
+import { collectorWardScope, wardAllowed } from "../middleware/collectorWardGuard";
 import type { Request, Response } from "express";
 import { z } from "zod";
 import { holdingNoSchema } from "../utils/holdingNoSchema";
@@ -100,6 +101,8 @@ const surveyListQuerySchema = z.object({ status: z.enum(["to_be_surveyed", "surv
 export const getPropertySurveyList = asyncHandler(async (req: Request, res: Response) => {
   const parsed = surveyListQuerySchema.safeParse(req.query);
   if (!parsed.success) throw ApiError.badRequest("Invalid status", parsed.error.flatten().fieldErrors);
-  const properties = await propertyRepository.listBySurveyStatus(parsed.data.status);
+  let properties = await propertyRepository.listBySurveyStatus(parsed.data.status);
+  const scope = await collectorWardScope(req.admin);
+  if (scope !== null) properties = properties.filter((p) => wardAllowed(scope, p.ward));
   res.status(200).json({ properties });
 });

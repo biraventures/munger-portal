@@ -77,7 +77,6 @@ export interface RenewalAutofill {
   applicantName?: string;
   relationType?: string | null;
   relationName?: string | null;
-  mobile?: string | null;
   email?: string | null;
   entityName?: string;
   entityNameHindi?: string | null;
@@ -93,9 +92,12 @@ export interface RenewalAutofill {
 }
 
 /** Public — prefills a renewal form from the last application on file for a holding number. */
-export async function fetchRenewalAutofill(holdingNo: string): Promise<RenewalAutofill> {
-  const res = await fetch(`${API_BASE_URL}/trade-license-applications/renewal-autofill?holdingNo=${encodeURIComponent(holdingNo)}`);
-  if (!res.ok) throw new Error("Could not check for existing records.");
+export async function fetchRenewalAutofill(holdingNo: string, mobile: string): Promise<RenewalAutofill> {
+  const res = await fetch(`${API_BASE_URL}/trade-license-applications/renewal-autofill?holdingNo=${encodeURIComponent(holdingNo)}&mobile=${encodeURIComponent(mobile)}`);
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error((body && typeof body.error === "string" && body.error) || "Could not check for existing records.");
+  }
   return res.json();
 }
 

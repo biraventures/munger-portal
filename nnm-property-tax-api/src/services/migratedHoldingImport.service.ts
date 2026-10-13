@@ -1,3 +1,4 @@
+import { normalizeWard } from "../utils/ward";
 import ExcelJS from "exceljs";
 import { pool } from "../config/db";
 import { getNextMigratedHoldingNo } from "./holdingNumberSeries.service";
@@ -106,7 +107,7 @@ export async function importMigratedHoldingsXlsx(fileBuffer: Buffer, actorDispla
           ownerName,
           relationType,
           relativeName,
-          `Ward ${ward}, Munger - address to be confirmed on survey`,
+          `Ward ${normalizeWard(ward)}, Munger - address to be confirmed on survey`,
           ward,
           currentAssessmentYear,
           actorDisplayName,

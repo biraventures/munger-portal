@@ -8,6 +8,16 @@ export interface FloorInput {
   closingYear?: string | null;
 }
 
+export interface TaxExemptionInput {
+  isExempt: boolean;
+  category?: string | null;
+  orderNo?: string | null;
+  orderDate?: string | null; // YYYY-MM-DD
+  fromYear?: string | null; // YYYY-YYYY
+  remarks?: string | null;
+  orderDocId?: string | null;
+}
+
 export interface PropertySaveInput {
   oldHoldingNo?: string | null;
   oldPid?: string | null;
@@ -33,6 +43,12 @@ export interface PropertySaveInput {
   solidWasteMonths?: number;
   /** Registered as a Bulk Waste Generator - no solid waste user charge. */
   isBwg?: boolean;
+  isSlum?: boolean;
+  /**
+   * Holding tax exemption. Omitted = keep whatever is stored (same rule as isSlum).
+   * Can only be set on an EXISTING holding, so it always goes through the change request chain.
+   */
+  taxExemption?: TaxExemptionInput;
   penalCharge?: number;
   waterCharge?: number;
   boringCharge?: number;

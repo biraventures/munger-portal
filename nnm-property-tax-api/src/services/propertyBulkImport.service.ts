@@ -226,8 +226,8 @@ export async function importPropertiesXlsx(fileBuffer: Buffer, actorDisplayName:
           solid_waste_charge, penal_charge, water_charge, boring_charge, form_fee, misc_cost,
           misc_cost_reason, misc_rebate, misc_rebate_reason, arv, tax_payable, holding_creation_year,
           tax_paid_till_year, present_holding_name, present_category, created_by, created_date,
-          last_modified_by, last_modified_date, latitude, longitude, data_source
-        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40,$41,$42)`,
+          last_modified_by, last_modified_date, latitude, longitude, data_source, is_slum
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40,$41,$42,$43)`,
         [
           holdingNo,
           cellText(row.OldHoldingNo) || null,
@@ -271,6 +271,8 @@ export async function importPropertiesXlsx(fileBuffer: Buffer, actorDisplayName:
           gps.lat,
           gps.lng,
           dataSource,
+          // Optional "IsSlum" column (Yes/No). Blank = not a slum holding.
+          parseYesNo(row.IsSlum),
         ],
       );
       result.propertiesCreated++;

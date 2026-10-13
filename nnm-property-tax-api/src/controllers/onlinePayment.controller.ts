@@ -8,6 +8,8 @@ import { ApiError } from "../utils/ApiError";
 const initiateSchema = z.object({
   amount: z.coerce.number().positive(),
   taxCollectorCode: z.string().trim().max(32).nullish(),
+  // The payer's tick on the declaration shown before paying - required.
+  acceptDeclaration: z.boolean().refine((v) => v === true, "Please tick the declaration to continue with the payment."),
 });
 
 const holdingNoParamSchema = z.object({
@@ -21,13 +23,14 @@ export const postInitiateOnlinePayment = asyncHandler(async (req: Request, res: 
 
   const bodyParsed = initiateSchema.safeParse(req.body);
   if (!bodyParsed.success) {
-    throw ApiError.badRequest("Invalid amount", bodyParsed.error.flatten().fieldErrors);
+    throw ApiError.badRequest(bodyParsed.error.flatten().fieldErrors.acceptDeclaration?.[0] ?? "Invalid amount", bodyParsed.error.flatten().fieldErrors);
   }
 
   const result = await initiateOnlinePayment(
     paramsParsed.data.holdingNo,
     bodyParsed.data.amount,
     bodyParsed.data.taxCollectorCode ?? null,
+    bodyParsed.data.acceptDeclaration,
   );
   res.status(200).json(result);
 });

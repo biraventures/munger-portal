@@ -12,9 +12,11 @@ import { parseYearStartOrNull } from "../utils/assessmentYear";
 import { num } from "../utils/num";
 import { ApiError } from "../utils/ApiError";
 import { assertNotDisputed } from "./propertyDispute.service";
+import { generateDemandNotice } from "./demandNotice.service";
 import { buildVerificationUrl } from "../utils/verificationSignature";
 import { formatYmdToDmy } from "../utils/formatYmdToDmy";
 import type { PaymentInput, PaymentResult } from "../types/payment.types";
+import type { DemandNoticeResult } from "../types/demandNotice.types";
 import type { FrozenFloorBreakdown } from "../types/property.types";
 
 function formatDocNumber(n: string | number, type: "Payment" | "Demand", date: Date): string {
@@ -44,6 +46,8 @@ export interface PrintableReceiptHistory {
   taxCollectorName: string | null;
   tvNumber: string | null;
   tvDate: string | null;
+  /** Set only for public online payments: when the payer ticked the declaration (dd-mm-yyyy HH:MM). */
+  onlineDeclarationAcceptedAt: string | null;
   // Frozen at the moment of payment (migration 024) - not
   // reconstructed later by joining to the demand notice, which was
   // fragile (see that migration's comment). Null only for
@@ -114,6 +118,9 @@ export async function getReceiptForReprint(receiptNo: string): Promise<Printable
     tvNumber: txn.tv_number,
     tvDate: txn.tv_date
       ? `${String(txn.tv_date.getDate()).padStart(2, "0")}-${String(txn.tv_date.getMonth() + 1).padStart(2, "0")}-${txn.tv_date.getFullYear()}`
+      : null,
+    onlineDeclarationAcceptedAt: txn.online_declaration_accepted_at
+      ? new Date(txn.online_declaration_accepted_at).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: false }).replace(/\//g, "-").replace(",", "")
       : null,
     // Read directly from the frozen snapshot stored at payment time
     // (migration 024) - no longer reconstructed by joining to the
@@ -349,6 +356,19 @@ export async function submitPayment(
   const dateStr = `${String(now.getDate()).padStart(2, "0")}-${String(now.getMonth() + 1).padStart(2, "0")}-${now.getFullYear()}`;
   const formattedReceiptNo = formatDocNumber(receiptNo, "Payment", now);
 
+  // A part payment settles its notice but leaves the remaining years unpaid: right away raise the demand notice for
+  // those (remaining arrears + current year + other charges) so the owner can verify what is still pending against
+  // his name. The payment is already committed - if this fails it is reported, never rolled back.
+  let followUpNotice: DemandNoticeResult | null = null;
+  let followUpNoticeError: string | null = null;
+  if (isPart) {
+    try {
+      followUpNotice = await generateDemandNotice(holdingNo, collectedBy, undefined, formattedReceiptNo);
+    } catch (err) {
+      followUpNoticeError = err instanceof Error ? err.message : "Could not generate the balance demand notice.";
+    }
+  }
+
   // Recompute tax fresh for the receipt body (never trusted from stored columns).
   const calc = calculateTax(property, floors);
   const solidWasteCharge = calculateSolidWasteCharge(property);
@@ -377,6 +397,8 @@ export async function submitPayment(
     // date on the receipt, rather than echoing the raw input back.
     tvDate: tvDate ? formatYmdToDmy(tvDate) : null,
     arrearStagesPaid: clearance.stages,
+    followUpNotice,
+    followUpNoticeError,
     // Override the stored (possibly stale) solid_waste_charge column with
     // the value just recomputed above — same "never trusted from stored
     // columns" principle as the tax figures a few lines up. Was previously

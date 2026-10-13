@@ -8,6 +8,7 @@ import { postRecordFieldVerification, listFieldVerifications } from "../controll
 import { getLatestSolidWasteRequest } from "../controllers/solidWasteRequest.controller";
 import { putCollectorDetails } from "../controllers/propertyCollectorDetails.controller";
 import { saveProperty, postResubmitChangeRequest } from "../controllers/propertySave.controller";
+import { getTaxExemptionOptions, postExemptionOrder, getExemptionOrderFile } from "../controllers/taxExemption.controller";
 import { getRevertedChangeRequests } from "../controllers/changeRequest.controller";
 import { postPayment, getPaymentHistory, getReceiptReprint } from "../controllers/payment.controller";
 import { postInitiateOnlinePayment } from "../controllers/onlinePayment.controller";
@@ -21,10 +22,17 @@ import {
 } from "../controllers/demandNotice.controller";
 import { postPreviewTax } from "../controllers/taxPreview.controller";
 import { postRequestCancellation } from "../controllers/cancellationRequest.controller";
+import { collectorHoldingParam, collectorDemandNoticeParam, collectorReceiptParam } from "../middleware/collectorWardGuard";
 import { requireOperator } from "../middleware/requireOperator";
 import { requireOperatorOrAdmin } from "../middleware/requireOperatorOrAdmin";
 
 export const propertyRouter = Router();
+
+// A Tax Collector can only reach holdings (and their demand notices and
+// receipts) in the wards assigned to them.
+propertyRouter.param("holdingNo", collectorHoldingParam);
+propertyRouter.param("demandNo", collectorDemandNoticeParam);
+propertyRouter.param("receiptNo", collectorReceiptParam);
 
 // GET /api/v1/properties/next-holding-no?mode=new|partiallyKnown — MUST
 // come before GET /:holdingNo below, or Express would treat
@@ -55,6 +63,12 @@ propertyRouter.post("/cancellation-requests", requireOperatorOrAdmin, postReques
 // (holding number + mobile number). MUST come before POST /:holdingNo
 // below, or Express would treat "lookup" as a holding number.
 propertyRouter.post("/lookup", postPropertyLookup);
+
+// Holding tax exemption (migration 118). Fixed multi-segment paths, so they never
+// collide with the /:holdingNo catch-alls below.
+propertyRouter.get("/tax-exemption/options", requireOperatorOrAdmin, getTaxExemptionOptions);
+propertyRouter.get("/tax-exemption/orders/:id/file", requireOperatorOrAdmin, getExemptionOrderFile);
+propertyRouter.post("/:holdingNo/exemption-order", requireOperatorOrAdmin, postExemptionOrder);
 
 // POST /api/v1/properties — create a new-entry or partially-known
 // property (holding number auto-assigned; operator only)

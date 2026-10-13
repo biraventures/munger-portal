@@ -72,6 +72,7 @@ export const listLightsHandler = asyncHandler(async (req: Request, res: Response
       switchStatus: l.switch_status,
       active: l.active,
       noOfLights: l.no_of_lights,
+      noOfFunctionalLights: l.no_of_functional_lights,
       maintenanceAgencyId: l.maintenance_agency_id,
       remarks: l.remarks,
     })),

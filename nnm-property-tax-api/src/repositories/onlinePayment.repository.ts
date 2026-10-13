@@ -18,6 +18,7 @@ export interface TransactionRow {
   confirmed_at: Date | null;
   tax_collector_code: string | null;
   tax_collector_name: string | null;
+  online_declaration_accepted_at: Date | null;
 }
 
 export const onlinePaymentRepository = {
@@ -32,8 +33,8 @@ export const onlinePaymentRepository = {
     await pool.query(
       `INSERT INTO transactions (
         holding_no, txn_date, payment_mode, amount_received, collected_by,
-        order_id, gateway, status, tax_collector_code, tax_collector_name
-      ) VALUES ($1, now(), 'Online', $2, 'Citizen Self-Service', $3, $4, 'pending', $5, $6)`,
+        order_id, gateway, status, tax_collector_code, tax_collector_name, online_declaration_accepted_at
+      ) VALUES ($1, now(), 'Online', $2, 'Citizen Self-Service', $3, $4, 'pending', $5, $6, now())`,
       [row.holdingNo, row.amount, row.orderId, row.gateway, row.taxCollectorCode, row.taxCollectorName],
     );
   },

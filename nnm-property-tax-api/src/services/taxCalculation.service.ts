@@ -11,7 +11,8 @@ import {
   VACANT_LAND_RATE,
 } from "../constants/taxRates";
 import { num } from "../utils/num";
-import { parseYearStartOrNull } from "../utils/assessmentYear";
+import { getCurrentAssessmentYearStartNum, parseYearStartOrNull } from "../utils/assessmentYear";
+import { isTaxExemptForYear, taxExemptionReason } from "../utils/taxExemption";
 import type { FloorBreakdownEntry, FloorRow, PropertyRow, TaxCalculationResult } from "../types/property.types";
 
 /**
@@ -125,15 +126,27 @@ let rebatePct = 0;
   // notice discussion this was corrected from (a 196 sqft hut on a 5444
   // sqft plot was incorrectly getting a 100% exemption that also wiped
   // out its vacant-land tax, under the old built-area-only check).
-  if (totalBuiltArea > 0 && totalPlotArea < PLINTH_AREA_REBATE_THRESHOLD) {
+  // The relief is given ONLY to holdings in a slum area; a non-slum
+  // holding below 250 sqft pays full tax.
+  if (property.is_slum && totalBuiltArea > 0 && totalPlotArea < PLINTH_AREA_REBATE_THRESHOLD) {
     rebatePct = PLINTH_AREA_REBATE_PCT;
-    rebateReason.push("Total plot area < 250 sqft (100% exempt)");
+    rebateReason.push("Slum area holding with total plot area < 250 sqft (100% exempt)");
   } else if (property.rain_water_harvesting) {
     rebatePct += RAIN_WATER_REBATE_PCT;
     rebateReason.push("Rain water harvesting (5%)");
   }
   // Solar Rooftop rebate is FROZEN in the source system — intentionally
   // never applied here either, regardless of the stored value.
+
+  // Holding tax exemption (migration 118): the whole year's tax is waived from
+  // the order's year onward. Takes the place of any other relief so it is never
+  // stacked. Solid waste user charge is calculated separately and still applies.
+  const taxYear = currentAssessmentYearStart ?? getCurrentAssessmentYearStartNum();
+  if (isTaxExemptForYear(property, taxYear)) {
+    rebatePct = 1;
+    rebateReason.length = 0;
+    rebateReason.push(taxExemptionReason(property));
+  }
 
   const rebate = baseTax * rebatePct;
 

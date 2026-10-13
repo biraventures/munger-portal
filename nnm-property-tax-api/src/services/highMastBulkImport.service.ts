@@ -21,8 +21,8 @@ function pick(row: Record<string, string>, candidates: string[]): string {
 
 /**
  * Imports the High Mast summary CSV: Sl no, Ward, Location name,
- * Installed by Agency name, No of lights, Functional status,
- * Maintenance agency, Latitude, Longitude, Remarks.
+ * Installed by Agency name, No of lights, Number of functional lamps,
+ * Functional status, Maintenance agency, Latitude, Longitude, Remarks.
  *
  * Distinct from importLightsCsv (lightCsvImport.service.ts), which
  * expects a per-light serial number already assigned - this source
@@ -122,6 +122,34 @@ export async function importHighMastBulkCsv(csvContent: string): Promise<HighMas
       const noOfLightsRaw = pick(row, ["No of lights", "No. of lights", "Number of lights"]);
       const noOfLights = noOfLightsRaw ? parseInt(noOfLightsRaw, 10) : null;
 
+      // Optional: how many of the lamps on this tower are working. Must be a whole number and cannot exceed the
+      // number of lights; a row that says otherwise is rejected rather than stored with figures that contradict each other.
+      const functionalRaw2 = pick(row, [
+        "Number of functional lamps",
+        "No of functional lamps",
+        "No. of functional lamps",
+        "Functional lamps",
+        "Number of functional lights",
+        "No of functional lights",
+        "No. of functional lights",
+        "Functional lights",
+      ]);
+      let noOfFunctionalLights: number | null = null;
+      if (functionalRaw2) {
+        if (!/^\d+$/.test(functionalRaw2)) {
+          result.errors.push({ row: rowNum, message: `Number of functional lamps "${functionalRaw2}" for ${locationName || "this row"} is not a whole number - not imported` });
+          continue;
+        }
+        noOfFunctionalLights = parseInt(functionalRaw2, 10);
+        if (noOfLights !== null && !Number.isNaN(noOfLights) && noOfFunctionalLights > noOfLights) {
+          result.errors.push({
+            row: rowNum,
+            message: `Number of functional lamps (${noOfFunctionalLights}) is more than No of lights (${noOfLights}) for ${locationName || "this row"} - not imported`,
+          });
+          continue;
+        }
+      }
+
       const remarks = pick(row, ["Remarks", "Remark"]) || null;
 
       const functionalRaw = pick(row, ["Functional status", "functional status"]).toLowerCase();
@@ -139,6 +167,7 @@ export async function importHighMastBulkCsv(csvContent: string): Promise<HighMas
         installationAgencyId,
         maintenanceAgencyId,
         noOfLights: noOfLights && !Number.isNaN(noOfLights) ? noOfLights : null,
+        noOfFunctionalLights,
         remarks,
       });
       result.created++;
