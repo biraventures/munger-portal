@@ -8,6 +8,7 @@ import { parseYearStartOrNull } from "../utils/assessmentYear";
 import { num } from "../utils/num";
 import { ApiError } from "../utils/ApiError";
 import { assertNotDisputed } from "./propertyDispute.service";
+import { assertNoResurveyPending } from "./propertyResurvey.service";
 import { buildVerificationUrl } from "../utils/verificationSignature";
 import type { DemandNoticeResult, DemandNoticeReprintResult, DemandNoticeTotals } from "../types/demandNotice.types";
 import type { FrozenFloorBreakdown, TaxCalculationResult } from "../types/property.types";
@@ -55,6 +56,7 @@ export async function getPartPaymentOptions(holdingNo: string): Promise<{ paidTi
   const property = await propertyRepository.findByHoldingNo(holdingNo);
   if (!property) throw ApiError.notFound(`Property not found for Holding No: ${holdingNo}`);
   assertNotDisputed(property);
+  assertNoResurveyPending(property);
   const stages = await propertyRepository.findTaxHistoryByHoldingNo(holdingNo);
   return { paidTillYear: property.tax_paid_till_year, options: computePartPaymentOptions(property, stages) };
 }
@@ -77,6 +79,7 @@ export async function generateDemandNotice(
     throw ApiError.notFound(`Property not found for Holding No: ${holdingNo}`);
   }
   assertNotDisputed(property);
+  assertNoResurveyPending(property);
   const floors = await propertyRepository.findFloorsByHoldingNo(holdingNo);
   const stages = await propertyRepository.findTaxHistoryByHoldingNo(holdingNo);
 

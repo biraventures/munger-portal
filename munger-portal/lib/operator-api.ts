@@ -548,6 +548,8 @@ export interface PropertySurveyListEntry {
   ward: string | null;
   old_holding_no: string | null;
   survey_status: "to_be_surveyed" | "surveyed";
+  resurvey_required?: boolean;
+  resurvey_reason?: string | null;
   surveyor_name: string | null;
   surveyor_id_number: string | null;
   survey_date: string | null;

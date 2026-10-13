@@ -126,18 +126,19 @@ export function computeArrearsClearance(
 }
 
 export function summarizeArrears(property: PropertyRow, stages: TaxHistoryStageRow[]): ArrearsSummary {
-  const taxPaidTillYear = parseYearStartOrNull(property.tax_paid_till_year);
   const holdingCreationYear = parseYearStartOrNull(property.holding_creation_year);
   const lastYear = getCurrentAssessmentYearStartNum() - 1;
 
-  if (taxPaidTillYear === null || holdingCreationYear === null) {
+  if (holdingCreationYear === null) {
     return {
       totalPending: 0,
       penalty: 0,
       stagesConsidered: 0,
-      note: "tax_paid_till_year or holding_creation_year not set — cannot determine pending arrears.",
+      note: "holding_creation_year not set — cannot determine pending arrears.",
     };
   }
+  // Blank paid-till year = nothing has ever been paid: the year before creation counts as the last paid year, so every year since creation is due.
+  const taxPaidTillYear = parseYearStartOrNull(property.tax_paid_till_year) ?? holdingCreationYear - 1;
 
   const pendingStart = Math.max(taxPaidTillYear + 1, holdingCreationYear);
   if (pendingStart > lastYear) {
@@ -197,10 +198,11 @@ const yearLabel = (y: number): string => `${y}-${y + 1}`;
  * quoting a wrong amount.
  */
 export function computePartPaymentOptions(property: PropertyRow, stages: TaxHistoryStageRow[]): PartPaymentOption[] {
-  const taxPaidTillYear = parseYearStartOrNull(property.tax_paid_till_year);
   const holdingCreationYear = parseYearStartOrNull(property.holding_creation_year);
   const lastYear = getCurrentAssessmentYearStartNum() - 1;
-  if (taxPaidTillYear === null || holdingCreationYear === null) return [];
+  if (holdingCreationYear === null) return [];
+  // Blank paid-till year: the year before creation counts as the last paid year, so everything since creation is due.
+  const taxPaidTillYear = parseYearStartOrNull(property.tax_paid_till_year) ?? holdingCreationYear - 1;
   const pendingStart = Math.max(taxPaidTillYear + 1, holdingCreationYear);
   if (pendingStart > lastYear) return [];
 
@@ -240,10 +242,11 @@ export interface ArrearsPeriod {
  * or they cannot be determined.
  */
 export function pendingArrearsPeriod(property: PropertyRow, stages: TaxHistoryStageRow[]): ArrearsPeriod | null {
-  const taxPaidTillYear = parseYearStartOrNull(property.tax_paid_till_year);
   const holdingCreationYear = parseYearStartOrNull(property.holding_creation_year);
   const lastYear = getCurrentAssessmentYearStartNum() - 1;
-  if (taxPaidTillYear === null || holdingCreationYear === null) return null;
+  if (holdingCreationYear === null) return null;
+  // Blank paid-till year: the year before creation counts as the last paid year, so everything since creation is due.
+  const taxPaidTillYear = parseYearStartOrNull(property.tax_paid_till_year) ?? holdingCreationYear - 1;
   const pendingStart = Math.max(taxPaidTillYear + 1, holdingCreationYear);
   if (pendingStart > lastYear) return null;
   let first: number | null = null;

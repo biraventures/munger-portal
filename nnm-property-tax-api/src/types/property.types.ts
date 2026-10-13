@@ -64,6 +64,9 @@ export interface PropertyRow {
   last_modified_by: string | null;
   last_modified_date: Date | null;
   survey_status: "to_be_surveyed" | "surveyed" | null;
+  /** Missing total area and/or floors - tax collection blocked until resurveyed (migration 123). */
+  resurvey_required?: boolean;
+  resurvey_reason?: string | null;
   surveyor_name: string | null;
   surveyor_id_number: string | null;
   survey_date: string | null;

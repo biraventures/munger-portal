@@ -329,6 +329,7 @@ export async function buildAgencyReport(f: ReportFilters): Promise<AgencyReport>
 const PENDING_HOLDING_SQL = `
   FROM properties p
   WHERE NOT COALESCE(p.is_disputed, FALSE)
+    AND NOT p.resurvey_required
     AND EXISTS (SELECT 1 FROM floors f WHERE f.holding_no = p.holding_no)
     AND (p.tax_paid_till_year IS NULL OR p.tax_paid_till_year < p.assessment_year)`;
 

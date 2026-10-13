@@ -61,6 +61,7 @@ export const demandNoticeRepository = {
        FROM properties p
        JOIN floors f ON f.holding_no = p.holding_no
        WHERE NOT COALESCE(p.is_disputed, FALSE)
+         AND NOT p.resurvey_required
          AND (p.tax_paid_till_year IS NULL OR p.tax_paid_till_year < p.assessment_year)
          AND NOT EXISTS (
            SELECT 1 FROM demand_notices d

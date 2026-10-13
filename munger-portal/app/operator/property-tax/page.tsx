@@ -97,6 +97,8 @@ export default function OperatorPropertyTaxPage() {
   const [noticeError, setNoticeError] = useState<string | null>(null);
   const [justCreated, setJustCreated] = useState<string | null>(null);
   const [dispute, setDispute] = useState<{ remarks: string } | null>(null);
+  const [resurvey, setResurvey] = useState<{ reason: string } | null>(null);
+  const blocked = !!dispute || !!resurvey;
 
   useEffect(() => {
     fetchFormOptions()
@@ -112,6 +114,7 @@ export default function OperatorPropertyTaxPage() {
     setNoticeError(null);
     setJustCreated(null);
     setDispute(null);
+    setResurvey(null);
   }
 
   async function handleGenerateNotice(holdingNo: string, partYears?: number) {
@@ -138,6 +141,7 @@ export default function OperatorPropertyTaxPage() {
         return;
       }
       setDispute(result.property.is_disputed ? { remarks: String(result.property.dispute_remarks ?? "") } : null);
+      setResurvey(result.property.resurvey_required ? { reason: String(result.property.resurvey_reason ?? "Total area and/or floor details are missing") } : null);
       setMode({ kind: "edit", holdingNo, data: mapToFormState(result.property, result.floors ?? []) });
     } finally {
       setSearching(false);
@@ -279,6 +283,17 @@ export default function OperatorPropertyTaxPage() {
                   </div>
                 )}
 
+                {resurvey && (
+                  <div role="alert" className="flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
+                    <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                    <div>
+                      <b>This holding must be re-surveyed before tax can be collected.</b> No demand notice can be generated and no payment can be
+                      accepted until a surveyor has surveyed it and the total area and floor details are updated.
+                      <div className="mt-1 text-xs">Reason: {resurvey.reason}</div>
+                    </div>
+                  </div>
+                )}
+
                 {dispute && (
                   <div role="alert" className="flex items-start gap-2 rounded-md border border-red-300 bg-red-50 p-4 text-sm text-red-800">
                     <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
@@ -291,7 +306,7 @@ export default function OperatorPropertyTaxPage() {
                 )}
 
                 <div className="flex flex-wrap gap-3">
-                  {!showPayment && !dispute && (
+                  {!showPayment && !blocked && (
                     <button
                       onClick={() => setShowPayment(true)}
                       className="inline-flex items-center gap-2 rounded-md bg-nnm-gold px-6 py-3 text-sm font-semibold text-[#20240a] hover:brightness-95"
@@ -302,7 +317,7 @@ export default function OperatorPropertyTaxPage() {
                   )}
                   <button
                     onClick={() => handleGenerateNotice(mode.holdingNo)}
-                    disabled={generatingNotice || !!dispute}
+                    disabled={generatingNotice || blocked}
                     className="inline-flex items-center gap-2 rounded-md border border-nnm-blue px-6 py-3 text-sm font-semibold text-nnm-blue hover:bg-blue-50 disabled:opacity-60"
                   >
                     {generatingNotice ? (
@@ -314,7 +329,7 @@ export default function OperatorPropertyTaxPage() {
                   </button>
                 </div>
 
-                {!dispute && (
+                {!blocked && (
                   <PartPaymentPanel
                     key={`pp-${mode.holdingNo}`}
                     holdingNo={mode.holdingNo}
@@ -323,7 +338,7 @@ export default function OperatorPropertyTaxPage() {
                   />
                 )}
 
-                {showPayment && !dispute && (
+                {showPayment && !blocked && (
                   <PaymentForm holdingNo={mode.holdingNo} onSuccess={setReceipt} />
                 )}
 

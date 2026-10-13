@@ -1,6 +1,7 @@
 import ExcelJS from "exceljs";
 import { pool } from "../config/db";
 import { searchPropertyByHoldingNo } from "./property.service";
+import { flagIncompleteHoldings } from "./propertyResurvey.service";
 
 export interface PropertyImportResult {
   propertiesCreated: number;
@@ -510,6 +511,19 @@ export async function importPropertiesXlsx(fileBuffer: Buffer, actorDisplayName:
       );
     } catch (err) {
       result.errors.push({ sheet: "PropertyHistory", row: 0, message: `Holdings were imported but their audit-trail entry could not be written: ${err instanceof Error ? err.message : String(err)}` });
+    }
+  }
+
+  // Holdings that came in without a total area or floor details cannot be assessed: mark them for resurvey so
+  // no demand notice or payment is taken on them until a surveyor has surveyed them.
+  if (createdHoldings.size > 0) {
+    try {
+      const flagged = await flagIncompleteHoldings([...createdHoldings]);
+      if (flagged > 0) {
+        result.errors.push({ sheet: "Master", row: 0, message: `${flagged} imported holding(s) have no total area and/or floor details - marked for resurvey; tax cannot be collected on them until they are surveyed.` });
+      }
+    } catch (err) {
+      result.errors.push({ sheet: "Master", row: 0, message: `Holdings were imported but could not be checked for missing area/floors: ${err instanceof Error ? err.message : String(err)}` });
     }
   }
 

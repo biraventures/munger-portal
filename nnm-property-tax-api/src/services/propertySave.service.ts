@@ -167,6 +167,9 @@ export async function applyPropertySave(
     { property: input, floors: floorsWithTax, taxCalc: calc },
   );
 
+  // A holding flagged for resurvey (missing area/floors) is released once a surveyor has surveyed it and these details are complete.
+  await propertyRepository.releaseResurveyIfComplete(holdingNo);
+
   return { holdingNo, version, taxCalc: calc, solidWasteCharge };
 }
 
