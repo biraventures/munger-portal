@@ -21,6 +21,8 @@ export interface ArrearStagePaidView {
 
 export interface PaymentResult {
   receiptNo: string;
+  /** True for a part payment - the receipt shows no current-year charges. */
+  isPartPayment?: boolean;
   formattedReceiptNo: string;
   date: string;
   paymentMode: string;

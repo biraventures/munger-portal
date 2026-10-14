@@ -399,6 +399,8 @@ export async function submitPayment(
     // date on the receipt, rather than echoing the raw input back.
     tvDate: tvDate ? formatYmdToDmy(tvDate) : null,
     arrearStagesPaid: clearance.stages,
+    // A part payment collects holding tax for earlier years only: the receipt must not show the current year's user charge.
+    isPartPayment: isPart,
     followUpNotice,
     followUpNoticeError,
     // Override the stored (possibly stale) solid_waste_charge column with

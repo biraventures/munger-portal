@@ -54,6 +54,8 @@ export interface ReceiptData {
   /** Set only for public online payments - when the payer ticked the declaration. */
   onlineDeclarationAcceptedAt?: string | null;
   arrearStagesPaid: ArrearStagePaidView[];
+  /** True for a part payment (earlier years' holding tax only - no current-year charges are collected or shown). */
+  isPartPayment?: boolean;
   /** After a PART payment: the balance demand notice for the remaining years, generated automatically. */
   followUpNotice?: DemandNoticeData | null;
   followUpNoticeError?: string | null;

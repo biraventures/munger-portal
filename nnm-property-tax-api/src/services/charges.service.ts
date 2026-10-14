@@ -6,10 +6,16 @@ import {
   SOLID_WASTE_RATE,
 } from "../constants/taxRates";
 import { num } from "../utils/num";
+import { parseYearStartOrNull } from "../utils/assessmentYear";
 import type { PropertyRow, RebateOrLateFeeResult } from "../types/property.types";
 
 /** Port of calculateSolidWasteCharge_() — rate × months, by usage type. */
+/** The solid waste user charge is levied only from the 2025-26 assessment year onwards. */
+export const SOLID_WASTE_CHARGE_FROM_YEAR = 2025;
+
 export function calculateSolidWasteCharge(property: PropertyRow): number {
+  const yearStart = parseYearStartOrNull(property.assessment_year);
+  if (yearStart !== null && yearStart < SOLID_WASTE_CHARGE_FROM_YEAR) return 0;
   // A holding registered as a Bulk Waste Generator handles its own
   // waste, so no solid waste user charge applies at all.
   if (property.is_bwg) return 0;

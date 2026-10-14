@@ -292,12 +292,14 @@ export function ReceiptView({ receipt, onNewPayment }: { receipt: ReceiptData; o
                 <b>{receipt.totals.currentTotal}</b>
               </td>
             </tr>
-            <tr>
-              <td colSpan={5} className="border-x border-slate-400 p-1.5">
-                Solid Waste User Charge
-              </td>
-              <td className="border-x border-slate-400 p-1.5 text-right">{str(p.solid_waste_charge)}</td>
-            </tr>
+            {!receipt.isPartPayment && (
+              <tr>
+                <td colSpan={5} className="border-x border-slate-400 p-1.5">
+                  Solid Waste User Charge
+                </td>
+                <td className="border-x border-slate-400 p-1.5 text-right">{str(p.solid_waste_charge)}</td>
+              </tr>
+            )}
             <tr>
               <td colSpan={5} className="border-x border-b border-slate-400 p-1.5">
                 <b>Total</b>
