@@ -40,7 +40,24 @@ export const getVerifyDemandNotice = asyncHandler(async (req: Request, res: Resp
   // The QR page also offers payment of the pending dues; the amount and the
   // serving collector are worked out here, never taken from the browser.
   const payment = await getDemandNoticePaymentInfo(parsed.data.docNo).catch(() => null);
-  res.status(200).json({ ...notice, payment });
+  // The QR page shows a short summary, not the whole notice: flatten the
+  // frozen property/totals into the plain fields it renders.
+  const property = (notice.property ?? {}) as Record<string, unknown>;
+  const totals = (notice.totals ?? {}) as unknown as Record<string, unknown>;
+  const text = (v: unknown) => (v === null || v === undefined ? "" : String(v));
+  res.status(200).json({
+    demandNo: notice.demandNo,
+    formattedDemandNo: notice.formattedDemandNo,
+    date: notice.date,
+    holdingNo: text(property.holding_no),
+    ownerName: text(property.owner_name),
+    address: text(property.address),
+    assessmentYear: property.assessment_year ? text(property.assessment_year) : null,
+    totalAmountDemanded: text(totals.grandTotal ?? "0"),
+    settled: notice.settled,
+    settledReceiptNo: notice.settledReceiptNo,
+    payment,
+  });
 });
 
 /** POST /api/v1/verify/demand-notice/:demandNo/pay?sig= - starts an online payment of the holding's pending dues. */
