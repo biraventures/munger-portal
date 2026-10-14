@@ -11,7 +11,7 @@ import { saveProperty, postResubmitChangeRequest } from "../controllers/property
 import { getTaxExemptionOptions, postExemptionOrder, getExemptionOrderFile } from "../controllers/taxExemption.controller";
 import { getRevertedChangeRequests } from "../controllers/changeRequest.controller";
 import { postPayment, getPaymentHistory, getReceiptReprint } from "../controllers/payment.controller";
-import { postInitiateOnlinePayment } from "../controllers/onlinePayment.controller";
+import { postConfirmOnlinePayment, postInitiateOnlinePayment } from "../controllers/onlinePayment.controller";
 import { createNewEntryProperty, previewNextHoldingNo } from "../controllers/newEntry.controller";
 import {
   postGenerateDemandNotice,
@@ -105,6 +105,9 @@ propertyRouter.post("/:holdingNo/payments", requireOperatorOrAdmin, postPayment)
 
 // POST /api/v1/properties/:holdingNo/pay/online/initiate — start an online payment (public)
 propertyRouter.post("/:holdingNo/pay/online/initiate", postInitiateOnlinePayment);
+
+// POST /api/v1/properties/:holdingNo/pay/online/callback — cllback for an online payment (public)
+propertyRouter.post("/pay/online/callback", postConfirmOnlinePayment);
 
 // POST /api/v1/properties/:holdingNo/demand-notice - generate a demand notice (operator, or a tax_collector admin - see the role check inside postGenerateDemandNotice)
 propertyRouter.post("/:holdingNo/demand-notice", requireOperatorOrAdmin, postGenerateDemandNotice);

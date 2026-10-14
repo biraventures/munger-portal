@@ -7,9 +7,11 @@ import { env } from "../config/env";
 import { ApiError } from "../utils/ApiError";
 import { assertNotDisputed } from "./propertyDispute.service";
 import { assertNoResurveyPending } from "./propertyResurvey.service";
+import axios from "axios";
 
 const GATEWAY_NAME = "ICICI_PG";
-const ICICI_PG_BASE_URL = "https://pgpay.icicibank.com/pg/portal/pay/initiatePayOrder";
+// const ICICI_PG_BASE_URL = "https://pgpayuat.icici.bank.in/tsp/pg/api/v2/initiateSale";
+const ICICI_PG_BASE_URL = "https://pgpayuat.icici.bank.in/tsp/pg/api/v2/initiateSale";
 
 export interface InitiateResult {
   orderId: string;
@@ -73,7 +75,7 @@ export async function initiateOnlinePayment(
     taxCollector = { code: collector.tax_collector_code!, name: collector.display_name };
   }
 
-  return createGatewayOrder(holdingNo, amount, taxCollector);
+  return createGatewayOrder(holdingNo, amount, taxCollector, property);
 }
 
 /**
@@ -82,10 +84,36 @@ export async function initiateOnlinePayment(
  * decides the collector itself (from who served the notice) and so skips the
  * "typed code must be tagged for this ward" check.
  */
+// export async function createGatewayOrder(
+//   holdingNo: string,
+//   amount: number,
+//   taxCollector: { code: string; name: string } | null,
+// ): Promise<InitiateResult> {
+//   const orderId = crypto.randomUUID();
+//   await onlinePaymentRepository.createPendingOrder({
+//     orderId,
+//     holdingNo,
+//     amount,
+//     gateway: GATEWAY_NAME,
+//     taxCollectorCode: taxCollector?.code ?? null,
+//     taxCollectorName: taxCollector?.name ?? null,
+//   });
+
+//   const returnUrl = `${env.FRONTEND_URL}/property-tax/payment-return`;
+
+//   // TODO: replace with the real signed request per ICICI's integration
+//   // spec once available (see warning above).
+//   const redirectUrl = `${ICICI_PG_BASE_URL}?merchantID=${encodeURIComponent(env.ICICI_MERCHANT_ID)}&orderId=${encodeURIComponent(
+//     orderId,
+//   )}&amount=${encodeURIComponent(amount.toFixed(2))}&returnUrl=${encodeURIComponent(returnUrl)}`;
+
+//   return { orderId, redirectUrl };
+// }
 export async function createGatewayOrder(
   holdingNo: string,
   amount: number,
   taxCollector: { code: string; name: string } | null,
+  property?: any
 ): Promise<InitiateResult> {
   const orderId = crypto.randomUUID();
   await onlinePaymentRepository.createPendingOrder({
@@ -105,7 +133,19 @@ export async function createGatewayOrder(
     orderId,
   )}&amount=${encodeURIComponent(amount.toFixed(2))}&returnUrl=${encodeURIComponent(returnUrl)}`;
 
-  return { orderId, redirectUrl };
+  if (!property) {
+    throw ApiError.badRequest("Property details are required to initiate payment.");
+  }
+
+  const payerData: PayerType = {
+    payerName: property.owner_name,
+    payerMobile: property.mobile_no,
+    amount: amount,
+  }
+
+  const initiationData = await initiatePaymentDal(payerData, orderId);
+
+  return { orderId, redirectUrl: initiationData.redirectURI };
 }
 
 export interface ConfirmResult {
@@ -113,6 +153,7 @@ export interface ConfirmResult {
   receiptNo: string | null;
   holdingNo: string;
   amount: string;
+  order_id?: string;
 }
 
 /**
@@ -155,12 +196,154 @@ export async function confirmOnlinePayment(
 
   if (!reportedSuccess) {
     await onlinePaymentRepository.markFailed(orderId, gatewayResponse);
-    return { status: "failed", receiptNo: null, holdingNo: order.holding_no, amount: order.amount_received };
+    return { status: "failed", receiptNo: null, holdingNo: order.holding_no, amount: order.amount_received, order_id: orderId };
   }
 
   const receiptNoNum = await paymentRepository.getNextReceiptNo();
   const receiptNo = String(receiptNoNum);
   await onlinePaymentRepository.markSuccess(orderId, receiptNo, gatewayResponse);
 
-  return { status: "success", receiptNo, holdingNo: order.holding_no, amount: order.amount_received };
+  return { status: "success", receiptNo, holdingNo: order.holding_no, amount: order.amount_received, order_id: orderId };
+}
+
+export async function paymentStatusCheck(orderId: string) {
+
+  const order = await onlinePaymentRepository.findByOrderId(orderId);
+  if (!order) {
+    throw ApiError.notFound(`No payment order found for ${orderId}`);
+  }
+
+  return order
+}
+
+//=============================For ICICI ORange integration================================================
+
+function generateSecureHash(payload: Record<string, any>, secretKey: string): string {
+
+  if (!secretKey) {
+    throw new Error('No secret key found')
+  }
+  //sort keys alphabetically
+  const sortedKeys = Object.keys(payload).sort();
+
+  //concatenate values only
+  const hashText = sortedKeys.map(key => payload[key]).join("");
+
+  //generate HMAC SHA256
+  const hash = crypto
+    .createHmac("sha256", secretKey)
+    .update(hashText)
+    .digest("hex")
+    .toLowerCase();
+
+  return hash
+}
+
+function validatePayer(payer: PayerType) {
+  if (!payer.payerName || !payer.payerMobile || !payer.amount) {
+    throw new Error("Missing required payer details");
+  }
+
+  if (payer?.payerEmail && !/^\S+@\S+\.\S+$/.test(payer.payerEmail)) {
+    throw new Error("Invalid email format");
+  }
+
+  if (!/^\d{10}$/.test(payer.payerMobile)) {
+    throw new Error("Invalid mobile number");
+  }
+
+  if (payer.amount <= 0) {
+    throw new Error("Invalid amount");
+  }
+}
+
+type PayerType = {
+  payerName: string;
+  payerEmail?: string;
+  payerMobile: string;
+  amount: number;
+};
+
+function getTxnDate(): string {
+  const now = new Date();
+
+  const pad = (num: number) => num.toString().padStart(2, "0");
+
+  const year = now.getFullYear();
+  const month = pad(now.getMonth() + 1);
+  const day = pad(now.getDate());
+  const hours = pad(now.getHours());
+  const minutes = pad(now.getMinutes());
+  const seconds = pad(now.getSeconds());
+
+  return `${year}${month}${day}${hours}${minutes}${seconds}`;
+}
+
+const getIciciOrangeKeys = () => {
+
+  const secretKey = env.ICICI_SECRET_KEY
+  const merchantId = env.ICICI_MERCHANT_ID
+  const aggregatorId = env.ICICI_AGG_ID
+
+  if (!secretKey || !merchantId || !aggregatorId) {
+    throw new Error('ICICI Orange keys are not properly configured in environment variables');
+  }
+
+  return { merchantId, aggregatorId, secretKey };
+};
+
+const initiatePaymentDal = async (payer: PayerType, transactionId?: string) => {
+  const payerName = payer.payerName;
+  const payerMobile = payer.payerMobile;
+  const amount = payer.amount;
+
+  validatePayer(payer)
+
+  const merchantTxnNo = transactionId
+
+  const { secretKey, merchantId, aggregatorId } = getIciciOrangeKeys()
+
+  const returnURL = env.ICICI_RETURN_URL
+
+  const preparedData: Record<string, any> = {
+    "merchantId": merchantId,
+    "aggregatorID": aggregatorId,
+    "merchantTxnNo": merchantTxnNo,
+    "amount": amount,
+    "currencyCode": "356",
+    "payType": "0",
+    "customerEmailID": "pay@property.tax",
+    "transactionType": "SALE",
+    "returnURL": returnURL,
+    "txnDate": getTxnDate(),
+    "customerMobileNo": payerMobile,
+    "customerName": payerName,
+    "addlParam1": "null",
+    "addlParam2": "nill",
+  }
+
+  const dataToReturn: Record<string, any> = {}
+
+  try {
+    const hashForRequest = generateSecureHash(preparedData, secretKey)
+    preparedData.secureHash = hashForRequest
+
+    if (!ICICI_PG_BASE_URL) {
+      throw new Error('No URL found to initiate payment')
+    }
+
+    const res = await axios.post(ICICI_PG_BASE_URL, preparedData)
+
+    if (res?.data?.responseCode !== 'R1000') {
+      throw new Error(res?.data?.responseDescription)
+    }
+
+    dataToReturn.responseCode = res?.data?.responseCode
+    dataToReturn.redirectURI = `${res?.data?.redirectURI}?tranCtx=${res?.data?.tranCtx}`
+    dataToReturn.id = res?.data?.tranCtx
+  } catch (err) {
+    console.error("Payment initiation failed:", err);
+  }
+
+  return dataToReturn
 }
