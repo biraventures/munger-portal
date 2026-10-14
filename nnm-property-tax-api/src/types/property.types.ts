@@ -30,6 +30,8 @@ export interface PropertyRow {
   arrear_tax: string;
   solid_waste_charge_type: string | null;
   solid_waste_months: number;
+  /** User charge paid through this assessment year (migration 124). NULL = unknown: treated as paid till 2025-2026. */
+  solid_waste_paid_till_year?: string | null;
   solid_waste_charge: string;
   /** Registered as a Bulk Waste Generator (SPCB) - solid waste user charge is not levied (migration 098). */
   is_bwg: boolean;

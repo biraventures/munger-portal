@@ -218,6 +218,7 @@ export async function importPropertiesXlsx(fileBuffer: Buffer, actorDisplayName:
 
       const relationType = cellText(row.RelationType);
       const gps = parseGps(row.Latitude, row.Longitude);
+      const solidWastePaidTillYear = /^\d{4}-\d{4}$/.test(cellText(row.SolidWastePaidTillYear)) ? cellText(row.SolidWastePaidTillYear) : null;
 
       await pool.query(
         `INSERT INTO properties (
@@ -277,6 +278,9 @@ export async function importPropertiesXlsx(fileBuffer: Buffer, actorDisplayName:
         ],
       );
       result.propertiesCreated++;
+      if (solidWastePaidTillYear) {
+        await pool.query(`UPDATE properties SET solid_waste_paid_till_year = $2 WHERE holding_no = $1`, [holdingNo, solidWastePaidTillYear]);
+      }
       createdHoldings.add(holdingNo);
     } catch (err) {
       result.errors.push({ sheet: "Master", row: excelRowNum, message: err instanceof Error ? err.message : String(err) });

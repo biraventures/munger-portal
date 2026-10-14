@@ -44,7 +44,7 @@ function mapToFormState(property: Record<string, unknown>, floors: Record<string
       vacantAreaSqft: str(property.vacant_area_sqft),
       rainWaterHarvesting: Boolean(property.rain_water_harvesting),
       solidWasteChargeType: str(property.solid_waste_charge_type),
-      solidWasteMonths: str(property.solid_waste_months || "12"),
+      solidWastePaidTillYear: str(property.solid_waste_paid_till_year || ""),
       isBwg: Boolean(property.is_bwg),
       isSlum: Boolean(property.is_slum),
       holdingCreationYear: str(property.holding_creation_year),

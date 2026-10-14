@@ -165,6 +165,14 @@ async function finalizeAndApplyCancellation(requestId: number, reviewedBy: strin
           await paymentRepository.revertTaxPaidTillYear(txn.holding_no, taxPaidTillYearBefore(txn, notice.assessment_year), advancedTo, client);
         }
       }
+
+      // Undo the user-charge paid-till advance this receipt made (only if nothing has moved it since).
+      await client.query(
+        `UPDATE properties p SET solid_waste_paid_till_year = l.previous_paid_till_year
+           FROM solid_waste_payment_log l
+          WHERE l.receipt_no = $1 AND p.holding_no = l.holding_no AND p.solid_waste_paid_till_year = l.new_paid_till_year`,
+        [txn.receipt_no],
+      );
     }
 
     await client.query("COMMIT");

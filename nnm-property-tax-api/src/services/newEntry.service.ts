@@ -1,7 +1,7 @@
 import { propertySaveRepository } from "../repositories/propertySave.repository";
 import { propertyRepository } from "../repositories/property.repository";
 import { calculateTax } from "./taxCalculation.service";
-import { calculateSolidWasteCharge } from "./charges.service";
+import { annualSolidWasteCharge } from "./charges.service";
 import { getNextNewHoldingNo, getNextPartiallyKnownHoldingNo } from "./holdingNumberSeries.service";
 import { buildSyntheticFloorsForPartiallyKnown } from "./partiallyKnown.service";
 import { computeStageYears } from "./computeStageYears.service";
@@ -103,7 +103,7 @@ export async function saveNewEntryProperty(input: NewEntryPropertyInput, operato
   })) as unknown as FloorRow[];
 
   const calc = calculateTax(draftProperty, draftFloors);
-  const solidWasteCharge = calculateSolidWasteCharge(draftProperty);
+  const solidWasteCharge = annualSolidWasteCharge(draftProperty);
 
   const floorsWithTax = floors.map((f, i) => ({
     ...f,
@@ -176,6 +176,10 @@ export async function saveNewEntryProperty(input: NewEntryPropertyInput, operato
     operatorDisplayName,
     true, // isNew
   );
+  // Keep the stored user-charge paid-till year unless this save supplies one ("" / null = unknown).
+  if (input.solidWastePaidTillYear !== undefined) {
+    await propertySaveRepository.setSolidWastePaidTillYear(holdingNo, input.solidWastePaidTillYear || null);
+  }
 
   await propertySaveRepository.replaceFloors(holdingNo, floorsWithTax);
 

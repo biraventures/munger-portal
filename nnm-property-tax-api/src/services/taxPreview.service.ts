@@ -1,5 +1,5 @@
 import { calculateTax } from "./taxCalculation.service";
-import { calculateSolidWasteCharge } from "./charges.service";
+import { annualSolidWasteCharge } from "./charges.service";
 import type { PropertyRow, FloorRow, TaxCalculationResult } from "../types/property.types";
 import type { TaxPreviewInput } from "../types/taxPreview.types";
 
@@ -35,7 +35,7 @@ export function previewPropertyTax(input: TaxPreviewInput): { taxCalc: TaxCalcul
   })) as unknown as FloorRow[];
 
   const taxCalc = calculateTax(draftProperty, draftFloors);
-  const solidWasteCharge = calculateSolidWasteCharge(draftProperty);
+  const solidWasteCharge = annualSolidWasteCharge(draftProperty);
 
   return { taxCalc, solidWasteCharge };
 }

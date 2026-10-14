@@ -1,7 +1,7 @@
 import { pool } from "../config/db";
 import { propertyRepository } from "../repositories/property.repository";
 import { adminRepository } from "../repositories/admin.repository";
-import { calculateSolidWasteCharge } from "./charges.service";
+import { annualSolidWasteCharge } from "./charges.service";
 import { SOLID_WASTE_RATE } from "../constants/taxRates";
 import { ApiError } from "../utils/ApiError";
 
@@ -103,7 +103,7 @@ export async function approveSolidWasteRequest(id: number, admin: Actor): Promis
       ).rows[0]!;
       const property = await propertyRepository.findByHoldingNo(r.holding_no);
       if (!property) throw ApiError.notFound("Holding not found.");
-      const charge = calculateSolidWasteCharge({ ...property, solid_waste_charge_type: r.requested_type, solid_waste_months: property.solid_waste_months || 12 });
+      const charge = annualSolidWasteCharge({ ...property, solid_waste_charge_type: r.requested_type });
       await client.query(
         `UPDATE properties SET solid_waste_charge_type = $2, solid_waste_charge = $3,
            solid_waste_months = COALESCE(NULLIF(solid_waste_months, 0), 12),

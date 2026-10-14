@@ -5,7 +5,7 @@ import { adminRepository } from "../repositories/admin.repository";
 import { demandNoticeRepository } from "../repositories/demandNotice.repository";
 import { cancellationRequestRepository } from "../repositories/cancellationRequest.repository";
 import { calculateTax } from "./taxCalculation.service";
-import { calculateRebateOrLateFee, calculateSolidWasteCharge } from "./charges.service";
+import { annualSolidWasteCharge, calculateRebateOrLateFee, calculateSolidWasteCharge, solidWasteYearsDue } from "./charges.service";
 import { summarizeArrears, computeArrearsClearance } from "./arrears.service";
 import { amountInWords } from "../utils/amountInWords";
 import { parseYearStartOrNull } from "../utils/assessmentYear";
@@ -345,6 +345,17 @@ export async function submitPayment(
     // The core fix: unconditionally advance paid-through status to what
     // this notice covered — this is what was missing before.
     await paymentRepository.updateTaxPaidTillYear(holdingNo, paidThroughYear, client);
+
+    // A full payment also collects the solid waste user charge for every unpaid year up to the assessment year (a
+    // part payment is holding tax only), so the user-charge paid-till year moves up to that year. The previous value
+    // is logged against the receipt so a cancellation can restore it.
+    if (!isPart && solidWasteYearsDue(property) > 0 && annualSolidWasteCharge(property) > 0) {
+      await client.query(
+        `INSERT INTO solid_waste_payment_log (receipt_no, holding_no, previous_paid_till_year, new_paid_till_year, amount) VALUES ($1,$2,$3,$4,$5)`,
+        [receiptNo, holdingNo, property.solid_waste_paid_till_year ?? null, property.assessment_year, calculateSolidWasteCharge(property)],
+      );
+      await client.query(`UPDATE properties SET solid_waste_paid_till_year = $2 WHERE holding_no = $1`, [holdingNo, property.assessment_year]);
+    }
 
     await client.query("COMMIT");
   } catch (err) {

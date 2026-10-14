@@ -1,5 +1,7 @@
 "use client";
 
+import { UserChargePaidTill } from "@/components/operator/user-charge-paid-till";
+
 import { Plus } from "lucide-react";
 import { FloorRow, makeBlankFloor, type FloorFormState } from "@/components/operator/floor-row";
 
@@ -17,7 +19,7 @@ export interface AdminPropertyFormState {
   roadType: "PMR" | "MR" | "OR";
   holdingCreationYear: string;
   solidWasteChargeType: string;
-  solidWasteMonths: string;
+  solidWastePaidTillYear: string;
   isBwg: boolean;
   isSlum: boolean;
   floors: FloorFormState[];
@@ -35,7 +37,7 @@ export function blankAdminPropertyForm(): AdminPropertyFormState {
     roadType: "MR",
     holdingCreationYear: "",
     solidWasteChargeType: "",
-    solidWasteMonths: "12",
+    solidWastePaidTillYear: "",
     isBwg: false,
     isSlum: false,
     floors: [makeBlankFloor(0)],
@@ -54,7 +56,7 @@ export function propertyFormToPayload(form: AdminPropertyFormState): Record<stri
     roadType: form.roadType,
     holdingCreationYear: form.holdingCreationYear.trim(),
     solidWasteChargeType: form.solidWasteChargeType || null,
-    solidWasteMonths: Number(form.solidWasteMonths) || 12,
+    solidWastePaidTillYear: form.solidWastePaidTillYear || null,
     isBwg: form.isBwg,
     isSlum: form.isSlum,
     floors: form.floors.map((f) => ({
@@ -84,7 +86,7 @@ export function propertyFormFromProposedData(data: Record<string, unknown>): Adm
     roadType: (data.roadType as "PMR" | "MR" | "OR") ?? "MR",
     holdingCreationYear: String(data.holdingCreationYear ?? ""),
     solidWasteChargeType: String(data.solidWasteChargeType ?? ""),
-    solidWasteMonths: String(data.solidWasteMonths ?? "12"),
+    solidWastePaidTillYear: String(data.solidWastePaidTillYear ?? ""),
     isBwg: Boolean(data.isBwg),
     isSlum: Boolean(data.isSlum),
     floors:
@@ -115,7 +117,7 @@ export function propertyFormFromExisting(property: Record<string, unknown>, floo
     roadType: (property.road_type as "PMR" | "MR" | "OR") ?? "MR",
     holdingCreationYear: String(property.holding_creation_year ?? ""),
     solidWasteChargeType: String(property.solid_waste_charge_type ?? ""),
-    solidWasteMonths: String(property.solid_waste_months ?? "12"),
+    solidWastePaidTillYear: String(property.solid_waste_paid_till_year ?? ""),
     isBwg: Boolean(property.is_bwg),
     isSlum: Boolean(property.is_slum),
     floors:
@@ -232,10 +234,7 @@ export function AdminPropertyDetailsForm({
               ))}
             </select>
           </div>
-          <div>
-            <label className={labelClass}>Months applicable</label>
-            <input type="number" min="1" max="12" value={form.solidWasteMonths} onChange={(e) => updateField("solidWasteMonths", e.target.value)} className={inputClass} />
-          </div>
+          <UserChargePaidTill value={form.solidWastePaidTillYear} onChange={(v) => updateField("solidWastePaidTillYear", v)} />
           <label className="flex items-start gap-2 text-sm text-slate-700 sm:col-span-2">
             <input
               type="checkbox"

@@ -4,6 +4,10 @@ import type { PropertyRow, FloorRow } from "../types/property.types";
 import type { FloorInput } from "../types/propertySave.types";
 
 export const propertySaveRepository = {
+  async setSolidWastePaidTillYear(holdingNo: string, year: string | null): Promise<void> {
+    await pool.query(`UPDATE properties SET solid_waste_paid_till_year = $2 WHERE holding_no = $1`, [holdingNo, year]);
+  },
+
   async upsertProperty(
     holdingNo: string,
     p: Record<string, unknown>,
