@@ -8,6 +8,7 @@ import type { ReceiptData } from "@/lib/payment-api";
 import { DocumentVerificationQR } from "./document-verification-qr";
 import { NoticeView } from "./notice-view";
 import { printElementInNewWindow } from "@/lib/print-in-new-window";
+import { totalArv, vacantArv } from "@/lib/vacant-arv";
 
 function money(v: string | number | undefined | null): string {
   const n = Number(v ?? 0);
@@ -203,7 +204,7 @@ export function ReceiptView({ receipt, onNewPayment }: { receipt: ReceiptData; o
                 —
               </td>
               <td className="border border-slate-400 p-1.5 text-right">{calc.vacant.rate}</td>
-              <td className="border border-slate-400 p-1.5 text-right text-[10px]">direct rate</td>
+              <td className="border border-slate-400 p-1.5 text-right">{vacantArv(calc)}</td>
               <td className="border border-slate-400 p-1.5 text-right">{calc.vacant.tax}</td>
             </tr>
             <tr>
@@ -211,7 +212,7 @@ export function ReceiptView({ receipt, onNewPayment }: { receipt: ReceiptData; o
                 <b>Total ARV / Current Year Tax (before rebate)</b>
               </td>
               <td className="border border-slate-400 p-1.5 text-right">
-                <b>{calc.arv}</b>
+                <b>{totalArv(calc)}</b>
               </td>
               <td className="border border-slate-400 p-1.5 text-right">
                 <b>{calc.currentTax}</b>

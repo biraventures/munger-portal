@@ -2,7 +2,7 @@ import { propertyRepository } from "../repositories/property.repository";
 import { demandNoticeRepository } from "../repositories/demandNotice.repository";
 import { cancellationRequestRepository } from "../repositories/cancellationRequest.repository";
 import { calculateTax } from "./taxCalculation.service";
-import { calculateRebateOrLateFee, calculateSolidWasteCharge } from "./charges.service";
+import { annualSolidWasteCharge, calculateRebateOrLateFee, calculateSolidWasteCharge, solidWastePendingPeriod } from "./charges.service";
 import { summarizeArrears, computePartPaymentOptions, pendingArrearsPeriod, type PartPaymentOption } from "./arrears.service";
 import { parseYearStartOrNull } from "../utils/assessmentYear";
 import { num } from "../utils/num";
@@ -85,6 +85,7 @@ export async function generateDemandNotice(
 
   const calc = calculateTax(property, floors);
   const solidWasteCharge = calculateSolidWasteCharge(property);
+  const solidWastePeriod = solidWastePendingPeriod(property);
   const arrears = summarizeArrears(property, stages);
 
   let part: PartPaymentOption | null = null;
@@ -165,6 +166,10 @@ export async function generateDemandNotice(
   const reminderLabel = reminderNumber > 0 ? `${ordinal(reminderNumber)} Reminder` : null;
   const previousUnsettledDemandNosFormatted = previousUnsettled.map((n) => formatDocNumber(n.demand_no, "Demand", n.notice_date));
 
+  // The stored solid_waste_charge column is a per-year figure (and may be stale); the notice must print the
+  // amount actually demanded, the same one included in the "Solid Waste + Other Charges" subtotal.
+  const noticeProperty = { ...property, solid_waste_charge: (part ? 0 : solidWasteCharge).toFixed(2) };
+
   const arrearsPeriod = part ? { fromYear: part.fromYear, toYear: part.toYear, years: part.years } : pendingArrearsPeriod(property, stages);
 
   const totals: DemandNoticeTotals = {
@@ -185,6 +190,8 @@ export async function generateDemandNotice(
     ...(part ? { partPayment: { years: part.years, fromYear: part.fromYear, toYear: part.toYear } } : {}),
     // The period of arrears being cleared and the current year (and whether it is cleared by THIS notice).
     ...(arrearsPeriod ? { arrearsPeriod } : {}),
+    // The user charge is printed ONCE, as the total for the whole unpaid period (annual x years), with that period shown.
+    ...(!part && solidWastePeriod ? { solidWaste: { annual: annualSolidWasteCharge(property).toFixed(2), ...solidWastePeriod } } : {}),
     ...(property.assessment_year ? { currentYear: { year: property.assessment_year, included: !part } } : {}),
     ...(followsPartPaymentReceipt ? { balanceAfterPartPaymentReceipt: followsPartPaymentReceipt } : {}),
   };
@@ -193,7 +200,8 @@ export async function generateDemandNotice(
     demandNo,
     holdingNo,
     generatedBy,
-    arv: num(calc.arv),
+    arv: num(calc.arvBuilt),
+    vacantArv: num(calc.vacant.arv),
     currentYearTaxNet: currentTotal,
     previousYearsTaxBase: yearWiseArrears,
     totalFineAmount: totalFineAmount + arrearsPenalty,
@@ -213,7 +221,7 @@ export async function generateDemandNotice(
     // replay it straight back into notice-view.tsx later with nothing
     // re-derived - see getDemandNoticeForReprint.
     snapshot: {
-      property: property as unknown as Record<string, unknown>,
+      property: noticeProperty as unknown as Record<string, unknown>,
       taxCalc: calc,
       totals,
       previousUnsettledDemandNos: previousUnsettledDemandNosFormatted,
@@ -233,7 +241,7 @@ export async function generateDemandNotice(
     reminderLabel,
     previousUnsettledDemandNos: previousUnsettledDemandNosFormatted,
     verificationUrl: buildVerificationUrl("demand-notice", demandNo),
-    property: property as unknown as Record<string, unknown>,
+    property: noticeProperty as unknown as Record<string, unknown>,
     floors,
     taxCalc: calc,
     totals,

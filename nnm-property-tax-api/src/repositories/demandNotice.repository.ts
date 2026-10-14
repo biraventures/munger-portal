@@ -10,6 +10,7 @@ export interface DemandNoticeRow {
   notice_date: Date;
   generated_by: string;
   arv: string;
+  vacant_arv: string | null;
   current_year_tax_net: string;
   previous_years_tax_base: string;
   total_fine_amount: string;
@@ -89,6 +90,7 @@ export const demandNoticeRepository = {
     holdingNo: string;
     generatedBy: string;
     arv: number;
+    vacantArv: number;
     currentYearTaxNet: number;
     previousYearsTaxBase: number;
     totalFineAmount: number;
@@ -113,8 +115,8 @@ export const demandNoticeRepository = {
         current_year_tax_net, previous_years_tax_base, total_fine_amount,
         other_charges, total_amount_demanded, assessment_year,
         reminder_number, previous_unsettled_demand_nos, floor_breakdown,
-        area_rebate, area_rebate_reason, snapshot, part_payment, paid_through_year
-      ) VALUES ($1,$2, now(), $3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)`,
+        area_rebate, area_rebate_reason, snapshot, part_payment, paid_through_year, vacant_arv
+      ) VALUES ($1,$2, now(), $3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)`,
       [
         row.demandNo,
         row.holdingNo,
@@ -134,6 +136,7 @@ export const demandNoticeRepository = {
         JSON.stringify(row.snapshot),
         row.partPayment ?? false,
         row.paidThroughYear ?? null,
+        row.vacantArv,
       ],
     );
   },

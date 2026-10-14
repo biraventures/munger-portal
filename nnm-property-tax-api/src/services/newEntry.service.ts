@@ -166,7 +166,9 @@ export async function saveNewEntryProperty(input: NewEntryPropertyInput, operato
       miscRebateReason: input.miscRebateReason ?? null,
       penalty: input.penalty ?? 0,
       outstandingDemand: input.outstandingDemand ?? 0,
-      arv: Number(calc.arv),
+      // Built-up ARV only; vacant land's notional ARV (tax x 100/9) is stored separately.
+      arv: Number(calc.arvBuilt),
+      vacantArv: Number(calc.vacant.arv),
       taxPayable: Number(calc.currentTax),
       holdingCreationYear: input.holdingCreationYear,
       taxPaidTillYear: input.taxPaidTillYear ?? null,

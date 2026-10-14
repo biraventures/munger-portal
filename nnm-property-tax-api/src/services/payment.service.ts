@@ -55,6 +55,7 @@ export interface PrintableReceiptHistory {
   // transactions that predate this migration.
   breakdown: {
     arv: string;
+    vacantArv: string | null;
     currentYearTaxNet: string;
     previousYearsTaxBase: string;
     totalFineAmount: string;
@@ -132,7 +133,9 @@ export async function getReceiptForReprint(receiptNo: string): Promise<Printable
     breakdown:
       txn.arv !== null
         ? {
-            arv: txn.arv,
+            // Total ARV as printed: built-up ARV plus vacant land's notional ARV (stored separately).
+            arv: (Number(txn.arv) + Number(txn.vacant_arv ?? 0)).toFixed(2),
+            vacantArv: txn.vacant_arv,
             currentYearTaxNet: txn.current_year_tax_net!,
             previousYearsTaxBase: txn.previous_years_tax_base!,
             totalFineAmount: txn.total_fine_amount!,
@@ -329,6 +332,7 @@ export async function submitPayment(
         tvDate,
         // Frozen at the moment of payment - see migrations 024 and 025's comments.
         arv: notice.arv,
+        vacantArv: notice.vacant_arv,
         currentYearTaxNet: notice.current_year_tax_net,
         previousYearsTaxBase: notice.previous_years_tax_base,
         totalFineAmount: notice.total_fine_amount,

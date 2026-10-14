@@ -54,6 +54,8 @@ export interface DemandNoticeData {
     currentYear?: { year: string; included: boolean };
     /** Set on the balance notice raised right after a part payment: formatted receipt no. of that payment. */
     balanceAfterPartPaymentReceipt?: string;
+    /** User charge printed once: annual amount and the unpaid period it covers. */
+    solidWaste?: { annual: string; fromYear: string; toYear: string; years: number };
   };
 }
 

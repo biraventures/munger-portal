@@ -56,6 +56,8 @@ export interface PropertyRow {
   penalty: string;
   outstanding_demand: string;
   arv: string;
+  /** Notional ARV of vacant land (tax x 100/9), stored separately from the built-up `arv`. */
+  vacant_arv: string;
   tax_payable: string;
   holding_creation_year: string;
   tax_paid_till_year: string | null;
@@ -146,6 +148,8 @@ export interface TaxCalculationResult {
     totalPlotArea: string;
     rate: number;
     tax: string;
+    /** Notional ARV of the vacant land = tax x 100/9 (display only). Absent on older frozen notices. */
+    arv?: string;
   };
 }
 

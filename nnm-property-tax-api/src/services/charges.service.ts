@@ -29,6 +29,17 @@ export function solidWasteYearsDue(property: Pick<PropertyRow, "assessment_year"
   return Math.max(0, current - paidTill);
 }
 
+/** The unpaid user-charge period, for printing (e.g. 2025-26 to 2026-27), or null when nothing is due. */
+export function solidWastePendingPeriod(
+  property: Pick<PropertyRow, "assessment_year" | "solid_waste_paid_till_year">,
+): { fromYear: string; toYear: string; years: number } | null {
+  const years = solidWasteYearsDue(property);
+  const current = parseYearStartOrNull(property.assessment_year);
+  if (years <= 0 || current === null) return null;
+  const label = (y: number) => `${y}-${String((y + 1) % 100).padStart(2, "0")}`;
+  return { fromYear: label(current - years + 1), toYear: label(current), years };
+}
+
 /** The user charge payable now: the annual charge for each unpaid year. */
 export function calculateSolidWasteCharge(property: PropertyRow): number {
   return annualSolidWasteCharge(property) * solidWasteYearsDue(property);
