@@ -13,7 +13,11 @@ const envSchema = z.object({
   VERIFICATION_SECRET: z.string().min(16, "VERIFICATION_SECRET must be at least 16 characters — used to sign document verification QR codes"),
   JWT_EXPIRES_IN: z.string().default("8h"),
   FRONTEND_URL: z.string().url().default("http://localhost:3000"),
+  FRONTEND_BASE_PATH: z.string().default(""),
   ICICI_MERCHANT_ID: z.string().default(""),
+  ICICI_AGG_ID: z.string().default(""),
+  ICICI_SECRET_KEY: z.string().default(""),
+  ICICI_RETURN_URL: z.string().default(""),
   // Kill switch for the citizen-facing online payment gateway - default
   // false. Set to "true" once the ICICI integration is properly signed
   // and live on whichever server actually hosts this (see the warning
@@ -30,6 +34,7 @@ const envSchema = z.object({
   // folder for development; in production point this at the SDC's NFS
   // mount (e.g. /image-upload) so photos survive an App server redeploy.
   PHOTO_UPLOAD_DIR: z.string().default("./uploads/attendance-photos"),
+
 });
 
 const parsed = envSchema.safeParse(process.env);

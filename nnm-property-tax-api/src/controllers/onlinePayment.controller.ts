@@ -1,9 +1,10 @@
 import type { Request, Response } from "express";
 import { z } from "zod";
 import { holdingNoSchema } from "../utils/holdingNoSchema";
-import { initiateOnlinePayment, confirmOnlinePayment } from "../services/onlinePayment.service";
+import { initiateOnlinePayment, confirmOnlinePayment, paymentStatusCheck } from "../services/onlinePayment.service";
 import { asyncHandler } from "../middleware/asyncHandler";
 import { ApiError } from "../utils/ApiError";
+import { env } from "../config/env";
 
 const initiateSchema = z.object({
   amount: z.coerce.number().positive(),
@@ -35,12 +36,17 @@ export const postInitiateOnlinePayment = asyncHandler(async (req: Request, res: 
   res.status(200).json(result);
 });
 
+// const confirmSchema = z.object({
+//   orderId: z.string().min(1),
+//   // Accept whatever the gateway's redirect sends — exact field names
+//   // depend on ICICI's real spec. `success` is this endpoint's own
+//   // normalized boolean; adjust the mapping once that spec is known.
+//   success: z.coerce.boolean(),
+// });
 const confirmSchema = z.object({
-  orderId: z.string().min(1),
-  // Accept whatever the gateway's redirect sends — exact field names
-  // depend on ICICI's real spec. `success` is this endpoint's own
-  // normalized boolean; adjust the mapping once that spec is known.
-  success: z.coerce.boolean(),
+  responseCode: z.string().min(1),
+  merchantTxnNo: z.string().min(1),
+  paymentID: z.string().min(1),
 });
 
 /**
@@ -56,6 +62,24 @@ export const postConfirmOnlinePayment = asyncHandler(async (req: Request, res: R
     throw ApiError.badRequest("Invalid confirmation payload", parsed.error.flatten().fieldErrors);
   }
 
-  const result = await confirmOnlinePayment(parsed.data.orderId, parsed.data.success, req.body);
-  res.status(200).json(result);
+  let isSuccess = false;
+
+  if (req.body?.responseCode !== '0000') {
+    isSuccess = true
+  }
+
+  const result = await confirmOnlinePayment(parsed.data.merchantTxnNo, isSuccess, req.body);
+  // res.status(200).json(result);
+  return res.redirect(`${env.FRONTEND_URL}${env.FRONTEND_BASE_PATH}/property-tax/payment-return?order_id=${result?.order_id}`);
+});
+
+export const paymentStatus = asyncHandler(async (req: Request, res: Response) => {
+  const result = await paymentStatusCheck(req.body?.order_id);
+  const datatToSend = {
+    ...result,
+    amount:result?.amount_received,
+    holdingNo:result?.holding_no,
+    receiptNo:result?.receipt_no
+  }
+  res.status(200).json(datatToSend);
 });
