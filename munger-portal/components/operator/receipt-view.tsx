@@ -108,9 +108,8 @@ export function ReceiptView({ receipt, onNewPayment }: { receipt: ReceiptData; o
             <div>
               <b className="inline-block w-[130px]">Ward</b> {str(p.ward)}
             </div>
-            <div>
-              <b className="inline-block w-[130px]">Zone</b> {str(p.zone)}
-            </div>
+          </div>
+          <div className="flex-1 space-y-0.5">
             <div>
               <b className="inline-block w-[130px]">Holding No</b> {str(p.holding_no)}
             </div>
@@ -119,16 +118,11 @@ export function ReceiptView({ receipt, onNewPayment }: { receipt: ReceiptData; o
                 <b className="inline-block w-[130px]">Old Holding No</b> {str(p.old_holding_no)}
               </div>
             ) : null}
-          </div>
-          <div className="flex-1 space-y-0.5">
             <div>
               <b className="inline-block w-[130px]">Road Type</b> {str(p.road_type)}
             </div>
             <div>
               <b className="inline-block w-[130px]">Rain Water Harvesting</b> {p.rain_water_harvesting ? "Yes" : "No"}
-            </div>
-            <div>
-              <b className="inline-block w-[130px]">Assessment Year</b> {str(p.assessment_year)}
             </div>
             <div>
               <b className="inline-block w-[130px]">Vacant Area (taxable)</b> {calc.vacant.taxableArea} sqft
@@ -140,14 +134,14 @@ export function ReceiptView({ receipt, onNewPayment }: { receipt: ReceiptData; o
         <table className="mt-2.5 w-full border-collapse text-[11px]">
           <thead>
             <tr className="bg-slate-100">
-              <th className="border border-slate-400 p-1.5 text-left">Floor</th>
-              <th className="border border-slate-400 p-1.5 text-left">Area</th>
-              <th className="border border-slate-400 p-1.5 text-left">Const.</th>
-              <th className="border border-slate-400 p-1.5 text-left">Usage</th>
-              <th className="border border-slate-400 p-1.5 text-left">Occ.</th>
-              <th className="border border-slate-400 p-1.5 text-right">Rate</th>
-              <th className="border border-slate-400 p-1.5 text-right">ARV</th>
-              <th className="border border-slate-400 p-1.5 text-right">Tax @ 9%</th>
+              <th className="border border-slate-400 px-1.5 py-0.5 text-left">Floor</th>
+              <th className="border border-slate-400 px-1.5 py-0.5 text-left">Area</th>
+              <th className="border border-slate-400 px-1.5 py-0.5 text-left">Const.</th>
+              <th className="border border-slate-400 px-1.5 py-0.5 text-left">Usage</th>
+              <th className="border border-slate-400 px-1.5 py-0.5 text-left">Occ.</th>
+              <th className="border border-slate-400 px-1.5 py-0.5 text-right">Rate</th>
+              <th className="border border-slate-400 px-1.5 py-0.5 text-right">ARV</th>
+              <th className="border border-slate-400 px-1.5 py-0.5 text-right">Tax @ 9%</th>
             </tr>
           </thead>
           <tbody>
@@ -158,10 +152,10 @@ export function ReceiptView({ receipt, onNewPayment }: { receipt: ReceiptData; o
               // an error to whoever reads the receipt. Same total ARV/Tax either
               // way (unaffected below); just collapsed to one line here.
               <tr>
-                <td className="border border-slate-400 p-1.5" colSpan={2}>
+                <td className="border border-slate-400 px-1.5 py-0.5" colSpan={2}>
                   <b>Total Built-up Area</b>
                 </td>
-                <td className="border border-slate-400 p-1.5" colSpan={6}>
+                <td className="border border-slate-400 px-1.5 py-0.5" colSpan={6}>
                   {calc.vacant.groundFloorBuiltArea} sqft
                 </td>
               </tr>
@@ -169,52 +163,52 @@ export function ReceiptView({ receipt, onNewPayment }: { receipt: ReceiptData; o
               calc.breakdown.map((row, i) =>
                 row.error ? (
                   <tr key={i}>
-                    <td colSpan={8} className="border border-slate-400 p-1.5 text-red-700">
+                    <td colSpan={8} className="border border-slate-400 px-1.5 py-0.5 text-red-700">
                       {row.floor}: {row.error}
                     </td>
                   </tr>
                 ) : row.demolished ? (
                   <tr key={i} className="italic text-slate-400">
-                    <td className="border border-slate-400 p-1.5">{row.floor} (Demolished)</td>
-                    <td colSpan={4} className="border border-slate-400 p-1.5">
+                    <td className="border border-slate-400 px-1.5 py-0.5">{row.floor} (Demolished)</td>
+                    <td colSpan={4} className="border border-slate-400 px-1.5 py-0.5">
                       Not part of current total
                     </td>
-                    <td className="border border-slate-400 p-1.5 text-right">—</td>
-                    <td className="border border-slate-400 p-1.5 text-right">N/A</td>
-                    <td className="border border-slate-400 p-1.5 text-right">N/A</td>
+                    <td className="border border-slate-400 px-1.5 py-0.5 text-right">—</td>
+                    <td className="border border-slate-400 px-1.5 py-0.5 text-right">N/A</td>
+                    <td className="border border-slate-400 px-1.5 py-0.5 text-right">N/A</td>
                   </tr>
                 ) : (
                   <tr key={i}>
-                    <td className="border border-slate-400 p-1.5">{row.floor}</td>
-                    <td className="border border-slate-400 p-1.5">{row.area}</td>
-                    <td className="border border-slate-400 p-1.5">{row.constType}</td>
-                    <td className="border border-slate-400 p-1.5">{row.usage}</td>
-                    <td className="border border-slate-400 p-1.5">{row.occupancy}</td>
-                    <td className="border border-slate-400 p-1.5 text-right">{row.rate}</td>
-                    <td className="border border-slate-400 p-1.5 text-right">{row.floorArv}</td>
-                    <td className="border border-slate-400 p-1.5 text-right">{row.floorTax}</td>
+                    <td className="border border-slate-400 px-1.5 py-0.5">{row.floor}</td>
+                    <td className="border border-slate-400 px-1.5 py-0.5">{row.area}</td>
+                    <td className="border border-slate-400 px-1.5 py-0.5">{row.constType}</td>
+                    <td className="border border-slate-400 px-1.5 py-0.5">{row.usage}</td>
+                    <td className="border border-slate-400 px-1.5 py-0.5">{row.occupancy}</td>
+                    <td className="border border-slate-400 px-1.5 py-0.5 text-right">{row.rate}</td>
+                    <td className="border border-slate-400 px-1.5 py-0.5 text-right">{row.floorArv}</td>
+                    <td className="border border-slate-400 px-1.5 py-0.5 text-right">{row.floorTax}</td>
                   </tr>
                 ),
               )
             )}
             <tr className={Number(calc.vacant.tax) <= 0 ? "text-slate-400" : ""}>
-              <td className="border border-slate-400 p-1.5">Vacant Land</td>
-              <td className="border border-slate-400 p-1.5">{calc.vacant.taxableArea}</td>
-              <td colSpan={3} className="border border-slate-400 p-1.5">
+              <td className="border border-slate-400 px-1.5 py-0.5">Vacant Land</td>
+              <td className="border border-slate-400 px-1.5 py-0.5">{calc.vacant.taxableArea}</td>
+              <td colSpan={3} className="border border-slate-400 px-1.5 py-0.5">
                 —
               </td>
-              <td className="border border-slate-400 p-1.5 text-right">{calc.vacant.rate}</td>
-              <td className="border border-slate-400 p-1.5 text-right">{vacantArv(calc)}</td>
-              <td className="border border-slate-400 p-1.5 text-right">{calc.vacant.tax}</td>
+              <td className="border border-slate-400 px-1.5 py-0.5 text-right">{calc.vacant.rate}</td>
+              <td className="border border-slate-400 px-1.5 py-0.5 text-right">{vacantArv(calc)}</td>
+              <td className="border border-slate-400 px-1.5 py-0.5 text-right">{calc.vacant.tax}</td>
             </tr>
             <tr>
-              <td colSpan={6} className="border border-slate-400 p-1.5">
+              <td colSpan={6} className="border border-slate-400 px-1.5 py-0.5">
                 <b>Total ARV / Current Year Tax (before rebate)</b>
               </td>
-              <td className="border border-slate-400 p-1.5 text-right">
+              <td className="border border-slate-400 px-1.5 py-0.5 text-right">
                 <b>{totalArv(calc)}</b>
               </td>
-              <td className="border border-slate-400 p-1.5 text-right">
+              <td className="border border-slate-400 px-1.5 py-0.5 text-right">
                 <b>{calc.currentTax}</b>
               </td>
             </tr>
@@ -232,80 +226,80 @@ export function ReceiptView({ receipt, onNewPayment }: { receipt: ReceiptData; o
         <table className="mt-2.5 w-full border-collapse text-[11px]">
           <thead>
             <tr>
-              <th className="border border-slate-400 bg-slate-100 p-1.5 text-left" colSpan={5}>
+              <th className="border border-slate-400 bg-slate-100 px-1.5 py-0.5 text-left" colSpan={5}>
                 Particulars
               </th>
-              <th className="border border-slate-400 bg-slate-100 p-1.5 text-right">Amount</th>
+              <th className="border border-slate-400 bg-slate-100 px-1.5 py-0.5 text-right">Amount</th>
             </tr>
           </thead>
           <tbody>
             {Number(receipt.totals.yearWiseArrears) > 0 && (
               <tr>
-                <td colSpan={5} className="border-x border-slate-400 p-1.5">
+                <td colSpan={5} className="border-x border-slate-400 px-1.5 py-0.5">
                   Pending Arrears (Outstanding Demand)
                 </td>
-                <td className="border-x border-slate-400 p-1.5 text-right">{receipt.totals.yearWiseArrears}</td>
+                <td className="border-x border-slate-400 px-1.5 py-0.5 text-right">{receipt.totals.yearWiseArrears}</td>
               </tr>
             )}
             {Number(receipt.totals.penalty) > 0 && (
               <tr>
-                <td colSpan={5} className="border-x border-slate-400 p-1.5">
+                <td colSpan={5} className="border-x border-slate-400 px-1.5 py-0.5">
                   + Penalty (late fee on arrears, per pending year)
                 </td>
-                <td className="border-x border-slate-400 p-1.5 text-right">{receipt.totals.penalty}</td>
+                <td className="border-x border-slate-400 px-1.5 py-0.5 text-right">{receipt.totals.penalty}</td>
               </tr>
             )}
             <tr>
-              <td colSpan={5} className="border-x border-slate-400 p-1.5">
+              <td colSpan={5} className="border-x border-slate-400 px-1.5 py-0.5">
                 {str(p.assessment_year)} (Current)
               </td>
-              <td className="border-x border-slate-400 p-1.5 text-right">{receipt.totals.currentTax}</td>
+              <td className="border-x border-slate-400 px-1.5 py-0.5 text-right">{receipt.totals.currentTax}</td>
             </tr>
             {Number(receipt.totals.rebate) > 0 && (
               <tr>
-                <td colSpan={5} className="border-x border-slate-400 p-1.5">
+                <td colSpan={5} className="border-x border-slate-400 px-1.5 py-0.5">
                   − Plinth Area / Rain Water Harvesting Rebate
                 </td>
-                <td className="border-x border-slate-400 p-1.5 text-right">{receipt.totals.rebate}</td>
+                <td className="border-x border-slate-400 px-1.5 py-0.5 text-right">{receipt.totals.rebate}</td>
               </tr>
             )}
             {Number(receipt.totals.currentTaxLateFee) > 0 && (
               <tr>
-                <td colSpan={5} className="border-x border-slate-400 p-1.5">
+                <td colSpan={5} className="border-x border-slate-400 px-1.5 py-0.5">
                   + Late Fee on Current Year Tax
                 </td>
-                <td className="border-x border-slate-400 p-1.5 text-right">{receipt.totals.currentTaxLateFee}</td>
+                <td className="border-x border-slate-400 px-1.5 py-0.5 text-right">{receipt.totals.currentTaxLateFee}</td>
               </tr>
             )}
             {Number(receipt.totals.currentTaxRebate) > 0 && (
               <tr>
-                <td colSpan={5} className="border-x border-slate-400 p-1.5">
+                <td colSpan={5} className="border-x border-slate-400 px-1.5 py-0.5">
                   − Early-Payment Rebate
                 </td>
-                <td className="border-x border-slate-400 p-1.5 text-right">{receipt.totals.currentTaxRebate}</td>
+                <td className="border-x border-slate-400 px-1.5 py-0.5 text-right">{receipt.totals.currentTaxRebate}</td>
               </tr>
             )}
             <tr>
-              <td colSpan={5} className="border-x border-slate-400 p-1.5">
+              <td colSpan={5} className="border-x border-slate-400 px-1.5 py-0.5">
                 <b>Current Year Net Payable</b>
               </td>
-              <td className="border-x border-slate-400 p-1.5 text-right">
+              <td className="border-x border-slate-400 px-1.5 py-0.5 text-right">
                 <b>{receipt.totals.currentTotal}</b>
               </td>
             </tr>
             {!receipt.isPartPayment && (
               <tr>
-                <td colSpan={5} className="border-x border-slate-400 p-1.5">
+                <td colSpan={5} className="border-x border-slate-400 px-1.5 py-0.5">
                   Solid Waste User Charge
                 </td>
-                <td className="border-x border-slate-400 p-1.5 text-right">{str(p.solid_waste_charge)}</td>
+                <td className="border-x border-slate-400 px-1.5 py-0.5 text-right">{str(p.solid_waste_charge)}</td>
               </tr>
             )}
             <tr>
-              <td colSpan={5} className="border-x border-b border-slate-400 p-1.5">
+              <td colSpan={5} className="border-x border-b border-slate-400 px-1.5 py-0.5">
                 <b>Total</b>
               </td>
-              <td className="border-x border-b border-slate-400 p-1.5 text-right">
+              <td className="border-x border-b border-slate-400 px-1.5 py-0.5 text-right">
                 <b>{receipt.totals.grandTotal}</b>
               </td>
             </tr>
@@ -318,19 +312,19 @@ export function ReceiptView({ receipt, onNewPayment }: { receipt: ReceiptData; o
             <table className="mt-1 w-full border-collapse text-[11px]">
               <thead>
                 <tr className="bg-slate-100">
-                  <th className="border border-slate-400 p-1.5 text-left">Period</th>
-                  <th className="border border-slate-400 p-1.5 text-left">Years</th>
-                  <th className="border border-slate-400 p-1.5 text-right">Annual (avg)</th>
-                  <th className="border border-slate-400 p-1.5 text-right">Amount</th>
+                  <th className="border border-slate-400 px-1.5 py-0.5 text-left">Period</th>
+                  <th className="border border-slate-400 px-1.5 py-0.5 text-left">Years</th>
+                  <th className="border border-slate-400 px-1.5 py-0.5 text-right">Annual (avg)</th>
+                  <th className="border border-slate-400 px-1.5 py-0.5 text-right">Amount</th>
                 </tr>
               </thead>
               <tbody>
                 {receipt.arrearStagesPaid.map((s, i) => (
                   <tr key={i}>
-                    <td className="border border-slate-400 p-1.5">{s.period}</td>
-                    <td className="border border-slate-400 p-1.5">{s.years}</td>
-                    <td className="border border-slate-400 p-1.5 text-right">{s.annualCharge}</td>
-                    <td className="border border-slate-400 p-1.5 text-right">{s.amount}</td>
+                    <td className="border border-slate-400 px-1.5 py-0.5">{s.period}</td>
+                    <td className="border border-slate-400 px-1.5 py-0.5">{s.years}</td>
+                    <td className="border border-slate-400 px-1.5 py-0.5 text-right">{s.annualCharge}</td>
+                    <td className="border border-slate-400 px-1.5 py-0.5 text-right">{s.amount}</td>
                   </tr>
                 ))}
               </tbody>
@@ -343,33 +337,33 @@ export function ReceiptView({ receipt, onNewPayment }: { receipt: ReceiptData; o
           <table className="w-full text-[11px]">
             <tbody>
               <tr>
-                <td className="w-[130px] p-1.5">Payee Name</td>
-                <td className="p-1.5">{str(p.owner_name)}</td>
-                <td className="w-[130px] p-1.5">Payment Mode</td>
-                <td className="p-1.5">{receipt.paymentMode}</td>
+                <td className="w-[130px] px-1.5 py-0.5">Payee Name</td>
+                <td className="px-1.5 py-0.5">{str(p.owner_name)}</td>
+                <td className="w-[130px] px-1.5 py-0.5">Payment Mode</td>
+                <td className="px-1.5 py-0.5">{receipt.paymentMode}</td>
               </tr>
               <tr>
-                <td className="p-1.5">Collected By</td>
-                <td className="p-1.5">{receipt.collectedBy}</td>
-                <td className="p-1.5">Amount Received</td>
-                <td className="p-1.5">
+                <td className="px-1.5 py-0.5">Collected By</td>
+                <td className="px-1.5 py-0.5">{receipt.collectedBy}</td>
+                <td className="px-1.5 py-0.5">Amount Received</td>
+                <td className="px-1.5 py-0.5">
                   <b>{money(receipt.amountReceived)}</b>
                 </td>
               </tr>
               {receipt.taxCollectorName && (
                 <tr>
-                  <td className="p-1.5">Tax Collector</td>
-                  <td className="p-1.5" colSpan={3}>
+                  <td className="px-1.5 py-0.5">Tax Collector</td>
+                  <td className="px-1.5 py-0.5" colSpan={3}>
                     {receipt.taxCollectorName} ({receipt.taxCollectorCode})
                   </td>
                 </tr>
               )}
               {receipt.tvNumber && (
                 <tr>
-                  <td className="p-1.5">T.V. No.</td>
-                  <td className="p-1.5">{receipt.tvNumber}</td>
-                  <td className="p-1.5">T.V. Date</td>
-                  <td className="p-1.5">{receipt.tvDate}</td>
+                  <td className="px-1.5 py-0.5">T.V. No.</td>
+                  <td className="px-1.5 py-0.5">{receipt.tvNumber}</td>
+                  <td className="px-1.5 py-0.5">T.V. Date</td>
+                  <td className="px-1.5 py-0.5">{receipt.tvDate}</td>
                 </tr>
               )}
             </tbody>
