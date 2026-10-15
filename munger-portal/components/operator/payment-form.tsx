@@ -1,5 +1,6 @@
 "use client";
 
+import { EMPTY_INSTRUMENT, InstrumentFields, instrumentError, isInstrumentMode, type InstrumentValue } from "./instrument-fields";
 import { useEffect, useState } from "react";
 import { AlertCircle, FileWarning, Loader2 } from "lucide-react";
 import { submitPayment, type PaymentError, type ReceiptData } from "@/lib/payment-api";
@@ -31,6 +32,7 @@ export function PaymentForm({
   const [tvNumber, setTvNumber] = useState("");
   const [tvDate, setTvDate] = useState("");
   const isDistrictTreasury = paymentMode === "District Treasury";
+  const [instrument, setInstrument] = useState<InstrumentValue>(EMPTY_INSTRUMENT);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<PaymentError | null>(null);
 
@@ -74,9 +76,16 @@ export function PaymentForm({
       }
     }
 
+    const instErr = instrumentError(paymentMode, instrument);
+    if (instErr) {
+      setError({ message: instErr });
+      return;
+    }
+
     setSubmitting(true);
     try {
       const receipt = await submitPayment(holdingNo, {
+        ...(isInstrumentMode(paymentMode) ? instrument : {}),
         paymentMode,
         counter: counter || undefined,
         demandNo: selectedDemandNo,
@@ -204,6 +213,7 @@ export function PaymentForm({
                 </div>
               </>
             )}
+            <InstrumentFields paymentMode={paymentMode} value={instrument} onChange={setInstrument} inputClassName={inputClass} labelClassName={labelClass} />
             <div className="sm:col-span-2">
               <TaxCollectorCodeInput
                 value={taxCollectorCode}

@@ -4,6 +4,7 @@ import { holdingNoSchema } from "../utils/holdingNoSchema";
 import { tvNumberSchema } from "../utils/tvNumberSchema";
 import { submitPayment, getReceiptForReprint, listPaymentHistory } from "../services/payment.service";
 import { propertyRepository } from "../repositories/property.repository";
+import { adminRepository } from "../repositories/admin.repository";
 import { isSolidWasteTypeMissing } from "../services/property.service";
 import { asyncHandler } from "../middleware/asyncHandler";
 import { ApiError } from "../utils/ApiError";
@@ -16,6 +17,11 @@ const paymentSchema = z
     taxCollectorCode: z.string().trim().max(32).nullish(),
     tvNumber: tvNumberSchema.nullish(),
     tvDate: z.string().trim().min(1).nullish(),
+    // Cheque / Demand Draft details - checked in the service, which knows which modes need them.
+    instrumentNo: z.string().trim().max(50).nullish(),
+    instrumentDate: z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/, "Instrument date must be YYYY-MM-DD").nullish().or(z.literal("")),
+    bankName: z.string().trim().max(50).nullish(),
+    branchName: z.string().trim().max(50).nullish(),
   })
   // "District Treasury" payments are identified by the T.V. number/date
   // instead of a till receipt, so both are required only for that mode -
@@ -67,7 +73,16 @@ export const postPayment = asyncHandler(async (req: Request, res: Response) => {
   }
 
   const collectedBy = req.admin?.displayName ?? req.operator!.displayName;
-  const result = await submitPayment(paramsParsed.data.holdingNo, bodyParsed.data, collectedBy);
+  const input = { ...bodyParsed.data, instrumentDate: bodyParsed.data.instrumentDate || null };
+  // A Tax Collector collecting in the field is the collector of that payment - always credited to their own code.
+  if (req.admin) {
+    const me = await adminRepository.findByUsername(req.admin.username);
+    if (me?.tax_collector_code) input.taxCollectorCode = me.tax_collector_code;
+  }
+  const actor = req.admin
+    ? { id: req.admin.sub, username: req.admin.username, role: "tax_collector" as const, ip: req.ip ?? null }
+    : { id: req.operator!.sub, username: req.operator!.username, role: "operator" as const, ip: req.ip ?? null };
+  const result = await submitPayment(paramsParsed.data.holdingNo, input, collectedBy, actor);
   res.status(200).json(result);
 });
 

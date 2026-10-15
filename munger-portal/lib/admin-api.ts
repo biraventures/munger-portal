@@ -1,6 +1,7 @@
 import { getAdminToken, type AdminRole } from "./admin-auth";
 import type { DemandNoticeReprintData } from "./demand-notice-api";
 import type { ReceiptData } from "./payment-api";
+import type { PrintableReceiptHistory as OperatorPrintableReceipt } from "./operator-api";
 
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_PROPERTY_TAX_API_URL || "http://localhost:4000/api/v1";
@@ -351,6 +352,8 @@ export interface PrintableReceiptHistory {
   taxCollectorName: string | null;
   tvNumber: string | null;
   tvDate: string | null;
+  instrument?: { no: string | null; date: string | null; bank: string | null; branch: string | null } | null;
+  reconcileStatus?: string;
   onlineDeclarationAcceptedAt?: string | null;
   breakdown: {
     arv: string;
@@ -1114,7 +1117,10 @@ export async function generateDemandNoticeAdmin(holdingNo: string): Promise<Reco
   return res.json();
 }
 
-export async function submitPaymentAdmin(holdingNo: string, input: { amount: number; paymentMode: string; demandNo?: string; counter?: string }): Promise<ReceiptData> {
+export async function submitPaymentAdmin(
+  holdingNo: string,
+  input: { amount: number; paymentMode: string; demandNo?: string; counter?: string; instrumentNo?: string; instrumentDate?: string; bankName?: string; branchName?: string },
+): Promise<ReceiptData> {
   const res = await fetch(`${API_BASE_URL}/properties/${encodeURIComponent(holdingNo)}/payments`, {
     method: "POST",
     headers: authHeaders(),
@@ -2092,4 +2098,80 @@ export async function fetchDisputedHoldings(): Promise<DisputedHoldingRow[]> {
   const res = await fetch(`${API_BASE_URL}/admin/disputed-holdings`, { headers: authHeaders() });
   const data = await disputeJson<{ holdings: DisputedHoldingRow[] }>(res, "Could not load disputed holdings.");
   return data.holdings;
+}
+
+// ---------------------------------------------------------------------------
+// Field collection: end-of-day bulk receipts and cheque/DD reconciliation
+// ---------------------------------------------------------------------------
+
+export interface BulkReceiptCollector {
+  username: string;
+  name: string;
+  count: number;
+  amount: number;
+}
+
+export interface BulkReceiptGroup {
+  collectorUsername: string | null;
+  collectorName: string;
+  receipts: OperatorPrintableReceipt[];
+  total: number;
+}
+
+export async function fetchBulkReceiptCollectors(date: string): Promise<BulkReceiptCollector[]> {
+  const res = await fetch(`${API_BASE_URL}/admin/bulk-receipts/collectors?date=${encodeURIComponent(date)}`, { headers: authHeaders() });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body.error || "Could not load the collectors.");
+  return body.collectors;
+}
+
+export async function fetchBulkReceipts(date: string, collector?: string): Promise<BulkReceiptGroup[]> {
+  const q = new URLSearchParams({ date, ...(collector ? { collector } : {}) });
+  const res = await fetch(`${API_BASE_URL}/admin/bulk-receipts?${q}`, { headers: authHeaders() });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body.error || "Could not load the receipts.");
+  return body.groups;
+}
+
+export type InstrumentStatus = "pending" | "pm_verified" | "reconciled" | "bounced" | "cancelled";
+
+export interface InstrumentRow {
+  receiptNo: string;
+  txnDate: string;
+  holdingNo: string;
+  ownerName: string;
+  ward: string | null;
+  paymentMode: string;
+  amount: string;
+  instrumentNo: string | null;
+  instrumentDate: string | null;
+  bankName: string | null;
+  branchName: string | null;
+  collectedBy: string;
+  taxCollectorName: string | null;
+  demandNo: string | null;
+  status: InstrumentStatus;
+  pmVerifiedBy: string | null;
+  pmVerifiedAt: string | null;
+  reconciledBy: string | null;
+  reconciledAt: string | null;
+  remarks: string | null;
+}
+
+export async function fetchInstruments(status: "open" | "closed" | "all", from?: string, to?: string): Promise<InstrumentRow[]> {
+  const q = new URLSearchParams({ status, ...(from ? { from } : {}), ...(to ? { to } : {}) });
+  const res = await fetch(`${API_BASE_URL}/admin/instrument-reconciliation?${q}`, { headers: authHeaders() });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body.error || "Could not load cheques / DDs.");
+  return body.instruments;
+}
+
+export async function actOnInstrument(receiptNo: string, action: "pm-verify" | "reconcile" | "bounce", text: string): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/admin/instrument-reconciliation/${encodeURIComponent(receiptNo)}/${action}`, {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify(action === "bounce" ? { reason: text } : { remarks: text || undefined }),
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body.error || "Could not save this.");
 }

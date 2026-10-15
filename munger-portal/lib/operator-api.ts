@@ -340,6 +340,9 @@ export interface PrintableReceiptHistory {
   taxCollectorName: string | null;
   tvNumber: string | null;
   tvDate: string | null;
+  instrument?: { no: string | null; date: string | null; bank: string | null; branch: string | null } | null;
+  /** 'not_required' | 'pending' | 'pm_verified' | 'reconciled' | 'bounced'. */
+  reconcileStatus?: string;
   onlineDeclarationAcceptedAt?: string | null;
   breakdown: {
     arv: string;

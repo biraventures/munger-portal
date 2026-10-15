@@ -45,6 +45,19 @@ export interface TransactionRow {
   // cancellation restore exactly this value, see
   // revertTaxPaidTillYear below.
   previous_tax_paid_till_year: string | null;
+  // Cheque/DD reconciliation (migration 126).
+  instrument_no: string | null;
+  instrument_date: Date | null;
+  bank_name: string | null;
+  branch_name: string | null;
+  reconcile_status: string;
+  pm_verified_by: string | null;
+  pm_verified_at: Date | null;
+  reconciled_by: string | null;
+  reconciled_at: Date | null;
+  reconcile_remarks: string | null;
+  collected_by_username: string | null;
+  collected_by_role: string | null;
 }
 
 export const paymentRepository = {

@@ -11,6 +11,8 @@ export interface DemandNoticeRow {
   generated_by: string;
   arv: string;
   vacant_arv: string | null;
+  /** Paid by cheque/DD that is not yet reconciled (migration 126). */
+  on_hold: boolean;
   current_year_tax_net: string;
   previous_years_tax_base: string;
   total_fine_amount: string;
@@ -63,6 +65,7 @@ export const demandNoticeRepository = {
        JOIN floors f ON f.holding_no = p.holding_no
        WHERE NOT COALESCE(p.is_disputed, FALSE)
          AND NOT p.resurvey_required
+         AND NOT EXISTS (SELECT 1 FROM demand_notices h WHERE h.holding_no = p.holding_no AND h.on_hold)
          AND (p.tax_paid_till_year IS NULL OR p.tax_paid_till_year < p.assessment_year)
          AND NOT EXISTS (
            SELECT 1 FROM demand_notices d
@@ -237,7 +240,7 @@ export const demandNoticeRepository = {
   async revertToUnsettled(demandNo: string, client: Pool | PoolClient = pool): Promise<DemandNoticeRow | null> {
     const { rows } = await client.query<DemandNoticeRow>(
       `UPDATE demand_notices
-       SET settled = FALSE, settled_receipt_no = NULL, settled_at = NULL
+       SET settled = FALSE, settled_receipt_no = NULL, settled_at = NULL, on_hold = FALSE
        WHERE demand_no = $1 AND settled = TRUE
        RETURNING *`,
       [demandNo],

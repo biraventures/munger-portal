@@ -22,6 +22,36 @@ export function CancelledWatermark() {
   );
 }
 
+/** Cheque / DD receipt not yet reconciled. */
+export function isProvisional(reconcileStatus: string | undefined | null): boolean {
+  return reconcileStatus === "pending" || reconcileStatus === "pm_verified";
+}
+
+export function ProvisionalWatermark() {
+  return (
+    <div aria-hidden="true" className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center overflow-hidden">
+      <span
+        className="select-none whitespace-nowrap text-[72px] font-extrabold uppercase tracking-widest text-amber-600 opacity-[0.16]"
+        style={{ transform: "rotate(-30deg)" }}
+      >
+        TEMPORARY / PROVISIONAL
+      </span>
+    </div>
+  );
+}
+
+export function ProvisionalBanner({ paymentMode }: { paymentMode: string }) {
+  return (
+    <div className="relative z-20 my-3 rounded-md border-2 border-amber-500 bg-amber-50 p-2.5 text-center">
+      <div className="text-[13px] font-extrabold uppercase tracking-wide text-amber-800">Temporary / Provisional Receipt</div>
+      <div className="mt-0.5 text-[11px] text-amber-800">
+        Paid by {paymentMode}. Valid only after the amount is credited to the Nagar Nigam account. If the {paymentMode.toLowerCase()} is
+        dishonoured, this receipt stands cancelled and the demand becomes payable again.
+      </div>
+    </div>
+  );
+}
+
 export function CancelledBanner({ reason }: { reason: string | null }) {
   return (
     <div className="relative z-20 my-3 rounded-md border-2 border-red-600 bg-red-50 p-3 text-center">

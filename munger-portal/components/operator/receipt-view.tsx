@@ -9,6 +9,7 @@ import { DocumentVerificationQR } from "./document-verification-qr";
 import { NoticeView } from "./notice-view";
 import { printElementInNewWindow } from "@/lib/print-in-new-window";
 import { totalArv, vacantArv } from "@/lib/vacant-arv";
+import { isProvisional, ProvisionalBanner, ProvisionalWatermark } from "./cancelled-document-notice";
 
 function money(v: string | number | undefined | null): string {
   const n = Number(v ?? 0);
@@ -61,7 +62,8 @@ export function ReceiptView({ receipt, onNewPayment }: { receipt: ReceiptData; o
       </div>
 
       <div ref={printRef}
-        className="printable-area rounded-xl border border-slate-200 bg-white p-8 text-[12px] text-[#222]" style={{ fontFamily: "Arial, sans-serif" }}>
+        className="printable-area rounded-xl border border-slate-200 bg-white p-8 text-[12px] text-[#222]" style={{ fontFamily: "Arial, sans-serif", position: "relative" }}>
+        {isProvisional(receipt.reconcileStatus) && <ProvisionalWatermark />}
         {/* Header */}
         <div className="flex items-start justify-between gap-3 border-b-2 border-nnm-blue pb-2">
           <DocumentVerificationQR url={receipt.verificationUrl} />
@@ -86,6 +88,8 @@ export function ReceiptView({ receipt, onNewPayment }: { receipt: ReceiptData; o
             )}
           </div>
         </div>
+
+        {isProvisional(receipt.reconcileStatus) && <ProvisionalBanner paymentMode={receipt.paymentMode} />}
 
         {/* Info grid */}
         <div className="mt-3.5 flex gap-5">
@@ -355,6 +359,19 @@ export function ReceiptView({ receipt, onNewPayment }: { receipt: ReceiptData; o
                   <td className="px-1.5 py-0.5">Tax Collector</td>
                   <td className="px-1.5 py-0.5" colSpan={3}>
                     {receipt.taxCollectorName} ({receipt.taxCollectorCode})
+                  </td>
+                </tr>
+              )}
+              {receipt.instrument && (
+                <tr>
+                  <td className="px-1.5 py-0.5">{receipt.paymentMode} No. / Date</td>
+                  <td className="px-1.5 py-0.5">
+                    {receipt.instrument.no} / {receipt.instrument.date}
+                  </td>
+                  <td className="px-1.5 py-0.5">Bank</td>
+                  <td className="px-1.5 py-0.5">
+                    {receipt.instrument.bank}
+                    {receipt.instrument.branch ? `, ${receipt.instrument.branch}` : ""}
                   </td>
                 </tr>
               )}

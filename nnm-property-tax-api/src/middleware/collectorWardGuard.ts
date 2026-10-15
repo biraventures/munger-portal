@@ -20,6 +20,20 @@ export async function collectorWardScope(admin: { role: string; username: string
   return (await adminRepository.listTaxCollectorWards(admin.username)).map((w) => w.trim());
 }
 
+/**
+ * Wards a Tax Collector may see in the collection report: the ones assigned now plus every ward assigned to them in
+ * the past (tax_collector_ward_history, migration 126). Null when the admin is not a Tax Collector.
+ */
+export async function collectorReportWardScope(admin: { role: string; username: string } | undefined): Promise<string[] | null> {
+  if (!admin || admin.role !== "tax_collector") return null;
+  const current = await collectorWardScope(admin);
+  const { rows } = await pool.query<{ ward: string }>(
+    `SELECT btrim(ward) AS ward FROM tax_collector_ward_history WHERE tax_collector_username = $1`,
+    [admin.username],
+  );
+  return [...new Set([...(current ?? []), ...rows.map((r) => r.ward)])];
+}
+
 export function wardAllowed(scope: string[], ward: string | null | undefined): boolean {
   const w = normalizeWard(ward);
   return w !== "" && scope.map(normalizeWard).includes(w);

@@ -1,5 +1,5 @@
 import { normalizeWard } from "../utils/ward";
-import { collectorWardScope, wardAllowed } from "../middleware/collectorWardGuard";
+import { collectorReportWardScope, wardAllowed } from "../middleware/collectorWardGuard";
 import type { Request, Response } from "express";
 import { z } from "zod";
 import ExcelJS from "exceljs";
@@ -38,15 +38,17 @@ async function parseFilters(query: unknown, admin: { role: string; username: str
   if (from > to) throw ApiError.badRequest("'From' date is after 'To' date.");
   // Guard the database: at most ~6 years in one report.
   if ((Date.parse(to) - Date.parse(from)) / 86400000 > 366 * 6) throw ApiError.badRequest("Choose a range of 6 years or less.");
-  // A Tax Collector's report covers only the wards assigned to them.
-  const wardScope = (await collectorWardScope(admin)) ?? undefined;
-  if (wardScope && d.ward && !wardAllowed(wardScope, d.ward)) throw new ApiError(403, "That ward is not assigned to you.");
-  return { period: d.period, from, to, ward: d.ward || undefined, collector: d.collector || undefined, wardScope };
+  // A Tax Collector sees only their own collection, in the wards assigned to them now or in the past.
+  const wardScope = (await collectorReportWardScope(admin)) ?? undefined;
+  if (wardScope && d.ward && !wardAllowed(wardScope, d.ward)) throw new ApiError(403, "That ward has never been assigned to you.");
+  const selfCollector = admin?.role === "tax_collector" ? admin.username : undefined;
+  return { period: d.period, from, to, ward: d.ward || undefined, collector: selfCollector ? undefined : d.collector || undefined, wardScope, selfCollector };
 }
 
 /** GET /api/v1/admin/agency/report-filters - the ward and Tax Collector choices for the report filters. */
 export const getReportFilterOptionsHandler = asyncHandler(async (req: Request, res: Response) => {
-  res.status(200).json(await listReportFilterOptions((await collectorWardScope(req.admin)) ?? undefined));
+  const self = req.admin?.role === "tax_collector" ? req.admin.username : undefined;
+  res.status(200).json(await listReportFilterOptions((await collectorReportWardScope(req.admin)) ?? undefined, self));
 });
 
 /** GET /api/v1/admin/agency/reports - Agency Project Manager (and senior officers). Everything is bucketed in Indian time; the year is the April-March financial year. */
@@ -79,7 +81,7 @@ export const exportAgencyReportHandler = asyncHandler(async (req: Request, res: 
     { Setting: "From", Value: filters.from },
     { Setting: "To", Value: filters.to },
     { Setting: "Ward", Value: filters.ward ?? "All" },
-    { Setting: "Tax Collector", Value: filters.collector ?? "All" },
+    { Setting: "Tax Collector", Value: filters.selfCollector ?? filters.collector ?? "All" },
   ]);
   const sections: Record<string, Record<string, unknown>[]> = {
     ...datasetRows("Collection", report.collection, { count: "Receipts", amount: "Amount collected (Rs)" }),
@@ -90,6 +92,7 @@ export const exportAgencyReportHandler = asyncHandler(async (req: Request, res: 
     ...datasetRows("Collection issues", report.collectionIssues, { count: "Issues" }),
   };
   for (const [name, rows] of Object.entries(sections)) addSheetFromRows(workbook, name.slice(0, 31), rows);
+  addSheetFromRows(workbook, "Collection - by payment mode", (report.collection.byType ?? []).map((m) => ({ "Payment mode": m.type, Receipts: m.count, "Amount (Rs)": Math.round(m.amount * 100) / 100 })));
   addSheetFromRows(workbook, "Highest wards", report.ranking.highestWards.map((w) => ({ Ward: w.ward, "Amount (Rs)": w.amount, Receipts: w.count })));
   addSheetFromRows(workbook, "Lowest wards", report.ranking.lowestWards.map((w) => ({ Ward: w.ward, "Amount (Rs)": w.amount, Receipts: w.count })));
   addSheetFromRows(workbook, "Highest collectors", report.ranking.highestCollectors.map((c) => ({ "Tax Collector": c.name, "Amount (Rs)": c.amount, Receipts: c.count })));

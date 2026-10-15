@@ -108,13 +108,13 @@ export const collectorFieldRepository = {
     return rows[0] ?? null;
   },
 
-  /** The holding's most recent notices (newest first), each with how many receiving copies it already has. */
+  /** The holding's live notices only - not cancelled, not superseded, not yet settled (newest first), each with how many receiving copies it already has. */
   async listNoticesForReceiving(holdingNo: string, limit = 6): Promise<NoticeForReceivingRow[]> {
     const { rows } = await pool.query<NoticeForReceivingRow>(
       `SELECT d.demand_no, d.notice_date, d.total_amount_demanded, d.settled, d.cancelled, d.superseded,
               (SELECT count(*)::int FROM demand_notice_receiving_copies c WHERE c.demand_no = d.demand_no) AS copies_uploaded
          FROM demand_notices d
-        WHERE d.holding_no = $1 AND d.cancelled = FALSE
+        WHERE d.holding_no = $1 AND d.cancelled = FALSE AND d.superseded = FALSE AND d.settled = FALSE
         ORDER BY d.notice_date DESC
         LIMIT $2`,
       [holdingNo, limit],

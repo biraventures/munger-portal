@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Users, FileClock, FileWarning, LayoutGrid, ShoppingBag, Store, BarChart3, Award, Archive, Download, XCircle, ShieldCheck, Trash2, RefreshCw, Upload, MapPin, Map as MapIcon, ClipboardCheck, UserCheck, ClipboardList, Receipt, RotateCcw, AlertTriangle, List, Flag, Home, FileText, Printer } from "lucide-react";
+import { Users, FileClock, FileWarning, LayoutGrid, ShoppingBag, Store, BarChart3, Award, Archive, Download, XCircle, ShieldCheck, Trash2, RefreshCw, Upload, MapPin, Map as MapIcon, ClipboardCheck, UserCheck, ClipboardList, Receipt, RotateCcw, AlertTriangle, List, Flag, Home, FileText, Printer, Landmark } from "lucide-react";
 import { AdminHeader } from "@/components/admin-header";
 import { DashboardSummaryWidget } from "@/components/dashboard-summary-widget";
 import { useAdminGuard } from "@/lib/use-admin-guard";
@@ -101,6 +101,8 @@ export default function AdminDashboardPage() {
   const showMyDiscrepancyReports = admin.role === "tax_collector";
   const showAgencyReports = ["agency_project_manager", "commissioner", "deputy_commissioner", "city_manager", "tax_daroga", "tax_collector"].includes(admin.role);
   const showAgencyNotices = admin.role === "agency_team_leader";
+  const showBulkReceipts = ["tax_daroga", "commissioner", "deputy_commissioner", "city_manager"].includes(admin.role);
+  const showInstrumentReconciliation = ["agency_project_manager", "tax_daroga", "commissioner", "deputy_commissioner", "city_manager"].includes(admin.role);
   const showUnsurveyedHouseEntry = admin.role === "tax_collector";
   const showNoticeReceivingUpload = admin.role === "tax_collector";
   const showUnsurveyedHouses = ["tax_collector", "tax_daroga", "city_manager", "deputy_commissioner", "commissioner"].includes(admin.role);
@@ -129,7 +131,7 @@ export default function AdminDashboardPage() {
     showMutationApprovals || showCancellationRequests || showBulkDemandNotices || showAllPropertyChanges || showRenumberHolding || showBulkUploadProperties ||
     showMigratedHoldingsBulkUpload || showMigratedHoldingsAssign || showMigratedHoldingsSurveyor || showMigratedHoldingsMySurveys || showInitiateSurvey || showTaxCollectorPage ||
     showAgencyReports || showAgencyNotices || showReportPropertyDiscrepancy || showMyDiscrepancyReports || showUnsurveyedHouseEntry || showNoticeReceivingUpload || showUnsurveyedHouses || showNoticeReceivingCopies || showPropertyDiscrepancyRequests || showResurveyFlags || showCollectionIssues || showSolidWasteApprovals || showTaxCollectorAssignments || showRevertAuditTrail ||
-    showPropertyWiseReport || showDisputedHoldings || showHoldingImportReview;
+    showPropertyWiseReport || showDisputedHoldings || showHoldingImportReview || showBulkReceipts || showInstrumentReconciliation;
 
   const showShopAgreementApprovals = !isTradeLicenseNodal && !isGisOnlyRole && !isNarrowlyScopedRole;
   const showShopRentalApplications = !isTradeLicenseNodal && !isGisOnlyRole && !isNarrowlyScopedRole;
@@ -237,6 +239,26 @@ export default function AdminDashboardPage() {
                   </span>
                   <h3 className="mb-1.5 text-base font-semibold text-slate-900">Cancellation Requests</h3>
                   <p className="text-sm text-slate-500">Requests to cancel a demand notice or payment receipt.</p>
+                </Link>
+              )}
+
+              {showBulkReceipts && (
+                <Link href="/admin/bulk-receipts" className={cardClass}>
+                  <span className={iconWrapClass}>
+                    <Printer className="h-6 w-6" strokeWidth={1.8} />
+                  </span>
+                  <h3 className="mb-1.5 text-base font-semibold text-slate-900">Field Collection Receipts</h3>
+                  <p className="text-sm text-slate-500">Print a day&apos;s receipts Tax Collector-wise, to stamp and hand over.</p>
+                </Link>
+              )}
+
+              {showInstrumentReconciliation && (
+                <Link href="/admin/instrument-reconciliation" className={cardClass}>
+                  <span className={iconWrapClass}>
+                    <Landmark className="h-6 w-6" strokeWidth={1.8} />
+                  </span>
+                  <h3 className="mb-1.5 text-base font-semibold text-slate-900">Cheque / DD Reconciliation</h3>
+                  <p className="text-sm text-slate-500">Verify cheques and DDs credited to the Nagar Nigam account, or mark them bounced.</p>
                 </Link>
               )}
 

@@ -40,6 +40,16 @@ function Content() {
           {data.tvDate && <VerificationField label="T.V. Date" value={data.tvDate} />}
           <VerificationField label="Amount Received" value={`₹${Number(data.amountReceived).toLocaleString("en-IN")}`} />
           {data.demandNo && <VerificationField label="Against Demand No" value={data.demandNo} />}
+          <VerificationField
+            label="Status"
+            value={
+              data.cancelled
+                ? `Cancelled${data.cancelledReason ? ` - ${data.cancelledReason}` : ""}`
+                : data.reconcileStatus === "pending" || data.reconcileStatus === "pm_verified"
+                  ? `Provisional - ${data.paymentMode} awaiting realisation`
+                  : "Valid"
+            }
+          />
         </>
       )}
     </VerificationLayout>

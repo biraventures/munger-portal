@@ -37,7 +37,7 @@ export interface DatasetReport {
   series: SeriesPoint[];
   byWard: WardRow[];
   byCollector: CollectorRow[];
-  byType?: { type: string; count: number }[];
+  byType?: { type: string; count: number; amount: number }[];
 }
 export interface AgencyReport {
   filters: { period: ReportPeriod; from: string; to: string; ward?: string; collector?: string };

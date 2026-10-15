@@ -16,7 +16,9 @@ import { assertNoResurveyPending } from "./propertyResurvey.service";
 import { generateDemandNotice } from "./demandNotice.service";
 import { buildVerificationUrl } from "../utils/verificationSignature";
 import { formatYmdToDmy } from "../utils/formatYmdToDmy";
-import type { PaymentInput, PaymentResult } from "../types/payment.types";
+import type { PaymentActor, PaymentInput, PaymentResult } from "../types/payment.types";
+import { needsReconciliation, writeLedgerEntry } from "./transactionLedger.service";
+import { assertNoNoticeOnHold } from "./noticeHold.service";
 import type { DemandNoticeResult } from "../types/demandNotice.types";
 import type { FrozenFloorBreakdown } from "../types/property.types";
 
@@ -47,6 +49,9 @@ export interface PrintableReceiptHistory {
   taxCollectorName: string | null;
   tvNumber: string | null;
   tvDate: string | null;
+  instrument: { no: string | null; date: string | null; bank: string | null; branch: string | null } | null;
+  /** 'not_required' | 'pending' | 'pm_verified' | 'reconciled' | 'bounced' - pending/pm_verified print as PROVISIONAL. */
+  reconcileStatus: string;
   /** Set only for public online payments: when the payer ticked the declaration (dd-mm-yyyy HH:MM). */
   onlineDeclarationAcceptedAt: string | null;
   // Frozen at the moment of payment (migration 024) - not
@@ -121,6 +126,15 @@ export async function getReceiptForReprint(receiptNo: string): Promise<Printable
     tvDate: txn.tv_date
       ? `${String(txn.tv_date.getDate()).padStart(2, "0")}-${String(txn.tv_date.getMonth() + 1).padStart(2, "0")}-${txn.tv_date.getFullYear()}`
       : null,
+    instrument: txn.instrument_no
+      ? {
+          no: txn.instrument_no,
+          date: txn.instrument_date ? `${String(txn.instrument_date.getDate()).padStart(2, "0")}-${String(txn.instrument_date.getMonth() + 1).padStart(2, "0")}-${txn.instrument_date.getFullYear()}` : null,
+          bank: txn.bank_name,
+          branch: txn.branch_name,
+        }
+      : null,
+    reconcileStatus: txn.reconcile_status,
     onlineDeclarationAcceptedAt: txn.online_declaration_accepted_at
       ? new Date(txn.online_declaration_accepted_at).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: false }).replace(/\//g, "-").replace(",", "")
       : null,
@@ -186,6 +200,7 @@ export async function submitPayment(
   holdingNo: string,
   input: PaymentInput,
   collectedBy: string,
+  actor?: PaymentActor,
 ): Promise<PaymentResult> {
   const property = await propertyRepository.findByHoldingNo(holdingNo);
   if (!property) {
@@ -262,6 +277,22 @@ export async function submitPayment(
     throw ApiError.badRequest("T.V. number and date are required for District Treasury payments.");
   }
 
+  // A cheque or DD is only provisional until it is credited to the Nagar Nigam account: its number, date and bank are
+  // needed to reconcile it, and the notice stays ON HOLD until the Tax Daroga does.
+  const provisional = needsReconciliation(input.paymentMode);
+  const instrument = provisional
+    ? {
+        no: input.instrumentNo?.trim() || null,
+        date: input.instrumentDate?.trim() || null,
+        bank: input.bankName?.trim() || null,
+        branch: input.branchName?.trim() || null,
+      }
+    : null;
+  if (instrument && (!instrument.no || !instrument.date || !instrument.bank)) {
+    throw ApiError.badRequest(`${input.paymentMode} number, date and bank name are required.`);
+  }
+  await assertNoNoticeOnHold(holdingNo);
+
   // Snapshot pending arrears BEFORE this payment, and which specific
   // periods it covers — purely for display on the receipt. The amount
   // actually charged is the notice's frozen total, not recomputed here.
@@ -312,6 +343,9 @@ export async function submitPayment(
         `Demand notice ${input.demandNo} can no longer be paid - it may have just been paid, cancelled, or superseded. Please refresh and try again.`,
       );
     }
+    if (provisional) {
+      await client.query(`UPDATE demand_notices SET on_hold = TRUE WHERE demand_no = $1`, [input.demandNo]);
+    }
 
     await paymentRepository.insertTransaction(
       {
@@ -342,6 +376,40 @@ export async function submitPayment(
         areaRebate: notice.area_rebate,
         areaRebateReason: notice.area_rebate_reason,
         previousTaxPaidTillYear: property.tax_paid_till_year,
+      },
+      client,
+    );
+
+    await client.query(
+      `UPDATE transactions
+          SET instrument_no = $2, instrument_date = $3::date, bank_name = $4, branch_name = $5,
+              reconcile_status = $6, collected_by_username = $7, collected_by_role = $8
+        WHERE receipt_no = $1`,
+      [
+        receiptNo,
+        instrument?.no ?? null,
+        instrument?.date ?? null,
+        instrument?.bank ?? null,
+        instrument?.branch ?? null,
+        provisional ? "pending" : "not_required",
+        actor?.username ?? null,
+        actor?.role ?? null,
+      ],
+    );
+
+    await writeLedgerEntry(
+      {
+        receiptNo,
+        property,
+        notice,
+        paymentMode: input.paymentMode,
+        amountReceived,
+        dueFrom: clearance.stages.length > 0 ? clearance.stages[0]!.period.split(" to ")[0]! : notice.assessment_year,
+        dueUpto: paidThroughYear,
+        instrument: instrument ?? { no: tvNumber, date: tvDate, bank: null, branch: null },
+        entryBy: actor?.id ?? null,
+        entryIp: actor?.ip ?? null,
+        remarks: `Receipt ${receiptNo} against demand ${input.demandNo}; collected by ${collectedBy}${actor ? ` (${actor.username})` : ""}`,
       },
       client,
     );
@@ -413,6 +481,9 @@ export async function submitPayment(
     // input) to the same "dd-mm-yyyy" display format as every other
     // date on the receipt, rather than echoing the raw input back.
     tvDate: tvDate ? formatYmdToDmy(tvDate) : null,
+    instrument: instrument ? { ...instrument, date: instrument.date ? formatYmdToDmy(instrument.date) : null } : null,
+    reconcileStatus: provisional ? "pending" : "not_required",
+    fieldCollection: actor?.role === "tax_collector",
     arrearStagesPaid: clearance.stages,
     // A part payment collects holding tax for earlier years only: the receipt must not show the current year's user charge.
     isPartPayment: isPart,

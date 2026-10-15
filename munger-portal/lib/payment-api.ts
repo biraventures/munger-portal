@@ -15,6 +15,11 @@ export interface PaymentInput {
   tvNumber?: string | null;
   /** Required only when paymentMode is "District Treasury". */
   tvDate?: string | null;
+  /** Cheque / Demand Draft only. */
+  instrumentNo?: string;
+  instrumentDate?: string;
+  bankName?: string;
+  branchName?: string;
 }
 
 export interface ArrearStagePaidView {
@@ -51,6 +56,12 @@ export interface ReceiptData {
   taxCollectorName: string | null;
   tvNumber: string | null;
   tvDate: string | null;
+  /** Cheque/DD details (null for other modes). */
+  instrument?: { no: string | null; date: string | null; bank: string | null; branch: string | null } | null;
+  /** 'pending' | 'pm_verified' => PROVISIONAL receipt (cheque/DD not yet reconciled). */
+  reconcileStatus?: string;
+  /** Recorded by a Tax Collector in the field: show the collection slip; the receipt is printed in bulk at the office. */
+  fieldCollection?: boolean;
   /** Set only for public online payments - when the payer ticked the declaration. */
   onlineDeclarationAcceptedAt?: string | null;
   arrearStagesPaid: ArrearStagePaidView[];

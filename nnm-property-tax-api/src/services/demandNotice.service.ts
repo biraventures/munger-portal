@@ -9,6 +9,7 @@ import { num } from "../utils/num";
 import { ApiError } from "../utils/ApiError";
 import { assertNotDisputed } from "./propertyDispute.service";
 import { assertNoResurveyPending } from "./propertyResurvey.service";
+import { assertNoNoticeOnHold } from "./noticeHold.service";
 import { buildVerificationUrl } from "../utils/verificationSignature";
 import type { DemandNoticeResult, DemandNoticeReprintResult, DemandNoticeTotals } from "../types/demandNotice.types";
 import type { FrozenFloorBreakdown, TaxCalculationResult } from "../types/property.types";
@@ -80,6 +81,9 @@ export async function generateDemandNotice(
   }
   assertNotDisputed(property);
   assertNoResurveyPending(property);
+  // A cheque/DD payment awaiting reconciliation freezes the holding - except for the balance notice raised right after a
+  // part payment (that one is cancelled automatically if the cheque bounces).
+  if (!followsPartPaymentReceipt) await assertNoNoticeOnHold(holdingNo);
   const floors = await propertyRepository.findFloorsByHoldingNo(holdingNo);
   const stages = await propertyRepository.findTaxHistoryByHoldingNo(holdingNo);
 

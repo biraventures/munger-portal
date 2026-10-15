@@ -10,6 +10,26 @@ export interface PaymentInput {
   tvNumber?: string | null;
   /** Required only when paymentMode is "District Treasury" - the date on the treasury voucher. */
   tvDate?: string | null;
+  /** Cheque / Demand Draft only (required for those modes): instrument number, its date (YYYY-MM-DD), bank and branch. */
+  instrumentNo?: string | null;
+  instrumentDate?: string | null;
+  bankName?: string | null;
+  branchName?: string | null;
+}
+
+/** Who is recording a counter/field payment - drives the collection report and the ledger's entry fields. */
+export interface PaymentActor {
+  id: number;
+  username: string;
+  role: "operator" | "tax_collector";
+  ip: string | null;
+}
+
+export interface InstrumentView {
+  no: string | null;
+  date: string | null;
+  bank: string | null;
+  branch: string | null;
 }
 
 export interface ArrearStagePaidView {
@@ -35,6 +55,12 @@ export interface PaymentResult {
   taxCollectorName: string | null;
   tvNumber: string | null;
   tvDate: string | null;
+  /** Cheque/DD details (null for other modes). */
+  instrument: InstrumentView | null;
+  /** 'pending' | 'pm_verified' => the receipt is PROVISIONAL until the Tax Daroga reconciles it. */
+  reconcileStatus: string;
+  /** True when a Tax Collector recorded it in the field - the app shows a collection slip; the stamped receipt is printed in bulk at the office. */
+  fieldCollection: boolean;
   arrearStagesPaid: ArrearStagePaidView[];
   /** After a PART payment: the balance demand notice for the remaining years, generated automatically. */
   followUpNotice?: DemandNoticeResult | null;

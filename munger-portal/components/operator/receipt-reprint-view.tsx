@@ -5,7 +5,7 @@ import { useRef } from "react";
 import { Printer, X } from "lucide-react";
 import type { PrintableReceiptHistory } from "@/lib/operator-api";
 import { DocumentVerificationQR } from "./document-verification-qr";
-import { CancelledWatermark, CancelledBanner } from "./cancelled-document-notice";
+import { CancelledWatermark, CancelledBanner, isProvisional, ProvisionalBanner, ProvisionalWatermark } from "./cancelled-document-notice";
 import { printElementInNewWindow } from "@/lib/print-in-new-window";
 
 function money(v: string | number | undefined | null): string {
@@ -13,23 +13,36 @@ function money(v: string | number | undefined | null): string {
   return n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-export function ReceiptReprintView({ receipt, onClose }: { receipt: PrintableReceiptHistory; onClose: () => void }) {
+/** `bare` drops the print/close buttons - for many receipts printed together (end-of-day bulk print). */
+export function ReceiptReprintView({
+  receipt,
+  onClose,
+  bare = false,
+  heading = "PROPERTY TAX — PAYMENT RECEIPT (REPRINT)",
+}: {
+  receipt: PrintableReceiptHistory;
+  onClose?: () => void;
+  bare?: boolean;
+  heading?: string;
+}) {
   const printRef = useRef<HTMLDivElement>(null);
   return (
     <div>
-      <div className="no-print mb-4 flex items-center justify-between">
-        <button
-          onClick={() => printRef.current && printElementInNewWindow(printRef.current)}
-          className="inline-flex items-center gap-2 rounded-md bg-nnm-blue px-5 py-2.5 text-sm font-semibold text-white hover:bg-nnm-blue-dark"
-        >
-          <Printer className="h-4 w-4" />
-          Print / Save as PDF
-        </button>
-        <button onClick={onClose} className="inline-flex items-center gap-1.5 text-sm font-medium text-nnm-blue hover:underline">
-          <X className="h-4 w-4" />
-          Close
-        </button>
-      </div>
+      {!bare && (
+        <div className="no-print mb-4 flex items-center justify-between">
+          <button
+            onClick={() => printRef.current && printElementInNewWindow(printRef.current)}
+            className="inline-flex items-center gap-2 rounded-md bg-nnm-blue px-5 py-2.5 text-sm font-semibold text-white hover:bg-nnm-blue-dark"
+          >
+            <Printer className="h-4 w-4" />
+            Print / Save as PDF
+          </button>
+          <button onClick={() => onClose?.()} className="inline-flex items-center gap-1.5 text-sm font-medium text-nnm-blue hover:underline">
+            <X className="h-4 w-4" />
+            Close
+          </button>
+        </div>
+      )}
 
       <div
         ref={printRef}
@@ -37,11 +50,12 @@ export function ReceiptReprintView({ receipt, onClose }: { receipt: PrintableRec
         style={{ fontFamily: "Arial, sans-serif", position: "relative" }}
       >
         {receipt.cancelled && <CancelledWatermark />}
+        {!receipt.cancelled && isProvisional(receipt.reconcileStatus) && <ProvisionalWatermark />}
         <div className="flex items-start justify-between gap-3 border-b-2 border-nnm-blue pb-2">
           <DocumentVerificationQR url={receipt.verificationUrl} />
           <div className="flex-1 text-center">
             <h1 className="m-0 text-xl font-bold text-nnm-blue">MUNGER NAGAR NIGAM</h1>
-            <div className="text-[13px] text-slate-500">PROPERTY TAX — PAYMENT RECEIPT (REPRINT)</div>
+            <div className="text-[13px] text-slate-500">{heading}</div>
           </div>
           <div className="w-[170px] shrink-0 text-right text-[11px]">
             <div>
@@ -59,6 +73,7 @@ export function ReceiptReprintView({ receipt, onClose }: { receipt: PrintableRec
         </div>
 
         {receipt.cancelled && <CancelledBanner reason={receipt.cancelledReason} />}
+        {!receipt.cancelled && isProvisional(receipt.reconcileStatus) && <ProvisionalBanner paymentMode={receipt.paymentMode} />}
 
         <div className="mt-3.5 flex gap-5">
           <div className="flex-1 space-y-0.5">
@@ -84,6 +99,13 @@ export function ReceiptReprintView({ receipt, onClose }: { receipt: PrintableRec
             <div>
               <b className="inline-block w-[140px]">Counter</b> {receipt.counter ?? "—"}
             </div>
+            {receipt.instrument && (
+              <div>
+                <b className="inline-block w-[140px]">{receipt.paymentMode} No.</b> {receipt.instrument.no} ({receipt.instrument.date}),{" "}
+                {receipt.instrument.bank}
+                {receipt.instrument.branch ? `, ${receipt.instrument.branch}` : ""}
+              </div>
+            )}
             {receipt.tvNumber && (
               <div>
                 <b className="inline-block w-[140px]">T.V. No.</b> {receipt.tvNumber}
