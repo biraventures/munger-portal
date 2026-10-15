@@ -11,6 +11,7 @@ const initiateSchema = z.object({
   taxCollectorCode: z.string().trim().max(32).nullish(),
   // The payer's tick on the declaration shown before paying - required.
   acceptDeclaration: z.boolean().refine((v) => v === true, "Please tick the declaration to continue with the payment."),
+  demandNos: z.array(z.string().min(1)).optional(),
 });
 
 const holdingNoParamSchema = z.object({
@@ -32,6 +33,7 @@ export const postInitiateOnlinePayment = asyncHandler(async (req: Request, res: 
     bodyParsed.data.amount,
     bodyParsed.data.taxCollectorCode ?? null,
     bodyParsed.data.acceptDeclaration,
+    bodyParsed.data.demandNos
   );
   res.status(200).json(result);
 });
@@ -56,7 +58,7 @@ const confirmSchema = z.object({
  * this does NOT yet independently verify with the bank; that's the
  * critical remaining piece before this can safely go live.
  */
-export const postConfirmOnlinePayment = asyncHandler(async (req: Request, res: Response) => {  
+export const postConfirmOnlinePayment = asyncHandler(async (req: Request, res: Response) => {    
   const parsed = confirmSchema.safeParse(req.body);
   if (!parsed.success) {
     throw ApiError.badRequest("Invalid confirmation payload", parsed.error.flatten().fieldErrors);
@@ -64,7 +66,7 @@ export const postConfirmOnlinePayment = asyncHandler(async (req: Request, res: R
 
   let isSuccess = false;
 
-  if (req.body?.responseCode !== '0000') {
+  if (req.body?.responseCode === '0000') {
     isSuccess = true
   }
 
