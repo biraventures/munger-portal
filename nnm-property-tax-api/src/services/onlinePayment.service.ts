@@ -125,13 +125,13 @@ export async function createGatewayOrder(
     taxCollectorName: taxCollector?.name ?? null,
   });
 
-  const returnUrl = `${env.FRONTEND_URL}/property-tax/payment-return`;
+  // const returnUrl = `${env.FRONTEND_URL}/property-tax/payment-return`;
 
   // TODO: replace with the real signed request per ICICI's integration
   // spec once available (see warning above).
-  const redirectUrl = `${ICICI_PG_BASE_URL}?merchantID=${encodeURIComponent(env.ICICI_MERCHANT_ID)}&orderId=${encodeURIComponent(
-    orderId,
-  )}&amount=${encodeURIComponent(amount.toFixed(2))}&returnUrl=${encodeURIComponent(returnUrl)}`;
+  // const redirectUrl = `${ICICI_PG_BASE_URL}?merchantID=${encodeURIComponent(env.ICICI_MERCHANT_ID)}&orderId=${encodeURIComponent(
+  //   orderId,
+  // )}&amount=${encodeURIComponent(amount.toFixed(2))}&returnUrl=${encodeURIComponent(returnUrl)}`;
 
   if (!property) {
     throw ApiError.badRequest("Property details are required to initiate payment.");
