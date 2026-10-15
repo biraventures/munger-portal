@@ -224,7 +224,9 @@ export default function MutationApplicationPage() {
             <span className="mb-2.5 block font-mono text-[12.5px] uppercase tracking-[0.14em] text-nnm-gold">Counter 01B</span>
             <h1 className="mb-3 font-display text-3xl font-semibold sm:text-4xl">Mutation of Holding</h1>
             <p className="max-w-xl text-[17px] text-white/80">
-              Apply to change the owner&apos;s name on a holding after sale, partition, gift, inheritance or auction.{" "}
+              Apply to change the owner&apos;s name on a holding after sale, partition, gift, inheritance or auction. Dues of earlier
+              years must be cleared first; this year&apos;s tax can be paid after the mutation. One mobile number can be used for at most
+              two applications.{" "}
               <Link href="/mutation/status" className="font-semibold text-nnm-gold underline">
                 Track an application
               </Link>
@@ -294,7 +296,7 @@ export default function MutationApplicationPage() {
                             {holding.message}
                             {Number(holding.duesPending) > 0 && (
                               <div className="mt-2">
-                                Pending: <b>₹{Number(holding.duesPending).toLocaleString("en-IN")}</b>{" "}
+                                Earlier years&apos; dues: <b>₹{Number(holding.duesPending).toLocaleString("en-IN")}</b>{" "}
                                 <Link href={PROPERTY_TAX_SEARCH_PATH} className="ml-2 inline-block rounded-md bg-nnm-blue px-3 py-1.5 text-xs font-semibold text-white">
                                   Pay property tax
                                 </Link>
@@ -342,7 +344,7 @@ export default function MutationApplicationPage() {
                       </select>
                     </div>
                     <p className="text-xs text-slate-500 sm:col-span-2">
-                      The Nagar Nigam will identify the holding from these details. Any pending tax must be paid before the mutation is done.
+                      The Nagar Nigam will identify the holding from these details. Holding tax and user charge of earlier years must be paid before the mutation is done; this year&apos;s can be paid after it.
                     </p>
                   </div>
                 )}

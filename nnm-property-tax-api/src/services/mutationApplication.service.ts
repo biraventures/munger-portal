@@ -10,6 +10,7 @@ import { propertyRepository } from "../repositories/property.repository";
 import { changeRequestRepository } from "../repositories/changeRequest.repository";
 import { searchPropertyByHoldingNo } from "./property.service";
 import { TIER_FINAL_STAGE } from "./changeClassification.service";
+import { annualSolidWasteCharge, solidWasteYearsDue } from "./charges.service";
 import type { FloorRow, PropertyRow } from "../types/property.types";
 import type { PropertySaveInput } from "../types/propertySave.types";
 
@@ -44,6 +45,29 @@ export const DOC_TYPES: Record<string, { label: string; images: boolean; pdf: bo
   affidavit: { label: "Affidavit on stamp paper", images: true, pdf: true },
   vanshavali: { label: "Vanshavali / family tree / parivarik suchi", images: true, pdf: true },
 };
+
+/** One mobile number (as applicant or as new owner) may be on at most this many applications, rejected ones aside. */
+export const MAX_APPLICATIONS_PER_MOBILE = 2;
+
+/** Submitted applications (not drafts, not finally rejected) that carry this mobile number as applicant or new owner. */
+async function applicationsForMobile(mobile: string, excludeId?: string): Promise<number> {
+  const { rows } = await pool.query<{ n: number }>(
+    `SELECT count(*)::int AS n
+       FROM mutation_applications a LEFT JOIN property_change_requests c ON c.id = a.change_request_id
+      WHERE a.status IN ('awaiting_holding', 'in_chain') AND COALESCE(c.status, '') <> 'rejected'
+        AND (a.applicant_mobile = $1 OR a.new_owner_mobile = $1) AND ($2::bigint IS NULL OR a.id <> $2::bigint)`,
+    [mobile, excludeId ?? null],
+  );
+  return rows[0]?.n ?? 0;
+}
+
+async function assertMobileLimit(mobiles: string[], excludeId?: string): Promise<void> {
+  for (const m of [...new Set(mobiles)]) {
+    if ((await applicationsForMobile(m, excludeId)) >= MAX_APPLICATIONS_PER_MOBILE) {
+      throw ApiError.badRequest(`Mobile number ${m} is already on ${MAX_APPLICATIONS_PER_MOBILE} mutation applications - no more can be made with it.`);
+    }
+  }
+}
 
 const MANDATORY_DOCS = ["transfer_proof", "aadhaar", "holding_photo"];
 const MAX_DOC_BYTES = 10 * 1024 * 1024;
@@ -142,7 +166,12 @@ async function checkHolding(holdingNo: string): Promise<HoldingCheck & { propert
     solidWastePaidTillYear: p.solid_waste_paid_till_year ?? null,
   };
   if (p.is_disputed) return { ok: false, reason: "This holding is under a dispute. Please contact the Holding Tax Section, Nagar Nigam Munger.", duesPending: 0, property: p, info };
-  const dues = Number(p.totalPayable ?? 0);
+  // Only EARLIER years must be cleared: the current year's holding tax and user charge may stay unpaid, so the new
+  // owner can pay them and get this year's receipt in his own name. Earlier years = holding-tax arrears with their
+  // penalty, plus the user charge for every unpaid year before the current one.
+  const extra = p as unknown as { pendingArrearsTotal?: string; autoPenalty?: string };
+  const pastUserChargeYears = Math.max(0, solidWasteYearsDue(p) - 1);
+  const dues = Math.ceil(Number(extra.pendingArrearsTotal ?? 0) + Number(extra.autoPenalty ?? 0) + annualSolidWasteCharge(p) * pastUserChargeYears);
   if (dues > 0) return { ok: false, reason: "dues", duesPending: dues, property: p, info };
   const pending = await changeRequestRepository.findPendingForHolding(holdingNo);
   if (pending) return { ok: false, reason: "A mutation / correction for this holding is already in process. Please wait for it to be decided.", duesPending: 0, property: p, info };
@@ -160,7 +189,7 @@ export async function lookupHoldingForMutation(holdingNo: string) {
     ...c.info,
     canApply: c.ok,
     duesPending: c.duesPending ? c.duesPending.toFixed(2) : "0.00",
-    message: c.reason === "dues" ? "Property tax dues are pending on this holding. Clear them first, then apply for mutation." : c.reason,
+    message: c.reason === "dues" ? "Holding tax / user charge of earlier years is pending on this holding. Clear it first, then apply for mutation (this year's tax can be paid after the mutation)." : c.reason,
   };
 }
 
@@ -188,12 +217,13 @@ export async function createDraft(input: CreateApplicationInput, ip: string | nu
   if (!isValidAadhaar(input.newOwnerAadhaar)) throw ApiError.badRequest("The Aadhaar number is not valid - please check it.");
   if (!TRANSFER_BASIS[input.transferBasis]) throw ApiError.badRequest("Choose the basis of mutation.");
   if (new Date(input.transferDate) > new Date()) throw ApiError.badRequest("The date of transfer cannot be in the future.");
+  await assertMobileLimit([input.applicantMobile, input.newOwnerMobile]);
 
   let holdingNo: string | null = null;
   if (input.holdingNo) {
     const c = await checkHolding(input.holdingNo.trim());
     if (c.reason === "not_found") throw ApiError.badRequest("This holding number was not found. Check it, or apply with the old holding number and ward.");
-    if (!c.ok) throw ApiError.badRequest(c.reason === "dues" ? `Property tax of ₹${c.duesPending.toFixed(2)} is pending on this holding. Pay it first, then apply.` : c.reason!);
+    if (!c.ok) throw ApiError.badRequest(c.reason === "dues" ? `Dues of earlier years (₹${c.duesPending.toFixed(2)}) are pending on this holding. Pay them first, then apply.` : c.reason!);
     holdingNo = c.property!.holding_no;
   } else if (!input.manual) {
     throw ApiError.badRequest("Enter the holding number, or the old holding number with the ward.");
@@ -401,10 +431,12 @@ export async function submitApplication(id: string, token: string): Promise<{ ap
   const missing = required.filter((t) => !have.has(t));
   if (missing.length) throw ApiError.badRequest(`Upload: ${missing.map((t) => DOC_TYPES[t]!.label).join("; ")}.`);
   if (app.latitude === null || app.longitude === null) throw ApiError.badRequest("Capture the GPS location of the holding.");
+  // Checked again here: other applications with the same number may have been submitted since this draft began.
+  await assertMobileLimit([app.applicant_mobile, app.new_owner_mobile], app.id);
 
   if (app.holding_no) {
     const c = await checkHolding(app.holding_no);
-    if (!c.ok) throw ApiError.badRequest(c.reason === "dues" ? `Property tax of ₹${c.duesPending.toFixed(2)} is pending on this holding. Pay it first, then submit.` : c.reason!);
+    if (!c.ok) throw ApiError.badRequest(c.reason === "dues" ? `Dues of earlier years (₹${c.duesPending.toFixed(2)}) are pending on this holding. Pay them first, then submit.` : c.reason!);
   }
 
   const applicationNo = await nextApplicationNo();
@@ -509,7 +541,7 @@ export async function linkApplicationToHolding(id: string, holdingNo: string, by
   if (!a || a.status !== "awaiting_holding") throw ApiError.badRequest("This application is not waiting to be linked.");
   const c = await checkHolding(holdingNo.trim());
   if (c.reason === "not_found") throw ApiError.badRequest("Holding not found.");
-  if (!c.ok) throw ApiError.badRequest(c.reason === "dues" ? `₹${c.duesPending.toFixed(2)} property tax is pending on this holding - it must be paid before the mutation can proceed.` : c.reason!);
+  if (!c.ok) throw ApiError.badRequest(c.reason === "dues" ? `₹${c.duesPending.toFixed(2)} of earlier years' dues is pending on this holding - it must be paid before the mutation can proceed.` : c.reason!);
   const hn = c.property!.holding_no;
   const claimed = await pool.query(`UPDATE mutation_applications SET status = 'in_chain', holding_no = $2, handled_by = $3, handled_at = now() WHERE id = $1 AND status = 'awaiting_holding'`, [id, hn, by]);
   if (!claimed.rowCount) throw ApiError.badRequest("This application was handled meanwhile.");
