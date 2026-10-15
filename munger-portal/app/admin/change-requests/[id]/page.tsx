@@ -15,6 +15,7 @@ import {
 } from "@/lib/admin-api";
 import { ADMIN_ROLE_LABELS } from "@/lib/admin-auth";
 import { TaxExemptionReview } from "@/components/admin/tax-exemption-review";
+import { MutationApplicationPanel } from "@/components/admin/mutation-application-panel";
 
 const FIELD_DIFF_ROWS: { label: string; currentKey: string; proposedKey: string }[] = [
   { label: "Owner Name", currentKey: "owner_name", proposedKey: "ownerName" },
@@ -189,6 +190,13 @@ export default function ChangeRequestDetailPage() {
             </section>
 
             <TaxExemptionReview current={detail.currentProperty ?? null} proposed={detail.request.proposed_data.taxExemption} />
+
+            {detail.request.public_application_id && (
+              <section className="rounded-xl border border-blue-200 bg-white p-6">
+                <h2 className="mb-4 text-base font-semibold text-slate-900">Online mutation application</h2>
+                <MutationApplicationPanel applicationId={String(detail.request.public_application_id)} />
+              </section>
+            )}
 
             <section className="rounded-xl border border-slate-200 bg-white p-6">
               <h2 className="mb-4 text-base font-semibold text-slate-900">Approval history</h2>

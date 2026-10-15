@@ -121,6 +121,7 @@ export default function AdminDashboardPage() {
   const showEmployeeDatabaseList = admin.role === "establishment_clerk";
   const showEmployeeDatabaseVerify = admin.role === "city_manager";
   const showEmployeeDatabaseProgress = isCommissioner;
+  const showMutationApplications = isMutationChainRole || admin.role === "city_manager";
   const showKhatianUpload = admin.role === "abhilekh_prabhari";
   const showKhatianReview = ["deputy_commissioner", "commissioner", "city_manager"].includes(admin.role);
   const isStreetlightReporterRole =
@@ -259,6 +260,16 @@ export default function AdminDashboardPage() {
                       ? "Review property change requests waiting on your desk."
                       : `${myStagePendingCount} request${myStagePendingCount === 1 ? "" : "s"} currently waiting on your desk.`}
                   </p>
+                </Link>
+              )}
+
+              {showMutationApplications && (
+                <Link href="/admin/mutation-applications" className={cardClass}>
+                  <span className={iconWrapClass}>
+                    <FileText className="h-6 w-6" strokeWidth={1.8} />
+                  </span>
+                  <h3 className="mb-1.5 text-base font-semibold text-slate-900">Online Mutation Applications</h3>
+                  <p className="text-sm text-slate-500">Applications from the public window, their documents and progress; holdings to be identified.</p>
                 </Link>
               )}
 
