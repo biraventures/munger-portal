@@ -174,17 +174,22 @@ export async function reviewKhatian(id: string, decision: "approve" | "return", 
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
+    const cleanRemarks = remarks?.trim().slice(0, 500) || null;
+    // The file version's copy of the review is written first: once the khatian is approved, the database refuses
+    // any change to it or its files (migration 130).
+    await client.query(
+      `UPDATE khatian_record_files f SET review_status = $2, reviewed_by_name = $3, reviewed_at = now(), review_remarks = $4
+         FROM khatian_records k
+        WHERE k.id = $1 AND k.status = 'pending' AND f.khatian_id = k.id AND f.version = k.version`,
+      [id, status, by.name, cleanRemarks],
+    );
     const { rows } = await client.query<KhatianRow>(
       `UPDATE khatian_records SET status = $2, reviewed_by_username = $3, reviewed_by_name = $4, reviewed_at = now(), review_remarks = $5
         WHERE id = $1 AND status = 'pending' RETURNING *`,
-      [id, status, by.username, by.name, remarks?.trim().slice(0, 500) || null],
+      [id, status, by.username, by.name, cleanRemarks],
     );
     const row = rows[0];
     if (!row) throw ApiError.badRequest("This khatian is not awaiting review (already reviewed, or re-uploaded).");
-    await client.query(
-      `UPDATE khatian_record_files SET review_status = $3, reviewed_by_name = $4, reviewed_at = now(), review_remarks = $5 WHERE khatian_id = $1 AND version = $2`,
-      [row.id, row.version, status, by.name, row.review_remarks],
-    );
     await client.query("COMMIT");
     return row;
   } catch (err) {
