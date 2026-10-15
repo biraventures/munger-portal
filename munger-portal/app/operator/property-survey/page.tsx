@@ -125,6 +125,11 @@ export default function PropertySurveyPage() {
                       {p.owner_name} - {p.address}
                       {p.old_holding_no ? ` (old: ${p.old_holding_no})` : ""}
                     </p>
+                    {p.resurvey_required && (
+                      <p className="mt-1 text-xs font-medium text-amber-700">
+                        Resurvey required - {p.resurvey_reason ?? "area / floor details missing"}. Tax collection is blocked until this is done.
+                      </p>
+                    )}
                     {tab === "surveyed" && (
                       <p className="mt-1 text-xs text-green-700">
                         Surveyed by {p.surveyor_name} (ID: {p.surveyor_id_number})

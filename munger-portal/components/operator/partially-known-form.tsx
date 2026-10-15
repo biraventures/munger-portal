@@ -1,5 +1,7 @@
 "use client";
 
+import { UserChargePaidTill } from "@/components/operator/user-charge-paid-till";
+
 import { useState } from "react";
 import { AlertCircle, CheckCircle2, Plus } from "lucide-react";
 import { PhaseArvRow, makeBlankPhaseArv, type PhaseArvEntry } from "./phase-arv-row";
@@ -36,7 +38,7 @@ export function PartiallyKnownForm({
   const [assessmentYear, setAssessmentYear] = useState(`${currentYear}-${currentYear + 1}`);
   const [taxPaidTillYear, setTaxPaidTillYear] = useState("");
   const [solidWasteChargeType, setSolidWasteChargeType] = useState("");
-  const [solidWasteMonths, setSolidWasteMonths] = useState("12");
+  const [solidWastePaidTillYear, setSolidWastePaidTillYear] = useState("");
   const [isBwg, setIsBwg] = useState(false);
   const [isSlum, setIsSlum] = useState(false);
   const [markForSurvey, setMarkForSurvey] = useState(true);
@@ -90,7 +92,7 @@ export function PartiallyKnownForm({
         holdingCreationYear,
         taxPaidTillYear: taxPaidTillYear || null,
         solidWasteChargeType: solidWasteChargeType || null,
-        solidWasteMonths: Number(solidWasteMonths) || 12,
+        solidWastePaidTillYear: solidWastePaidTillYear || null,
         isBwg,
         isSlum,
         taxHistoryStages: validPhases.map((p) => ({
@@ -257,19 +259,7 @@ export function PartiallyKnownForm({
               ))}
             </select>
           </div>
-          <div>
-            <label className={labelClass}>Months applicable</label>
-            <input
-              type="number"
-              min="1"
-              value={solidWasteMonths}
-              onChange={(e) => setSolidWasteMonths(e.target.value)}
-              className={inputClass}
-            />
-            <p className="mt-1 text-xs text-slate-400">
-              Enter more than 12 to include multiple pending years (e.g. 36 for 3 years) as part of arrears.
-            </p>
-          </div>
+          <UserChargePaidTill value={solidWastePaidTillYear} onChange={setSolidWastePaidTillYear} />
           <label className="flex items-start gap-2 text-sm text-slate-700 sm:col-span-2">
             <input
               type="checkbox"

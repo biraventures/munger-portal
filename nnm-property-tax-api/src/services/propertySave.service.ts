@@ -4,7 +4,7 @@ import { changeRequestRepository } from "../repositories/changeRequest.repositor
 import { regenerateAutomaticTaxHistoryStages } from "./automaticTaxHistory.service";
 import { classifyPropertyChange, TIER_FINAL_STAGE } from "./changeClassification.service";
 import { calculateTax } from "./taxCalculation.service";
-import { calculateSolidWasteCharge } from "./charges.service";
+import { annualSolidWasteCharge } from "./charges.service";
 import { ApiError } from "../utils/ApiError";
 import { exemptionDraftFields } from "../utils/taxExemption";
 import { taxExemptionRepository } from "../repositories/taxExemption.repository";
@@ -71,7 +71,7 @@ export async function applyPropertySave(
   })) as unknown as FloorRow[];
 
   const calc = calculateTax(draftProperty, draftFloors);
-  const solidWasteCharge = calculateSolidWasteCharge(draftProperty);
+  const solidWasteCharge = annualSolidWasteCharge(draftProperty);
 
   const floorsWithTax = input.floors.map((f, i) => ({
     ...f,
@@ -135,7 +135,9 @@ export async function applyPropertySave(
       miscRebateReason: input.miscRebateReason ?? null,
       penalty: input.penalty ?? 0,
       outstandingDemand: input.outstandingDemand ?? 0,
-      arv: Number(calc.arv),
+      // Built-up ARV only; vacant land's notional ARV (tax x 100/9) is stored separately.
+      arv: Number(calc.arvBuilt),
+      vacantArv: Number(calc.vacant.arv),
       taxPayable: Number(calc.currentTax),
       holdingCreationYear: input.holdingCreationYear,
       taxPaidTillYear: input.taxPaidTillYear ?? null,
@@ -145,6 +147,10 @@ export async function applyPropertySave(
     actorDisplayName,
     isNew,
   );
+  // Keep the stored user-charge paid-till year unless this save supplies one ("" / null = unknown).
+  if (input.solidWastePaidTillYear !== undefined) {
+    await propertySaveRepository.setSolidWastePaidTillYear(holdingNo, input.solidWastePaidTillYear || null);
+  }
 
   // Holding tax exemption (migration 118) - only ever applied to an existing
   // holding, i.e. after it has been through the change request chain.
@@ -166,6 +172,9 @@ export async function applyPropertySave(
     actorDisplayName,
     { property: input, floors: floorsWithTax, taxCalc: calc },
   );
+
+  // A holding flagged for resurvey (missing area/floors) is released once a surveyor has surveyed it and these details are complete.
+  await propertyRepository.releaseResurveyIfComplete(holdingNo);
 
   return { holdingNo, version, taxCalc: calc, solidWasteCharge };
 }
@@ -231,7 +240,7 @@ export async function savePropertyByHoldingNo(
     closing_year: f.closingYear ?? null,
   })) as unknown as FloorRow[];
   const previewCalc = calculateTax(draftProperty, draftFloors);
-  const previewSolidWaste = calculateSolidWasteCharge(draftProperty);
+  const previewSolidWaste = annualSolidWasteCharge(draftProperty);
 
 	const existingFloors = await propertyRepository.findFloorsByHoldingNo(holdingNo);
 	const approvalTier = classifyPropertyChange(existing, existingFloors, input);

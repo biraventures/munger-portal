@@ -95,6 +95,7 @@ export function PropertyResultCard({ record }: PropertyResultCardProps) {
         total,
         payerChoice === "tax_collector" ? verifiedCollector?.code : undefined,
         declared,
+        record?.pendingDemandNotices.map(item=>String(item.demandNo)) || []
       );
       window.location.href = redirectUrl;
     } catch (err) {

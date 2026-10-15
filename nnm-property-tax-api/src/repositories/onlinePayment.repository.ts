@@ -29,13 +29,14 @@ export const onlinePaymentRepository = {
     gateway: string;
     taxCollectorCode: string | null;
     taxCollectorName: string | null;
+    demandNos?: any[];
   }): Promise<void> {
     await pool.query(
       `INSERT INTO transactions (
         holding_no, txn_date, payment_mode, amount_received, collected_by,
-        order_id, gateway, status, tax_collector_code, tax_collector_name, online_declaration_accepted_at
-      ) VALUES ($1, now(), 'Online', $2, 'Citizen Self-Service', $3, $4, 'pending', $5, $6, now())`,
-      [row.holdingNo, row.amount, row.orderId, row.gateway, row.taxCollectorCode, row.taxCollectorName],
+        order_id, gateway, status, tax_collector_code, tax_collector_name, online_declaration_accepted_at, demand_no
+      ) VALUES ($1, now(), 'Online', $2, 'Citizen Self-Service', $3, $4, 'pending', $5, $6, now(),$7)`,
+      [row.holdingNo, row.amount, row.orderId, row.gateway, row.taxCollectorCode, row.taxCollectorName, row.demandNos?.join(',')],
     );
   },
 

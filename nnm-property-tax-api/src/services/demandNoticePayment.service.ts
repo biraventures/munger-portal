@@ -4,6 +4,8 @@ import { ApiError } from "../utils/ApiError";
 import { demandNoticeRepository } from "../repositories/demandNotice.repository";
 import { searchPropertyByHoldingNo } from "./property.service";
 import { assertNotDisputed } from "./propertyDispute.service";
+import { assertNoNoticeOnHold } from "./noticeHold.service";
+import { assertNoResurveyPending } from "./propertyResurvey.service";
 import { propertyRepository } from "../repositories/property.repository";
 import { createGatewayOrder, type InitiateResult } from "./onlinePayment.service";
 
@@ -61,6 +63,8 @@ export async function getDemandNoticePaymentInfo(demandNo: string): Promise<Dema
   if (!property) return { ...base, available: false, reason: "Holding not found." };
   try {
     assertNotDisputed(property);
+    assertNoResurveyPending(property);
+    await assertNoNoticeOnHold(holdingNo);
   } catch {
     return { ...base, available: false, reason: "Please contact the Holding Tax Section, Municipal Corporation Office, Munger." };
   }

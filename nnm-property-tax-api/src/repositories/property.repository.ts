@@ -189,11 +189,34 @@ export const propertyRepository = {
        RETURNING *`,
       [holdingNo, surveyorName, surveyorIdNumber, surveyDate],
     );
+    // A holding flagged for resurvey (missing area/floors) is released as soon as the survey is recorded AND the details are complete.
+    if (rows[0]) await this.releaseResurveyIfComplete(holdingNo);
     return rows[0] ?? null;
+  },
+
+  /**
+   * Lifts the collection block on a holding flagged for resurvey, but only once a surveyor has recorded the survey
+   * (survey_status = 'surveyed') AND the total area and floors are now on file. Called after the survey is recorded
+   * and after an approved change on the holding, so it works whichever happens last. If details are still missing the
+   * holding stays blocked and the reason is refreshed.
+   */
+  async releaseResurveyIfComplete(holdingNo: string): Promise<void> {
+    await pool.query(
+      `UPDATE properties SET resurvey_required = FALSE, resurvey_reason = NULL, survey_status = NULL
+        WHERE holding_no = $1 AND resurvey_required AND survey_status = 'surveyed' AND holding_incomplete_reason(holding_no) IS NULL`,
+      [holdingNo],
+    );
+    await pool.query(
+      `UPDATE properties SET resurvey_reason = holding_incomplete_reason(holding_no)
+        WHERE holding_no = $1 AND resurvey_required AND holding_incomplete_reason(holding_no) IS NOT NULL`,
+      [holdingNo],
+    );
   },
 
   /** Clears survey_status back to NULL once the surveyed area has been finalized through the normal mutation-approval chain - see changeRequest.service.ts's approveAtCurrentStage(). A no-op if the holding wasn't in the survey workflow (survey_status already NULL). */
   async clearSurveyStatus(holdingNo: string): Promise<void> {
-    await pool.query(`UPDATE properties SET survey_status = NULL WHERE holding_no = $1 AND survey_status IS NOT NULL`, [holdingNo]);
+    // Holdings flagged for resurvey keep their status until releaseResurveyIfComplete() confirms the details are complete.
+    await pool.query(`UPDATE properties SET survey_status = NULL WHERE holding_no = $1 AND survey_status IS NOT NULL AND NOT resurvey_required`, [holdingNo]);
+    await this.releaseResurveyIfComplete(holdingNo);
   },
 };

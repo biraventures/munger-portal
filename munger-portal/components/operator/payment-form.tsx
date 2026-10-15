@@ -1,5 +1,7 @@
 "use client";
 
+import { EMPTY_INSTRUMENT, InstrumentFields, instrumentError, instrumentPayload, type InstrumentValue } from "./instrument-fields";
+import { COUNTER_PAYMENT_MODES } from "@/lib/payment-modes";
 import { useEffect, useState } from "react";
 import { AlertCircle, FileWarning, Loader2 } from "lucide-react";
 import { submitPayment, type PaymentError, type ReceiptData } from "@/lib/payment-api";
@@ -10,7 +12,7 @@ const inputClass =
   "w-full rounded-md border border-slate-300 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-nnm-blue focus:ring-offset-1";
 const labelClass = "mb-1.5 block text-sm font-medium text-slate-700";
 
-const PAYMENT_MODES = ["Cash", "Cheque", "Online / UPI", "Card", "Demand Draft", "District Treasury"];
+const PAYMENT_MODES: readonly string[] = COUNTER_PAYMENT_MODES;
 
 const TV_NUMBER_MIN = 15;
 const TV_NUMBER_MAX = 40;
@@ -31,6 +33,7 @@ export function PaymentForm({
   const [tvNumber, setTvNumber] = useState("");
   const [tvDate, setTvDate] = useState("");
   const isDistrictTreasury = paymentMode === "District Treasury";
+  const [instrument, setInstrument] = useState<InstrumentValue>(EMPTY_INSTRUMENT);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<PaymentError | null>(null);
 
@@ -74,9 +77,16 @@ export function PaymentForm({
       }
     }
 
+    const instErr = instrumentError(paymentMode ?? "", instrument, Number(selected?.totalAmountDemanded ?? 0));
+    if (instErr) {
+      setError({ message: instErr });
+      return;
+    }
+
     setSubmitting(true);
     try {
       const receipt = await submitPayment(holdingNo, {
+        ...instrumentPayload(paymentMode ?? "", instrument),
         paymentMode,
         counter: counter || undefined,
         demandNo: selectedDemandNo,
@@ -204,6 +214,7 @@ export function PaymentForm({
                 </div>
               </>
             )}
+            <InstrumentFields paymentMode={paymentMode ?? ""} amountDemanded={selected ? Number(selected.totalAmountDemanded) : null} value={instrument} onChange={setInstrument} inputClassName={inputClass} labelClassName={labelClass} />
             <div className="sm:col-span-2">
               <TaxCollectorCodeInput
                 value={taxCollectorCode}

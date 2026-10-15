@@ -21,6 +21,8 @@ export interface DemandNoticeTotals {
   currentYear?: { year: string; included: boolean };
   // Set on the balance notice generated automatically right after a part payment: the receipt of that payment.
   balanceAfterPartPaymentReceipt?: string;
+  // User charge: annual amount, and the unpaid period it is demanded for (printed once, as annual x years).
+  solidWaste?: { annual: string; fromYear: string; toYear: string; years: number };
 }
 
 export interface DemandNoticeResult {

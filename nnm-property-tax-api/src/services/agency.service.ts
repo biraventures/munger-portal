@@ -18,6 +18,8 @@ export interface ReportFilters {
   collector?: string;
   /** When set, the report covers only these wards (a Tax Collector sees just their assigned wards). */
   wardScope?: string[];
+  /** A Tax Collector viewing the report: collector-wise figures (collection above all) are limited to their own work. */
+  selfCollector?: string;
 }
 
 interface Tally {
@@ -41,7 +43,8 @@ export interface DatasetReport {
   series: SeriesPoint[];
   byWard: WardRow[];
   byCollector: CollectorRow[];
-  byType?: { type: string; count: number }[];
+  /** Collection issues by type; for collection, the payment-mode-wise split (count and amount). */
+  byType?: { type: string; count: number; amount: number }[];
 }
 
 interface DatasetConfig {
@@ -105,6 +108,10 @@ async function runDataset(cfg: DatasetConfig, f: ReportFilters, allWards: string
     params.push(f.wardScope);
     filterSql += ` AND ${cfg.ward} = ANY($${params.length}::text[])`;
   }
+  if (f.selfCollector && cfg.collUser) {
+    params.push(f.selfCollector);
+    filterSql += ` AND ${cfg.collUser} = $${params.length}`;
+  }
   if (f.collector) {
     if (!cfg.collUser) {
       // A collector filter makes no sense for a dataset without that dimension.
@@ -136,7 +143,7 @@ async function runDataset(cfg: DatasetConfig, f: ReportFilters, allWards: string
   const series = new Map<string, SeriesPoint>();
   const wards = new Map<string, WardRow>();
   const collectors = new Map<string, CollectorRow>();
-  const types = new Map<string, number>();
+  const types = new Map<string, { count: number; amount: number }>();
 
   const add = (t: Tally, r: { n: number; amt: number; n2: number }) => {
     t.count += r.n;
@@ -158,7 +165,12 @@ async function runDataset(cfg: DatasetConfig, f: ReportFilters, allWards: string
       if (!collectors.has(key)) collectors.set(key, { username: r.coll_user, name: r.coll_user ? (r.coll_name ?? r.coll_user) : "Not attributed to a collector", count: 0, amount: 0, count2: 0 });
       add(collectors.get(key)!, r);
     }
-    if (cfg.typeExpr && r.type) types.set(r.type, (types.get(r.type) ?? 0) + r.n);
+    if (cfg.typeExpr && r.type) {
+      const t = types.get(r.type) ?? { count: 0, amount: 0 };
+      t.count += r.n;
+      t.amount += r.amt;
+      types.set(r.type, t);
+    }
   }
 
   if (cfg.fillWards && !f.ward) {
@@ -173,11 +185,11 @@ async function runDataset(cfg: DatasetConfig, f: ReportFilters, allWards: string
     series: [...series.values()].sort((a, b) => a.bucket.localeCompare(b.bucket)),
     byWard: [...wards.values()].sort((a, b) => compareWards(a.ward, b.ward)),
     byCollector: [...collectors.values()].sort((a, b) => a.name.localeCompare(b.name)),
-    ...(cfg.typeExpr ? { byType: [...types.entries()].map(([type, count]) => ({ type, count })).sort((a, b) => b.count - a.count) } : {}),
+    ...(cfg.typeExpr ? { byType: [...types.entries()].map(([type, t]) => ({ type, count: t.count, amount: t.amount })).sort((a, b) => b.amount - a.amount || b.count - a.count) } : {}),
   };
 }
 
-export async function listReportFilterOptions(wardScope?: string[]): Promise<{ wards: string[]; collectors: { username: string; name: string; code: string | null }[] }> {
+export async function listReportFilterOptions(wardScope?: string[], selfCollector?: string): Promise<{ wards: string[]; collectors: { username: string; name: string; code: string | null }[] }> {
   const [w, c] = await Promise.all([
     pool.query<{ ward: string }>(`SELECT DISTINCT btrim(ward) AS ward FROM properties WHERE ward IS NOT NULL AND btrim(ward) <> ''`),
     pool.query<{ username: string; display_name: string; tax_collector_code: string | null }>(
@@ -196,6 +208,7 @@ export async function listReportFilterOptions(wardScope?: string[]): Promise<{ w
     const inScope = new Set(rows.map((r) => r.tax_collector_username));
     collectors = collectors.filter((x) => inScope.has(x.username));
   }
+  if (selfCollector) collectors = collectors.filter((x) => x.username === selfCollector);
   return { wards: wards.sort(compareWards), collectors };
 }
 
@@ -216,7 +229,7 @@ export interface AgencyReport {
 }
 
 export async function buildAgencyReport(f: ReportFilters): Promise<AgencyReport> {
-  const { wards, collectors } = await listReportFilterOptions(f.wardScope);
+  const { wards, collectors } = await listReportFilterOptions(f.wardScope, f.selfCollector);
   const collList = collectors.map((c) => ({ username: c.username, name: c.name }));
 
   const configs: Record<string, DatasetConfig> = {
@@ -227,9 +240,11 @@ export async function buildAgencyReport(f: ReportFilters): Promise<AgencyReport>
       where: `t.status = 'success' AND t.cancelled = FALSE AND t.receipt_no IS NOT NULL`,
       ts: "t.txn_date",
       ward: "btrim(p.ward)",
-      collUser: "COALESCE(a.username, t.tax_collector_code)",
-      collName: "COALESCE(a.display_name, t.tax_collector_name, t.tax_collector_code)",
+      collUser: "COALESCE(a.username, CASE WHEN t.collected_by_role = 'tax_collector' THEN t.collected_by_username END, t.tax_collector_code)",
+      collName: "COALESCE(a.display_name, t.tax_collector_name, t.collected_by, t.tax_collector_code)",
       amount: "t.amount_received",
+      // Payment-mode-wise split of the collection.
+      typeExpr: "COALESCE(NULLIF(btrim(t.payment_mode), ''), 'Unknown')",
       fillWards: true,
       fillCollectors: true,
     },
@@ -329,6 +344,8 @@ export async function buildAgencyReport(f: ReportFilters): Promise<AgencyReport>
 const PENDING_HOLDING_SQL = `
   FROM properties p
   WHERE NOT COALESCE(p.is_disputed, FALSE)
+    AND NOT p.resurvey_required
+    AND NOT EXISTS (SELECT 1 FROM demand_notices h WHERE h.holding_no = p.holding_no AND h.on_hold)
     AND EXISTS (SELECT 1 FROM floors f WHERE f.holding_no = p.holding_no)
     AND (p.tax_paid_till_year IS NULL OR p.tax_paid_till_year < p.assessment_year)`;
 

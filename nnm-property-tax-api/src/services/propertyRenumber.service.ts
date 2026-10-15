@@ -7,12 +7,12 @@ import { NEW_HOLDING_NO_PREFIX, PARTIALLY_KNOWN_HOLDING_NO_PREFIX } from "../con
 const PROPERTY_COLUMNS = [
   "old_holding_no", "old_pid", "owner_name", "relation_type", "relation_name", "mobile_no",
   "area_sqft", "address", "ward", "zone", "pincode", "assessment_year", "road_type", "vacant_area_sqft",
-  "rain_water_harvesting", "solar_rooftop", "arrear_tax", "solid_waste_charge_type", "solid_waste_months",
+  "rain_water_harvesting", "solar_rooftop", "arrear_tax", "solid_waste_charge_type", "solid_waste_months", "solid_waste_paid_till_year",
   "solid_waste_charge", "penal_charge", "water_charge", "boring_charge", "form_fee", "misc_cost",
   "misc_cost_reason", "misc_rebate", "misc_rebate_reason", "arv", "tax_payable", "holding_creation_year",
   "tax_paid_till_year", "present_holding_name", "present_category", "created_by", "created_date",
   "last_modified_by", "last_modified_date", "is_bwg", "is_slum", "latitude", "longitude",
-  "is_disputed", "dispute_remarks", "disputed_by", "disputed_by_role", "disputed_at", "data_source",
+  "resurvey_required", "resurvey_reason", "resurvey_flagged_at", "is_disputed", "dispute_remarks", "disputed_by", "disputed_by_role", "disputed_at", "data_source",
   // Holding tax exemption (migration 118) - must move with the holding.
   "is_tax_exempt", "tax_exempt_category", "tax_exempt_order_no", "tax_exempt_order_date",
   "tax_exempt_from_year", "tax_exempt_remarks", "tax_exempt_order_doc_id",
