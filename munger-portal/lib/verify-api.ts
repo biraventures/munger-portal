@@ -66,6 +66,7 @@ export function verifyReceipt(receiptNo: string, sig: string) {
     cancelled?: boolean;
     cancelledReason?: string | null;
     reconcileStatus?: string;
+    provisional?: boolean;
   }>(`receipt/${encodeURIComponent(receiptNo)}`, sig);
 }
 

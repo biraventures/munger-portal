@@ -11,7 +11,8 @@ import { FieldVerificationCapture } from "@/components/admin/field-verification-
 import { CollectionIssueList } from "@/components/admin/collection-issue-list";
 import { ReceiptView } from "@/components/operator/receipt-view";
 import { CollectionSlip } from "@/components/admin/collection-slip";
-import { EMPTY_INSTRUMENT, InstrumentFields, instrumentError, isInstrumentMode, type InstrumentValue } from "@/components/operator/instrument-fields";
+import { EMPTY_INSTRUMENT, InstrumentFields, instrumentError, instrumentPayload, type InstrumentValue } from "@/components/operator/instrument-fields";
+import { FIELD_PAYMENT_MODES } from "@/lib/payment-modes";
 import type { ReceiptData } from "@/lib/payment-api";
 import {
   fetchPropertyForCollector,
@@ -34,7 +35,7 @@ import {
 } from "@/lib/admin-api";
 
 const inputClass = "w-full rounded-md border border-slate-300 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-nnm-blue focus:ring-offset-1";
-const PAYMENT_MODES = ["Cash", "Cheque", "Online / UPI", "Card", "Demand Draft"];
+const PAYMENT_MODES: readonly string[] = FIELD_PAYMENT_MODES;
 
 /** Every property field worth showing the collector, in reading order. Aadhaar is masked to the last 4 digits. */
 const DETAIL_FIELDS: [string, string][] = [
@@ -240,7 +241,7 @@ export default function TaxCollectorPage() {
     if (!result?.property || !selectedDemandNo) return;
     const selected = notices?.find((n) => n.demandNo === selectedDemandNo);
     if (!selected) return;
-    const instErr = instrumentError(paymentMode ?? "", instrument);
+    const instErr = instrumentError(paymentMode ?? "", instrument, Number(selected.totalAmountDemanded));
     if (instErr) {
       setError(instErr);
       return;
@@ -252,7 +253,7 @@ export default function TaxCollectorPage() {
         amount: Number(selected.totalAmountDemanded),
         paymentMode: paymentMode ?? "",
         demandNo: selectedDemandNo,
-        ...(isInstrumentMode(paymentMode ?? "") ? instrument : {}),
+        ...instrumentPayload(paymentMode ?? "", instrument),
       });
       setReceipt(res);
       setInstrument(EMPTY_INSTRUMENT);
@@ -478,7 +479,10 @@ export default function TaxCollectorPage() {
                           </option>
                         ))}
                       </select>
-                      <InstrumentFields paymentMode={paymentMode ?? ""} value={instrument} onChange={setInstrument} inputClassName={inputClass} />
+                      <InstrumentFields
+                        paymentMode={paymentMode ?? ""}
+                        amountDemanded={notices.find((n) => n.demandNo === selectedDemandNo) ? Number(notices.find((n) => n.demandNo === selectedDemandNo)!.totalAmountDemanded) : null}
+                        value={instrument} onChange={setInstrument} inputClassName={inputClass} />
                     </div>
                     <button
                       onClick={handleCollectPayment}

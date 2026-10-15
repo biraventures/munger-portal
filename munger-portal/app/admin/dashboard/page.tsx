@@ -257,8 +257,8 @@ export default function AdminDashboardPage() {
                   <span className={iconWrapClass}>
                     <Landmark className="h-6 w-6" strokeWidth={1.8} />
                   </span>
-                  <h3 className="mb-1.5 text-base font-semibold text-slate-900">Cheque / DD Reconciliation</h3>
-                  <p className="text-sm text-slate-500">Verify cheques and DDs credited to the Nagar Nigam account, or mark them bounced.</p>
+                  <h3 className="mb-1.5 text-base font-semibold text-slate-900">Payment Reconciliation</h3>
+                  <p className="text-sm text-slate-500">Reconcile card, UPI, online banking, cheque and DD collections with the bank credit, or mark them bounced.</p>
                 </Link>
               )}
 

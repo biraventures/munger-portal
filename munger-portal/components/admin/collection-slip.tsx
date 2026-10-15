@@ -6,6 +6,7 @@ import type { ReceiptData } from "@/lib/payment-api";
 import { DocumentVerificationQR } from "@/components/operator/document-verification-qr";
 import { isProvisional } from "@/components/operator/cancelled-document-notice";
 import { printElementInNewWindow } from "@/lib/print-in-new-window";
+import { describePaymentDetails } from "@/lib/payment-modes";
 
 function money(v: string | number): string {
   return Number(v).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -18,7 +19,7 @@ function money(v: string | number): string {
 export function CollectionSlip({ receipt }: { receipt: ReceiptData }) {
   const ref = useRef<HTMLDivElement>(null);
   const p = receipt.property;
-  const provisional = isProvisional(receipt.reconcileStatus);
+  const provisional = isProvisional(receipt);
   const row = (label: string, value: React.ReactNode) => (
     <div className="flex gap-2 py-0.5">
       <span className="w-[120px] shrink-0 text-slate-500">{label}</span>
@@ -58,14 +59,13 @@ export function CollectionSlip({ receipt }: { receipt: ReceiptData }) {
           {row("Owner", String(p.owner_name ?? ""))}
           {row("Ward", String(p.ward ?? ""))}
           {row("Demand No", receipt.demandNo)}
-          {row("Amount", <b>₹{money(receipt.amountReceived)}</b>)}
+          {row("Money demanded", `₹${money(receipt.amountDemanded ?? receipt.amountReceived)}`)}
+          {row("Amount received", <b>₹{money(receipt.amountReceivedActual ?? receipt.amountReceived)}</b>)}
           {row("In words", receipt.amountInWords)}
           {row("Mode", receipt.paymentMode)}
-          {receipt.instrument &&
-            row(
-              `${receipt.paymentMode} No.`,
-              `${receipt.instrument.no} dt. ${receipt.instrument.date}, ${receipt.instrument.bank}${receipt.instrument.branch ? `, ${receipt.instrument.branch}` : ""}`,
-            )}
+          {describePaymentDetails(receipt.paymentMode, receipt.instrument).map(([label, value]) => (
+            <div key={label}>{row(label, value)}</div>
+          ))}
           {row("Collected by", `${receipt.taxCollectorName ?? receipt.collectedBy}${receipt.taxCollectorCode ? ` (${receipt.taxCollectorCode})` : ""}`)}
         </div>
         <p className="mt-3 border-t border-slate-200 pt-2 text-[10px] text-slate-500">

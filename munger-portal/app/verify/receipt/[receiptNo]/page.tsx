@@ -45,7 +45,7 @@ function Content() {
             value={
               data.cancelled
                 ? `Cancelled${data.cancelledReason ? ` - ${data.cancelledReason}` : ""}`
-                : data.reconcileStatus === "pending" || data.reconcileStatus === "pm_verified"
+                : data.provisional
                   ? `Provisional - ${data.paymentMode} awaiting realisation`
                   : "Valid"
             }

@@ -7,6 +7,7 @@ import type { PrintableReceiptHistory } from "@/lib/operator-api";
 import { DocumentVerificationQR } from "./document-verification-qr";
 import { CancelledWatermark, CancelledBanner, isProvisional, ProvisionalBanner, ProvisionalWatermark } from "./cancelled-document-notice";
 import { printElementInNewWindow } from "@/lib/print-in-new-window";
+import { describePaymentDetails } from "@/lib/payment-modes";
 
 function money(v: string | number | undefined | null): string {
   const n = Number(v ?? 0);
@@ -50,7 +51,7 @@ export function ReceiptReprintView({
         style={{ fontFamily: "Arial, sans-serif", position: "relative" }}
       >
         {receipt.cancelled && <CancelledWatermark />}
-        {!receipt.cancelled && isProvisional(receipt.reconcileStatus) && <ProvisionalWatermark />}
+        {!receipt.cancelled && isProvisional(receipt) && <ProvisionalWatermark />}
         <div className="flex items-start justify-between gap-3 border-b-2 border-nnm-blue pb-2">
           <DocumentVerificationQR url={receipt.verificationUrl} />
           <div className="flex-1 text-center">
@@ -73,7 +74,7 @@ export function ReceiptReprintView({
         </div>
 
         {receipt.cancelled && <CancelledBanner reason={receipt.cancelledReason} />}
-        {!receipt.cancelled && isProvisional(receipt.reconcileStatus) && <ProvisionalBanner paymentMode={receipt.paymentMode} />}
+        {!receipt.cancelled && isProvisional(receipt) && <ProvisionalBanner paymentMode={receipt.paymentMode} />}
 
         <div className="mt-3.5 flex gap-5">
           <div className="flex-1 space-y-0.5">
@@ -99,13 +100,11 @@ export function ReceiptReprintView({
             <div>
               <b className="inline-block w-[140px]">Counter</b> {receipt.counter ?? "—"}
             </div>
-            {receipt.instrument && (
-              <div>
-                <b className="inline-block w-[140px]">{receipt.paymentMode} No.</b> {receipt.instrument.no} ({receipt.instrument.date}),{" "}
-                {receipt.instrument.bank}
-                {receipt.instrument.branch ? `, ${receipt.instrument.branch}` : ""}
+            {describePaymentDetails(receipt.paymentMode, receipt.instrument).map(([label, value]) => (
+              <div key={label}>
+                <b className="inline-block w-[140px]">{label}</b> {value}
               </div>
-            )}
+            ))}
             {receipt.tvNumber && (
               <div>
                 <b className="inline-block w-[140px]">T.V. No.</b> {receipt.tvNumber}

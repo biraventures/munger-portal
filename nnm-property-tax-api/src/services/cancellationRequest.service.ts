@@ -183,6 +183,7 @@ async function finalizeAndApplyCancellation(requestId: number, reviewedBy: strin
       const txn = await paymentRepository.findByReceiptNo(request.target_id);
       if (!txn) throw ApiError.notFound(`Receipt ${request.target_id} not found.`);
       await undoReceiptPayment(txn, request.reason, client);
+      await client.query(`UPDATE transactions SET reconcile_status = 'cancelled' WHERE receipt_no = $1 AND reconcile_status <> 'not_required'`, [txn.receipt_no]);
       await updateLedgerStatus(txn.receipt_no, LEDGER_STATUS.cancelled, null, `Cancelled: ${request.reason}`, client);
     }
 

@@ -24,7 +24,7 @@ export const getBulkReceipts = asyncHandler(async (req: Request, res: Response) 
 /** GET /api/v1/admin/instrument-reconciliation?status=open|closed|all&from=&to= */
 export const getInstruments = asyncHandler(async (req: Request, res: Response) => {
   const q = z
-    .object({ status: z.enum(["open", "closed", "all"]).default("open"), from: dateString.optional(), to: dateString.optional() })
+    .object({ status: z.enum(["open", "closed", "all"]).default("open"), from: dateString.optional(), to: dateString.optional(), mode: z.string().trim().max(32).optional() })
     .safeParse(req.query);
   if (!q.success) throw ApiError.badRequest(q.error.issues[0]?.message ?? "Invalid filters");
   res.status(200).json({ instruments: await listInstruments(q.data) });

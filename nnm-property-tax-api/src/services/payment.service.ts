@@ -16,8 +16,9 @@ import { assertNoResurveyPending } from "./propertyResurvey.service";
 import { generateDemandNotice } from "./demandNotice.service";
 import { buildVerificationUrl } from "../utils/verificationSignature";
 import { formatYmdToDmy } from "../utils/formatYmdToDmy";
-import type { PaymentActor, PaymentInput, PaymentResult } from "../types/payment.types";
-import { needsReconciliation, writeLedgerEntry } from "./transactionLedger.service";
+import type { InstrumentView, PaymentActor, PaymentInput, PaymentResult } from "../types/payment.types";
+import { writeLedgerEntry } from "./transactionLedger.service";
+import { assertActualMatchesDemand, reconciliationRule, validatePaymentDetails } from "./paymentDetails.service";
 import { assertNoNoticeOnHold } from "./noticeHold.service";
 import type { DemandNoticeResult } from "../types/demandNotice.types";
 import type { FrozenFloorBreakdown } from "../types/property.types";
@@ -49,9 +50,13 @@ export interface PrintableReceiptHistory {
   taxCollectorName: string | null;
   tvNumber: string | null;
   tvDate: string | null;
-  instrument: { no: string | null; date: string | null; bank: string | null; branch: string | null } | null;
-  /** 'not_required' | 'pending' | 'pm_verified' | 'reconciled' | 'bounced' - pending/pm_verified print as PROVISIONAL. */
+  instrument: InstrumentView | null;
+  amountDemanded: string | null;
+  amountReceivedActual: string | null;
+  /** 'not_required' | 'pending' | 'pm_verified' | 'reconciled' | 'bounced' | 'cancelled'. */
   reconcileStatus: string;
+  /** Cheque/DD not yet reconciled - prints TEMPORARY / PROVISIONAL. */
+  provisional: boolean;
   /** Set only for public online payments: when the payer ticked the declaration (dd-mm-yyyy HH:MM). */
   onlineDeclarationAcceptedAt: string | null;
   // Frozen at the moment of payment (migration 024) - not
@@ -126,15 +131,22 @@ export async function getReceiptForReprint(receiptNo: string): Promise<Printable
     tvDate: txn.tv_date
       ? `${String(txn.tv_date.getDate()).padStart(2, "0")}-${String(txn.tv_date.getMonth() + 1).padStart(2, "0")}-${txn.tv_date.getFullYear()}`
       : null,
-    instrument: txn.instrument_no
-      ? {
-          no: txn.instrument_no,
-          date: txn.instrument_date ? `${String(txn.instrument_date.getDate()).padStart(2, "0")}-${String(txn.instrument_date.getMonth() + 1).padStart(2, "0")}-${txn.instrument_date.getFullYear()}` : null,
-          bank: txn.bank_name,
-          branch: txn.branch_name,
-        }
-      : null,
+    instrument:
+      txn.instrument_no || txn.bank_name || txn.card_last4 || txn.card_holder_name
+        ? {
+            no: txn.instrument_no,
+            date: txn.instrument_date ? `${String(txn.instrument_date.getDate()).padStart(2, "0")}-${String(txn.instrument_date.getMonth() + 1).padStart(2, "0")}-${txn.instrument_date.getFullYear()}` : null,
+            bank: txn.bank_name,
+            branch: txn.branch_name,
+            cardType: txn.card_type,
+            cardHolderName: txn.card_holder_name,
+            cardLast4: txn.card_last4,
+          }
+        : null,
+    amountDemanded: txn.amount_demanded,
+    amountReceivedActual: txn.amount_received_actual,
     reconcileStatus: txn.reconcile_status,
+    provisional: !txn.cancelled && reconciliationRule(txn.payment_mode) === "hold" && (txn.reconcile_status === "pending" || txn.reconcile_status === "pm_verified"),
     onlineDeclarationAcceptedAt: txn.online_declaration_accepted_at
       ? new Date(txn.online_declaration_accepted_at).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: false }).replace(/\//g, "-").replace(",", "")
       : null,
@@ -277,20 +289,15 @@ export async function submitPayment(
     throw ApiError.badRequest("T.V. number and date are required for District Treasury payments.");
   }
 
-  // A cheque or DD is only provisional until it is credited to the Nagar Nigam account: its number, date and bank are
-  // needed to reconcile it, and the notice stays ON HOLD until the Tax Daroga does.
-  const provisional = needsReconciliation(input.paymentMode);
-  const instrument = provisional
-    ? {
-        no: input.instrumentNo?.trim() || null,
-        date: input.instrumentDate?.trim() || null,
-        bank: input.bankName?.trim() || null,
-        branch: input.branchName?.trim() || null,
-      }
-    : null;
-  if (instrument && (!instrument.no || !instrument.date || !instrument.bank)) {
-    throw ApiError.badRequest(`${input.paymentMode} number, date and bank name are required.`);
-  }
+  // The details each mode needs (bank, cheque/DD no, UPI URN, card holder and last 4 digits ...), and how it is
+  // reconciled: cash at once; card/UPI/online banking stay "reconciliation pending" until the Project Manager and the
+  // Tax Daroga reconcile them; a cheque/DD also keeps the notice ON HOLD with a provisional receipt meanwhile.
+  const details = validatePaymentDetails(input);
+  const rule = reconciliationRule(input.paymentMode);
+  const provisional = rule === "hold";
+  const amountDemanded = num(notice.total_amount_demanded);
+  const amountReceivedActual = assertActualMatchesDemand(input.amountReceivedActual, amountDemanded);
+  const hasDetails = Object.values(details).some((v) => v !== null);
   await assertNoNoticeOnHold(holdingNo);
 
   // Snapshot pending arrears BEFORE this payment, and which specific
@@ -380,20 +387,34 @@ export async function submitPayment(
       client,
     );
 
+    // Recorded as the process flows: cash is reconciled at collection (by whoever collected it).
+    const reconcileStatus = rule === "auto" ? "reconciled" : rule === "none" ? "not_required" : "pending";
     await client.query(
       `UPDATE transactions
           SET instrument_no = $2, instrument_date = $3::date, bank_name = $4, branch_name = $5,
-              reconcile_status = $6, collected_by_username = $7, collected_by_role = $8
+              card_type = $6, card_holder_name = $7, card_last4 = $8,
+              amount_demanded = $9, amount_received_actual = $10,
+              reconcile_status = $11::varchar, collected_by_username = $12, collected_by_role = $13,
+              reconciled_at    = CASE WHEN $11::varchar = 'reconciled' THEN now() END,
+              reconciled_by    = CASE WHEN $11::varchar = 'reconciled' THEN $14::varchar END,
+              reconciled_by_id = CASE WHEN $11::varchar = 'reconciled' THEN $15::bigint END
         WHERE receipt_no = $1`,
       [
         receiptNo,
-        instrument?.no ?? null,
-        instrument?.date ?? null,
-        instrument?.bank ?? null,
-        instrument?.branch ?? null,
-        provisional ? "pending" : "not_required",
+        details.instrumentNo,
+        details.instrumentDate,
+        details.bankName,
+        details.branchName,
+        details.cardType,
+        details.cardHolderName,
+        details.cardLast4,
+        amountDemanded,
+        amountReceivedActual,
+        reconcileStatus,
         actor?.username ?? null,
         actor?.role ?? null,
+        `${collectedBy} (cash, at collection)`,
+        actor?.id ?? null,
       ],
     );
 
@@ -406,7 +427,8 @@ export async function submitPayment(
         amountReceived,
         dueFrom: clearance.stages.length > 0 ? clearance.stages[0]!.period.split(" to ")[0]! : notice.assessment_year,
         dueUpto: paidThroughYear,
-        instrument: instrument ?? { no: tvNumber, date: tvDate, bank: null, branch: null },
+        details: hasDetails ? details : { ...details, instrumentNo: tvNumber, instrumentDate: tvDate },
+        reconcileRule: rule,
         entryBy: actor?.id ?? null,
         entryIp: actor?.ip ?? null,
         remarks: `Receipt ${receiptNo} against demand ${input.demandNo}; collected by ${collectedBy}${actor ? ` (${actor.username})` : ""}`,
@@ -481,8 +503,21 @@ export async function submitPayment(
     // input) to the same "dd-mm-yyyy" display format as every other
     // date on the receipt, rather than echoing the raw input back.
     tvDate: tvDate ? formatYmdToDmy(tvDate) : null,
-    instrument: instrument ? { ...instrument, date: instrument.date ? formatYmdToDmy(instrument.date) : null } : null,
-    reconcileStatus: provisional ? "pending" : "not_required",
+    instrument: hasDetails
+      ? {
+          no: details.instrumentNo,
+          date: details.instrumentDate ? formatYmdToDmy(details.instrumentDate) : null,
+          bank: details.bankName,
+          branch: details.branchName,
+          cardType: details.cardType,
+          cardHolderName: details.cardHolderName,
+          cardLast4: details.cardLast4,
+        }
+      : null,
+    amountDemanded: amountDemanded.toFixed(2),
+    amountReceivedActual: amountReceivedActual.toFixed(2),
+    reconcileStatus: rule === "auto" ? "reconciled" : rule === "none" ? "not_required" : "pending",
+    provisional,
     fieldCollection: actor?.role === "tax_collector",
     arrearStagesPaid: clearance.stages,
     // A part payment collects holding tax for earlier years only: the receipt must not show the current year's user charge.

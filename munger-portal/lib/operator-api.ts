@@ -340,7 +340,19 @@ export interface PrintableReceiptHistory {
   taxCollectorName: string | null;
   tvNumber: string | null;
   tvDate: string | null;
-  instrument?: { no: string | null; date: string | null; bank: string | null; branch: string | null } | null;
+  instrument?: {
+    no: string | null;
+    date: string | null;
+    bank: string | null;
+    branch: string | null;
+    cardType?: string | null;
+    cardHolderName?: string | null;
+    cardLast4?: string | null;
+  } | null;
+  amountDemanded?: string | null;
+  amountReceivedActual?: string | null;
+  /** Cheque / DD not yet reconciled - print TEMPORARY / PROVISIONAL. */
+  provisional?: boolean;
   /** 'not_required' | 'pending' | 'pm_verified' | 'reconciled' | 'bounced'. */
   reconcileStatus?: string;
   onlineDeclarationAcceptedAt?: string | null;

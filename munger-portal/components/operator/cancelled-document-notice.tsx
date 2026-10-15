@@ -22,9 +22,9 @@ export function CancelledWatermark() {
   );
 }
 
-/** Cheque / DD receipt not yet reconciled. */
-export function isProvisional(reconcileStatus: string | undefined | null): boolean {
-  return reconcileStatus === "pending" || reconcileStatus === "pm_verified";
+/** Cheque / DD receipt not yet reconciled (the API works this out - card/UPI awaiting reconciliation are NOT provisional). */
+export function isProvisional(doc: { provisional?: boolean; cancelled?: boolean }): boolean {
+  return !!doc.provisional && !doc.cancelled;
 }
 
 export function ProvisionalWatermark() {

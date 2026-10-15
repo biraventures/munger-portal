@@ -17,8 +17,12 @@ const paymentSchema = z
     taxCollectorCode: z.string().trim().max(32).nullish(),
     tvNumber: tvNumberSchema.nullish(),
     tvDate: z.string().trim().min(1).nullish(),
-    // Cheque / Demand Draft details - checked in the service, which knows which modes need them.
+    // Payment details - which ones are required depends on the mode; checked in the service.
     instrumentNo: z.string().trim().max(50).nullish(),
+    cardType: z.string().trim().max(20).nullish(),
+    cardHolderName: z.string().trim().max(50).nullish(),
+    cardLast4: z.string().trim().max(4).nullish(),
+    amountReceivedActual: z.coerce.number().nonnegative().max(1e9).nullish(),
     instrumentDate: z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/, "Instrument date must be YYYY-MM-DD").nullish().or(z.literal("")),
     bankName: z.string().trim().max(50).nullish(),
     branchName: z.string().trim().max(50).nullish(),

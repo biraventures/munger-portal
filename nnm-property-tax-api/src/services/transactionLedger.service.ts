@@ -3,6 +3,7 @@ import { pool } from "../config/db";
 import { num } from "../utils/num";
 import type { DemandNoticeRow } from "../repositories/demandNotice.repository";
 import type { PropertyRow } from "../types/property.types";
+import type { PaymentDetails, ReconciliationRule } from "./paymentDetails.service";
 
 /**
  * Mirror of every property-tax receipt into tbl_transaction_master / tbl_transaction_details (migration 126). The
@@ -12,12 +13,6 @@ import type { PropertyRow } from "../types/property.types";
  * or invalid, 3 = receipt cancelled.
  */
 export const LEDGER_STATUS = { pending: 0, cleared: 1, bounced: 2, cancelled: 3 } as const;
-
-/** Payment modes that stay provisional until the Project Manager and the Tax Daroga reconcile them. */
-export function needsReconciliation(paymentMode: string): boolean {
-  const m = paymentMode.trim().toLowerCase();
-  return m === "cheque" || m === "demand draft" || m === "dd";
-}
 
 const whole = (v: unknown) => Math.round(num(v as string));
 
@@ -34,7 +29,8 @@ export interface LedgerEntryInput {
   amountReceived: number;
   dueFrom: string | null;
   dueUpto: string | null;
-  instrument: { no: string | null; date: string | null; bank: string | null; branch: string | null };
+  details: PaymentDetails;
+  reconcileRule: ReconciliationRule;
   entryBy: number | null;
   entryIp: string | null;
   remarks: string;
@@ -48,7 +44,8 @@ export async function writeLedgerEntry(e: LedgerEntryInput, client: Pool | PoolC
   const earlyRebate = snapshotTotals ? whole(snapshotTotals.currentTaxRebate) : 0;
   const rainWater = whole(e.notice.area_rebate);
   const actualDemand = whole(e.notice.current_year_tax_net) + whole(e.notice.previous_years_tax_base);
-  const pending = needsReconciliation(e.paymentMode);
+  const pending = e.reconcileRule === "pending" || e.reconcileRule === "hold";
+  const cashVerified = e.reconcileRule === "auto" ? 1 : 0;
 
   const { rows } = await client.query<{ pk_id: string }>(
     `INSERT INTO tbl_transaction_master (
@@ -56,7 +53,7 @@ export async function writeLedgerEntry(e: LedgerEntryInput, client: Pool | PoolC
        actual_demand, penalty, water_charge, late_submission, rain_wtr, rebate_early, total_rebate,
        payable_amount, advance, paid_amount, remarks, payment_mode, cancel_status, recstatus,
        entryby, entryipaddress, cash_verify_stts, reg_fee, bpl_actual_demand, pole_amount
-     ) VALUES (NULL,$1,$2,$3,(now() AT TIME ZONE 'Asia/Kolkata')::date,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,0,$14,$15,$16,0,1,$17,$18,0,$19,0,0)
+     ) VALUES (NULL,$1,$2,$3,(now() AT TIME ZONE 'Asia/Kolkata')::date,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,0,$14,$15,$16,0,1,$17,$18,$20,$19,0,0)
      RETURNING pk_id`,
     [
       wardId(e.property.ward),
@@ -78,26 +75,33 @@ export async function writeLedgerEntry(e: LedgerEntryInput, client: Pool | PoolC
       e.entryBy,
       e.entryIp,
       whole(e.property.form_fee),
+      cashVerified,
     ],
   );
 
   await client.query(
     `INSERT INTO tbl_transaction_details (
        prop_pk_id, trans_id, upi_cheque_cardtrans_id_neftref_no, cheque_neft_date, branch_name, bank_name,
-       paid_amount, trans_status, remarks, entryby, entryipaddress, recstatus
-     ) VALUES ($1,$2,$3,COALESCE($4::date, (now() AT TIME ZONE 'Asia/Kolkata')::date),$5,$6,$7,$8,$9,$10,$11,1)`,
+       card_type, card_no, card_holder_name,
+       paid_amount, trans_status, remarks, entryby, entryipaddress, recstatus,
+       reconcile_date, reconcile_by
+     ) VALUES ($1,$2,$3,COALESCE($4::date, (now() AT TIME ZONE 'Asia/Kolkata')::date),$5,$6,$12,$13,$14,$7,$8,$9,$10,$11,1,
+               CASE WHEN $8::smallint = 1 THEN now() END, CASE WHEN $8::smallint = 1 THEN $10::bigint END)`,
     [
       e.property.pk_id ?? null,
       rows[0]!.pk_id,
-      e.instrument.no,
-      e.instrument.date,
-      e.instrument.branch,
-      e.instrument.bank,
+      e.details.instrumentNo,
+      e.details.instrumentDate,
+      e.details.branchName,
+      e.details.bankName,
       Math.round(e.amountReceived),
       pending ? LEDGER_STATUS.pending : LEDGER_STATUS.cleared,
       pending ? "Awaiting reconciliation" : null,
       e.entryBy,
       e.entryIp,
+      e.details.cardType,
+      e.details.cardLast4 ? `XXXX-XXXX-XXXX-${e.details.cardLast4}` : null,
+      e.details.cardHolderName,
     ],
   );
 }

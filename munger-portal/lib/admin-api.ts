@@ -352,7 +352,19 @@ export interface PrintableReceiptHistory {
   taxCollectorName: string | null;
   tvNumber: string | null;
   tvDate: string | null;
-  instrument?: { no: string | null; date: string | null; bank: string | null; branch: string | null } | null;
+  instrument?: {
+    no: string | null;
+    date: string | null;
+    bank: string | null;
+    branch: string | null;
+    cardType?: string | null;
+    cardHolderName?: string | null;
+    cardLast4?: string | null;
+  } | null;
+  amountDemanded?: string | null;
+  amountReceivedActual?: string | null;
+  /** Cheque / DD not yet reconciled - print TEMPORARY / PROVISIONAL. */
+  provisional?: boolean;
   reconcileStatus?: string;
   onlineDeclarationAcceptedAt?: string | null;
   breakdown: {
@@ -1119,7 +1131,20 @@ export async function generateDemandNoticeAdmin(holdingNo: string): Promise<Reco
 
 export async function submitPaymentAdmin(
   holdingNo: string,
-  input: { amount: number; paymentMode: string; demandNo?: string; counter?: string; instrumentNo?: string; instrumentDate?: string; bankName?: string; branchName?: string },
+  input: {
+    amount: number;
+    paymentMode: string;
+    demandNo?: string;
+    counter?: string;
+    instrumentNo?: string;
+    instrumentDate?: string;
+    bankName?: string;
+    branchName?: string;
+    cardType?: string;
+    cardHolderName?: string;
+    cardLast4?: string;
+    amountReceivedActual?: number;
+  },
 ): Promise<ReceiptData> {
   const res = await fetch(`${API_BASE_URL}/properties/${encodeURIComponent(holdingNo)}/payments`, {
     method: "POST",
@@ -2147,19 +2172,26 @@ export interface InstrumentRow {
   instrumentDate: string | null;
   bankName: string | null;
   branchName: string | null;
+  cardType: string | null;
+  cardHolderName: string | null;
+  cardLast4: string | null;
+  amountDemanded: string | null;
+  amountReceivedActual: string | null;
   collectedBy: string;
   taxCollectorName: string | null;
   demandNo: string | null;
   status: InstrumentStatus;
   pmVerifiedBy: string | null;
+  pmVerifiedById: string | null;
   pmVerifiedAt: string | null;
   reconciledBy: string | null;
+  reconciledById: string | null;
   reconciledAt: string | null;
   remarks: string | null;
 }
 
-export async function fetchInstruments(status: "open" | "closed" | "all", from?: string, to?: string): Promise<InstrumentRow[]> {
-  const q = new URLSearchParams({ status, ...(from ? { from } : {}), ...(to ? { to } : {}) });
+export async function fetchInstruments(status: "open" | "closed" | "all", mode?: string, from?: string, to?: string): Promise<InstrumentRow[]> {
+  const q = new URLSearchParams({ status, ...(mode ? { mode } : {}), ...(from ? { from } : {}), ...(to ? { to } : {}) });
   const res = await fetch(`${API_BASE_URL}/admin/instrument-reconciliation?${q}`, { headers: authHeaders() });
   const body = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(body.error || "Could not load cheques / DDs.");

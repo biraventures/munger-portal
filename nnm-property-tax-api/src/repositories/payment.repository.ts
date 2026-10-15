@@ -50,10 +50,17 @@ export interface TransactionRow {
   instrument_date: Date | null;
   bank_name: string | null;
   branch_name: string | null;
+  card_type: string | null;
+  card_holder_name: string | null;
+  card_last4: string | null;
+  amount_demanded: string | null;
+  amount_received_actual: string | null;
   reconcile_status: string;
   pm_verified_by: string | null;
+  pm_verified_by_id: string | null;
   pm_verified_at: Date | null;
   reconciled_by: string | null;
+  reconciled_by_id: string | null;
   reconciled_at: Date | null;
   reconcile_remarks: string | null;
   collected_by_username: string | null;
