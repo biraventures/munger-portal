@@ -189,6 +189,7 @@ import {
   patchPublicDocumentHandler,
   deletePublicDocumentHandler,
 } from "../controllers/publicDocument.controller";
+import { getKhatianFile, getKhatianHistory, getKhatians, postKhatian, postReviewKhatian } from "../controllers/khatian.controller";
 
 export const adminRouter = Router();
 
@@ -483,6 +484,14 @@ adminRouter.get("/instrument-reconciliation", requireAdminRole("agency_project_m
 adminRouter.post("/instrument-reconciliation/:receiptNo/pm-verify", requireAdminRole("agency_project_manager"), postPmVerifyInstrument);
 adminRouter.post("/instrument-reconciliation/:receiptNo/reconcile", requireAdminRole("tax_daroga"), postReconcileInstrument);
 adminRouter.post("/instrument-reconciliation/:receiptNo/bounce", requireAdminRole("agency_project_manager", "tax_daroga"), postBounceInstrument);
+
+// Khatian scans: the Abhilekh Prabhari uploads, the Deputy Municipal Commissioner reviews; senior officers can view.
+const requireKhatianViewRole = requireAdminRole("abhilekh_prabhari", "deputy_commissioner", "commissioner", "city_manager");
+adminRouter.post("/khatian", requireAdminRole("abhilekh_prabhari"), postKhatian);
+adminRouter.get("/khatian", requireKhatianViewRole, getKhatians);
+adminRouter.get("/khatian/:id/file", requireKhatianViewRole, getKhatianFile);
+adminRouter.get("/khatian/:id/history", requireKhatianViewRole, getKhatianHistory);
+adminRouter.post("/khatian/:id/review", requireAdminRole("deputy_commissioner"), postReviewKhatian);
 
 adminRouter.get("/collection-issues/mine", requireAdminRole("tax_collector"), listMyCollectionIssues);
 adminRouter.get("/collection-issues", requireAdminRole("tax_daroga", "commissioner", "city_manager"), listAllCollectionIssues);
