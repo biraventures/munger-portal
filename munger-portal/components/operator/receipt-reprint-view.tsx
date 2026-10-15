@@ -5,31 +5,45 @@ import { useRef } from "react";
 import { Printer, X } from "lucide-react";
 import type { PrintableReceiptHistory } from "@/lib/operator-api";
 import { DocumentVerificationQR } from "./document-verification-qr";
-import { CancelledWatermark, CancelledBanner } from "./cancelled-document-notice";
+import { CancelledWatermark, CancelledBanner, isProvisional, ProvisionalBanner, ProvisionalWatermark } from "./cancelled-document-notice";
 import { printElementInNewWindow } from "@/lib/print-in-new-window";
+import { describePaymentDetails } from "@/lib/payment-modes";
 
 function money(v: string | number | undefined | null): string {
   const n = Number(v ?? 0);
   return n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-export function ReceiptReprintView({ receipt, onClose }: { receipt: PrintableReceiptHistory; onClose: () => void }) {
+/** `bare` drops the print/close buttons - for many receipts printed together (end-of-day bulk print). */
+export function ReceiptReprintView({
+  receipt,
+  onClose,
+  bare = false,
+  heading = "PROPERTY TAX — PAYMENT RECEIPT (REPRINT)",
+}: {
+  receipt: PrintableReceiptHistory;
+  onClose?: () => void;
+  bare?: boolean;
+  heading?: string;
+}) {
   const printRef = useRef<HTMLDivElement>(null);
   return (
     <div>
-      <div className="no-print mb-4 flex items-center justify-between">
-        <button
-          onClick={() => printRef.current && printElementInNewWindow(printRef.current)}
-          className="inline-flex items-center gap-2 rounded-md bg-nnm-blue px-5 py-2.5 text-sm font-semibold text-white hover:bg-nnm-blue-dark"
-        >
-          <Printer className="h-4 w-4" />
-          Print / Save as PDF
-        </button>
-        <button onClick={onClose} className="inline-flex items-center gap-1.5 text-sm font-medium text-nnm-blue hover:underline">
-          <X className="h-4 w-4" />
-          Close
-        </button>
-      </div>
+      {!bare && (
+        <div className="no-print mb-4 flex items-center justify-between">
+          <button
+            onClick={() => printRef.current && printElementInNewWindow(printRef.current)}
+            className="inline-flex items-center gap-2 rounded-md bg-nnm-blue px-5 py-2.5 text-sm font-semibold text-white hover:bg-nnm-blue-dark"
+          >
+            <Printer className="h-4 w-4" />
+            Print / Save as PDF
+          </button>
+          <button onClick={() => onClose?.()} className="inline-flex items-center gap-1.5 text-sm font-medium text-nnm-blue hover:underline">
+            <X className="h-4 w-4" />
+            Close
+          </button>
+        </div>
+      )}
 
       <div
         ref={printRef}
@@ -37,11 +51,12 @@ export function ReceiptReprintView({ receipt, onClose }: { receipt: PrintableRec
         style={{ fontFamily: "Arial, sans-serif", position: "relative" }}
       >
         {receipt.cancelled && <CancelledWatermark />}
+        {!receipt.cancelled && isProvisional(receipt) && <ProvisionalWatermark />}
         <div className="flex items-start justify-between gap-3 border-b-2 border-nnm-blue pb-2">
           <DocumentVerificationQR url={receipt.verificationUrl} />
           <div className="flex-1 text-center">
             <h1 className="m-0 text-xl font-bold text-nnm-blue">MUNGER NAGAR NIGAM</h1>
-            <div className="text-[13px] text-slate-500">PROPERTY TAX — PAYMENT RECEIPT (REPRINT)</div>
+            <div className="text-[13px] text-slate-500">{heading}</div>
           </div>
           <div className="w-[170px] shrink-0 text-right text-[11px]">
             <div>
@@ -59,6 +74,7 @@ export function ReceiptReprintView({ receipt, onClose }: { receipt: PrintableRec
         </div>
 
         {receipt.cancelled && <CancelledBanner reason={receipt.cancelledReason} />}
+        {!receipt.cancelled && isProvisional(receipt) && <ProvisionalBanner paymentMode={receipt.paymentMode} />}
 
         <div className="mt-3.5 flex gap-5">
           <div className="flex-1 space-y-0.5">
@@ -84,6 +100,11 @@ export function ReceiptReprintView({ receipt, onClose }: { receipt: PrintableRec
             <div>
               <b className="inline-block w-[140px]">Counter</b> {receipt.counter ?? "—"}
             </div>
+            {describePaymentDetails(receipt.paymentMode, receipt.instrument).map(([label, value]) => (
+              <div key={label}>
+                <b className="inline-block w-[140px]">{label}</b> {value}
+              </div>
+            ))}
             {receipt.tvNumber && (
               <div>
                 <b className="inline-block w-[140px]">T.V. No.</b> {receipt.tvNumber}
@@ -101,14 +122,14 @@ export function ReceiptReprintView({ receipt, onClose }: { receipt: PrintableRec
           <table className="mt-3.5 w-full border-collapse text-[11px]">
             <thead>
               <tr className="bg-slate-100">
-                <th className="border border-slate-400 p-1.5 text-left">Floor</th>
-                <th className="border border-slate-400 p-1.5 text-left">Area</th>
-                <th className="border border-slate-400 p-1.5 text-left">Const.</th>
-                <th className="border border-slate-400 p-1.5 text-left">Usage</th>
-                <th className="border border-slate-400 p-1.5 text-left">Occ.</th>
-                <th className="border border-slate-400 p-1.5 text-right">Rate</th>
-                <th className="border border-slate-400 p-1.5 text-right">ARV</th>
-                <th className="border border-slate-400 p-1.5 text-right">Tax @ 9%</th>
+                <th className="border border-slate-400 px-1.5 py-0.5 text-left">Floor</th>
+                <th className="border border-slate-400 px-1.5 py-0.5 text-left">Area</th>
+                <th className="border border-slate-400 px-1.5 py-0.5 text-left">Const.</th>
+                <th className="border border-slate-400 px-1.5 py-0.5 text-left">Usage</th>
+                <th className="border border-slate-400 px-1.5 py-0.5 text-left">Occ.</th>
+                <th className="border border-slate-400 px-1.5 py-0.5 text-right">Rate</th>
+                <th className="border border-slate-400 px-1.5 py-0.5 text-right">ARV</th>
+                <th className="border border-slate-400 px-1.5 py-0.5 text-right">Tax @ 9%</th>
               </tr>
             </thead>
             <tbody>
@@ -118,10 +139,10 @@ export function ReceiptReprintView({ receipt, onClose }: { receipt: PrintableRec
                 // (non-reprint) view uses, frozen here so a reprint shows
                 // exactly what the original document showed.
                 <tr>
-                  <td className="border border-slate-400 p-1.5" colSpan={2}>
+                  <td className="border border-slate-400 px-1.5 py-0.5" colSpan={2}>
                     <b>Total Built-up Area</b>
                   </td>
-                  <td className="border border-slate-400 p-1.5" colSpan={6}>
+                  <td className="border border-slate-400 px-1.5 py-0.5" colSpan={6}>
                     {receipt.floorBreakdown.groundFloorBuiltArea} sqft
                   </td>
                 </tr>
@@ -129,30 +150,30 @@ export function ReceiptReprintView({ receipt, onClose }: { receipt: PrintableRec
                 receipt.floorBreakdown.rows.map((row, i) =>
                   row.error ? (
                     <tr key={i}>
-                      <td colSpan={8} className="border border-slate-400 p-1.5 text-red-700">
+                      <td colSpan={8} className="border border-slate-400 px-1.5 py-0.5 text-red-700">
                         {row.floor}: {row.error}
                       </td>
                     </tr>
                   ) : row.demolished ? (
                     <tr key={i} className="italic text-slate-400">
-                      <td className="border border-slate-400 p-1.5">{row.floor} (Demolished)</td>
-                      <td colSpan={4} className="border border-slate-400 p-1.5">
+                      <td className="border border-slate-400 px-1.5 py-0.5">{row.floor} (Demolished)</td>
+                      <td colSpan={4} className="border border-slate-400 px-1.5 py-0.5">
                         Not part of current total
                       </td>
-                      <td className="border border-slate-400 p-1.5 text-right">—</td>
-                      <td className="border border-slate-400 p-1.5 text-right">N/A</td>
-                      <td className="border border-slate-400 p-1.5 text-right">N/A</td>
+                      <td className="border border-slate-400 px-1.5 py-0.5 text-right">—</td>
+                      <td className="border border-slate-400 px-1.5 py-0.5 text-right">N/A</td>
+                      <td className="border border-slate-400 px-1.5 py-0.5 text-right">N/A</td>
                     </tr>
                   ) : (
                     <tr key={i}>
-                      <td className="border border-slate-400 p-1.5">{row.floor}</td>
-                      <td className="border border-slate-400 p-1.5">{row.area}</td>
-                      <td className="border border-slate-400 p-1.5">{row.constType}</td>
-                      <td className="border border-slate-400 p-1.5">{row.usage}</td>
-                      <td className="border border-slate-400 p-1.5">{row.occupancy}</td>
-                      <td className="border border-slate-400 p-1.5 text-right">{row.rate}</td>
-                      <td className="border border-slate-400 p-1.5 text-right">{row.floorArv}</td>
-                      <td className="border border-slate-400 p-1.5 text-right">{row.floorTax}</td>
+                      <td className="border border-slate-400 px-1.5 py-0.5">{row.floor}</td>
+                      <td className="border border-slate-400 px-1.5 py-0.5">{row.area}</td>
+                      <td className="border border-slate-400 px-1.5 py-0.5">{row.constType}</td>
+                      <td className="border border-slate-400 px-1.5 py-0.5">{row.usage}</td>
+                      <td className="border border-slate-400 px-1.5 py-0.5">{row.occupancy}</td>
+                      <td className="border border-slate-400 px-1.5 py-0.5 text-right">{row.rate}</td>
+                      <td className="border border-slate-400 px-1.5 py-0.5 text-right">{row.floorArv}</td>
+                      <td className="border border-slate-400 px-1.5 py-0.5 text-right">{row.floorTax}</td>
                     </tr>
                   ),
                 )
@@ -165,22 +186,22 @@ export function ReceiptReprintView({ receipt, onClose }: { receipt: PrintableRec
           <table className="mt-3.5 w-full border-collapse text-[11px]">
             <thead>
               <tr className="bg-slate-100">
-                <th className="border border-slate-400 p-1.5 text-left">Particulars</th>
-                <th className="border border-slate-400 p-1.5 text-right">Amount (₹)</th>
+                <th className="border border-slate-400 px-1.5 py-0.5 text-left">Particulars</th>
+                <th className="border border-slate-400 px-1.5 py-0.5 text-right">Amount (₹)</th>
               </tr>
             </thead>
             <tbody>
               <tr>
-                <td className="border border-slate-400 p-1.5">Annual Rental Value (ARV)</td>
-                <td className="border border-slate-400 p-1.5 text-right">{money(receipt.breakdown.arv)}</td>
+                <td className="border border-slate-400 px-1.5 py-0.5">Annual Rental Value (ARV)</td>
+                <td className="border border-slate-400 px-1.5 py-0.5 text-right">{money(receipt.breakdown.arv)}</td>
               </tr>
               <tr>
-                <td className="border border-slate-400 p-1.5">Current Year Tax (net)</td>
-                <td className="border border-slate-400 p-1.5 text-right">{money(receipt.breakdown.currentYearTaxNet)}</td>
+                <td className="border border-slate-400 px-1.5 py-0.5">Current Year Tax (net)</td>
+                <td className="border border-slate-400 px-1.5 py-0.5 text-right">{money(receipt.breakdown.currentYearTaxNet)}</td>
               </tr>
               {Number(receipt.breakdown.areaRebate) > 0 && (
                 <tr>
-                  <td className="border border-slate-400 p-1.5 pl-6 italic text-slate-500">
+                  <td className="border border-slate-400 px-1.5 py-0.5 pl-6 italic text-slate-500">
                     {String(receipt.breakdown.areaRebateReason ?? "").startsWith("Exempt from holding tax") ? (
                       <>— {receipt.breakdown.areaRebateReason}</>
                     ) : (
@@ -190,27 +211,27 @@ export function ReceiptReprintView({ receipt, onClose }: { receipt: PrintableRec
                       </>
                     )}
                   </td>
-                  <td className="border border-slate-400 p-1.5 text-right italic text-slate-500">
+                  <td className="border border-slate-400 px-1.5 py-0.5 text-right italic text-slate-500">
                     −{money(receipt.breakdown.areaRebate)}
                   </td>
                 </tr>
               )}
               {Number(receipt.breakdown.previousYearsTaxBase) > 0 && (
                 <tr>
-                  <td className="border border-slate-400 p-1.5">Previous Years&apos; Outstanding Demand</td>
-                  <td className="border border-slate-400 p-1.5 text-right">{money(receipt.breakdown.previousYearsTaxBase)}</td>
+                  <td className="border border-slate-400 px-1.5 py-0.5">Previous Years&apos; Outstanding Demand</td>
+                  <td className="border border-slate-400 px-1.5 py-0.5 text-right">{money(receipt.breakdown.previousYearsTaxBase)}</td>
                 </tr>
               )}
               {Number(receipt.breakdown.totalFineAmount) > 0 && (
                 <tr>
-                  <td className="border border-slate-400 p-1.5">Fine / Penalty</td>
-                  <td className="border border-slate-400 p-1.5 text-right">{money(receipt.breakdown.totalFineAmount)}</td>
+                  <td className="border border-slate-400 px-1.5 py-0.5">Fine / Penalty</td>
+                  <td className="border border-slate-400 px-1.5 py-0.5 text-right">{money(receipt.breakdown.totalFineAmount)}</td>
                 </tr>
               )}
               {Number(receipt.breakdown.otherCharges) > 0 && (
                 <tr>
-                  <td className="border border-slate-400 p-1.5">Other Charges</td>
-                  <td className="border border-slate-400 p-1.5 text-right">{money(receipt.breakdown.otherCharges)}</td>
+                  <td className="border border-slate-400 px-1.5 py-0.5">Other Charges</td>
+                  <td className="border border-slate-400 px-1.5 py-0.5 text-right">{money(receipt.breakdown.otherCharges)}</td>
                 </tr>
               )}
             </tbody>
@@ -223,19 +244,19 @@ export function ReceiptReprintView({ receipt, onClose }: { receipt: PrintableRec
             <table className="mt-1 w-full border-collapse text-[11px]">
               <thead>
                 <tr className="bg-slate-100">
-                  <th className="border border-slate-400 p-1.5 text-left">Period</th>
-                  <th className="border border-slate-400 p-1.5 text-left">Years</th>
-                  <th className="border border-slate-400 p-1.5 text-right">Annual (avg)</th>
-                  <th className="border border-slate-400 p-1.5 text-right">Amount</th>
+                  <th className="border border-slate-400 px-1.5 py-0.5 text-left">Period</th>
+                  <th className="border border-slate-400 px-1.5 py-0.5 text-left">Years</th>
+                  <th className="border border-slate-400 px-1.5 py-0.5 text-right">Annual (avg)</th>
+                  <th className="border border-slate-400 px-1.5 py-0.5 text-right">Amount</th>
                 </tr>
               </thead>
               <tbody>
                 {receipt.arrearStagesPaid.map((s, i) => (
                   <tr key={i}>
-                    <td className="border border-slate-400 p-1.5">{s.period}</td>
-                    <td className="border border-slate-400 p-1.5">{s.years}</td>
-                    <td className="border border-slate-400 p-1.5 text-right">{s.annualCharge}</td>
-                    <td className="border border-slate-400 p-1.5 text-right">{s.amount}</td>
+                    <td className="border border-slate-400 px-1.5 py-0.5">{s.period}</td>
+                    <td className="border border-slate-400 px-1.5 py-0.5">{s.years}</td>
+                    <td className="border border-slate-400 px-1.5 py-0.5 text-right">{s.annualCharge}</td>
+                    <td className="border border-slate-400 px-1.5 py-0.5 text-right">{s.amount}</td>
                   </tr>
                 ))}
               </tbody>

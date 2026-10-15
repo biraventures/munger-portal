@@ -6,6 +6,7 @@ import { paymentRepository } from "../repositories/payment.repository";
 import { env } from "../config/env";
 import { ApiError } from "../utils/ApiError";
 import { assertNotDisputed } from "./propertyDispute.service";
+import { assertNoNoticeOnHold } from "./noticeHold.service";
 import { assertNoResurveyPending } from "./propertyResurvey.service";
 import axios from "axios";
 import { submitPayment } from "./payment.service";
@@ -65,6 +66,7 @@ export async function initiateOnlinePayment(
   }
   assertNotDisputed(property);
   assertNoResurveyPending(property);
+  await assertNoNoticeOnHold(holdingNo);
 
   // Optional, same reasoning as the operator counter-payment flow: if a
   // code WAS given it must resolve to a real active collector, so a

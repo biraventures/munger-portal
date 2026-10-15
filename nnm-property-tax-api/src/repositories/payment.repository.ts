@@ -22,6 +22,7 @@ export interface TransactionRow {
   // Set only for public online payments - when the payer ticked the declaration before paying.
   online_declaration_accepted_at: Date | null;
   arv: string | null;
+  vacant_arv: string | null;
   current_year_tax_net: string | null;
   previous_years_tax_base: string | null;
   total_fine_amount: string | null;
@@ -44,6 +45,26 @@ export interface TransactionRow {
   // cancellation restore exactly this value, see
   // revertTaxPaidTillYear below.
   previous_tax_paid_till_year: string | null;
+  // Cheque/DD reconciliation (migration 126).
+  instrument_no: string | null;
+  instrument_date: Date | null;
+  bank_name: string | null;
+  branch_name: string | null;
+  card_type: string | null;
+  card_holder_name: string | null;
+  card_last4: string | null;
+  amount_demanded: string | null;
+  amount_received_actual: string | null;
+  reconcile_status: string;
+  pm_verified_by: string | null;
+  pm_verified_by_id: string | null;
+  pm_verified_at: Date | null;
+  reconciled_by: string | null;
+  reconciled_by_id: string | null;
+  reconciled_at: Date | null;
+  reconcile_remarks: string | null;
+  collected_by_username: string | null;
+  collected_by_role: string | null;
 }
 
 export const paymentRepository = {
@@ -84,6 +105,7 @@ export const paymentRepository = {
       // Frozen breakdown snapshot - see migration 024's comment for why
       // this is stored here rather than reconstructed later via a join.
       arv: string | null;
+      vacantArv: string | null;
       currentYearTaxNet: string | null;
       previousYearsTaxBase: string | null;
       totalFineAmount: string | null;
@@ -113,8 +135,8 @@ export const paymentRepository = {
         collected_by, counter, demand_no, arrear_periods_paid,
         tax_collector_code, tax_collector_name, tv_number, tv_date,
         arv, current_year_tax_net, previous_years_tax_base, total_fine_amount, other_charges,
-        arrear_stages_paid, floor_breakdown, area_rebate, area_rebate_reason, previous_tax_paid_till_year
-      ) VALUES ($1,$2, now(), $3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)`,
+        arrear_stages_paid, floor_breakdown, area_rebate, area_rebate_reason, previous_tax_paid_till_year, vacant_arv
+      ) VALUES ($1,$2, now(), $3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)`,
       [
         row.receiptNo,
         row.holdingNo,
@@ -138,6 +160,7 @@ export const paymentRepository = {
         row.areaRebate,
         row.areaRebateReason,
         row.previousTaxPaidTillYear,
+        row.vacantArv,
       ],
     );
   },

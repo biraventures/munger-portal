@@ -5,7 +5,7 @@ import { adminRepository } from "../repositories/admin.repository";
 import { demandNoticeRepository } from "../repositories/demandNotice.repository";
 import { cancellationRequestRepository } from "../repositories/cancellationRequest.repository";
 import { calculateTax } from "./taxCalculation.service";
-import { calculateRebateOrLateFee, calculateSolidWasteCharge } from "./charges.service";
+import { annualSolidWasteCharge, calculateRebateOrLateFee, calculateSolidWasteCharge, solidWasteYearsDue } from "./charges.service";
 import { summarizeArrears, computeArrearsClearance } from "./arrears.service";
 import { amountInWords } from "../utils/amountInWords";
 import { parseYearStartOrNull } from "../utils/assessmentYear";
@@ -16,7 +16,10 @@ import { assertNoResurveyPending } from "./propertyResurvey.service";
 import { generateDemandNotice } from "./demandNotice.service";
 import { buildVerificationUrl } from "../utils/verificationSignature";
 import { formatYmdToDmy } from "../utils/formatYmdToDmy";
-import type { PaymentInput, PaymentResult } from "../types/payment.types";
+import type { InstrumentView, PaymentActor, PaymentInput, PaymentResult } from "../types/payment.types";
+import { writeLedgerEntry } from "./transactionLedger.service";
+import { assertActualMatchesDemand, reconciliationRule, validatePaymentDetails } from "./paymentDetails.service";
+import { assertNoNoticeOnHold } from "./noticeHold.service";
 import type { DemandNoticeResult } from "../types/demandNotice.types";
 import type { FrozenFloorBreakdown } from "../types/property.types";
 
@@ -47,6 +50,13 @@ export interface PrintableReceiptHistory {
   taxCollectorName: string | null;
   tvNumber: string | null;
   tvDate: string | null;
+  instrument: InstrumentView | null;
+  amountDemanded: string | null;
+  amountReceivedActual: string | null;
+  /** 'not_required' | 'pending' | 'pm_verified' | 'reconciled' | 'bounced' | 'cancelled'. */
+  reconcileStatus: string;
+  /** Cheque/DD not yet reconciled - prints TEMPORARY / PROVISIONAL. */
+  provisional: boolean;
   /** Set only for public online payments: when the payer ticked the declaration (dd-mm-yyyy HH:MM). */
   onlineDeclarationAcceptedAt: string | null;
   // Frozen at the moment of payment (migration 024) - not
@@ -55,6 +65,7 @@ export interface PrintableReceiptHistory {
   // transactions that predate this migration.
   breakdown: {
     arv: string;
+    vacantArv: string | null;
     currentYearTaxNet: string;
     previousYearsTaxBase: string;
     totalFineAmount: string;
@@ -120,6 +131,22 @@ export async function getReceiptForReprint(receiptNo: string): Promise<Printable
     tvDate: txn.tv_date
       ? `${String(txn.tv_date.getDate()).padStart(2, "0")}-${String(txn.tv_date.getMonth() + 1).padStart(2, "0")}-${txn.tv_date.getFullYear()}`
       : null,
+    instrument:
+      txn.instrument_no || txn.bank_name || txn.card_last4 || txn.card_holder_name
+        ? {
+            no: txn.instrument_no,
+            date: txn.instrument_date ? `${String(txn.instrument_date.getDate()).padStart(2, "0")}-${String(txn.instrument_date.getMonth() + 1).padStart(2, "0")}-${txn.instrument_date.getFullYear()}` : null,
+            bank: txn.bank_name,
+            branch: txn.branch_name,
+            cardType: txn.card_type,
+            cardHolderName: txn.card_holder_name,
+            cardLast4: txn.card_last4,
+          }
+        : null,
+    amountDemanded: txn.amount_demanded,
+    amountReceivedActual: txn.amount_received_actual,
+    reconcileStatus: txn.reconcile_status,
+    provisional: !txn.cancelled && reconciliationRule(txn.payment_mode) === "hold" && (txn.reconcile_status === "pending" || txn.reconcile_status === "pm_verified"),
     onlineDeclarationAcceptedAt: txn.online_declaration_accepted_at
       ? new Date(txn.online_declaration_accepted_at).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: false }).replace(/\//g, "-").replace(",", "")
       : null,
@@ -132,7 +159,9 @@ export async function getReceiptForReprint(receiptNo: string): Promise<Printable
     breakdown:
       txn.arv !== null
         ? {
-            arv: txn.arv,
+            // Total ARV as printed: built-up ARV plus vacant land's notional ARV (stored separately).
+            arv: (Number(txn.arv) + Number(txn.vacant_arv ?? 0)).toFixed(2),
+            vacantArv: txn.vacant_arv,
             currentYearTaxNet: txn.current_year_tax_net!,
             previousYearsTaxBase: txn.previous_years_tax_base!,
             totalFineAmount: txn.total_fine_amount!,
@@ -183,6 +212,7 @@ export async function submitPayment(
   holdingNo: string,
   input: PaymentInput,
   collectedBy: string,
+  actor?: PaymentActor,
 ): Promise<PaymentResult> {
   const property = await propertyRepository.findByHoldingNo(holdingNo);
   if (!property) {
@@ -259,6 +289,17 @@ export async function submitPayment(
     throw ApiError.badRequest("T.V. number and date are required for District Treasury payments.");
   }
 
+  // The details each mode needs (bank, cheque/DD no, UPI URN, card holder and last 4 digits ...), and how it is
+  // reconciled: cash at once; card/UPI/online banking stay "reconciliation pending" until the Project Manager and the
+  // Tax Daroga reconcile them; a cheque/DD also keeps the notice ON HOLD with a provisional receipt meanwhile.
+  const details = validatePaymentDetails(input);
+  const rule = reconciliationRule(input.paymentMode);
+  const provisional = rule === "hold";
+  const amountDemanded = num(notice.total_amount_demanded);
+  const amountReceivedActual = assertActualMatchesDemand(input.amountReceivedActual, amountDemanded);
+  const hasDetails = Object.values(details).some((v) => v !== null);
+  await assertNoNoticeOnHold(holdingNo);
+
   // Snapshot pending arrears BEFORE this payment, and which specific
   // periods it covers — purely for display on the receipt. The amount
   // actually charged is the notice's frozen total, not recomputed here.
@@ -309,6 +350,9 @@ export async function submitPayment(
         `Demand notice ${input.demandNo} can no longer be paid - it may have just been paid, cancelled, or superseded. Please refresh and try again.`,
       );
     }
+    if (provisional) {
+      await client.query(`UPDATE demand_notices SET on_hold = TRUE WHERE demand_no = $1`, [input.demandNo]);
+    }
 
     await paymentRepository.insertTransaction(
       {
@@ -329,6 +373,7 @@ export async function submitPayment(
         tvDate,
         // Frozen at the moment of payment - see migrations 024 and 025's comments.
         arv: notice.arv,
+        vacantArv: notice.vacant_arv,
         currentYearTaxNet: notice.current_year_tax_net,
         previousYearsTaxBase: notice.previous_years_tax_base,
         totalFineAmount: notice.total_fine_amount,
@@ -342,9 +387,69 @@ export async function submitPayment(
       client,
     );
 
+    // Recorded as the process flows: cash is reconciled at collection (by whoever collected it).
+    const reconcileStatus = rule === "auto" ? "reconciled" : rule === "none" ? "not_required" : "pending";
+    await client.query(
+      `UPDATE transactions
+          SET instrument_no = $2, instrument_date = $3::date, bank_name = $4, branch_name = $5,
+              card_type = $6, card_holder_name = $7, card_last4 = $8,
+              amount_demanded = $9, amount_received_actual = $10,
+              reconcile_status = $11::varchar, collected_by_username = $12, collected_by_role = $13,
+              reconciled_at    = CASE WHEN $11::varchar = 'reconciled' THEN now() END,
+              reconciled_by    = CASE WHEN $11::varchar = 'reconciled' THEN $14::varchar END,
+              reconciled_by_id = CASE WHEN $11::varchar = 'reconciled' THEN $15::bigint END
+        WHERE receipt_no = $1`,
+      [
+        receiptNo,
+        details.instrumentNo,
+        details.instrumentDate,
+        details.bankName,
+        details.branchName,
+        details.cardType,
+        details.cardHolderName,
+        details.cardLast4,
+        amountDemanded,
+        amountReceivedActual,
+        reconcileStatus,
+        actor?.username ?? null,
+        actor?.role ?? null,
+        `${collectedBy} (cash, at collection)`,
+        actor?.id ?? null,
+      ],
+    );
+
+    await writeLedgerEntry(
+      {
+        receiptNo,
+        property,
+        notice,
+        paymentMode: input.paymentMode,
+        amountReceived,
+        dueFrom: clearance.stages.length > 0 ? clearance.stages[0]!.period.split(" to ")[0]! : notice.assessment_year,
+        dueUpto: paidThroughYear,
+        details: hasDetails ? details : { ...details, instrumentNo: tvNumber, instrumentDate: tvDate },
+        reconcileRule: rule,
+        entryBy: actor?.id ?? null,
+        entryIp: actor?.ip ?? null,
+        remarks: `Receipt ${receiptNo} against demand ${input.demandNo}; collected by ${collectedBy}${actor ? ` (${actor.username})` : ""}`,
+      },
+      client,
+    );
+
     // The core fix: unconditionally advance paid-through status to what
     // this notice covered — this is what was missing before.
     await paymentRepository.updateTaxPaidTillYear(holdingNo, paidThroughYear, client);
+
+    // A full payment also collects the solid waste user charge for every unpaid year up to the assessment year (a
+    // part payment is holding tax only), so the user-charge paid-till year moves up to that year. The previous value
+    // is logged against the receipt so a cancellation can restore it.
+    if (!isPart && solidWasteYearsDue(property) > 0 && annualSolidWasteCharge(property) > 0) {
+      await client.query(
+        `INSERT INTO solid_waste_payment_log (receipt_no, holding_no, previous_paid_till_year, new_paid_till_year, amount) VALUES ($1,$2,$3,$4,$5)`,
+        [receiptNo, holdingNo, property.solid_waste_paid_till_year ?? null, property.assessment_year, calculateSolidWasteCharge(property)],
+      );
+      await client.query(`UPDATE properties SET solid_waste_paid_till_year = $2 WHERE holding_no = $1`, [holdingNo, property.assessment_year]);
+    }
 
     await client.query("COMMIT");
   } catch (err) {
@@ -398,7 +503,25 @@ export async function submitPayment(
     // input) to the same "dd-mm-yyyy" display format as every other
     // date on the receipt, rather than echoing the raw input back.
     tvDate: tvDate ? formatYmdToDmy(tvDate) : null,
+    instrument: hasDetails
+      ? {
+          no: details.instrumentNo,
+          date: details.instrumentDate ? formatYmdToDmy(details.instrumentDate) : null,
+          bank: details.bankName,
+          branch: details.branchName,
+          cardType: details.cardType,
+          cardHolderName: details.cardHolderName,
+          cardLast4: details.cardLast4,
+        }
+      : null,
+    amountDemanded: amountDemanded.toFixed(2),
+    amountReceivedActual: amountReceivedActual.toFixed(2),
+    reconcileStatus: rule === "auto" ? "reconciled" : rule === "none" ? "not_required" : "pending",
+    provisional,
+    fieldCollection: actor?.role === "tax_collector",
     arrearStagesPaid: clearance.stages,
+    // A part payment collects holding tax for earlier years only: the receipt must not show the current year's user charge.
+    isPartPayment: isPart,
     followUpNotice,
     followUpNoticeError,
     // Override the stored (possibly stale) solid_waste_charge column with

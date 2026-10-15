@@ -41,6 +41,8 @@ export interface PropertySaveInput {
   arrearTax?: number;
   solidWasteChargeType?: string | null;
   solidWasteMonths?: number;
+  /** User charge paid through this assessment year, e.g. "2023-2024". undefined = keep stored; null/"" = unknown (charged from 2026-27). */
+  solidWastePaidTillYear?: string | null;
   /** Registered as a Bulk Waste Generator - no solid waste user charge. */
   isBwg?: boolean;
   isSlum?: boolean;

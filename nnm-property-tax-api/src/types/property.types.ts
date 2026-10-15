@@ -30,6 +30,8 @@ export interface PropertyRow {
   arrear_tax: string;
   solid_waste_charge_type: string | null;
   solid_waste_months: number;
+  /** User charge paid through this assessment year (migration 124). NULL = unknown: treated as paid till 2025-2026. */
+  solid_waste_paid_till_year?: string | null;
   solid_waste_charge: string;
   /** Registered as a Bulk Waste Generator (SPCB) - solid waste user charge is not levied (migration 098). */
   is_bwg: boolean;
@@ -54,6 +56,8 @@ export interface PropertyRow {
   penalty: string;
   outstanding_demand: string;
   arv: string;
+  /** Notional ARV of vacant land (tax x 100/9), stored separately from the built-up `arv`. */
+  vacant_arv: string;
   tax_payable: string;
   holding_creation_year: string;
   tax_paid_till_year: string | null;
@@ -144,6 +148,8 @@ export interface TaxCalculationResult {
     totalPlotArea: string;
     rate: number;
     tax: string;
+    /** Notional ARV of the vacant land = tax x 100/9 (display only). Absent on older frozen notices. */
+    arv?: string;
   };
 }
 

@@ -358,6 +358,22 @@ export default function AgencyReportsPage() {
                   <WardTable title="By ward (highest first)" rows={report.collection.byWard} withAmount labels={["Receipts"]} sort="amount" />
                   <CollectorTable title="By Tax Collector (highest first)" rows={report.collection.byCollector} withAmount label="Receipts" />
                 </div>
+                <Table title="By payment mode" head={["Payment mode", "Receipts", "Amount", ""]}>
+                  {(report.collection.byType ?? []).map((m) => (
+                    <tr key={m.type} className="border-t border-slate-100">
+                      <td className="px-3 py-2 font-medium">{m.type}</td>
+                      <td className="px-3 py-2 text-right">{m.count.toLocaleString("en-IN")}</td>
+                      <td className="px-3 py-2 text-right">{money(m.amount)}</td>
+                      <td className="w-40 px-3 py-2">
+                        <Bar value={m.amount} max={Math.max(0, ...(report.collection.byType ?? []).map((x) => x.amount))} />
+                      </td>
+                    </tr>
+                  ))}
+                  {(report.collection.byType ?? []).length === 0 && <Empty cols={4} />}
+                </Table>
+                {admin.role === "tax_collector" && (
+                  <p className="text-xs text-slate-500">You see only the collection made by you, in the wards assigned to you now or earlier.</p>
+                )}
                 <p className="text-xs text-slate-400">Payments recorded without a Tax Collector code appear as &quot;Not attributed to a collector&quot;. Cancelled receipts are not counted.</p>
               </div>
             )}

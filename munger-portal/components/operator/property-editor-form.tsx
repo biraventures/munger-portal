@@ -1,5 +1,7 @@
 "use client";
 
+import { UserChargePaidTill } from "@/components/operator/user-charge-paid-till";
+
 import { useState } from "react";
 import { AlertCircle, CheckCircle2, Calculator, Clock, Plus, Hash } from "lucide-react";
 import { FloorRow, makeBlankFloor, type FloorFormState } from "./floor-row";
@@ -28,7 +30,7 @@ interface MasterFormState {
   vacantAreaSqft: string;
   rainWaterHarvesting: boolean;
   solidWasteChargeType: string;
-  solidWasteMonths: string;
+  solidWastePaidTillYear: string;
   isBwg: boolean;
   isSlum: boolean;
   holdingCreationYear: string;
@@ -68,7 +70,7 @@ function blankMaster(defaultFinancialYear: string): MasterFormState {
     vacantAreaSqft: "",
     rainWaterHarvesting: false,
     solidWasteChargeType: "",
-    solidWasteMonths: "12",
+    solidWastePaidTillYear: "",
     isBwg: false,
     isSlum: false,
     holdingCreationYear: defaultFinancialYear,
@@ -165,7 +167,7 @@ export function PropertyEditorForm({
         rainWaterHarvesting: master.rainWaterHarvesting,
         assessmentYear: master.assessmentYear,
         solidWasteChargeType: master.solidWasteChargeType || null,
-        solidWasteMonths: Number(master.solidWasteMonths) || 12,
+        solidWastePaidTillYear: master.solidWastePaidTillYear || null,
         isBwg: master.isBwg,
         isSlum: master.isSlum,
         ...(canSetExemption && exemption.isExempt && exemption.fromYear
@@ -218,7 +220,7 @@ export function PropertyEditorForm({
         vacantAreaSqft: Number(master.vacantAreaSqft) || 0,
         rainWaterHarvesting: master.rainWaterHarvesting,
         solidWasteChargeType: master.solidWasteChargeType || null,
-        solidWasteMonths: Number(master.solidWasteMonths) || 12,
+        solidWastePaidTillYear: master.solidWastePaidTillYear || null,
         isBwg: master.isBwg,
         isSlum: master.isSlum,
         holdingCreationYear: master.holdingCreationYear,
@@ -315,10 +317,10 @@ export function PropertyEditorForm({
                 <span className="block font-mono text-base font-semibold text-slate-900">
                   ₹
                   {(
-                    formOptions.solidWasteRates[master.solidWasteChargeType]! * (Number(master.solidWasteMonths) || 12)
+                    formOptions.solidWasteRates[master.solidWasteChargeType]! * 12
                   ).toLocaleString("en-IN")}
                   <span className="ml-1 text-xs font-normal text-slate-400">
-                    for {master.solidWasteMonths || 12} mo
+                    per year
                   </span>
                 </span>
               </div>
@@ -638,19 +640,7 @@ export function PropertyEditorForm({
               ))}
             </select>
           </div>
-          <div>
-            <label className={labelClass}>Months applicable</label>
-            <input
-              type="number"
-              min="1"
-              value={master.solidWasteMonths}
-              onChange={(e) => updateMaster("solidWasteMonths", e.target.value)}
-              className={inputClass}
-            />
-            <p className="mt-1 text-xs text-slate-400">
-              Enter more than 12 to include multiple pending years (e.g. 36 for 3 years) as part of arrears.
-            </p>
-          </div>
+          <UserChargePaidTill value={master.solidWastePaidTillYear} onChange={(v) => updateMaster("solidWastePaidTillYear", v)} />
           <label className="flex items-start gap-2 text-sm text-slate-700 sm:col-span-2">
             <input
               type="checkbox"

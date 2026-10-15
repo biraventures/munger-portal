@@ -154,7 +154,7 @@ export function CollectionIssueNoticeView({ notice, onClose }: { notice: Generat
               <tbody>
                 <tr>
                   <td className="border border-slate-400 p-1.5">{t.arv}</td>
-                  <td className="border border-slate-400 p-1.5 text-right">{money(dn.arv)}</td>
+                  <td className="border border-slate-400 p-1.5 text-right">{money(Number(dn.arv) + Number(dn.vacant_arv ?? 0))}</td>
                 </tr>
                 <tr>
                   <td className="border border-slate-400 p-1.5">{t.currentYearTax}</td>

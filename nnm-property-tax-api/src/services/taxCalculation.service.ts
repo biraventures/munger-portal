@@ -109,10 +109,15 @@ export function calculateTax(property: PropertyRow, floors: FloorRow[]): TaxCalc
   if (taxableVacantArea < 0) taxableVacantArea = 0;
 
   // vacantLandRate is itself a ₹/sqft TAX rate, not an ARV-building rate —
-  // it is never run through TAX_RATE a second time, and never included
-  // in ARV (ARV is built-up-only).
+  // it is never run through TAX_RATE a second time. Its notional ARV (below)
+  // is derived from the tax, never the other way round.
   const vacantTax = taxableVacantArea * vacantLandRate;
-  const arv = arvBuilt;
+  // Notional ARV for vacant land: the tax above is levied directly, so for
+  // presentation (tax = 9% of ARV, which the public can follow) the vacant
+  // land is shown at the ARV that would yield exactly that tax: tax x 100/9.
+  // Display only - baseTax is still arvBuilt x 9% + vacantTax, unchanged.
+  const vacantNotionalArv = vacantTax / TAX_RATE;
+  const arv = arvBuilt + vacantNotionalArv;
 
   const baseTax = arvBuilt * TAX_RATE + vacantTax;
 
@@ -166,6 +171,7 @@ let rebatePct = 0;
       totalPlotArea: totalPlotArea.toFixed(2),
       rate: vacantLandRate,
       tax: vacantTax.toFixed(2),
+      arv: vacantNotionalArv.toFixed(2),
     },
   };
 }

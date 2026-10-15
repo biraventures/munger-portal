@@ -10,6 +10,9 @@ export interface DemandNoticeRow {
   notice_date: Date;
   generated_by: string;
   arv: string;
+  vacant_arv: string | null;
+  /** Paid by cheque/DD that is not yet reconciled (migration 126). */
+  on_hold: boolean;
   current_year_tax_net: string;
   previous_years_tax_base: string;
   total_fine_amount: string;
@@ -62,6 +65,7 @@ export const demandNoticeRepository = {
        JOIN floors f ON f.holding_no = p.holding_no
        WHERE NOT COALESCE(p.is_disputed, FALSE)
          AND NOT p.resurvey_required
+         AND NOT EXISTS (SELECT 1 FROM demand_notices h WHERE h.holding_no = p.holding_no AND h.on_hold)
          AND (p.tax_paid_till_year IS NULL OR p.tax_paid_till_year < p.assessment_year)
          AND NOT EXISTS (
            SELECT 1 FROM demand_notices d
@@ -89,6 +93,7 @@ export const demandNoticeRepository = {
     holdingNo: string;
     generatedBy: string;
     arv: number;
+    vacantArv: number;
     currentYearTaxNet: number;
     previousYearsTaxBase: number;
     totalFineAmount: number;
@@ -113,8 +118,8 @@ export const demandNoticeRepository = {
         current_year_tax_net, previous_years_tax_base, total_fine_amount,
         other_charges, total_amount_demanded, assessment_year,
         reminder_number, previous_unsettled_demand_nos, floor_breakdown,
-        area_rebate, area_rebate_reason, snapshot, part_payment, paid_through_year
-      ) VALUES ($1,$2, now(), $3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)`,
+        area_rebate, area_rebate_reason, snapshot, part_payment, paid_through_year, vacant_arv
+      ) VALUES ($1,$2, now(), $3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)`,
       [
         row.demandNo,
         row.holdingNo,
@@ -134,6 +139,7 @@ export const demandNoticeRepository = {
         JSON.stringify(row.snapshot),
         row.partPayment ?? false,
         row.paidThroughYear ?? null,
+        row.vacantArv,
       ],
     );
   },
@@ -234,7 +240,7 @@ export const demandNoticeRepository = {
   async revertToUnsettled(demandNo: string, client: Pool | PoolClient = pool): Promise<DemandNoticeRow | null> {
     const { rows } = await client.query<DemandNoticeRow>(
       `UPDATE demand_notices
-       SET settled = FALSE, settled_receipt_no = NULL, settled_at = NULL
+       SET settled = FALSE, settled_receipt_no = NULL, settled_at = NULL, on_hold = FALSE
        WHERE demand_no = $1 AND settled = TRUE
        RETURNING *`,
       [demandNo],

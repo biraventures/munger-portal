@@ -1,4 +1,6 @@
 import { pool } from "../config/db";
+import type { PoolClient } from "pg";
+import { LEDGER_STATUS, updateLedgerStatus } from "./transactionLedger.service";
 import { cancellationRequestRepository } from "../repositories/cancellationRequest.repository";
 import { demandNoticeRepository } from "../repositories/demandNotice.repository";
 import { paymentRepository } from "../repositories/payment.repository";
@@ -107,6 +109,54 @@ function taxPaidTillYearBefore(txn: TransactionRow, noticeAssessmentYear: string
 }
 
 /**
+ * Undoes a receipt's payment inside the caller's transaction: marks the receipt cancelled with `reason`, cancels any
+ * unpaid notice raised after it, re-opens the notice it paid (lifting any on-hold), and restores the holding-tax and
+ * user-charge paid-till years. Used by an approved cancellation and by a bounced cheque/DD.
+ */
+export async function undoReceiptPayment(txn: TransactionRow, reason: string, client: PoolClient): Promise<void> {
+  const cancelledTxn = await paymentRepository.cancel(txn.receipt_no, reason, client);
+  if (!cancelledTxn) throw ApiError.badRequest("Could not cancel this receipt - it may already be cancelled.");
+
+  // Any notice raised for this holding AFTER this payment (e.g. the balance notice generated after a part payment, or
+  // a later full notice) assumed this receipt stood. With it cancelled the earlier years are pending again, so those
+  // newer unpaid notices are cancelled automatically - the notice this receipt paid is reopened below instead.
+  await demandNoticeRepository.cancelUnsettledGeneratedSince(
+    txn.holding_no,
+    txn.txn_date,
+    txn.demand_no,
+    `Cancelled automatically: Receipt No ${txn.receipt_no} (paid earlier dues) was cancelled, so those dues are pending again and this later notice no longer applies.`,
+    client,
+  );
+
+  if (txn.demand_no) {
+    const notice = await demandNoticeRepository.findByDemandNo(txn.demand_no);
+    await demandNoticeRepository.revertToUnsettled(txn.demand_no, client);
+
+    // The other half of undoing this payment - submitPayment advanced
+    // the property's own tax_paid_till_year to the notice's
+    // assessment_year (see payment.service.ts); revertToUnsettled above
+    // only reopens the notice itself, so without this the property's
+    // ledger still shows that year as paid and nothing appears pending,
+    // even though the receipt is now cancelled. Guarded against
+    // clobbering a later, unrelated payment - see
+    // paymentRepository.revertTaxPaidTillYear.
+    if (notice?.assessment_year) {
+      // A part-payment notice advanced tax_paid_till_year only to its paid_through_year.
+      const advancedTo = notice.part_payment && notice.paid_through_year ? notice.paid_through_year : notice.assessment_year;
+      await paymentRepository.revertTaxPaidTillYear(txn.holding_no, taxPaidTillYearBefore(txn, notice.assessment_year), advancedTo, client);
+    }
+  }
+
+  // Undo the user-charge paid-till advance this receipt made (only if nothing has moved it since).
+  await client.query(
+    `UPDATE properties p SET solid_waste_paid_till_year = l.previous_paid_till_year
+       FROM solid_waste_payment_log l
+      WHERE l.receipt_no = $1 AND p.holding_no = l.holding_no AND p.solid_waste_paid_till_year = l.new_paid_till_year`,
+    [txn.receipt_no],
+  );
+}
+
+/**
  * Atomically finalizes a request as approved AND applies the
  * cancellation (cancels the receipt/demand notice, reverting a
  * settled demand notice back to payable if its receipt is what's
@@ -132,39 +182,9 @@ async function finalizeAndApplyCancellation(requestId: number, reviewedBy: strin
     } else {
       const txn = await paymentRepository.findByReceiptNo(request.target_id);
       if (!txn) throw ApiError.notFound(`Receipt ${request.target_id} not found.`);
-
-      const cancelledTxn = await paymentRepository.cancel(request.target_id, request.reason, client);
-      if (!cancelledTxn) throw ApiError.badRequest("Could not cancel this receipt - it may already be cancelled.");
-
-      // Any notice raised for this holding AFTER this payment (e.g. the balance notice generated after a part payment, or
-      // a later full notice) assumed this receipt stood. With it cancelled the earlier years are pending again, so those
-      // newer unpaid notices are cancelled automatically - the notice this receipt paid is reopened below instead.
-      await demandNoticeRepository.cancelUnsettledGeneratedSince(
-        txn.holding_no,
-        txn.txn_date,
-        txn.demand_no,
-        `Cancelled automatically: Receipt No ${txn.receipt_no} (paid earlier dues) was cancelled, so those dues are pending again and this later notice no longer applies.`,
-        client,
-      );
-
-      if (txn.demand_no) {
-        const notice = await demandNoticeRepository.findByDemandNo(txn.demand_no);
-        await demandNoticeRepository.revertToUnsettled(txn.demand_no, client);
-
-        // The other half of undoing this payment - submitPayment advanced
-        // the property's own tax_paid_till_year to the notice's
-        // assessment_year (see payment.service.ts); revertToUnsettled above
-        // only reopens the notice itself, so without this the property's
-        // ledger still shows that year as paid and nothing appears pending,
-        // even though the receipt is now cancelled. Guarded against
-        // clobbering a later, unrelated payment - see
-        // paymentRepository.revertTaxPaidTillYear.
-        if (notice?.assessment_year) {
-          // A part-payment notice advanced tax_paid_till_year only to its paid_through_year.
-          const advancedTo = notice.part_payment && notice.paid_through_year ? notice.paid_through_year : notice.assessment_year;
-          await paymentRepository.revertTaxPaidTillYear(txn.holding_no, taxPaidTillYearBefore(txn, notice.assessment_year), advancedTo, client);
-        }
-      }
+      await undoReceiptPayment(txn, request.reason, client);
+      await client.query(`UPDATE transactions SET reconcile_status = 'cancelled' WHERE receipt_no = $1 AND reconcile_status <> 'not_required'`, [txn.receipt_no]);
+      await updateLedgerStatus(txn.receipt_no, LEDGER_STATUS.cancelled, null, `Cancelled: ${request.reason}`, client);
     }
 
     await client.query("COMMIT");

@@ -78,6 +78,7 @@ export const propertySaveSchema = z.object({
 	// reflect multiple pending years of solid waste charge as part of
 	// arrears (see migration 018_remove_solid_waste_months_cap.sql).
 	solidWasteMonths: z.coerce.number().min(1).optional(),
+  solidWastePaidTillYear: z.union([z.string().regex(/^\d{4}-\d{4}$/, "Use the format 2023-2024"), z.literal("")]).nullish(),
   penalCharge: z.coerce.number().optional(),
   waterCharge: z.coerce.number().optional(),
   boringCharge: z.coerce.number().optional(),

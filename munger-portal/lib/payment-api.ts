@@ -15,6 +15,15 @@ export interface PaymentInput {
   tvNumber?: string | null;
   /** Required only when paymentMode is "District Treasury". */
   tvDate?: string | null;
+  /** Payment details - which are required depends on the mode. */
+  instrumentNo?: string;
+  instrumentDate?: string;
+  bankName?: string;
+  branchName?: string;
+  cardType?: string;
+  cardHolderName?: string;
+  cardLast4?: string;
+  amountReceivedActual?: number;
 }
 
 export interface ArrearStagePaidView {
@@ -51,9 +60,29 @@ export interface ReceiptData {
   taxCollectorName: string | null;
   tvNumber: string | null;
   tvDate: string | null;
+  /** Cheque/DD details (null for other modes). */
+  instrument?: {
+    no: string | null;
+    date: string | null;
+    bank: string | null;
+    branch: string | null;
+    cardType?: string | null;
+    cardHolderName?: string | null;
+    cardLast4?: string | null;
+  } | null;
+  amountDemanded?: string | null;
+  amountReceivedActual?: string | null;
+  /** Cheque / DD not yet reconciled - print TEMPORARY / PROVISIONAL. */
+  provisional?: boolean;
+  /** 'pending' | 'pm_verified' => PROVISIONAL receipt (cheque/DD not yet reconciled). */
+  reconcileStatus?: string;
+  /** Recorded by a Tax Collector in the field: show the collection slip; the receipt is printed in bulk at the office. */
+  fieldCollection?: boolean;
   /** Set only for public online payments - when the payer ticked the declaration. */
   onlineDeclarationAcceptedAt?: string | null;
   arrearStagesPaid: ArrearStagePaidView[];
+  /** True for a part payment (earlier years' holding tax only - no current-year charges are collected or shown). */
+  isPartPayment?: boolean;
   /** After a PART payment: the balance demand notice for the remaining years, generated automatically. */
   followUpNotice?: DemandNoticeData | null;
   followUpNoticeError?: string | null;

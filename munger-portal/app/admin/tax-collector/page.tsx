@@ -10,6 +10,9 @@ import { useAdminGuard } from "@/lib/use-admin-guard";
 import { FieldVerificationCapture } from "@/components/admin/field-verification-capture";
 import { CollectionIssueList } from "@/components/admin/collection-issue-list";
 import { ReceiptView } from "@/components/operator/receipt-view";
+import { CollectionSlip } from "@/components/admin/collection-slip";
+import { EMPTY_INSTRUMENT, InstrumentFields, instrumentError, instrumentPayload, type InstrumentValue } from "@/components/operator/instrument-fields";
+import { FIELD_PAYMENT_MODES } from "@/lib/payment-modes";
 import type { ReceiptData } from "@/lib/payment-api";
 import {
   fetchPropertyForCollector,
@@ -32,7 +35,7 @@ import {
 } from "@/lib/admin-api";
 
 const inputClass = "w-full rounded-md border border-slate-300 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-nnm-blue focus:ring-offset-1";
-const PAYMENT_MODES = ["Cash", "Cheque", "Online / UPI", "Card", "Demand Draft"];
+const PAYMENT_MODES: readonly string[] = FIELD_PAYMENT_MODES;
 
 /** Every property field worth showing the collector, in reading order. Aadhaar is masked to the last 4 digits. */
 const DETAIL_FIELDS: [string, string][] = [
@@ -100,6 +103,8 @@ export default function TaxCollectorPage() {
   const [notices, setNotices] = useState<UnsettledDemandNoticeAdmin[] | null>(null);
   const [selectedDemandNo, setSelectedDemandNo] = useState("");
   const [paymentMode, setPaymentMode] = useState(PAYMENT_MODES[0]);
+  const [instrument, setInstrument] = useState<InstrumentValue>(EMPTY_INSTRUMENT);
+  const [showFullReceipt, setShowFullReceipt] = useState(false);
   const [collecting, setCollecting] = useState(false);
   const [receipt, setReceipt] = useState<ReceiptData | null>(null);
 
@@ -236,15 +241,23 @@ export default function TaxCollectorPage() {
     if (!result?.property || !selectedDemandNo) return;
     const selected = notices?.find((n) => n.demandNo === selectedDemandNo);
     if (!selected) return;
+    const instErr = instrumentError(paymentMode ?? "", instrument, Number(selected.totalAmountDemanded));
+    if (instErr) {
+      setError(instErr);
+      return;
+    }
     setCollecting(true);
     setError(null);
     try {
       const res = await submitPaymentAdmin(result.property.holding_no, {
         amount: Number(selected.totalAmountDemanded),
-        paymentMode,
+        paymentMode: paymentMode ?? "",
         demandNo: selectedDemandNo,
+        ...instrumentPayload(paymentMode ?? "", instrument),
       });
       setReceipt(res);
+      setInstrument(EMPTY_INSTRUMENT);
+      setShowFullReceipt(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not record this payment.");
     } finally {
@@ -466,6 +479,10 @@ export default function TaxCollectorPage() {
                           </option>
                         ))}
                       </select>
+                      <InstrumentFields
+                        paymentMode={paymentMode ?? ""}
+                        amountDemanded={notices.find((n) => n.demandNo === selectedDemandNo) ? Number(notices.find((n) => n.demandNo === selectedDemandNo)!.totalAmountDemanded) : null}
+                        value={instrument} onChange={setInstrument} inputClassName={inputClass} />
                     </div>
                     <button
                       onClick={handleCollectPayment}
@@ -473,7 +490,7 @@ export default function TaxCollectorPage() {
                       title={property.solidWasteTypeMissing || !property.water_connection_status ? "Enter the mandatory details above first" : undefined}
                       className="rounded-md bg-nnm-blue px-4 py-2 text-sm font-semibold text-white hover:bg-nnm-blue-dark disabled:opacity-60"
                     >
-                      {collecting ? "Recording…" : "Collect Payment & Issue Receipt"}
+                      {collecting ? "Recording…" : "Collect Payment & Issue Slip"}
                     </button>
                   </>
                 )}
@@ -482,15 +499,37 @@ export default function TaxCollectorPage() {
 
             {receipt && (
               <div className="space-y-4">
-                <ReceiptView
-                  receipt={receipt}
-                  onNewPayment={() => {
-                    setReceipt(null);
-                    setCancelReason("");
-                    setCancelSuccess(false);
-                    setRequestingCancel(false);
-                  }}
-                />
+                <CollectionSlip receipt={receipt} />
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={() => setShowFullReceipt((v) => !v)}
+                    className="rounded-md border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                  >
+                    {showFullReceipt ? "Hide full receipt" : "View full receipt (PDF)"}
+                  </button>
+                  <button
+                    onClick={() => {
+                      setReceipt(null);
+                      setCancelReason("");
+                      setCancelSuccess(false);
+                      setRequestingCancel(false);
+                    }}
+                    className="rounded-md border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                  >
+                    New payment
+                  </button>
+                </div>
+                {showFullReceipt && (
+                  <ReceiptView
+                    receipt={receipt}
+                    onNewPayment={() => {
+                      setReceipt(null);
+                      setCancelReason("");
+                      setCancelSuccess(false);
+                      setRequestingCancel(false);
+                    }}
+                  />
+                )}
 
                 {cancelSuccess ? (
                   <p className="flex items-center gap-1.5 rounded-xl border border-green-200 bg-green-50 p-4 text-sm text-green-800">

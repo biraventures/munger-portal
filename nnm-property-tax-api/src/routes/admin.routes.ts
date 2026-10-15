@@ -1,5 +1,13 @@
 import { collectorHoldingParam, collectorDemandNoticeParam } from "../middleware/collectorWardGuard";
 import { Router } from "express";
+import {
+  getBulkReceiptCollectors,
+  getBulkReceipts,
+  getInstruments,
+  postBounceInstrument,
+  postPmVerifyInstrument,
+  postReconcileInstrument,
+} from "../controllers/fieldCollection.controller";
 import { listOperators, setOperatorActive } from "../controllers/adminOperators.controller";
 import {
   getChangeRequests,
@@ -466,6 +474,16 @@ adminRouter.get("/property-resurvey-flags", requireResurveyFlagReviewRole, listR
 adminRouter.get("/solid-waste-requests", requireAdminRole("tax_daroga", "city_manager"), listMySolidWasteRequests);
 adminRouter.post("/solid-waste-requests/:id/approve", requireAdminRole("tax_daroga", "city_manager"), postApproveSolidWasteRequest);
 adminRouter.post("/solid-waste-requests/:id/reject", requireAdminRole("tax_daroga", "city_manager"), postRejectSolidWasteRequest);
+// Field collection: the Tax Daroga prints the day's receipts collector-wise; cheque/DD receipts are reconciled by the
+// Project Manager and then the Tax Daroga (or marked bounced).
+const requireBulkReceiptRole = requireAdminRole("tax_daroga", "commissioner", "deputy_commissioner", "city_manager");
+adminRouter.get("/bulk-receipts/collectors", requireBulkReceiptRole, getBulkReceiptCollectors);
+adminRouter.get("/bulk-receipts", requireBulkReceiptRole, getBulkReceipts);
+adminRouter.get("/instrument-reconciliation", requireAdminRole("agency_project_manager", "tax_daroga", "commissioner", "deputy_commissioner", "city_manager"), getInstruments);
+adminRouter.post("/instrument-reconciliation/:receiptNo/pm-verify", requireAdminRole("agency_project_manager"), postPmVerifyInstrument);
+adminRouter.post("/instrument-reconciliation/:receiptNo/reconcile", requireAdminRole("tax_daroga"), postReconcileInstrument);
+adminRouter.post("/instrument-reconciliation/:receiptNo/bounce", requireAdminRole("agency_project_manager", "tax_daroga"), postBounceInstrument);
+
 adminRouter.get("/collection-issues/mine", requireAdminRole("tax_collector"), listMyCollectionIssues);
 adminRouter.get("/collection-issues", requireAdminRole("tax_daroga", "commissioner", "city_manager"), listAllCollectionIssues);
 adminRouter.post("/collection-issues/:id/generate-notice", requireAdminRole("city_manager"), postGenerateCollectionIssueNotice);

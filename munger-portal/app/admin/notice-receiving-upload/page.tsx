@@ -56,7 +56,7 @@ export default function NoticeReceivingUploadPage() {
       setNotices(result.notices);
       const firstOpen = result.notices.find((n) => n.copies_uploaded < 2);
       setSelected(firstOpen?.demand_no ?? null);
-      if (result.notices.length === 0) setError("No demand notice has been generated for this holding yet.");
+      if (result.notices.length === 0) setError("This holding has no pending demand notice (none generated yet, or the latest one is already paid or replaced by a newer reminder).");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Search failed.");
     } finally {
