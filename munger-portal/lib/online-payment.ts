@@ -18,7 +18,7 @@ export async function initiateOnlinePayment(
   taxCollectorCode?: string,
   /** The payer's tick on the declaration shown before paying (the server refuses the payment without it). */
   acceptDeclaration = false,
-  demandNos?: any[],
+  demandNos?: string[],
 ): Promise<InitiatePaymentResult> {
   const res = await fetch(`${API_BASE_URL}/properties/${encodeURIComponent(holdingNo)}/pay/online/initiate`, {
     method: "POST",
