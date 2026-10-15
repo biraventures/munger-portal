@@ -46,7 +46,7 @@ export const postInitiateOnlinePayment = asyncHandler(async (req: Request, res: 
 const confirmSchema = z.object({
   responseCode: z.string().min(1),
   merchantTxnNo: z.string().min(1),
-  paymentID: z.string().min(1),
+  paymentID: z.string().min(1).optional(),
 });
 
 /**
@@ -56,7 +56,7 @@ const confirmSchema = z.object({
  * this does NOT yet independently verify with the bank; that's the
  * critical remaining piece before this can safely go live.
  */
-export const postConfirmOnlinePayment = asyncHandler(async (req: Request, res: Response) => {
+export const postConfirmOnlinePayment = asyncHandler(async (req: Request, res: Response) => {  
   const parsed = confirmSchema.safeParse(req.body);
   if (!parsed.success) {
     throw ApiError.badRequest("Invalid confirmation payload", parsed.error.flatten().fieldErrors);
