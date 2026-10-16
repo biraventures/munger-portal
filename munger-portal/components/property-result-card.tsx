@@ -1,8 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { CheckCircle2, Loader2, Users, User, AlertCircle } from "lucide-react";
-import { formatINR, totalPayable, type PropertyRecord } from "@/lib/property-tax";
+import { CheckCircle2, Loader2, AlertCircle, X } from "lucide-react";
+import {
+  formatINR,
+  totalPayable,
+  type PropertyRecord,
+} from "@/lib/property-tax";
 import { initiateOnlinePayment } from "@/lib/online-payment";
 import { DeclarationCheckbox } from "@/components/online-declaration";
 import { verifyTaxCollectorCode } from "@/lib/tax-collector";
@@ -12,13 +16,14 @@ import { verifyTaxCollectorCode } from "@/lib/tax-collector";
 // this is a separate deployment with its own env vars. Even if this
 // somehow drifted out of sync, the backend check is the one that
 // actually matters; this just avoids showing a button that would fail.
-const ONLINE_PAYMENT_ENABLED = process.env.NEXT_PUBLIC_ONLINE_PAYMENT_ENABLED === "true";
+const ONLINE_PAYMENT_ENABLED =
+  process.env.NEXT_PUBLIC_ONLINE_PAYMENT_ENABLED === "true";
 
 export interface PropertyResultCardProps {
   record: PropertyRecord;
 }
 
-type PayerChoice = "public" | "tax_collector" | null;
+type PayerChoice = "public" | "tax_collector";
 
 function Field({ label, value }: { label: string; value: string }) {
   return (
@@ -37,26 +42,30 @@ export function PropertyResultCard({ record }: PropertyResultCardProps) {
   const [paying, setPaying] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Clicking "Pay Property Tax" reveals this chooser rather than
-  // paying immediately - who's paying determines whether a Tax
-  // Collector code is collected and verified first.
+  // Clicking "Pay Property Tax" reveals payment flow directly for public
+  // payers by default, with an option to enter a Tax Collector code if needed.
   const [choosingPayer, setChoosingPayer] = useState(false);
   const [declared, setDeclared] = useState(false);
-  const [payerChoice, setPayerChoice] = useState<PayerChoice>(null);
+  const [payerChoice, setPayerChoice] = useState<PayerChoice>("public");
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
 
   const [taxCollectorCodeInput, setTaxCollectorCodeInput] = useState("");
   const [verifying, setVerifying] = useState(false);
   const [verifyError, setVerifyError] = useState<string | null>(null);
-  const [verifiedCollector, setVerifiedCollector] = useState<{ code: string; name: string } | null>(null);
+  const [verifiedCollector, setVerifiedCollector] = useState<{
+    code: string;
+    name: string;
+  } | null>(null);
 
   function resetPayerChoice() {
     setDeclared(false);
     setChoosingPayer(false);
-    setPayerChoice(null);
+    setPayerChoice("public");
     setTaxCollectorCodeInput("");
     setVerifyError(null);
     setVerifiedCollector(null);
     setError(null);
+    setShowConfirmModal(false);
   }
 
   function choosePayer(choice: PayerChoice) {
@@ -80,7 +89,11 @@ export function PropertyResultCard({ record }: PropertyResultCardProps) {
       setVerifiedCollector(collector);
     } catch (err) {
       setVerifiedCollector(null);
-      setVerifyError(err instanceof Error ? err.message : "Could not verify this code. Please try again.");
+      setVerifyError(
+        err instanceof Error
+          ? err.message
+          : "Could not verify this code. Please try again.",
+      );
     } finally {
       setVerifying(false);
     }
@@ -95,10 +108,15 @@ export function PropertyResultCard({ record }: PropertyResultCardProps) {
         total,
         payerChoice === "tax_collector" ? verifiedCollector?.code : undefined,
         declared,
+        record?.pendingDemandNotices.map((item) => String(item.demandNo)) || [],
       );
       window.location.href = redirectUrl;
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not start payment. Please try again.");
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Could not start payment. Please try again.",
+      );
       setPaying(false);
     }
   }
@@ -116,8 +134,9 @@ export function PropertyResultCard({ record }: PropertyResultCardProps) {
         <div className="mx-6 mb-2 flex items-center gap-2 rounded-md border border-green-200 bg-green-50 px-4 py-2.5 text-sm text-green-800 sm:mx-7">
           <CheckCircle2 className="h-4 w-4 shrink-0" />
           <span>
-            Tax paid/cleared up to <b>{record.paidThroughYear ?? "current year"}</b>. The current-year amount below
-            is shown for reference — it is not currently due.
+            Tax paid/cleared up to{" "}
+            <b>{record.paidThroughYear ?? "current year"}</b>. The current-year
+            amount below is shown for reference — it is not currently due.
           </span>
         </div>
       )}
@@ -128,9 +147,13 @@ export function PropertyResultCard({ record }: PropertyResultCardProps) {
         <div className="flex flex-wrap gap-x-8 gap-y-3">
           <div>
             <span className="block font-mono text-[10.5px] uppercase tracking-[0.08em] text-ink-soft">
-              {record.currentCyclePaid ? "Current year tax (paid)" : "Current tax due"}
+              {record.currentCyclePaid
+                ? "Current year tax (paid)"
+                : "Current tax due"}
             </span>
-            <span className={`block font-mono text-base ${record.currentCyclePaid ? "text-green-700" : "text-ink"}`}>
+            <span
+              className={`block font-mono text-base ${record.currentCyclePaid ? "text-green-700" : "text-ink"}`}
+            >
               {formatINR(record.currentTaxDue)}
             </span>
           </div>
@@ -144,9 +167,13 @@ export function PropertyResultCard({ record }: PropertyResultCardProps) {
           </div>
           <div>
             <span className="block font-mono text-[10.5px] uppercase tracking-[0.08em] text-ink-soft">
-              {record.currentCyclePaid ? "Solid waste charge (paid)" : "Solid waste charge"}
+              {record.currentCyclePaid
+                ? "Solid waste charge (paid)"
+                : "Solid waste charge"}
             </span>
-            <span className={`block font-mono text-base ${record.currentCyclePaid ? "text-green-700" : "text-ink"}`}>
+            <span
+              className={`block font-mono text-base ${record.currentCyclePaid ? "text-green-700" : "text-ink"}`}
+            >
               {formatINR(record.solidWasteCharge)}
             </span>
           </div>
@@ -181,18 +208,33 @@ export function PropertyResultCard({ record }: PropertyResultCardProps) {
         </div>
 
         {record.solidWasteTypeMissing && (
-          <div role="alert" className="w-full rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-            <p>This holding number&apos;s solid waste user type is not known. Contact Nagar Nigam Munger for entering missing details.</p>
-            <p lang="hi" className="mt-1">इस होल्डिंग नंबर का ठोस अपशिष्ट उपयोगकर्ता प्रकार ज्ञात नहीं है। छूटी हुई जानकारी दर्ज कराने के लिए नगर निगम मुंगेर से संपर्क करें।</p>
+          <div
+            role="alert"
+            className="w-full rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900"
+          >
+            <p>
+              This holding number&apos;s solid waste user type is not known.
+              Contact Nagar Nigam Munger for entering missing details.
+            </p>
+            <p lang="hi" className="mt-1">
+              इस होल्डिंग नंबर का ठोस अपशिष्ट उपयोगकर्ता प्रकार ज्ञात नहीं है।
+              छूटी हुई जानकारी दर्ज कराने के लिए नगर निगम मुंगेर से संपर्क करें।
+            </p>
           </div>
         )}
 
         <div className="flex w-full flex-col items-end gap-3 sm:w-auto sm:max-w-xs">
           {nothingDue && record.pendingDemandNotices.length > 0 ? (
             <span className="max-w-xs rounded-md border border-amber-200 bg-amber-50 px-4 py-2.5 text-right text-sm text-amber-800">
-              A demand notice (₹{Number(record.pendingDemandNotices[0]!.totalAmountDemanded).toLocaleString("en-IN")}
-              {record.pendingDemandNotices[0]!.assessmentYear ? `, ${record.pendingDemandNotices[0]!.assessmentYear}` : ""}) is
-              pending against this holding. Please contact the Nagar Nigam office to confirm the amount due.
+              A demand notice (₹
+              {Number(
+                record.pendingDemandNotices[0]!.totalAmountDemanded,
+              ).toLocaleString("en-IN")}
+              {record.pendingDemandNotices[0]!.assessmentYear
+                ? `, ${record.pendingDemandNotices[0]!.assessmentYear}`
+                : ""}
+              ) is pending against this holding. Please contact the Nagar Nigam
+              office to confirm the amount due.
             </span>
           ) : nothingDue ? (
             <span className="inline-flex items-center gap-2 rounded-md border border-green-200 bg-green-50 px-6 py-2.5 text-sm font-semibold text-green-800">
@@ -201,45 +243,35 @@ export function PropertyResultCard({ record }: PropertyResultCardProps) {
             </span>
           ) : !ONLINE_PAYMENT_ENABLED ? (
             <span className="max-w-xs rounded-md border border-amber-200 bg-amber-50 px-4 py-2.5 text-right text-sm text-amber-800">
-              Online payment is temporarily unavailable. Please pay at the Nagar Nigam office counter.
+              Online payment is temporarily unavailable. Please pay at the Nagar
+              Nigam office counter.
             </span>
           ) : !choosingPayer ? (
             <button
-              onClick={() => setChoosingPayer(true)}
+              onClick={() => {
+                setPayerChoice("public");
+                setChoosingPayer(true);
+              }}
               className="inline-flex items-center justify-center gap-2 rounded-md bg-nnm-gold px-6 py-2.5 text-sm font-semibold text-[#20240a] shadow-[0_3px_0_#96791b] transition-transform hover:-translate-y-px"
             >
               Pay Property Tax
             </button>
           ) : (
             <div className="w-full rounded-md border border-line bg-white p-4">
-              {!payerChoice ? (
+              {payerChoice === "tax_collector" ? (
                 <>
-                  <p className="mb-3 text-right text-xs font-medium text-ink-soft">Who is paying?</p>
-                  <div className="flex flex-col gap-2">
+                  <div className="mb-2 flex items-center justify-between">
+                    <label className="block font-mono text-[10.5px] uppercase tracking-[0.08em] text-ink-soft">
+                      Tax Collector Code
+                    </label>
                     <button
-                      onClick={() => choosePayer("tax_collector")}
-                      className="inline-flex items-center justify-center gap-2 rounded-md border border-line bg-white px-4 py-2 text-sm font-medium text-ink hover:bg-slate-50"
-                    >
-                      <Users className="h-4 w-4" />
-                      Tax Collector
-                    </button>
-                    <button
+                      type="button"
                       onClick={() => choosePayer("public")}
-                      className="inline-flex items-center justify-center gap-2 rounded-md border border-line bg-white px-4 py-2 text-sm font-medium text-ink hover:bg-slate-50"
+                      className="text-xs text-nnm-blue underline hover:text-blue-800"
                     >
-                      <User className="h-4 w-4" />
-                      Public
+                      Pay as Public
                     </button>
                   </div>
-                  <button onClick={resetPayerChoice} className="mt-3 w-full text-right text-xs text-ink-soft hover:underline">
-                    Cancel
-                  </button>
-                </>
-              ) : payerChoice === "tax_collector" ? (
-                <>
-                  <label className="mb-1 block text-right font-mono text-[10.5px] uppercase tracking-[0.08em] text-ink-soft">
-                    Tax Collector Code
-                  </label>
                   <div className="flex gap-2">
                     <input
                       value={taxCollectorCodeInput}
@@ -257,7 +289,11 @@ export function PropertyResultCard({ record }: PropertyResultCardProps) {
                       disabled={verifying || !taxCollectorCodeInput.trim()}
                       className="shrink-0 rounded-md border border-line bg-slate-50 px-3 py-2 text-xs font-semibold text-ink hover:bg-slate-100 disabled:opacity-60"
                     >
-                      {verifying ? <Loader2 className="h-4 w-4 animate-spin" /> : "Verify"}
+                      {verifying ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        "Verify"
+                      )}
                     </button>
                   </div>
                   {verifyError && (
@@ -269,47 +305,173 @@ export function PropertyResultCard({ record }: PropertyResultCardProps) {
                   {verifiedCollector && (
                     <p className="mt-2 flex items-center gap-1 text-xs text-green-700">
                       <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
-                      Verified: {verifiedCollector.name} ({verifiedCollector.code})
+                      Verified: {verifiedCollector.name} (
+                      {verifiedCollector.code})
                     </p>
                   )}
 
-                  {verifiedCollector && <DeclarationCheckbox checked={declared} onChange={setDeclared} disabled={paying} />}
+                  {verifiedCollector && (
+                    <DeclarationCheckbox
+                      checked={declared}
+                      onChange={setDeclared}
+                      disabled={paying}
+                    />
+                  )}
                   {verifiedCollector && (
                     <button
-                      onClick={handlePay}
+                      type="button"
+                      onClick={() => setShowConfirmModal(true)}
                       disabled={paying || !declared}
                       className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-md bg-nnm-gold px-6 py-2.5 text-sm font-semibold text-[#20240a] shadow-[0_3px_0_#96791b] transition-transform hover:-translate-y-px disabled:opacity-60"
                     >
-                      {paying && <Loader2 className="h-4 w-4 animate-spin" />}
-                      {paying ? "Redirecting to bank…" : `Pay ${formatINR(total)}`}
+                      Pay {formatINR(total)}
                     </button>
                   )}
-                  <button onClick={resetPayerChoice} className="mt-2 w-full text-right text-xs text-ink-soft hover:underline">
+                  <button
+                    onClick={resetPayerChoice}
+                    className="mt-2 w-full text-right text-xs text-ink-soft hover:underline"
+                  >
                     Cancel
                   </button>
                 </>
               ) : (
                 <>
-                  <p className="mb-3 text-right text-xs text-ink-soft">Paying as a member of the public.</p>
-                  <DeclarationCheckbox checked={declared} onChange={setDeclared} disabled={paying} />
+                  <div className="mb-3 flex items-center justify-between text-xs text-ink-soft">
+                    <span>Paying as a member of the public.</span>
+
+                    {/* This button is not required */}
+                    {/* <button
+                      type="button"
+                      onClick={() => choosePayer("tax_collector")}
+                      className="text-nnm-blue underline hover:text-blue-800"
+                    >
+                      Tax Collector?
+                    </button> */}
+                  </div>
+                  <DeclarationCheckbox
+                    checked={declared}
+                    onChange={setDeclared}
+                    disabled={paying}
+                  />
                   <button
-                    onClick={handlePay}
+                    type="button"
+                    onClick={() => setShowConfirmModal(true)}
                     disabled={paying || !declared}
                     className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-nnm-gold px-6 py-2.5 text-sm font-semibold text-[#20240a] shadow-[0_3px_0_#96791b] transition-transform hover:-translate-y-px disabled:opacity-60"
                   >
-                    {paying && <Loader2 className="h-4 w-4 animate-spin" />}
-                    {paying ? "Redirecting to bank…" : `Pay ${formatINR(total)}`}
+                    Pay {formatINR(total)}
                   </button>
-                  <button onClick={resetPayerChoice} className="mt-2 w-full text-right text-xs text-ink-soft hover:underline">
+                  <button
+                    onClick={resetPayerChoice}
+                    className="mt-2 w-full text-right text-xs text-ink-soft hover:underline"
+                  >
                     Cancel
                   </button>
                 </>
               )}
             </div>
           )}
-          {error && <p className="max-w-xs text-right text-xs text-red-600">{error}</p>}
+          {error && !showConfirmModal && (
+            <p className="max-w-xs text-right text-xs text-red-600">{error}</p>
+          )}
         </div>
       </div>
+
+      {showConfirmModal && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+        >
+          <div className="w-full max-w-md rounded-xl border border-line bg-white p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between pb-3 border-b border-line">
+              <h3 className="text-base font-semibold text-ink">
+                Confirm Property Tax Payment
+              </h3>
+              <button
+                type="button"
+                onClick={() => !paying && setShowConfirmModal(false)}
+                disabled={paying}
+                aria-label="Close"
+                className="rounded p-1 text-ink-soft hover:bg-slate-100 hover:text-ink disabled:opacity-40"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <p className="mt-3 text-xs text-ink-soft">
+              Please review the payment details below before being redirected to
+              the bank gateway:
+            </p>
+
+            <div className="my-4 rounded-lg border border-slate-200 bg-slate-50 p-4 text-xs space-y-2.5">
+              <div className="flex justify-between items-center">
+                <span className="text-ink-soft">Holding No.:</span>
+                <span className="font-mono font-medium text-ink">
+                  {record.holdingNumber}
+                </span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-ink-soft">Owner Name:</span>
+                <span className="font-medium text-ink text-right">
+                  {record.ownerName}
+                </span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-ink-soft">Payer:</span>
+                <span className="font-medium text-ink">
+                  {payerChoice === "tax_collector" && verifiedCollector
+                    ? `Tax Collector (${verifiedCollector.name} - ${verifiedCollector.code})`
+                    : "Public"}
+                </span>
+              </div>
+              <div className="border-t border-slate-200 pt-2.5 flex justify-between items-baseline">
+                <span className="text-xs font-semibold uppercase tracking-wider text-ganga-teal">
+                  Total Payable:
+                </span>
+                <span className="font-mono text-lg font-bold text-nnm-blue">
+                  {formatINR(total)}
+                </span>
+              </div>
+            </div>
+
+            {error && (
+              <div
+                role="alert"
+                className="mb-4 flex items-center gap-2 rounded-md border border-red-200 bg-red-50 p-3 text-xs text-red-700"
+              >
+                <AlertCircle className="h-4 w-4 shrink-0" />
+                <span>{error}</span>
+              </div>
+            )}
+
+            <p className="mb-5 text-[11px] text-ink-soft leading-relaxed">
+              Upon clicking <b>Proceed to Pay</b>, you will be directed to the
+              payment gateway to complete the transaction.
+            </p>
+
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => setShowConfirmModal(false)}
+                disabled={paying}
+                className="w-1/2 rounded-md border border-line bg-white px-4 py-2.5 text-sm font-medium text-ink hover:bg-slate-50 disabled:opacity-60"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handlePay}
+                disabled={paying}
+                className="w-1/2 inline-flex items-center justify-center gap-2 rounded-md bg-nnm-gold px-4 py-2.5 text-sm font-semibold text-[#20240a] shadow-[0_3px_0_#96791b] transition-transform hover:-translate-y-px disabled:opacity-60"
+              >
+                {paying && <Loader2 className="h-4 w-4 animate-spin" />}
+                {paying ? "Redirecting…" : "Proceed to Pay"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </article>
   );
 }

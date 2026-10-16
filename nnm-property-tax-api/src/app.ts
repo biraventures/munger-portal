@@ -19,6 +19,12 @@ export function createApp() {
   // anything further upstream that a client could forge.
   app.set("trust proxy", 1);
 
+  // Parse JSON requests
+  app.use(express.json());
+
+  // Parse application/x-www-form-urlencoded requests
+  app.use(express.urlencoded({ extended: false }));
+
   app.disable("x-powered-by");
   app.use(helmet());
   app.use(
