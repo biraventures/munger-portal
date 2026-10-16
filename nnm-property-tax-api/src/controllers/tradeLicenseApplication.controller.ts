@@ -56,6 +56,7 @@ const publicApplicationInputSchema = applicationInputSchema.extend({
   isGstRegistered: z.boolean({ required_error: "Answer whether the business is registered under GST." }),
   isNnmShop: z.boolean({ required_error: "Answer whether the business is in a Nagar Nigam Munger stall/shop." }),
   businessCategory: z.string({ required_error: "Choose the type of business." }).min(1, "Choose the type of business.").max(255),
+  areaOwnership: z.enum(["self_owned", "rented"], { required_error: "Choose whether the business premises are self-owned or rented / leased." }),
   mobile: z.string().transform((v) => v.replace(/[\s-]/g, "").replace(/^(\+91|91|0)(?=\d{10}$)/, "")).pipe(z.string().regex(/^[6-9]\d{9}$/, "Enter a valid 10-digit mobile number.")),
 });
 

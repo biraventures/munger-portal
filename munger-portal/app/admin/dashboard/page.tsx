@@ -464,7 +464,7 @@ export default function AdminDashboardPage() {
                     <FileText className="h-6 w-6" strokeWidth={1.8} />
                   </span>
                   <h3 className="mb-1.5 text-base font-semibold text-slate-900">Upload Notice Receiving Copy</h3>
-                  <p className="text-sm text-slate-500">Photograph and upload the signed copy of a printed demand notice (up to 2 per notice).</p>
+                  <p className="text-sm text-slate-500">Photograph and upload the signed receiving slip torn from a printed demand notice (up to 2 photos per notice).</p>
                 </Link>
               )}
 

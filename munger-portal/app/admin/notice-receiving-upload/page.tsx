@@ -66,7 +66,7 @@ export default function NoticeReceivingUploadPage() {
 
   async function handleUpload() {
     if (!selected) return setError("Choose the demand notice this copy belongs to.");
-    if (!photo) return setError("Take a photo of the signed copy.");
+    if (!photo) return setError("Take a photo of the signed receiving slip.");
     setUploading(true);
     setError(null);
     try {
@@ -104,7 +104,7 @@ export default function NoticeReceivingUploadPage() {
           Upload Notice Receiving Copy
         </h1>
         <p className="mb-6 text-sm text-slate-500">
-          After delivering a printed demand notice, photograph your copy with the receiver&apos;s signature and upload it here. Up to <b>2 copies</b> per notice. Once uploaded, a copy
+          After delivering a printed demand notice, photograph the receiving slip torn from its foot, signed by the receiver, and upload it here. Up to <b>2 copies</b> per notice. Once uploaded, a copy
           <b> cannot be changed or removed</b> by anyone.
         </p>
 

@@ -240,6 +240,7 @@ export function TradeLicenseApplicationForm({
       if (form.isBpl === null || form.isBpl === undefined) problems.push("whether the applicant is BPL");
       if (form.isGstRegistered === null || form.isGstRegistered === undefined) problems.push("whether the business is GST registered");
       if (!form.businessCategory) problems.push("the type of business");
+      if (!form.areaOwnership) problems.push("whether the premises are self-owned or rented / leased");
       if (problems.length) {
         setError(`Please answer ${problems.join(", ")}.`);
         return;
@@ -248,6 +249,7 @@ export function TradeLicenseApplicationForm({
         ["holding_receipt", !form.isNnmShop, "holding tax payment receipt"],
         ["bpl_proof", !!form.isBpl, "BPL proof"],
         ["gstr_3b", !!form.isGstRegistered, "GSTR-3B return"],
+        ["premises_agreement", true, "agreement / deed of the business premises"],
         ["pan_applicant", true, "PAN card of applicant"],
         ["shop_photo", true, "photo of shop"],
       ];
@@ -454,7 +456,7 @@ export function TradeLicenseApplicationForm({
             />
           </div>
           <div>
-            <label className={labelClass}>Ownership of area</label>
+            <label className={labelClass}>Ownership of business premises{isPublic && <span className="text-red-600"> *</span>}</label>
             <select
               value={form.areaOwnership ?? ""}
               onChange={(e) => update("areaOwnership", e.target.value as TradeLicenseApplicationInput["areaOwnership"])}
@@ -462,12 +464,12 @@ export function TradeLicenseApplicationForm({
             >
               <option value="">Select…</option>
               <option value="self_owned">Self Owned</option>
-              <option value="rented">Rented</option>
+              <option value="rented">Rented / Leased</option>
             </select>
           </div>
           {form.areaOwnership === "rented" && (
             <div>
-              <label className={labelClass}>Name of houseowner</label>
+              <label className={labelClass}>Name of houseowner / lessor</label>
               <input value={form.houseownerName ?? ""} onChange={(e) => update("houseownerName", e.target.value)} className={inputClass} />
             </div>
           )}
@@ -495,6 +497,21 @@ export function TradeLicenseApplicationForm({
             hint={form.isNnmShop ? "Not needed for a Nagar Nigam stall/shop — attach it if you have one." : "Latest receipt of the holding where the business runs."}
             required={isPublic && !form.isNnmShop}
             {...fileProps("holding_receipt")}
+          />
+
+          <FileField
+            label={
+              form.isNnmShop
+                ? "Allotment / rent agreement with Nagar Nigam"
+                : form.areaOwnership === "rented"
+                  ? "Rental / lease agreement of the business premises"
+                  : form.areaOwnership === "self_owned"
+                    ? "Sale / purchase deed of the business premises"
+                    : "Rental / lease / sale-purchase agreement of the business premises"
+            }
+            hint={form.areaOwnership ? undefined : "Choose the ownership of the business premises above to see which document is needed."}
+            required={isPublic}
+            {...fileProps("premises_agreement")}
           />
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
