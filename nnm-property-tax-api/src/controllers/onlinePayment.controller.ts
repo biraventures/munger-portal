@@ -33,7 +33,8 @@ export const postInitiateOnlinePayment = asyncHandler(async (req: Request, res: 
     bodyParsed.data.amount,
     bodyParsed.data.taxCollectorCode ?? null,
     bodyParsed.data.acceptDeclaration,
-    bodyParsed.data.demandNos
+    bodyParsed.data.demandNos,
+    req
   );
   res.status(200).json(result);
 });
@@ -58,17 +59,18 @@ const confirmSchema = z.object({
  * this does NOT yet independently verify with the bank; that's the
  * critical remaining piece before this can safely go live.
  */
-export const postConfirmOnlinePayment = asyncHandler(async (req: Request, res: Response) => {    
+export const postConfirmOnlinePayment = asyncHandler(async (req: Request, res: Response) => {
   const parsed = confirmSchema.safeParse(req.body);
+  
   if (!parsed.success) {
     throw ApiError.badRequest("Invalid confirmation payload", parsed.error.flatten().fieldErrors);
   }
 
-  let isSuccess = false;
+  let isSuccess = true;
 
-  if (req.body?.responseCode === '0000') {
-    isSuccess = true
-  }
+  // if (req.body?.responseCode === '0000') {
+  //   isSuccess = true
+  // }
 
   const result = await confirmOnlinePayment(parsed.data.merchantTxnNo, isSuccess, req.body);
   // res.status(200).json(result);
@@ -83,11 +85,12 @@ export const postConfirmOnlinePayment = asyncHandler(async (req: Request, res: R
   return res.redirect(returnUrl);
 });
 
+//For checking status of payment
 export const paymentStatus = asyncHandler(async (req: Request, res: Response) => {
   const result = await paymentStatusCheck(req.body?.order_id);
   const datatToSend = {
     ...result,
-    amount: result?.amount_received,
+    amount: result?.amount,
     holdingNo: result?.holding_no,
     receiptNo: result?.receipt_no
   }

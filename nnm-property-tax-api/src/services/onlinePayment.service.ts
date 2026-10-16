@@ -18,6 +18,7 @@ import { computeArrearsClearance, summarizeArrears } from "./arrears.service";
 import { parseYearStartOrNull } from "../utils/assessmentYear";
 import { num } from "../utils/num";
 import { pool } from "../config/db";
+import { Request } from "express";
 
 const GATEWAY_NAME = "ICICI_PG";
 // const ICICI_PG_BASE_URL = "https://pgpayuat.icici.bank.in/tsp/pg/api/v2/initiateSale";
@@ -44,7 +45,8 @@ export async function initiateOnlinePayment(
   amount: number,
   taxCollectorCode: string | null,
   declarationAccepted: boolean,
-  demandNos?: any[]
+  demandNos?: any[],
+  req?: Request
 ): Promise<InitiateResult> {
   if (!declarationAccepted) {
     throw ApiError.badRequest("Please tick the declaration to continue with the payment.");
@@ -87,7 +89,7 @@ export async function initiateOnlinePayment(
     taxCollector = { code: collector.tax_collector_code!, name: collector.display_name };
   }
 
-  return createGatewayOrder(holdingNo, amount, taxCollector, property, demandNos);
+  return createGatewayOrder(holdingNo, amount, taxCollector, property, demandNos, req);
 }
 
 /**
@@ -126,20 +128,33 @@ export async function createGatewayOrder(
   amount: number,
   taxCollector: { code: string; name: string } | null,
   property?: any,
-  demandNos?: any[]
+  demandNos?: any[],
+  req?: Request
 ): Promise<InitiateResult> {
   const orderId = crypto.randomUUID();
+  // await onlinePaymentRepository.createPendingOrder({
+  //   orderId,
+  //   holdingNo,
+  //   amount,
+  //   gateway: GATEWAY_NAME,
+  //   taxCollectorCode: taxCollector?.code ?? null,
+  //   taxCollectorName: taxCollector?.name ?? null,
+  //   demandNos: demandNos,
+  // });
   await onlinePaymentRepository.createPendingOrder({
     orderId,
     holdingNo,
     amount,
     gateway: GATEWAY_NAME,
-    taxCollectorCode: taxCollector?.code ?? null,
-    taxCollectorName: taxCollector?.name ?? null,
+    ward: property?.ward ?? null,
+    zone: property?.zone ?? null,
+    demandFrom: null,
+    demandUpto: null,
     demandNos: demandNos,
+    ipAddress: req?.ip ?? null,
+    userAgent: req?.headers['user-agent'] ?? null,
   });
 
-  // const returnUrl = `${env.FRONTEND_URL}/property-tax/payment-return`;
 
   // TODO: replace with the real signed request per ICICI's integration
   // spec once available (see warning above).
@@ -193,7 +208,6 @@ export async function confirmOnlinePayment(
   gatewayResponse: unknown,
 ): Promise<ConfirmResult> {
   const order = await onlinePaymentRepository.findByOrderId(orderId);
-  console.log('order', order);
 
   if (!order) {
     throw ApiError.notFound(`No payment order found for ${orderId}`);
@@ -206,35 +220,34 @@ export async function confirmOnlinePayment(
       status: order.status,
       receiptNo: order.receipt_no,
       holdingNo: order.holding_no,
-      amount: order.amount_received,
+      amount: order.amount,
     };
   }
 
   if (!reportedSuccess) {
     await onlinePaymentRepository.markFailed(orderId, gatewayResponse);
-    return { status: "failed", receiptNo: null, holdingNo: order.holding_no, amount: order.amount_received, order_id: orderId };
+    return { status: "failed", receiptNo: null, holdingNo: order.holding_no, amount: order.amount, order_id: orderId };
   }
 
   const receiptNoNum = await paymentRepository.getNextReceiptNo();
   const receiptNo = String(receiptNoNum);
 
+  const demandNos = order.demand
 
-  const demandNos = order.demand_no!.split(',').map(String)
+  const dataToSend = {
+    paymentMode: 'Online',
+    demandNo: demandNos.join(','),
+    amountReceivedActual: Number(order.amount),
+  }
+  console.log('dataToSend', dataToSend);
 
-  await Promise.all(
-    demandNos.map(async (demandNo) => {
-      const dataToSend = {
-        paymentMode: 'Online',
-        demandNo: demandNo,
-      }
+  await submitPayment(order.holding_no, dataToSend, 'Citizen Self-Service');
 
-      await submitOnlinePayment(order.holding_no, dataToSend);
-    })
-  )
+  console.log('Controll after submitPayment', order.holding_no, dataToSend, 'Citizen Self-Service');
 
   await onlinePaymentRepository.markSuccess(orderId, receiptNo, gatewayResponse);
 
-  return { status: "success", receiptNo, holdingNo: order.holding_no, amount: order.amount_received, order_id: orderId };
+  return { status: "success", receiptNo, holdingNo: order.holding_no, amount: order.amount, order_id: orderId };
 }
 
 export async function paymentStatusCheck(orderId: string) {
