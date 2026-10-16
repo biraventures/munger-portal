@@ -61,7 +61,7 @@ const confirmSchema = z.object({
  */
 export const postConfirmOnlinePayment = asyncHandler(async (req: Request, res: Response) => {
   const parsed = confirmSchema.safeParse(req.body);
-  
+
   if (!parsed.success) {
     throw ApiError.badRequest("Invalid confirmation payload", parsed.error.flatten().fieldErrors);
   }
@@ -89,7 +89,7 @@ export const paymentStatus = asyncHandler(async (req: Request, res: Response) =>
   const result = await paymentStatusCheck(req.body?.order_id);
   const dataToSend = {
     ...result,
-    amount: result?.amount_received,
+    amount: result?.amount,
     holdingNo: result?.holding_no,
     receiptNo: result?.receipt_no,
     receipt: result?.receipt,

@@ -26,6 +26,7 @@ function PaymentReturnContent() {
   const [state, setState] = useState<"confirming" | "done" | "error">("confirming");
   const [result, setResult] = useState<ConfirmPaymentResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [receiptView, setReceiptView] = useState<boolean>(false);
 
   useEffect(() => {
     const params: Record<string, string> = {};
@@ -74,7 +75,7 @@ function PaymentReturnContent() {
   }
 
   if (result.status === "success") {
-    if (result.receipt) {
+    if (result.receipt && receiptView) {
       return (
         <ReceiptView
           receipt={result.receipt}
@@ -91,9 +92,17 @@ function PaymentReturnContent() {
           ₹{Number(result.amount).toLocaleString("en-IN")} received for holding {result.holdingNo}
         </p>
         <p className="mb-5 text-sm text-green-700">Receipt No: <b>{result.receiptNo}</b></p>
-        <Link href="/property-tax" className="text-sm font-semibold text-nnm-blue hover:underline">
-          Back to Property Tax Search
-        </Link>
+        <div className="flex flex-col gap-4 justify-center items-center">
+          <Link href="/property-tax" className="text-sm font-semibold text-nnm-blue hover:underline">
+            Back to Property Tax Search
+          </Link>
+          <button
+            className="border-2 rounded w-[40%] cursor-pointer font-bold"
+            onClick={() => setReceiptView(true)}
+          >
+            View Receipt
+          </button>
+        </div>
       </div>
     );
   }

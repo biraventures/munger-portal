@@ -5,19 +5,6 @@ import { adminRepository } from "../repositories/admin.repository";
 import { paymentRepository } from "../repositories/payment.repository";
 import { env } from "../config/env";
 import { ApiError } from "../utils/ApiError";
-import { assertNotDisputed } from "./propertyDispute.service";
-import { assertNoNoticeOnHold } from "./noticeHold.service";
-import { assertNoResurveyPending } from "./propertyResurvey.service";
-import axios from "axios";
-import { submitPayment } from "./payment.service";
-import { string } from "zod";
-import { PaymentInput, PaymentResult } from "../types/payment.types";
-import { demandNoticeRepository } from "../repositories/demandNotice.repository";
-import { cancellationRequestRepository } from "../repositories/cancellationRequest.repository";
-import { computeArrearsClearance, summarizeArrears } from "./arrears.service";
-import { parseYearStartOrNull } from "../utils/assessmentYear";
-import { num } from "../utils/num";
-import { pool } from "../config/db";
 import { Request } from "express";
 import { assertNotDisputed } from "./propertyDispute.service";
 import { assertNoNoticeOnHold } from "./noticeHold.service";
@@ -270,14 +257,12 @@ export async function confirmOnlinePayment(
 
   await submitPayment(order.holding_no, dataToSend, 'Citizen Self-Service');
 
-  console.log('Controll after submitPayment', order.holding_no, dataToSend, 'Citizen Self-Service');
-
   await onlinePaymentRepository.markSuccess(orderId, receiptNo, gatewayResponse);
 
   // Copy frozen demand notice breakdown into transactions so the receipt reprint has full breakdown
   try {
     if (demandNos[0]) {
-      const firstNotice = await demandNoticeRepository.findByDemandNo(demandNos[0]);
+      const firstNotice = await demandNoticeRepository.findByDemandNo(String(demandNos[0]));
       if (firstNotice) {
         await pool.query(
           `UPDATE transactions SET
@@ -305,7 +290,7 @@ export async function confirmOnlinePayment(
             firstNotice.area_rebate,
             firstNotice.area_rebate_reason,
             firstNotice.total_amount_demanded,
-            order.amount_received,
+            order.amount,
           ]
         );
       }
@@ -328,7 +313,7 @@ export async function confirmOnlinePayment(
     }
   }
 
-  return { status: "success", receiptNo, holdingNo: order.holding_no, amount: order.amount_received, order_id: orderId, receipt };
+  return { status: "success", receiptNo, holdingNo: order.holding_no, amount: order.amount, order_id: orderId, receipt };
 }
 
 export async function paymentStatusCheck(orderId: string) {
@@ -355,10 +340,6 @@ export async function paymentStatusCheck(orderId: string) {
     ...order,
     receipt,
   };
-}
-
-export async function findAllDetailsByOrderId(orderId: string) {
-  return paymentStatusCheck(orderId);
 }
 
 //=============================For ICICI ORange integration================================================
@@ -491,128 +472,4 @@ const initiatePaymentDal = async (payer: PayerType, transactionId?: string) => {
   }
 
   return dataToReturn
-}
-
-export async function submitOnlinePayment(
-  holdingNo: string,
-  input: PaymentInput,
-) {
-  const property = await propertyRepository.findByHoldingNo(holdingNo);
-  if (!property) {
-    throw ApiError.notFound(`Property not found for Holding No: ${holdingNo}`);
-  }
-  assertNotDisputed(property);
-  assertNoResurveyPending(property);
-
-  const notice = await demandNoticeRepository.findByDemandNo(input.demandNo);
-  if (!notice || notice.holding_no !== holdingNo) {
-    throw ApiError.notFound(`Demand notice ${input.demandNo} not found for this holding.`);
-  }
-  if (notice.settled) {
-    throw ApiError.badRequest(`Demand notice ${input.demandNo} has already been paid.`);
-  }
-  if (notice.cancelled) {
-    throw ApiError.badRequest(`Demand notice ${input.demandNo} has been cancelled and can no longer be paid.`);
-  }
-  if (notice.superseded) {
-    throw ApiError.badRequest(
-      `Demand notice ${input.demandNo} has been superseded by a newer notice for this holding - please use the current demand notice instead.`,
-    );
-  }
-  // A pending cancellation request means tax_daroga hasn't yet decided
-  // whether this notice should be voided - collecting payment while
-  // that's unresolved would let the two outcomes race each other
-  // (e.g. approval reverting a notice that was just paid seconds
-  // earlier). Blocked until the request is approved or rejected.
-  const pendingCancellation = await cancellationRequestRepository.findPendingForTarget("demand_notice", input.demandNo);
-  if (pendingCancellation) {
-    throw ApiError.badRequest(
-      `Demand notice ${input.demandNo} has a pending cancellation request awaiting Tax Daroga's decision - payment cannot be collected until that is resolved.`,
-    );
-  }
-  if (!notice.assessment_year) {
-    // Only possible for notices generated before this feature existed —
-    // they predate assessment_year being recorded, so there's no safe
-    // year to advance tax_paid_till_year to. Regenerate the notice instead.
-    throw ApiError.badRequest(
-      `Demand notice ${input.demandNo} is missing its assessment year — regenerate the notice and pay the new one.`,
-    );
-  }
-
-  const floors = await propertyRepository.findFloorsByHoldingNo(holdingNo);
-  const stages = await propertyRepository.findTaxHistoryByHoldingNo(holdingNo);
-
-
-  // "District Treasury" payments are identified by the T.V. number/date
-  // instead of a till receipt - required here too (not just in the
-  // controller's zod schema) since this service is the actual source of
-  // truth for what a valid payment looks like.
-  const tvNumber = input.tvNumber?.trim() || null;
-  const tvDate = input.tvDate?.trim() || null;
-  if (input.paymentMode === "District Treasury" && (!tvNumber || !tvDate)) {
-    throw ApiError.badRequest("T.V. number and date are required for District Treasury payments.");
-  }
-
-  // Snapshot pending arrears BEFORE this payment, and which specific
-  // periods it covers — purely for display on the receipt. The amount
-  // actually charged is the notice's frozen total, not recomputed here.
-  const arrearsBefore = summarizeArrears(property, stages);
-  const noticeYearNum = parseYearStartOrNull(notice.assessment_year)!;
-  // A part-payment notice clears arrears only up to its paid_through_year; a normal notice clears everything before its own year.
-  const isPart = notice.part_payment && !!notice.paid_through_year;
-  const paidThroughYear = isPart ? notice.paid_through_year! : notice.assessment_year;
-  const throughYearNum = isPart ? parseYearStartOrNull(notice.paid_through_year)! : noticeYearNum - 1;
-  if (isPart) {
-    const already = parseYearStartOrNull(property.tax_paid_till_year);
-    if (already !== null && already >= throughYearNum) {
-      throw ApiError.badRequest(
-        `Demand notice ${input.demandNo} is out of date - this holding is already paid till ${property.tax_paid_till_year}. Generate a fresh demand notice.`,
-      );
-    }
-  }
-  const clearance = computeArrearsClearance(property, stages, throughYearNum);
-
-  const amountReceived = num(notice.total_amount_demanded);
-  const receiptNoNum = await paymentRepository.getNextReceiptNo();
-  const receiptNo = String(receiptNoNum);
-
-  // Wrapped in a real DB transaction (not just the "atomic single UPDATE"
-  // markSettled relies on for its own concurrency guard) - previously,
-  // if insertTransaction failed for ANY reason after markSettled had
-  // already succeeded, the demand notice was left stuck marked
-  // "settled" with no transaction ever actually recorded, permanently
-  // blocking payment on that notice. Discovered via holding MUNG-19249
-  // (Aug 2026): a too-long counter value crashed insertTransaction
-  // after markSettled had already committed. BEGIN/COMMIT/ROLLBACK here
-  // means any future failure between these steps, whatever the cause,
-  // rolls back cleanly and leaves the notice payable again instead of stuck.
-  const client = await pool.connect();
-  try {
-    await client.query("BEGIN");
-
-    // Atomic - only succeeds if the notice is STILL unsettled, not
-    // cancelled, and not superseded at this instant. Guards against
-    // two operators paying the same notice at once, or a cancellation/
-    // supersession happening in the brief window between the checks
-    // above and this update - the checks above give a specific,
-    // accurate error in the normal case; this is the last-resort
-    // safety net for that race window.
-    const settled = await demandNoticeRepository.markSettled(input.demandNo, receiptNo, client);
-    if (!settled) {
-      throw ApiError.badRequest(
-        `Demand notice ${input.demandNo} can no longer be paid - it may have just been paid, cancelled, or superseded. Please refresh and try again.`,
-      );
-    }
-
-    // The core fix: unconditionally advance paid-through status to what
-    // this notice covered — this is what was missing before.
-    await paymentRepository.updateTaxPaidTillYear(holdingNo, paidThroughYear, client);
-
-    await client.query("COMMIT");
-  } catch (err) {
-    await client.query("ROLLBACK");
-    throw err;
-  } finally {
-    client.release();
-  }
 }
