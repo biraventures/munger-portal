@@ -27,6 +27,8 @@ export interface ChangeRequestRow {
   reverted_at: Date | null;
   revert_comment: string | null;
   revision_count: number;
+  /** Set when the request came from an online mutation application (migration 131). */
+  public_application_id?: string | number | null;
 }
 
 export interface ChangeRequestApprovalRow {

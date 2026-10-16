@@ -92,6 +92,8 @@ export interface ChangeRequestSummary {
   status: ChangeRequestStatus;
   change_basis: string;
   change_reference: string;
+  /** Set when the request came from an online mutation application. */
+  public_application_id?: string | number | null;
   current_stage: AdminRole;
   approval_tier: ApprovalTier;
   final_stage: AdminRole;

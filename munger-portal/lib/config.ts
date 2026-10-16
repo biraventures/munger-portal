@@ -36,6 +36,16 @@ export const services = [
     live: true,
   },
   {
+    counter: "COUNTER 01B",
+    title: "Mutation of Holding",
+    description:
+      "Apply online to change the owner's name on a holding after sale, partition, gift, inheritance or auction - and track it.",
+    icon: "file-text",
+    cta: "Apply Now",
+    href: "/mutation",
+    live: true,
+  },
+  {
     counter: "COUNTER 02",
     title: "Solid Waste Management",
     description:
