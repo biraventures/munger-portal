@@ -19,6 +19,18 @@ import { parseYearStartOrNull } from "../utils/assessmentYear";
 import { num } from "../utils/num";
 import { pool } from "../config/db";
 import { Request } from "express";
+import { assertNotDisputed } from "./propertyDispute.service";
+import { assertNoNoticeOnHold } from "./noticeHold.service";
+import { assertNoResurveyPending } from "./propertyResurvey.service";
+import { submitPayment, getReceiptForReprint, getReceiptData, type PrintableReceiptHistory } from "./payment.service";
+import { PaymentInput, PaymentResult } from "../types/payment.types";
+import { demandNoticeRepository } from "../repositories/demandNotice.repository";
+import { cancellationRequestRepository } from "../repositories/cancellationRequest.repository";
+import { computeArrearsClearance, summarizeArrears } from "./arrears.service";
+import { parseYearStartOrNull } from "../utils/assessmentYear";
+import { num } from "../utils/num";
+import { pool } from "../config/db";
+import axios from "axios";
 
 const GATEWAY_NAME = "ICICI_PG";
 // const ICICI_PG_BASE_URL = "https://pgpayuat.icici.bank.in/tsp/pg/api/v2/initiateSale";
@@ -183,6 +195,7 @@ export interface ConfirmResult {
   holdingNo: string;
   amount: string;
   order_id?: string;
+  receipt?: PaymentResult | PrintableReceiptHistory | null;
 }
 
 /**
@@ -216,17 +229,32 @@ export async function confirmOnlinePayment(
   // Idempotent — a citizen refreshing the return page, or the gateway
   // calling back twice, must not double-record or double-assign a receipt.
   if (order.status !== "pending") {
+    let receipt: PaymentResult | PrintableReceiptHistory | null = null;
+    if (order.receipt_no) {
+      try {
+        receipt = await getReceiptData(order.receipt_no);
+      } catch (err) {
+        console.error("Could not fetch receipt data:", err);
+        try {
+          receipt = await getReceiptForReprint(order.receipt_no);
+        } catch (e) {
+          console.error("Could not fetch receipt for reprint:", e);
+        }
+      }
+    }
     return {
       status: order.status,
       receiptNo: order.receipt_no,
       holdingNo: order.holding_no,
       amount: order.amount,
+      order_id: orderId,
+      receipt,
     };
   }
 
   if (!reportedSuccess) {
     await onlinePaymentRepository.markFailed(orderId, gatewayResponse);
-    return { status: "failed", receiptNo: null, holdingNo: order.holding_no, amount: order.amount, order_id: orderId };
+    return { status: "failed", receiptNo: null, holdingNo: order.holding_no, amount: order.amount, order_id: orderId, receipt: null };
   }
 
   const receiptNoNum = await paymentRepository.getNextReceiptNo();
@@ -239,7 +267,6 @@ export async function confirmOnlinePayment(
     demandNo: demandNos.join(','),
     amountReceivedActual: Number(order.amount),
   }
-  console.log('dataToSend', dataToSend);
 
   await submitPayment(order.holding_no, dataToSend, 'Citizen Self-Service');
 
@@ -247,17 +274,91 @@ export async function confirmOnlinePayment(
 
   await onlinePaymentRepository.markSuccess(orderId, receiptNo, gatewayResponse);
 
-  return { status: "success", receiptNo, holdingNo: order.holding_no, amount: order.amount, order_id: orderId };
+  // Copy frozen demand notice breakdown into transactions so the receipt reprint has full breakdown
+  try {
+    if (demandNos[0]) {
+      const firstNotice = await demandNoticeRepository.findByDemandNo(demandNos[0]);
+      if (firstNotice) {
+        await pool.query(
+          `UPDATE transactions SET
+            arv = $2,
+            vacant_arv = $3,
+            current_year_tax_net = $4,
+            previous_years_tax_base = $5,
+            total_fine_amount = $6,
+            other_charges = $7,
+            floor_breakdown = $8,
+            area_rebate = $9,
+            area_rebate_reason = $10,
+            amount_demanded = $11,
+            amount_received_actual = $12
+           WHERE order_id = $1`,
+          [
+            orderId,
+            firstNotice.arv,
+            firstNotice.vacant_arv,
+            firstNotice.current_year_tax_net,
+            firstNotice.previous_years_tax_base,
+            firstNotice.total_fine_amount,
+            firstNotice.other_charges,
+            firstNotice.floor_breakdown ? JSON.stringify(firstNotice.floor_breakdown) : null,
+            firstNotice.area_rebate,
+            firstNotice.area_rebate_reason,
+            firstNotice.total_amount_demanded,
+            order.amount_received,
+          ]
+        );
+      }
+    }
+  } catch (err) {
+    console.error("Error updating transaction breakdown for online receipt:", err);
+  }
+
+  let receipt: PaymentResult | PrintableReceiptHistory | null = null;
+  if (receiptNo) {
+    try {
+      receipt = await getReceiptData(receiptNo);
+    } catch (e) {
+      console.error("Could not fetch receipt data:", e);
+      try {
+        receipt = await getReceiptForReprint(receiptNo);
+      } catch (err) {
+        console.error("Could not fetch receipt for reprint:", err);
+      }
+    }
+  }
+
+  return { status: "success", receiptNo, holdingNo: order.holding_no, amount: order.amount_received, order_id: orderId, receipt };
 }
 
 export async function paymentStatusCheck(orderId: string) {
-
   const order = await onlinePaymentRepository.findByOrderId(orderId);
   if (!order) {
     throw ApiError.notFound(`No payment order found for ${orderId}`);
   }
 
-  return order
+  let receipt: PaymentResult | PrintableReceiptHistory | null = null;
+  if (order.receipt_no) {
+    try {
+      receipt = await getReceiptData(order.receipt_no);
+    } catch (e) {
+      console.error("Could not fetch receipt data:", e);
+      try {
+        receipt = await getReceiptForReprint(order.receipt_no);
+      } catch (err) {
+        console.error("Could not fetch receipt for reprint:", err);
+      }
+    }
+  }
+
+  return {
+    ...order,
+    receipt,
+  };
+}
+
+export async function findAllDetailsByOrderId(orderId: string) {
+  return paymentStatusCheck(orderId);
 }
 
 //=============================For ICICI ORange integration================================================

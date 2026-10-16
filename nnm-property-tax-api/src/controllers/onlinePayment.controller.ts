@@ -66,11 +66,11 @@ export const postConfirmOnlinePayment = asyncHandler(async (req: Request, res: R
     throw ApiError.badRequest("Invalid confirmation payload", parsed.error.flatten().fieldErrors);
   }
 
-  let isSuccess = true;
+  let isSuccess = false;
 
-  // if (req.body?.responseCode === '0000') {
-  //   isSuccess = true
-  // }
+  if (req.body?.responseCode === '0000') {
+    isSuccess = true
+  }
 
   const result = await confirmOnlinePayment(parsed.data.merchantTxnNo, isSuccess, req.body);
   // res.status(200).json(result);
@@ -85,14 +85,14 @@ export const postConfirmOnlinePayment = asyncHandler(async (req: Request, res: R
   return res.redirect(returnUrl);
 });
 
-//For checking status of payment
 export const paymentStatus = asyncHandler(async (req: Request, res: Response) => {
   const result = await paymentStatusCheck(req.body?.order_id);
-  const datatToSend = {
+  const dataToSend = {
     ...result,
-    amount: result?.amount,
+    amount: result?.amount_received,
     holdingNo: result?.holding_no,
-    receiptNo: result?.receipt_no
-  }
-  res.status(200).json(datatToSend);
+    receiptNo: result?.receipt_no,
+    receipt: result?.receipt,
+  };
+  res.status(200).json(dataToSend);
 });

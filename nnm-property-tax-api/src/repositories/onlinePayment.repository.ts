@@ -147,4 +147,14 @@ export const onlinePaymentRepository = {
       [orderId, JSON.stringify(gatewayResponse), failureReason ?? null],
     );
   },
+
+  async findAllDetailsByorderId(
+    orderId: string,
+  ): Promise<TransactionRow | null> {
+    const { rows } = await pool.query<TransactionRow>(
+      `SELECT * FROM transactions WHERE order_id = $1 LIMIT 1`,
+      [orderId],
+    );
+    return rows[0] ?? null;
+  },
 };
