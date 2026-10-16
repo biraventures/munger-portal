@@ -32,20 +32,33 @@ export const onlinePaymentRepository = {
     await pool.query(
       `INSERT INTO transactions (
         holding_no, txn_date, payment_mode, amount_received, collected_by,
-        order_id, gateway, status, tax_collector_code, tax_collector_name
-      ) VALUES ($1, now(), 'Online', $2, 'Citizen Self-Service', $3, $4, 'pending', $5, $6)`,
-      [row.holdingNo, row.amount, row.orderId, row.gateway, row.taxCollectorCode, row.taxCollectorName],
+        order_id, gateway, status, tax_collector_code, tax_collector_name, online_declaration_accepted_at, demand_no
+      ) VALUES ($1, now(), 'Online', $2, 'Citizen Self-Service', $3, $4, 'pending', $5, $6, now(),$7)`,
+      [
+        row.holdingNo,
+        row.amount,
+        row.orderId,
+        row.gateway,
+        row.taxCollectorCode,
+        row.taxCollectorName,
+        row.demandNos?.join(","),
+      ],
     );
   },
 
   async findByOrderId(orderId: string): Promise<TransactionRow | null> {
-    const { rows } = await pool.query<TransactionRow>(`SELECT * FROM transactions WHERE order_id = $1 LIMIT 1`, [
-      orderId,
-    ]);
+    const { rows } = await pool.query<TransactionRow>(
+      `SELECT * FROM transactions WHERE order_id = $1 LIMIT 1`,
+      [orderId],
+    );
     return rows[0] ?? null;
   },
 
-  async markSuccess(orderId: string, receiptNo: string, gatewayResponse: unknown): Promise<void> {
+  async markSuccess(
+    orderId: string,
+    receiptNo: string,
+    gatewayResponse: unknown,
+  ): Promise<void> {
     await pool.query(
       `UPDATE transactions
        SET status = 'success', receipt_no = $2, gateway_response = $3, confirmed_at = now()
@@ -61,5 +74,15 @@ export const onlinePaymentRepository = {
        WHERE order_id = $1`,
       [orderId, JSON.stringify(gatewayResponse)],
     );
+  },
+
+  async findAllDetailsByorderId(
+    orderId: string,
+  ): Promise<TransactionRow | null> {
+    const { rows } = await pool.query<TransactionRow>(
+      `SELECT * FROM transactions WHERE order_id = $1 LIMIT 1`,
+      [orderId],
+    );
+    return rows[0] ?? null;
   },
 };

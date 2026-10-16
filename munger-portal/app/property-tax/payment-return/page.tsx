@@ -1,10 +1,11 @@
 "use client";
 
 import { Suspense, useEffect, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { CheckCircle2, XCircle, Loader2, AlertTriangle } from "lucide-react";
 import { confirmOnlinePayment, type ConfirmPaymentResult } from "@/lib/online-payment";
+import { ReceiptView } from "@/components/operator/receipt-view";
 
 /**
  * ⚠ The `status` field name and its "success" values below are a
@@ -20,6 +21,7 @@ function looksSuccessful(params: Record<string, string>): boolean {
 }
 
 function PaymentReturnContent() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const [state, setState] = useState<"confirming" | "done" | "error">("confirming");
   const [result, setResult] = useState<ConfirmPaymentResult | null>(null);
@@ -60,7 +62,7 @@ function PaymentReturnContent() {
 
   if (state === "error" || !result) {
     return (
-      <div className="rounded-xl border border-red-200 bg-red-50 p-8 text-center">
+      <div className="mx-auto max-w-lg rounded-xl border border-red-200 bg-red-50 p-8 text-center">
         <AlertTriangle className="mx-auto mb-3 h-10 w-10 text-red-500" />
         <h1 className="mb-2 text-lg font-semibold text-red-800">Couldn&apos;t confirm this payment</h1>
         <p className="mb-5 text-sm text-red-700">{error}</p>
@@ -72,8 +74,17 @@ function PaymentReturnContent() {
   }
 
   if (result.status === "success") {
+    if (result.receipt) {
+      return (
+        <ReceiptView
+          receipt={result.receipt}
+          onNewPayment={() => router.push("/property-tax")}
+        />
+      );
+    }
+
     return (
-      <div className="rounded-xl border border-green-200 bg-green-50 p-8 text-center">
+      <div className="mx-auto max-w-lg rounded-xl border border-green-200 bg-green-50 p-8 text-center">
         <CheckCircle2 className="mx-auto mb-3 h-10 w-10 text-green-600" />
         <h1 className="mb-2 text-lg font-semibold text-green-800">Payment successful</h1>
         <p className="mb-1 text-sm text-green-700">
@@ -88,7 +99,7 @@ function PaymentReturnContent() {
   }
 
   return (
-    <div className="rounded-xl border border-red-200 bg-red-50 p-8 text-center">
+    <div className="mx-auto max-w-lg rounded-xl border border-red-200 bg-red-50 p-8 text-center">
       <XCircle className="mx-auto mb-3 h-10 w-10 text-red-500" />
       <h1 className="mb-2 text-lg font-semibold text-red-800">Payment not successful</h1>
       <p className="mb-5 text-sm text-red-700">
@@ -103,7 +114,7 @@ function PaymentReturnContent() {
 
 export default function PaymentReturnPage() {
   return (
-    <div className="mx-auto max-w-lg px-6 py-16">
+    <div className="mx-auto max-w-3xl px-4 py-10">
       <Suspense fallback={<div className="py-16 text-center text-sm text-ink-soft">Loading…</div>}>
         <PaymentReturnContent />
       </Suspense>

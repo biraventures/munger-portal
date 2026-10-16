@@ -53,6 +53,33 @@ export const postConfirmOnlinePayment = asyncHandler(async (req: Request, res: R
     throw ApiError.badRequest("Invalid confirmation payload", parsed.error.flatten().fieldErrors);
   }
 
-  const result = await confirmOnlinePayment(parsed.data.orderId, parsed.data.success, req.body);
-  res.status(200).json(result);
+  let isSuccess = false;
+
+  if (req.body?.responseCode === '0000') {
+    isSuccess = true
+  }
+
+  const result = await confirmOnlinePayment(parsed.data.merchantTxnNo, isSuccess, req.body);
+  // res.status(200).json(result);
+  const frontendUrl = env.FRONTEND_URL.replace(/\/+$/, "");
+  const basePath = env.FRONTEND_BASE_PATH.replace(/^\/+|\/+$/g, "");
+
+  const baseUrl = basePath && frontendUrl.endsWith(`/${basePath}`)
+    ? frontendUrl
+    : `${frontendUrl}/${basePath}`;
+
+  const returnUrl = `${baseUrl}/property-tax/payment-return?order_id=${result?.order_id}`;
+  return res.redirect(returnUrl);
+});
+
+export const paymentStatus = asyncHandler(async (req: Request, res: Response) => {
+  const result = await paymentStatusCheck(req.body?.order_id);
+  const dataToSend = {
+    ...result,
+    amount: result?.amount_received,
+    holdingNo: result?.holding_no,
+    receiptNo: result?.receipt_no,
+    receipt: result?.receipt,
+  };
+  res.status(200).json(dataToSend);
 });

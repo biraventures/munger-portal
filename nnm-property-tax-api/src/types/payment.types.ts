@@ -32,6 +32,17 @@ export interface PaymentResult {
   taxCollectorName: string | null;
   tvNumber: string | null;
   tvDate: string | null;
+  /** Payment details entered for the mode (null when the mode has none). */
+  instrument: InstrumentView | null;
+  amountDemanded: string;
+  amountReceivedActual: string;
+  /** 'reconciled' | 'pending' | 'pm_verified' | 'not_required' ... */
+  reconcileStatus: string;
+  /** Cheque / DD not yet reconciled: the receipt prints TEMPORARY / PROVISIONAL. */
+  provisional: boolean;
+  /** True when a Tax Collector recorded it in the field - the app shows a collection slip; the stamped receipt is printed in bulk at the office. */
+  fieldCollection: boolean;
+  onlineDeclarationAcceptedAt?: string | null;
   arrearStagesPaid: ArrearStagePaidView[];
   property: Record<string, unknown>;
   floors: unknown[];
