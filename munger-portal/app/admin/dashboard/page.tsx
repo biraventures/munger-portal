@@ -124,6 +124,8 @@ export default function AdminDashboardPage() {
   const showMutationApplications = isMutationChainRole || admin.role === "city_manager";
   const showKhatianUpload = admin.role === "abhilekh_prabhari";
   const showKhatianReview = ["deputy_commissioner", "commissioner", "city_manager"].includes(admin.role);
+  const showTlSurvey = admin.role === "tax_collector";
+  const showTlNotices = ["tax_collector", "city_manager", "deputy_commissioner", "commissioner", "trade_license_nodal"].includes(admin.role);
   const isStreetlightReporterRole =
     admin.role === "tax_daroga" || admin.role === "tax_surveyor" || admin.role === "tax_collector" || admin.role === "stall_prabhari" || admin.role === "je_mechanical" || admin.role === "ae_mechanical" ||
     admin.role === "commissioner" || admin.role === "deputy_commissioner" || admin.role === "city_manager";
@@ -241,6 +243,39 @@ export default function AdminDashboardPage() {
                   </p>
                 </Link>
               )}
+            </div>
+          </>
+        )}
+
+        {showTlNotices && (
+          <>
+            <h2 className={groupHeadingClass}>Trade Licence Field Check</h2>
+            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+              {showTlSurvey && (
+                <Link href="/admin/tl-survey" className={cardClass}>
+                  <span className={iconWrapClass}>
+                    <ClipboardCheck className="h-6 w-6" strokeWidth={1.8} />
+                  </span>
+                  <h3 className="mb-1.5 text-base font-semibold text-slate-900">Trade Licence Check</h3>
+                  <p className="text-sm text-slate-500">Record a business visit - licence photo if it has one, otherwise a 14-day notice is generated.</p>
+                </Link>
+              )}
+              {showTlSurvey && (
+                <Link href="/admin/tl-notices-print" className={cardClass}>
+                  <span className={iconWrapClass}>
+                    <Printer className="h-6 w-6" strokeWidth={1.8} />
+                  </span>
+                  <h3 className="mb-1.5 text-base font-semibold text-slate-900">Print Trade Licence Notices</h3>
+                  <p className="text-sm text-slate-500">End-of-day printing of today&apos;s notices and automatic second notices, for the City Manager&apos;s signature.</p>
+                </Link>
+              )}
+              <Link href="/admin/tl-notices" className={cardClass}>
+                <span className={iconWrapClass}>
+                  <FileText className="h-6 w-6" strokeWidth={1.8} />
+                </span>
+                <h3 className="mb-1.5 text-base font-semibold text-slate-900">{showTlSurvey ? "My Trade Licence Visits" : "Trade Licence Notices"}</h3>
+                <p className="text-sm text-slate-500">Businesses checked, notice status (1st, 2nd, legal action due) and licences obtained after notice.</p>
+              </Link>
             </div>
           </>
         )}

@@ -197,6 +197,15 @@ import {
   postLinkMutationApplication,
   postRejectMutationApplication,
 } from "../controllers/mutationApplication.controller";
+import {
+  getTlNotice,
+  getTlPrintQueue,
+  getTlSurveyFile,
+  getTlSurveys,
+  postTlComplied,
+  postTlMarkPrinted,
+  postTlSurvey,
+} from "../controllers/tradeLicenseNotice.controller";
 
 export const adminRouter = Router();
 
@@ -508,6 +517,17 @@ adminRouter.get("/mutation-applications/:id", requireMutationApplicationRole, ge
 adminRouter.get("/mutation-applications/:id/documents/:docId/file", requireMutationApplicationRole, getMutationApplicationDocument);
 adminRouter.post("/mutation-applications/:id/link", requireAdminRole("tax_daroga"), postLinkMutationApplication);
 adminRouter.post("/mutation-applications/:id/reject", requireAdminRole("tax_daroga"), postRejectMutationApplication);
+
+// Trade licence field survey: the Tax Collector records visits and prints the notices; the City Manager (who signs them)
+// and senior officers see every business and its notice status.
+const requireTlViewRole = requireAdminRole("tax_collector", "city_manager", "deputy_commissioner", "commissioner", "trade_license_nodal");
+adminRouter.post("/tl-survey", requireAdminRole("tax_collector"), postTlSurvey);
+adminRouter.get("/tl-surveys", requireTlViewRole, getTlSurveys);
+adminRouter.get("/tl-surveys/:id/file/:which", requireTlViewRole, getTlSurveyFile);
+adminRouter.post("/tl-surveys/:id/complied", requireAdminRole("tax_collector", "city_manager"), postTlComplied);
+adminRouter.get("/tl-notices/print-queue", requireAdminRole("tax_collector"), getTlPrintQueue);
+adminRouter.post("/tl-notices/mark-printed", requireAdminRole("tax_collector"), postTlMarkPrinted);
+adminRouter.get("/tl-notices/:id", requireTlViewRole, getTlNotice);
 
 adminRouter.get("/collection-issues/mine", requireAdminRole("tax_collector"), listMyCollectionIssues);
 adminRouter.get("/collection-issues", requireAdminRole("tax_daroga", "commissioner", "city_manager"), listAllCollectionIssues);
