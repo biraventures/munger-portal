@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { AlertCircle, AlertTriangle, CheckCircle2, FileWarning, Receipt, Search, ShieldAlert } from "lucide-react";
+import { AlertCircle, AlertTriangle, CheckCircle2, FileWarning, Loader2, Receipt, Search, ShieldAlert, X } from "lucide-react";
 import { fetchFormOptions, type FormOptions } from "@/lib/operator-api";
 import { sanitizeHoldingNoInput } from "@/lib/holding-no";
 import { AdminHeader } from "@/components/admin-header";
@@ -107,6 +107,7 @@ export default function TaxCollectorPage() {
   const [showFullReceipt, setShowFullReceipt] = useState(false);
   const [collecting, setCollecting] = useState(false);
   const [receipt, setReceipt] = useState<ReceiptData | null>(null);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
 
   const [requestingCancel, setRequestingCancel] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
@@ -194,6 +195,7 @@ export default function TaxCollectorPage() {
     setIssueSuccess(false);
     setIssueNotes("");
     setError(null);
+    setShowConfirmModal(false);
   }
 
   async function handleReportIssue() {
@@ -246,6 +248,14 @@ export default function TaxCollectorPage() {
       setError(instErr);
       return;
     }
+    setError(null);
+    setShowConfirmModal(true);
+  }
+
+  async function executeCollectPayment() {
+    if (!result?.property || !selectedDemandNo) return;
+    const selected = notices?.find((n) => n.demandNo === selectedDemandNo);
+    if (!selected) return;
     setCollecting(true);
     setError(null);
     try {
@@ -255,6 +265,7 @@ export default function TaxCollectorPage() {
         demandNo: selectedDemandNo,
         ...instrumentPayload(paymentMode ?? "", instrument),
       });
+      setShowConfirmModal(false);
       setReceipt(res);
       setInstrument(EMPTY_INSTRUMENT);
       setShowFullReceipt(false);
@@ -635,6 +646,126 @@ export default function TaxCollectorPage() {
           <CollectionIssueList issues={myIssues} showHolding emptyText="You have not reported any collection issue yet." />
         </div>
       </main>
+
+      {showConfirmModal && result?.property && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+        >
+          <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200">
+              <h3 className="text-base font-semibold text-slate-900">
+                Confirm Property Tax Collection
+              </h3>
+              <button
+                type="button"
+                onClick={() => !collecting && setShowConfirmModal(false)}
+                disabled={collecting}
+                aria-label="Close"
+                className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 disabled:opacity-40"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <p className="mt-3 text-xs text-slate-500">
+              Please review the payment details below before recording the transaction and issuing the slip:
+            </p>
+
+            <div className="my-4 rounded-lg border border-slate-200 bg-slate-50 p-4 text-xs space-y-2.5">
+              <div className="flex justify-between items-center">
+                <span className="text-slate-500">Holding No.:</span>
+                <span className="font-mono font-medium text-slate-900">
+                  {result.property.holding_no}
+                </span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-slate-500">Owner Name:</span>
+                <span className="font-medium text-slate-900 text-right">
+                  {String(result.property.owner_name || "-")}
+                </span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-slate-500">Demand Notice:</span>
+                <span className="font-mono font-medium text-slate-900">
+                  {notices?.find((n) => n.demandNo === selectedDemandNo)?.formattedDemandNo || selectedDemandNo}
+                </span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-slate-500">Collector:</span>
+                <span className="font-medium text-slate-900">
+                  {admin?.displayName || "Tax Collector"}
+                </span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-slate-500">Payment Mode:</span>
+                <span className="font-medium text-slate-900">
+                  {paymentMode}
+                </span>
+              </div>
+              {instrument.instrumentNo && (
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-500">Instrument No.:</span>
+                  <span className="font-mono font-medium text-slate-900">
+                    {instrument.instrumentNo}
+                  </span>
+                </div>
+              )}
+              {(instrument.bankChoice || instrument.otherBank) && (
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-500">Bank:</span>
+                  <span className="font-medium text-slate-900">
+                    {instrument.bankChoice === "Other" ? instrument.otherBank : instrument.bankChoice}
+                  </span>
+                </div>
+              )}
+              <div className="border-t border-slate-200 pt-2.5 flex justify-between items-baseline">
+                <span className="text-xs font-semibold uppercase tracking-wider text-teal-700">
+                  Total to Collect:
+                </span>
+                <span className="font-mono text-lg font-bold text-nnm-blue">
+                  ₹{Number(notices?.find((n) => n.demandNo === selectedDemandNo)?.totalAmountDemanded ?? 0).toLocaleString("en-IN")}
+                </span>
+              </div>
+            </div>
+
+            {error && (
+              <div
+                role="alert"
+                className="mb-4 flex items-center gap-2 rounded-md border border-red-200 bg-red-50 p-3 text-xs text-red-700"
+              >
+                <AlertCircle className="h-4 w-4 shrink-0" />
+                <span>{error}</span>
+              </div>
+            )}
+
+            <p className="mb-5 text-[11px] text-slate-500 leading-relaxed">
+              Upon clicking Confirm, the payment will be recorded and an official collection slip will be issued immediately.
+            </p>
+
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => setShowConfirmModal(false)}
+                disabled={collecting}
+                className="w-1/2 rounded-md border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={executeCollectPayment}
+                disabled={collecting}
+                className="w-1/2 inline-flex items-center justify-center gap-2 rounded-md bg-nnm-gold px-4 py-2.5 text-sm font-semibold text-[#20240a] shadow-[0_3px_0_#96791b] transition-transform hover:-translate-y-px disabled:opacity-60"
+              >
+                {collecting && <Loader2 className="h-4 w-4 animate-spin" />}
+                {collecting ? "Recording…" : "Confirm & Issue Slip"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,7 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AlertCircle, FileWarning, Loader2, Printer, Receipt } from "lucide-react";
+import {
+  AlertCircle,
+  FileWarning,
+  Loader2,
+  Printer,
+  Receipt,
+  X,
+} from "lucide-react";
 import {
   fetchUnsettledShopDemands,
   generateRentDemand,
@@ -16,7 +23,14 @@ import { ShopNoticeView } from "./shop-notice-view";
 const inputClass =
   "w-full rounded-md border border-slate-300 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-nnm-blue focus:ring-offset-1";
 const labelClass = "mb-1.5 block text-sm font-medium text-slate-700";
-const PAYMENT_MODES = ["Cash", "Cheque", "Online / UPI", "Card", "Demand Draft", "District Treasury"];
+const PAYMENT_MODES = [
+  "Cash",
+  "Cheque",
+  "Online / UPI",
+  "Card",
+  "Demand Draft",
+  "District Treasury",
+];
 
 const TV_NUMBER_MIN = 15;
 const TV_NUMBER_MAX = 40;
@@ -42,7 +56,9 @@ export function ShopRentPaymentPanel({
   const isDistrictTreasury = paymentMode === "District Treasury";
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [printingNotice, setPrintingNotice] = useState<PrintableShopDemand | null>(null);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [printingNotice, setPrintingNotice] =
+    useState<PrintableShopDemand | null>(null);
   const [noticeLoading, setNoticeLoading] = useState(false);
 
   async function handlePrintNotice(demandNo: string) {
@@ -51,7 +67,9 @@ export function ShopRentPaymentPanel({
       const notice = await fetchPrintableDemandNotice(demandNo);
       setPrintingNotice(notice);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not load the notice.");
+      setError(
+        err instanceof Error ? err.message : "Could not load the notice.",
+      );
     } finally {
       setNoticeLoading(false);
     }
@@ -61,9 +79,14 @@ export function ShopRentPaymentPanel({
     fetchUnsettledShopDemands(shopNo)
       .then((list) => {
         setDemands(list);
-        if (list.length > 0 && !selectedDemandNo) setSelectedDemandNo(list[0]!.demandNo);
+        if (list.length > 0 && !selectedDemandNo)
+          setSelectedDemandNo(list[0]!.demandNo);
       })
-      .catch((err) => setLoadError(err instanceof Error ? err.message : "Could not load demands."));
+      .catch((err) =>
+        setLoadError(
+          err instanceof Error ? err.message : "Could not load demands.",
+        ),
+      );
   }
 
   useEffect(() => {
@@ -78,13 +101,15 @@ export function ShopRentPaymentPanel({
       await generateRentDemand(shopNo, monthsToCover);
       loadDemands();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not generate demand.");
+      setError(
+        err instanceof Error ? err.message : "Could not generate demand.",
+      );
     } finally {
       setGenerating(false);
     }
   }
 
-  async function handleSubmitPayment(e: React.FormEvent) {
+  function handleSubmitPayment(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
     if (!selectedDemandNo) {
@@ -98,7 +123,9 @@ export function ShopRentPaymentPanel({
         return;
       }
       if (tv.length < TV_NUMBER_MIN || tv.length > TV_NUMBER_MAX) {
-        setError(`T.V. number must be between ${TV_NUMBER_MIN} and ${TV_NUMBER_MAX} characters.`);
+        setError(
+          `T.V. number must be between ${TV_NUMBER_MIN} and ${TV_NUMBER_MAX} characters.`,
+        );
         return;
       }
       if (/\s/.test(tv)) {
@@ -110,7 +137,12 @@ export function ShopRentPaymentPanel({
         return;
       }
     }
+    setShowConfirmModal(true);
+  }
+
+  async function handleConfirmPayment() {
     setSubmitting(true);
+    setError(null);
     try {
       const receipt = await submitShopRentPayment(shopNo, {
         demandNo: selectedDemandNo,
@@ -119,6 +151,7 @@ export function ShopRentPaymentPanel({
         tvNumber: isDistrictTreasury ? tvNumber.trim() : undefined,
         tvDate: isDistrictTreasury ? tvDate : undefined,
       });
+      setShowConfirmModal(false);
       onPaymentSuccess(receipt);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Payment failed.");
@@ -127,22 +160,31 @@ export function ShopRentPaymentPanel({
     }
   }
 
-  const selected = demands?.find((d) => d.demandNo === selectedDemandNo) ?? null;
+  const selected =
+    demands?.find((d) => d.demandNo === selectedDemandNo) ?? null;
 
   if (printingNotice) {
     return (
       <section className="rounded-xl border border-slate-200 bg-white p-6">
-        <ShopNoticeView notice={printingNotice} onClose={() => setPrintingNotice(null)} />
+        <ShopNoticeView
+          notice={printingNotice}
+          onClose={() => setPrintingNotice(null)}
+        />
       </section>
     );
   }
 
   return (
     <section className="rounded-xl border border-slate-200 bg-white p-6">
-      <h2 className="mb-4 text-base font-semibold text-slate-900">Rent Demand &amp; Payment</h2>
+      <h2 className="mb-4 text-base font-semibold text-slate-900">
+        Rent Demand &amp; Payment
+      </h2>
 
-      {error && (
-        <div role="alert" className="mb-4 flex items-center gap-2 rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+      {error && !showConfirmModal && (
+        <div
+          role="alert"
+          className="mb-4 flex items-center gap-2 rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-700"
+        >
           <AlertCircle className="h-4 w-4 shrink-0" />
           {error}
         </div>
@@ -152,7 +194,11 @@ export function ShopRentPaymentPanel({
         <div className="mb-5 flex flex-wrap items-end gap-3 rounded-md border border-slate-200 bg-slate-50 p-4">
           <div>
             <label className={labelClass}>Generate demand for</label>
-            <select value={monthsToCover} onChange={(e) => setMonthsToCover(Number(e.target.value))} className={inputClass}>
+            <select
+              value={monthsToCover}
+              onChange={(e) => setMonthsToCover(Number(e.target.value))}
+              className={inputClass}
+            >
               <option value={1}>1 month</option>
               <option value={3}>3 months</option>
               <option value={6}>6 months</option>
@@ -165,7 +211,11 @@ export function ShopRentPaymentPanel({
             disabled={generating}
             className="inline-flex items-center gap-2 rounded-md bg-nnm-blue px-4 py-2.5 text-sm font-semibold text-white hover:bg-nnm-blue-dark disabled:opacity-60"
           >
-            {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileWarning className="h-4 w-4" />}
+            {generating ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <FileWarning className="h-4 w-4" />
+            )}
             {generating ? "Generating…" : "Generate Demand"}
           </button>
         </div>
@@ -182,7 +232,8 @@ export function ShopRentPaymentPanel({
 
       {demands && demands.length === 0 && (
         <p className="text-sm text-slate-500">
-          No unsettled rent demand for this shop{hasPendingRent ? " yet — generate one above." : "."}
+          No unsettled rent demand for this shop
+          {hasPendingRent ? " yet — generate one above." : "."}
         </p>
       )}
 
@@ -190,10 +241,15 @@ export function ShopRentPaymentPanel({
         <form onSubmit={handleSubmitPayment} className="space-y-4">
           <div>
             <label className={labelClass}>Rent demand</label>
-            <select value={selectedDemandNo} onChange={(e) => setSelectedDemandNo(e.target.value)} className={inputClass}>
+            <select
+              value={selectedDemandNo}
+              onChange={(e) => setSelectedDemandNo(e.target.value)}
+              className={inputClass}
+            >
               {demands.map((d) => (
                 <option key={d.demandNo} value={d.demandNo}>
-                  {d.formattedDemandNo} — {d.periodStartMonth} to {d.periodEndMonth} — ₹
+                  {d.formattedDemandNo} — {d.periodStartMonth} to{" "}
+                  {d.periodEndMonth} — ₹
                   {Number(d.totalAmountDemanded).toLocaleString("en-IN")}
                 </option>
               ))}
@@ -207,7 +263,8 @@ export function ShopRentPaymentPanel({
                   Amount to collect (frozen from the demand)
                 </span>
                 <span className="block font-mono text-2xl font-semibold text-nnm-blue">
-                  ₹{Number(selected.totalAmountDemanded).toLocaleString("en-IN")}
+                  ₹
+                  {Number(selected.totalAmountDemanded).toLocaleString("en-IN")}
                 </span>
               </div>
               <button
@@ -225,7 +282,11 @@ export function ShopRentPaymentPanel({
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
               <label className={labelClass}>Payment mode</label>
-              <select value={paymentMode} onChange={(e) => setPaymentMode(e.target.value)} className={inputClass}>
+              <select
+                value={paymentMode}
+                onChange={(e) => setPaymentMode(e.target.value)}
+                className={inputClass}
+              >
                 {PAYMENT_MODES.map((m) => (
                   <option key={m} value={m}>
                     {m}
@@ -235,7 +296,11 @@ export function ShopRentPaymentPanel({
             </div>
             <div>
               <label className={labelClass}>Counter (optional)</label>
-              <input value={counter} onChange={(e) => setCounter(e.target.value)} className={inputClass} />
+              <input
+                value={counter}
+                onChange={(e) => setCounter(e.target.value)}
+                className={inputClass}
+              />
             </div>
             {isDistrictTreasury && (
               <>
@@ -250,7 +315,8 @@ export function ShopRentPaymentPanel({
                     className={inputClass}
                   />
                   <p className="mt-1 text-xs text-slate-500">
-                    {TV_NUMBER_MIN}–{TV_NUMBER_MAX} characters, letters/numbers/symbols, no spaces.
+                    {TV_NUMBER_MIN}–{TV_NUMBER_MAX} characters,
+                    letters/numbers/symbols, no spaces.
                   </p>
                 </div>
                 <div>
@@ -276,6 +342,117 @@ export function ShopRentPaymentPanel({
             {submitting ? "Recording…" : "Record Payment"}
           </button>
         </form>
+      )}
+
+      {showConfirmModal && selected && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+        >
+          <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200">
+              <h3 className="text-base font-semibold text-slate-900">
+                Confirm Shop Rent Collection
+              </h3>
+              <button
+                type="button"
+                onClick={() => !submitting && setShowConfirmModal(false)}
+                disabled={submitting}
+                aria-label="Close"
+                className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 disabled:opacity-40"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <p className="mt-3 text-xs text-slate-500">
+              Please review the rent payment details below before recording the
+              transaction and generating the receipt:
+            </p>
+
+            <div className="my-4 rounded-lg border border-slate-200 bg-slate-50 p-4 text-xs space-y-2.5">
+              <div className="flex justify-between items-center">
+                <span className="text-slate-500">Shop No.:</span>
+                <span className="font-mono font-medium text-slate-900">
+                  {shopNo}
+                </span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-slate-500">Demand Notice:</span>
+                <span className="font-mono font-medium text-slate-900">
+                  {selected.formattedDemandNo || selected.demandNo}
+                </span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-slate-500">Payment Mode:</span>
+                <span className="font-medium text-slate-900">
+                  {paymentMode}
+                </span>
+              </div>
+              {counter.trim() && (
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-500">Counter:</span>
+                  <span className="font-medium text-slate-900">
+                    {counter.trim()}
+                  </span>
+                </div>
+              )}
+              {isDistrictTreasury && tvNumber.trim() && (
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-500">T.V. Number:</span>
+                  <span className="font-mono font-medium text-slate-900">
+                    {tvNumber.trim()}
+                  </span>
+                </div>
+              )}
+              <div className="border-t border-slate-200 pt-2.5 flex justify-between items-baseline">
+                <span className="text-xs font-semibold uppercase tracking-wider text-teal-700">
+                  Total to Collect:
+                </span>
+                <span className="font-mono text-lg font-bold text-nnm-blue">
+                  ₹
+                  {Number(selected.totalAmountDemanded).toLocaleString("en-IN")}
+                </span>
+              </div>
+            </div>
+
+            {error && (
+              <div
+                role="alert"
+                className="mb-4 flex items-center gap-2 rounded-md border border-red-200 bg-red-50 p-3 text-xs text-red-700"
+              >
+                <AlertCircle className="h-4 w-4 shrink-0" />
+                <span>{error}</span>
+              </div>
+            )}
+
+            <p className="mb-5 text-[11px] text-slate-500 leading-relaxed">
+              Upon confirmation, this rent payment will be recorded in the
+              system and an official receipt will be generated.
+            </p>
+
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => setShowConfirmModal(false)}
+                disabled={submitting}
+                className="w-1/2 rounded-md border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmPayment}
+                disabled={submitting}
+                className="w-1/2 inline-flex items-center justify-center gap-2 rounded-md bg-nnm-gold px-4 py-2.5 text-sm font-semibold text-[#20240a] shadow-[0_3px_0_#96791b] transition-transform hover:-translate-y-px disabled:opacity-60"
+              >
+                {submitting && <Loader2 className="h-4 w-4 animate-spin" />}
+                {submitting ? "Recording…" : "Confirm & Record"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </section>
   );
