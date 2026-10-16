@@ -16,11 +16,13 @@ import { fetchActiveTaxCollectors } from "@/lib/tax-collector";
 export function TaxCollectorCodeInput({
   value,
   onChange,
+  onCollectorChange,
   inputClassName,
   labelClassName,
 }: {
   value: string;
   onChange: (code: string) => void;
+  onCollectorChange?: (collector: { code: string; name: string } | null) => void;
   inputClassName: string;
   labelClassName: string;
 }) {
@@ -29,18 +31,34 @@ export function TaxCollectorCodeInput({
 
   useEffect(() => {
     fetchActiveTaxCollectors()
-      .then(setCollectors)
+      .then((list) => {
+        setCollectors(list);
+        if (value) {
+          const match = list.find((c) => c.code === value) ?? null;
+          onCollectorChange?.(match);
+        }
+      })
       .catch(() => setLoadError(true));
-  }, []);
+  }, [value, onCollectorChange]);
 
   return (
     <div>
       <label className={labelClassName}>Tax Collector (optional)</label>
-      <select value={value} onChange={(e) => onChange(e.target.value)} disabled={!collectors} className={inputClassName}>
+      <select
+        value={value}
+        onChange={(e) => {
+          const code = e.target.value;
+          onChange(code);
+          const match = collectors?.find((c) => c.code === code) ?? null;
+          onCollectorChange?.(match);
+        }}
+        disabled={!collectors}
+        className={inputClassName}
+      >
         <option value="">Not applicable</option>
         {collectors?.map((c) => (
           <option key={c.code} value={c.code}>
-            {c.code} - {c.name}
+            {c.name} ({c.code})
           </option>
         ))}
       </select>
