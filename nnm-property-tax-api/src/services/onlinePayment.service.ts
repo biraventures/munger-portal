@@ -140,6 +140,47 @@ export async function createGatewayOrder(
   //   taxCollectorName: taxCollector?.name ?? null,
   //   demandNos: demandNos,
   // });
+
+  const notice = await demandNoticeRepository.findByDemandNo(demandNos![0]);
+  // console.log('notice',notice);
+
+  if (!notice || notice.holding_no !== holdingNo) {
+    throw ApiError.notFound(`Demand notice ${demandNos![0]} not found for this holding.`);
+  }
+  if (notice.settled) {
+    throw ApiError.badRequest(`Demand notice ${demandNos![0]} has already been paid.`);
+  }
+  if (notice.cancelled) {
+    throw ApiError.badRequest(`Demand notice ${demandNos![0]} has been cancelled and can no longer be paid.`);
+  }
+  if (notice.superseded) {
+    throw ApiError.badRequest(
+      `Demand notice ${demandNos![0]} has been superseded by a newer notice for this holding - please use the current demand notice instead.`,
+    );
+  }
+  // A pending cancellation request means tax_daroga hasn't yet decided
+  // whether this notice should be voided - collecting payment while
+  // that's unresolved would let the two outcomes race each other
+  // (e.g. approval reverting a notice that was just paid seconds
+  // earlier). Blocked until the request is approved or rejected.
+  const pendingCancellation = await cancellationRequestRepository.findPendingForTarget("demand_notice", demandNos![0]);
+  if (pendingCancellation) {
+    throw ApiError.badRequest(
+      `Demand notice ${demandNos![0]} has a pending cancellation request awaiting Tax Daroga's decision - payment cannot be collected until that is resolved.`,
+    );
+  }
+  if (!notice.assessment_year) {
+    // Only possible for notices generated before this feature existed —
+    // they predate assessment_year being recorded, so there's no safe
+    // year to advance tax_paid_till_year to. Regenerate the notice instead.
+    throw ApiError.badRequest(
+      `Demand notice ${demandNos![0]} is missing its assessment year — regenerate the notice and pay the new one.`,
+    );
+  }
+  if (Number(notice.total_amount_demanded) !== Number(amount)) {
+    throw ApiError.badRequest(`Amount mismatch - please generate new demand. `);
+  }
+
   await onlinePaymentRepository.createPendingOrder({
     orderId,
     holdingNo,
@@ -472,4 +513,41 @@ const initiatePaymentDal = async (payer: PayerType, transactionId?: string) => {
   }
 
   return dataToReturn
+}
+
+export const validateDemandAmount = async (amount: number, holdingNo: string, demandNo: string) => {
+  const notice = await demandNoticeRepository.findByDemandNo(demandNo);
+  if (!notice || notice.holding_no !== holdingNo) {
+    throw ApiError.notFound(`Demand notice ${demandNo} not found for this holding.`);
+  }
+  if (notice.settled) {
+    throw ApiError.badRequest(`Demand notice ${demandNo} has already been paid.`);
+  }
+  if (notice.cancelled) {
+    throw ApiError.badRequest(`Demand notice ${demandNo} has been cancelled and can no longer be paid.`);
+  }
+  if (notice.superseded) {
+    throw ApiError.badRequest(
+      `Demand notice ${demandNo} has been superseded by a newer notice for this holding - please use the current demand notice instead.`,
+    );
+  }
+  // A pending cancellation request means tax_daroga hasn't yet decided
+  // whether this notice should be voided - collecting payment while
+  // that's unresolved would let the two outcomes race each other
+  // (e.g. approval reverting a notice that was just paid seconds
+  // earlier). Blocked until the request is approved or rejected.
+  const pendingCancellation = await cancellationRequestRepository.findPendingForTarget("demand_notice", demandNo);
+  if (pendingCancellation) {
+    throw ApiError.badRequest(
+      `Demand notice ${demandNo} has a pending cancellation request awaiting Tax Daroga's decision - payment cannot be collected until that is resolved.`,
+    );
+  }
+  if (!notice.assessment_year) {
+    // Only possible for notices generated before this feature existed —
+    // they predate assessment_year being recorded, so there's no safe
+    // year to advance tax_paid_till_year to. Regenerate the notice instead.
+    throw ApiError.badRequest(
+      `Demand notice ${demandNo} is missing its assessment year — regenerate the notice and pay the new one.`,
+    );
+  }
 }
