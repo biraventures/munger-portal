@@ -66,7 +66,7 @@ export default function AdminDashboardPage() {
   // Nodal who still see some cards in their own area.
   const isGisOnlyRole = isAtps || isAssistantArchitect;
   const isAgencyRole = admin.role === "agency_team_leader" || admin.role === "agency_project_manager";
-  const isRestrictedRole = isStallPrabhari || isTradeLicenseNodal || isGisOnlyRole || admin.role === "je_mechanical" || admin.role === "ae_mechanical" || admin.role === "establishment_clerk" || admin.role === "tax_surveyor" || admin.role === "tax_collector" || isAgencyRole;
+  const isRestrictedRole = isStallPrabhari || isTradeLicenseNodal || isGisOnlyRole || admin.role === "je_mechanical" || admin.role === "ae_mechanical" || admin.role === "establishment_clerk" || admin.role === "abhilekh_prabhari" || admin.role === "tax_surveyor" || admin.role === "tax_collector" || isAgencyRole;
   // Roles whose whole job is one narrow task (streetlight mechanical
   // engineers, the Establishment Clerk, the Tax Surveyor, the Tax
   // Collector) - shouldn't see property/shop/trade-license sections
@@ -75,7 +75,7 @@ export default function AdminDashboardPage() {
   // they're actually part of the approval chain for). Tax Surveyor
   // and Tax Collector still see their own dedicated cards below -
   // those are gated on the role directly, not on this exclusion.
-  const isNarrowlyScopedRole = admin.role === "je_mechanical" || admin.role === "ae_mechanical" || admin.role === "establishment_clerk" || admin.role === "tax_surveyor" || admin.role === "tax_collector" || isAgencyRole;
+  const isNarrowlyScopedRole = admin.role === "je_mechanical" || admin.role === "ae_mechanical" || admin.role === "establishment_clerk" || admin.role === "abhilekh_prabhari" || admin.role === "tax_surveyor" || admin.role === "tax_collector" || isAgencyRole;
   const canApproveShopPublication = admin.role === "stall_prabhari" || admin.role === "city_manager" || admin.role === "deputy_commissioner";
   const canApproveDemandActions = admin.role === "stall_prabhari" || admin.role === "city_manager";
   const isCommissioner = admin.role === "commissioner";
@@ -121,6 +121,9 @@ export default function AdminDashboardPage() {
   const showEmployeeDatabaseList = admin.role === "establishment_clerk";
   const showEmployeeDatabaseVerify = admin.role === "city_manager";
   const showEmployeeDatabaseProgress = isCommissioner;
+  const showMutationApplications = isMutationChainRole || admin.role === "city_manager";
+  const showKhatianUpload = admin.role === "abhilekh_prabhari";
+  const showKhatianReview = ["deputy_commissioner", "commissioner", "city_manager"].includes(admin.role);
   const isStreetlightReporterRole =
     admin.role === "tax_daroga" || admin.role === "tax_surveyor" || admin.role === "tax_collector" || admin.role === "stall_prabhari" || admin.role === "je_mechanical" || admin.role === "ae_mechanical" ||
     admin.role === "commissioner" || admin.role === "deputy_commissioner" || admin.role === "city_manager";
@@ -201,7 +204,7 @@ export default function AdminDashboardPage() {
         <h1 className="mb-1 text-2xl font-semibold text-slate-900">Welcome, {admin.displayName}</h1>
         <p className="mb-8 text-sm text-slate-500">Signed in as {ADMIN_ROLE_LABELS[admin.role]}.</p>
 
-        {!isAgencyRole && (
+        {!isAgencyRole && admin.role !== "abhilekh_prabhari" && (
           <DashboardSummaryWidget
             fetchSummary={fetchDashboardSummaryAdmin}
             fetchHoldings={fetchDashboardHoldingsAdmin}
@@ -212,6 +215,34 @@ export default function AdminDashboardPage() {
             fetchTradeLicensesIssued={fetchDashboardTradeLicensesIssuedAdmin}
             visibleTabs={isStallPrabhari ? ["shops", "shopApplications"] : isTradeLicenseNodal ? ["tradeLicenseApplications", "tradeLicensesIssued"] : undefined}
           />
+        )}
+
+        {(showKhatianUpload || showKhatianReview) && (
+          <>
+            <h2 className={groupHeadingClass}>Land Records (Khatian)</h2>
+            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+              {showKhatianUpload && (
+                <Link href="/admin/khatian-upload" className={cardClass}>
+                  <span className={iconWrapClass}>
+                    <FileText className="h-6 w-6" strokeWidth={1.8} />
+                  </span>
+                  <h3 className="mb-1.5 text-base font-semibold text-slate-900">Khatian Upload</h3>
+                  <p className="text-sm text-slate-500">Upload scanned khatian PDFs by ward, survey sheet and part, and see the DMC&apos;s review.</p>
+                </Link>
+              )}
+              {(showKhatianReview || showKhatianUpload) && (
+                <Link href="/admin/khatian-review" className={cardClass}>
+                  <span className={iconWrapClass}>
+                    <FileText className="h-6 w-6" strokeWidth={1.8} />
+                  </span>
+                  <h3 className="mb-1.5 text-base font-semibold text-slate-900">{admin.role === "deputy_commissioner" ? "Khatian Review" : "Khatian Records"}</h3>
+                  <p className="text-sm text-slate-500">
+                    {admin.role === "deputy_commissioner" ? "Review uploaded khatians - approve, or return with remarks." : "All uploaded khatians, ward-wise, with review status."}
+                  </p>
+                </Link>
+              )}
+            </div>
+          </>
         )}
 
         {propertyGroupVisible && (
@@ -229,6 +260,16 @@ export default function AdminDashboardPage() {
                       ? "Review property change requests waiting on your desk."
                       : `${myStagePendingCount} request${myStagePendingCount === 1 ? "" : "s"} currently waiting on your desk.`}
                   </p>
+                </Link>
+              )}
+
+              {showMutationApplications && (
+                <Link href="/admin/mutation-applications" className={cardClass}>
+                  <span className={iconWrapClass}>
+                    <FileText className="h-6 w-6" strokeWidth={1.8} />
+                  </span>
+                  <h3 className="mb-1.5 text-base font-semibold text-slate-900">Online Mutation Applications</h3>
+                  <p className="text-sm text-slate-500">Applications from the public window, their documents and progress; holdings to be identified.</p>
                 </Link>
               )}
 

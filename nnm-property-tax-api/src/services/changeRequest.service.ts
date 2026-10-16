@@ -2,6 +2,7 @@ import { changeRequestRepository } from "../repositories/changeRequest.repositor
 import { propertyRepository } from "../repositories/property.repository";
 import { entryRevertEventRepository } from "../repositories/entryRevertEvent.repository";
 import { applyPropertySave, assertExemptionOrderBelongs } from "./propertySave.service";
+import { liveInputForApplication } from "./mutationApplication.service";
 import { classifyPropertyChange, TIER_FINAL_STAGE } from "./changeClassification.service";
 import { nextApprovalStage } from "../types/admin.types";
 import { ApiError } from "../utils/ApiError";
@@ -81,7 +82,11 @@ export async function approveAtCurrentStage(
   // property_history's audit trail correctly shows who made the change;
   // this change request's own log separately records the full approval
   // chain actually used.
-  await applyPropertySave(request.holding_no, request.proposed_data, request.requested_by, false);
+  // An online mutation application changes only the owner on the holding as it stands now (see liveInputForApplication).
+  const toApply = request.public_application_id
+    ? await liveInputForApplication(String(request.public_application_id), request.holding_no, request.proposed_data)
+    : request.proposed_data;
+  await applyPropertySave(request.holding_no, toApply, request.requested_by, false);
   // If this holding was awaiting area finalization (survey_status =
   // 'surveyed'), an approved mutation on it is that finalization -
   // clears back to NULL, a no-op for every other holding.
