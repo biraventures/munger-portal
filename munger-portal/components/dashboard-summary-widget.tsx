@@ -64,6 +64,8 @@ interface TradeLicenseIssuedListItem {
   applicantName: string;
   entityName: string;
   requestedAt: string;
+  issuedOn?: string | null;
+  validTill?: string | null;
 }
 
 export type TabKey = "holdings" | "propertyChanges" | "shops" | "shopApplications" | "tradeLicenseApplications" | "tradeLicensesIssued";
@@ -399,7 +401,8 @@ export function DashboardSummaryWidget(props: DashboardSummaryWidgetProps) {
             { label: "Application No", render: (i) => <span className="font-mono">{i.applicationNumber}</span> },
             { label: "Applicant", render: (i) => i.applicantName },
             { label: "Entity", render: (i) => i.entityName },
-            { label: "Issued On", render: (i) => fmtDate(i.requestedAt) },
+            { label: "Issued On", render: (i) => (i.issuedOn ? fmtDate(i.issuedOn) : "—") },
+            { label: "Valid Till", render: (i) => (i.validTill ? fmtDate(i.validTill) : "—") },
           ]}
         />
       )}

@@ -170,6 +170,7 @@ export default function TlNoticesPage() {
                     <td className="p-2">
                       {r.holding_no}
                       {r.ward && <span className="block text-xs text-slate-400">Ward {r.ward}</span>}
+                      {r.is_nnm_shop && <span className="block text-xs font-semibold text-amber-700">NNM stall/shop{r.nnm_shop_no ? ` ${r.nnm_shop_no}` : ""}</span>}
                     </td>
                     <td className="p-2">
                       {r.business_name ?? <span className="text-slate-400">-</span>}

@@ -225,6 +225,8 @@ export async function listTradeLicensesIssuedForDashboard(page: unknown, pageSiz
       applicantName: r.applicant_name,
       entityName: r.entity_name,
       requestedAt: r.requested_at,
+      issuedOn: r.license_issued_on,
+      validTill: r.license_valid_till,
     })),
     total,
     page: p,

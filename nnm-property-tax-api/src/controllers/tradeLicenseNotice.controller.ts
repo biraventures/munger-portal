@@ -24,6 +24,8 @@ const surveySchema = z.object({
   phone: mobile.nullish().or(z.literal("")),
   latitude: z.number().min(-90).max(90).nullish(),
   longitude: z.number().min(-180).max(180).nullish(),
+  isNnmShop: z.boolean({ required_error: "Answer whether the business is in a Nagar Nigam stall/shop." }),
+  nnmShopNo: z.string().trim().max(50).nullish(),
 });
 
 /** POST /api/v1/admin/tl-survey - Tax Collector records a business visit (and a notice is raised when needed). */

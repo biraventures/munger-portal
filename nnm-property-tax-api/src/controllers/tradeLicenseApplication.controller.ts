@@ -14,12 +14,14 @@ import {
   getTradeLicenseReportingStats,
 } from "../services/tradeLicenseApplication.service";
 import { TRADE_LICENSE_APPROVAL_STAGE_ORDER } from "../types/admin.types";
+import fs from "node:fs";
 import { asyncHandler } from "../middleware/asyncHandler";
+import { applicationDocumentFile, stageDocument } from "../services/tradeLicenseDocuments.service";
 import { ApiError } from "../utils/ApiError";
 
 const applicationInputSchema = z.object({
   applicationType: z.enum(["new", "renewal"]),
-  bplProofAttached: z.boolean(),
+  bplProofAttached: z.boolean().default(false),
   applicantName: z.string().min(1),
   relationType: z.enum(["S/O", "W/O"]).nullish(),
   relationName: z.string().nullish(),
@@ -28,7 +30,7 @@ const applicationInputSchema = z.object({
   entityType: z.enum(["fully_owned", "partnership", "pvt_limited", "public_ltd"]).nullish(),
   completeAddress: z.string().min(1),
   holdingNo: holdingNoSchema.nullish(),
-  holdingReceiptAttached: z.boolean(),
+  holdingReceiptAttached: z.boolean().default(false),
   typeOfBusiness: z.string().nullish(),
   durationYears: z.coerce.number().refine((v) => [1, 3, 5].includes(v), "Duration must be 1, 3, or 5 years"),
   tanOrGstrNumber: z.string().nullish(),
@@ -39,24 +41,42 @@ const applicationInputSchema = z.object({
   areaOwnership: z.enum(["self_owned", "rented"]).nullish(),
   houseownerName: z.string().nullish(),
   annualTurnoverBracket: z.enum(["upto_10L", "above_10L"]).nullish(),
+  isBpl: z.boolean().nullish(),
+  isGstRegistered: z.boolean().nullish(),
+  firmPanNumber: z.string().trim().max(20).nullish(),
+  businessCategory: z.string().max(255).nullish(),
+  isNnmShop: z.boolean().nullish(),
+  nnmShopNo: z.string().trim().max(50).nullish(),
+  documents: z.array(z.object({ id: z.union([z.string().regex(/^\d+$/), z.number().int().positive()]), token: z.string().regex(/^[0-9a-f]{48}$/) })).max(12).default([]),
+});
+
+/** The online form must answer the yes/no questions and name the type of business. */
+const publicApplicationInputSchema = applicationInputSchema.extend({
+  isBpl: z.boolean({ required_error: "Answer whether the applicant is BPL." }),
+  isGstRegistered: z.boolean({ required_error: "Answer whether the business is registered under GST." }),
+  isNnmShop: z.boolean({ required_error: "Answer whether the business is in a Nagar Nigam Munger stall/shop." }),
+  businessCategory: z.string({ required_error: "Choose the type of business." }).min(1, "Choose the type of business.").max(255),
+  mobile: z.string().transform((v) => v.replace(/[\s-]/g, "").replace(/^(\+91|91|0)(?=\d{10}$)/, "")).pipe(z.string().regex(/^[6-9]\d{9}$/, "Enter a valid 10-digit mobile number.")),
 });
 
 /** POST /api/v1/trade-license-applications — operator only, for an application received offline. */
 export const postSubmitTradeLicenseApplication = asyncHandler(async (req: Request, res: Response) => {
   const parsed = applicationInputSchema.safeParse(req.body);
-  if (!parsed.success) throw ApiError.badRequest("Invalid application data", parsed.error.flatten().fieldErrors);
+  if (!parsed.success) throw ApiError.badRequest(parsed.error.issues[0]?.message ?? "Invalid application data", parsed.error.flatten().fieldErrors);
 
   const operatorDisplayName = req.operator!.displayName;
-  const result = await submitTradeLicenseApplication(parsed.data, operatorDisplayName);
+  const { documents, ...input } = parsed.data;
+  const result = await submitTradeLicenseApplication(input, operatorDisplayName, null, documents);
   res.status(200).json(result);
 });
 
 /** POST /api/v1/trade-license-applications/public — public, a citizen applying directly. */
 export const postSubmitPublicTradeLicenseApplication = asyncHandler(async (req: Request, res: Response) => {
-  const parsed = applicationInputSchema.safeParse(req.body);
-  if (!parsed.success) throw ApiError.badRequest("Invalid application data", parsed.error.flatten().fieldErrors);
+  const parsed = publicApplicationInputSchema.safeParse(req.body);
+  if (!parsed.success) throw ApiError.badRequest(parsed.error.issues[0]?.message ?? "Invalid application data", parsed.error.flatten().fieldErrors);
 
-  const result = await submitPublicTradeLicenseApplication(parsed.data);
+  const { documents, ...input } = parsed.data;
+  const result = await submitPublicTradeLicenseApplication(input, documents);
   res.status(200).json(result);
 });
 
@@ -151,4 +171,23 @@ export const putDocumentChecklistItem = asyncHandler(async (req: Request, res: R
 export const getTradeLicenseStats = asyncHandler(async (_req: Request, res: Response) => {
   const stats = await getTradeLicenseReportingStats();
   res.status(200).json(stats);
+});
+/** POST /api/v1/trade-license-applications/documents?type=&fileName= — public: one file (raw body), returns {id, token} to submit with the application. */
+export const postStageTradeLicenseDocument = asyncHandler(async (req: Request, res: Response) => {
+  const type = String(req.query.type ?? "");
+  const fileName = typeof req.query.fileName === "string" ? req.query.fileName : "";
+  res.status(201).json(await stageDocument(req, type, fileName));
+});
+
+const docParamSchema = z.object({ id: z.coerce.number().int().positive(), docId: z.coerce.number().int().positive() });
+
+/** GET /api/v1/admin/trade-license-applications/:id/documents/:docId (and the operator equivalent) — the uploaded file. */
+export const getTradeLicenseDocumentFile = asyncHandler(async (req: Request, res: Response) => {
+  const p = docParamSchema.safeParse(req.params);
+  if (!p.success) throw ApiError.badRequest("Invalid id");
+  const f = await applicationDocumentFile(p.data.id, p.data.docId);
+  res.setHeader("Content-Type", f.mime);
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("Content-Disposition", `inline; filename="${f.fileName.replace(/[^\w.\- ]/g, "_")}"`);
+  fs.createReadStream(f.full).pipe(res);
 });

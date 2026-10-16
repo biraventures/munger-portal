@@ -64,6 +64,8 @@ export interface TlSurveyInput {
   phone?: string | null;
   latitude?: number | null;
   longitude?: number | null;
+  isNnmShop: boolean;
+  nnmShopNo?: string | null;
 }
 
 export async function submitTlSurvey(input: TlSurveyInput): Promise<{ surveyId: string; status: string; noticeNo: string | null }> {
@@ -118,6 +120,8 @@ export interface TlSurvey {
   license_year: string | null;
   license_valid_till: string | null;
   license_no: string | null;
+  is_nnm_shop: boolean | null;
+  nnm_shop_no: string | null;
   person_name: string | null;
   business_name: string | null;
   address: string | null;

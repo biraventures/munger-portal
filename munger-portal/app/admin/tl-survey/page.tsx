@@ -26,6 +26,8 @@ export default function TlSurveyPage() {
   const [businessName, setBusinessName] = useState("");
   const [address, setAddress] = useState("");
   const [phone, setPhone] = useState("");
+  const [isNnmShop, setIsNnmShop] = useState<boolean | null>(null);
+  const [nnmShopNo, setNnmShopNo] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<{ status: string; noticeNo: string | null } | null>(null);
@@ -55,6 +57,8 @@ export default function TlSurveyPage() {
     setBusinessName("");
     setAddress("");
     setPhone("");
+    setIsNnmShop(null);
+    setNnmShopNo("");
     setDone(null);
     setError(null);
   }
@@ -74,6 +78,7 @@ export default function TlSurveyPage() {
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    if (isNnmShop === null) return setError("Answer whether it is a Nagar Nigam Munger stall/shop.");
     if (hasLicense && !validTill) return setError("Choose the year the licence is valid till.");
     if (hasLicense && !photo) return setError("Upload a photo of the trade licence.");
     if (needsNotice && !/^[6-9]\d{9}$/.test(phone)) return setError("Enter a valid 10-digit phone number.");
@@ -91,6 +96,8 @@ export default function TlSurveyPage() {
         businessName: needsNotice ? businessName.trim() : null,
         address: needsNotice ? address.trim() : null,
         phone: needsNotice ? phone : null,
+        isNnmShop,
+        nnmShopNo: isNnmShop ? nnmShopNo.trim() || null : null,
         latitude: gps?.lat ?? null,
         longitude: gps?.lng ?? null,
       });
@@ -164,6 +171,28 @@ export default function TlSurveyPage() {
                 <div>
                   <label className={label}>Holding number</label>
                   <input value={holdingNo} onChange={(e) => setHoldingNo(sanitizeHoldingNoInput(e.target.value))} required maxLength={32} className={input} />
+                </div>
+
+                <div>
+                  <p className={label}>Is it a stall / shop of Nagar Nigam Munger?</p>
+                  <div className="flex gap-2">
+                    {[
+                      { v: true, t: "Yes" },
+                      { v: false, t: "No" },
+                    ].map((o) => (
+                      <button
+                        type="button"
+                        key={o.t}
+                        onClick={() => setIsNnmShop(o.v)}
+                        className={`flex-1 rounded-md px-4 py-2 text-sm font-semibold ${isNnmShop === o.v ? "bg-nnm-blue text-white" : "border border-slate-300 bg-white text-slate-700"}`}
+                      >
+                        {o.t}
+                      </button>
+                    ))}
+                  </div>
+                  {isNnmShop && (
+                    <input value={nnmShopNo} onChange={(e) => setNnmShopNo(e.target.value)} maxLength={50} placeholder="Stall / shop number" className={`${input} mt-2`} />
+                  )}
                 </div>
 
                 {hasLicense && (

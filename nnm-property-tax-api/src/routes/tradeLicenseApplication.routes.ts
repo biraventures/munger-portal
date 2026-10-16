@@ -5,6 +5,8 @@ import {
   getRenewalAutofillHandler,
   getTradeLicenseApplicationByNumberHandler,
   putDocumentChecklistItem,
+  postStageTradeLicenseDocument,
+  getTradeLicenseDocumentFile,
 } from "../controllers/tradeLicenseApplication.controller";
 import rateLimit from "express-rate-limit";
 import { requireOperator } from "../middleware/requireOperator";
@@ -24,8 +26,16 @@ tradeLicenseApplicationRouter.get("/renewal-autofill", autofillPerIp, autofillPe
 // come before any catch-all param routes (none currently exist here, kept for clarity)
 tradeLicenseApplicationRouter.get("/by-number/:applicationNumber", requireOperator, getTradeLicenseApplicationByNumberHandler);
 
+// POST /api/v1/trade-license-applications/documents — public, one document file per request (attached on submit)
+const uploadLimit = rateLimit({ windowMs: 60 * 60 * 1000, max: 60, standardHeaders: true, legacyHeaders: false, message: { error: "Too many uploads. Please try again later." } });
+const submitLimit = rateLimit({ windowMs: 60 * 60 * 1000, max: 10, skipFailedRequests: true, standardHeaders: true, legacyHeaders: false, message: { error: "Too many applications from this connection. Please try again later." } });
+tradeLicenseApplicationRouter.post("/documents", uploadLimit, postStageTradeLicenseDocument);
+
+// GET /api/v1/trade-license-applications/:id/documents/:docId — operator only, view an uploaded document
+tradeLicenseApplicationRouter.get("/:id/documents/:docId", requireOperator, getTradeLicenseDocumentFile);
+
 // POST /api/v1/trade-license-applications/public — public, a citizen applying directly
-tradeLicenseApplicationRouter.post("/public", postSubmitPublicTradeLicenseApplication);
+tradeLicenseApplicationRouter.post("/public", submitLimit, postSubmitPublicTradeLicenseApplication);
 
 // POST /api/v1/trade-license-applications — operator only, for an application received offline
 tradeLicenseApplicationRouter.post("/", requireOperator, postSubmitTradeLicenseApplication);

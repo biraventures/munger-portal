@@ -36,6 +36,111 @@ export interface TradeLicenseApplicationInput {
   areaOwnership?: TradeLicenseAreaOwnership | null;
   houseownerName?: string | null;
   annualTurnoverBracket?: TradeLicenseTurnoverBracket | null;
+  isBpl?: boolean | null;
+  isGstRegistered?: boolean | null;
+  firmPanNumber?: string | null;
+  businessCategory?: string | null;
+  isNnmShop?: boolean | null;
+  nnmShopNo?: string | null;
+  documents?: { id: string; token: string }[];
+}
+
+/**
+ * Type of business - the non-residential holding use types (the value is the exact wording used on property records,
+ * so a licence can later be matched to its holding), plus Others.
+ */
+export const BUSINESS_CATEGORIES: { value: string; label: string }[] = [
+  { value: "shops(less than 250 sq ft)", label: "Shop (less than 250 sq ft)" },
+  {
+    value: "shops(250 sq ft and above), showroom, shopping mall, cinema, multiplex, dispensary, lab, restaurant, guest house",
+    label: "Shop (250 sq ft and above), showroom, mall, cinema, dispensary, lab, restaurant, guest house",
+  },
+  { value: "Hotel, bar, club, healthclub, marriage hall", label: "Hotel, bar, club, health club, marriage hall" },
+  {
+    value: "commercial office, financial institutions, banks, insurance office, pvt hospitaland nursing home",
+    label: "Commercial office, bank, financial institution, insurance office, private hospital / nursing home",
+  },
+  { value: "industry, workshop, storage, godown, warehouse", label: "Industry, workshop, storage, godown, warehouse" },
+  { value: "commercial est. , State and Central undertakings", label: "Commercial establishment, State / Central undertaking" },
+  { value: "Coaching classes, guidance and training centres and their hostels", label: "Coaching class, guidance / training centre and hostel" },
+  {
+    value: "pvt school, pvt college, pvt research institutes,other pvt institutes and their hostels",
+    label: "Private school, college, research or other institute and hostel",
+  },
+  { value: "Others", label: "Others" },
+];
+
+export function businessCategoryLabel(value: string | null | undefined): string | null {
+  if (!value) return null;
+  return BUSINESS_CATEGORIES.find((c) => c.value === value)?.label ?? value;
+}
+
+export type TradeLicenseDocType = "holding_receipt" | "bpl_proof" | "gstr_3b" | "pan_applicant" | "pan_firm" | "shop_photo";
+
+export interface TradeLicenseDocument {
+  id: string;
+  doc_type: TradeLicenseDocType;
+  label: string;
+  file_name: string;
+  mime_type: string;
+  size_bytes: string;
+  uploaded_at: string;
+}
+
+/**
+ * Uploads one document before the application is submitted; returns the {id, token} the submission must carry.
+ * A photo is shrunk to a 1600px JPEG first; a PDF goes as is.
+ */
+export async function uploadTradeLicenseDocument(file: File, docType: TradeLicenseDocType): Promise<{ id: string; token: string }> {
+  let body: Blob = file;
+  let type = file.type;
+  if (file.type !== "application/pdf") {
+    try {
+      const bitmap = await createImageBitmap(file);
+      const scale = Math.min(1, 1600 / Math.max(bitmap.width, bitmap.height));
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.round(bitmap.width * scale);
+      canvas.height = Math.round(bitmap.height * scale);
+      canvas.getContext("2d")!.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+      const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.82));
+      if (blob) {
+        body = blob;
+        type = "image/jpeg";
+      }
+    } catch {
+      // not decodable here - send the original and let the server check it
+    }
+  }
+  if (body.size > 8 * 1024 * 1024) throw new Error("The file is larger than 8 MB.");
+  const res = await fetch(`${API_BASE_URL}/trade-license-applications/documents?type=${docType}&fileName=${encodeURIComponent(file.name)}`, {
+    method: "POST",
+    headers: { "Content-Type": type || "application/octet-stream" },
+    body,
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(json.error || (res.status === 413 ? "The file is too large." : `Upload failed (error ${res.status}).`));
+  return { id: String(json.id), token: json.token };
+}
+
+/** Operator only - opens an uploaded document in a new tab. */
+export async function openOperatorTradeLicenseDocument(applicationId: number, docId: string): Promise<void> {
+  const token = getOperatorToken();
+  if (!token) throw new Error("Not logged in — please log in again.");
+  await openBlob(`${API_BASE_URL}/trade-license-applications/${applicationId}/documents/${docId}`, token);
+}
+
+/** Fetches a file with the login token and shows it in a new tab. */
+export async function openBlob(url: string, token: string): Promise<void> {
+  const win = window.open("", "_blank");
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+  if (!res.ok) {
+    win?.close();
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || "Could not open the document.");
+  }
+  const objectUrl = URL.createObjectURL(await res.blob());
+  if (win) win.location.href = objectUrl;
+  else window.location.href = objectUrl;
 }
 
 export interface SubmitResult {
@@ -88,6 +193,11 @@ export interface RenewalAutofill {
   houseownerName?: string | null;
   tanOrGstrNumber?: string | null;
   panNumber?: string | null;
+  firmPanNumber?: string | null;
+  businessCategory?: string | null;
+  isGstRegistered?: boolean | null;
+  isNnmShop?: boolean | null;
+  nnmShopNo?: string | null;
   previousApplicationId?: number;
 }
 
@@ -134,7 +244,16 @@ export interface TradeLicenseApplicationDetail {
     reviewed_role: string | null;
     reviewed_at: string | null;
     review_notes: string | null;
+    is_bpl: boolean | null;
+    is_gst_registered: boolean | null;
+    firm_pan_number: string | null;
+    business_category: string | null;
+    is_nnm_shop: boolean | null;
+    nnm_shop_no: string | null;
+    license_issued_on: string | null;
+    license_valid_till: string | null;
   };
+  documents?: TradeLicenseDocument[];
   checklist: {
     id: number;
     application_id: number;

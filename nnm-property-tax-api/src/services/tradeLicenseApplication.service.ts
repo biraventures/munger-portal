@@ -1,4 +1,7 @@
+import { pool } from "../config/db";
 import { tradeLicenseApplicationRepository } from "../repositories/tradeLicenseApplication.repository";
+import { TRADE_LICENSE_BUSINESS_CATEGORIES } from "../constants/tradeLicenseBusinessTypes";
+import { attachClaims, listApplicationDocuments, TL_DOC_TYPES, verifyClaims, type DocumentClaim, type TlDocType } from "./tradeLicenseDocuments.service";
 import { nextTradeLicenseApprovalStage, TRADE_LICENSE_APPROVAL_STAGE_ORDER } from "../types/admin.types";
 import { ApiError } from "../utils/ApiError";
 import type { TradeLicenseApplicationInput, TradeLicenseApplicationRow } from "../types/tradeLicense.types";
@@ -15,16 +18,55 @@ export async function submitTradeLicenseApplication(
   input: TradeLicenseApplicationInput,
   requestedBy: string,
   renewedFromApplicationId: number | null = null,
+  documents: DocumentClaim[] = [],
+  opts: { public?: boolean } = {},
 ): Promise<{ applicationId: number; applicationNumber: string; status: "pending" }> {
-  const application = await tradeLicenseApplicationRepository.create(input, requestedBy, renewedFromApplicationId);
-  return { applicationId: application.id, applicationNumber: application.application_number, status: "pending" };
+  if (input.businessCategory && !TRADE_LICENSE_BUSINESS_CATEGORIES.includes(input.businessCategory)) throw ApiError.badRequest("Choose the type of business from the list.");
+  if (input.businessCategory === "Others" && !input.typeOfBusiness?.trim()) throw ApiError.badRequest('Describe the business when the type is "Others".');
+  if (input.isGstRegistered && !input.tanOrGstrNumber?.trim()) throw ApiError.badRequest("Enter the GSTIN of the business.");
+
+  const types = await verifyClaims(documents);
+  if (types.has("bpl_proof") && !input.isBpl) throw ApiError.badRequest("A BPL proof was uploaded, but BPL is answered No.");
+  if (types.has("gstr_3b") && !input.isGstRegistered) throw ApiError.badRequest("A GSTR-3B was uploaded, but GST registration is answered No.");
+  if (opts.public) {
+    // The online form must carry the documents themselves; an operator recording a paper application uses the checklist.
+    const missing = (t: TlDocType, when = true) => (when && !types.has(t) ? TL_DOC_TYPES[t]!.label : null);
+    const absent = [
+      missing("holding_receipt", !input.isNnmShop),
+      missing("bpl_proof", !!input.isBpl),
+      missing("gstr_3b", !!input.isGstRegistered),
+      missing("pan_applicant"),
+      missing("shop_photo"),
+    ].filter(Boolean);
+    if (absent.length) throw ApiError.badRequest(`Upload: ${absent.join(", ")}.`);
+  }
+  const withFlags: TradeLicenseApplicationInput = {
+    ...input,
+    bplProofAttached: input.bplProofAttached || types.has("bpl_proof"),
+    holdingReceiptAttached: input.holdingReceiptAttached || types.has("holding_receipt"),
+  };
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const application = await tradeLicenseApplicationRepository.create(withFlags, requestedBy, renewedFromApplicationId, client);
+    await attachClaims(client, application.id, documents);
+    await client.query("COMMIT");
+    return { applicationId: application.id, applicationNumber: application.application_number, status: "pending" };
+  } catch (err) {
+    await client.query("ROLLBACK");
+    throw err;
+  } finally {
+    client.release();
+  }
 }
 
 /** A citizen submitting their own application directly — requested_by is their own name, same reasoning as shop rental applications. */
 export async function submitPublicTradeLicenseApplication(
   input: TradeLicenseApplicationInput,
+  documents: DocumentClaim[] = [],
 ): Promise<{ applicationId: number; applicationNumber: string; status: "pending" }> {
-  return submitTradeLicenseApplication(input, input.applicantName);
+  return submitTradeLicenseApplication(input, input.applicantName, null, documents, { public: true });
 }
 
 /** Compares the last 10 digits, so +91 / 0 prefixes and spaces don't matter. */
@@ -51,6 +93,11 @@ export interface RenewalAutofill {
   houseownerName?: string | null;
   tanOrGstrNumber?: string | null;
   panNumber?: string | null;
+  firmPanNumber?: string | null;
+  businessCategory?: string | null;
+  isGstRegistered?: boolean | null;
+  isNnmShop?: boolean | null;
+  nnmShopNo?: string | null;
   previousApplicationId?: number;
 }
 
@@ -85,6 +132,11 @@ export async function getRenewalAutofill(holdingNo: string, mobile: string): Pro
     houseownerName: previous.houseowner_name,
     tanOrGstrNumber: previous.tan_or_gstr_number,
     panNumber: previous.pan_number,
+    firmPanNumber: previous.firm_pan_number,
+    businessCategory: previous.business_category,
+    isGstRegistered: previous.is_gst_registered,
+    isNnmShop: previous.is_nnm_shop,
+    nnmShopNo: previous.nnm_shop_no,
     previousApplicationId: previous.id,
   };
 }
@@ -174,8 +226,9 @@ export async function getTradeLicenseApplicationDetail(id: number) {
 
   const checklist = await tradeLicenseApplicationRepository.getChecklistFor(id);
   const approvalHistory = await tradeLicenseApplicationRepository.listApprovalsFor(id);
+  const documents = await listApplicationDocuments(id);
 
-  return { application, checklist, approvalHistory };
+  return { application, checklist, approvalHistory, documents };
 }
 
 /**
@@ -190,8 +243,9 @@ export async function getTradeLicenseApplicationByNumber(applicationNumber: stri
 
   const checklist = await tradeLicenseApplicationRepository.getChecklistFor(application.id);
   const approvalHistory = await tradeLicenseApplicationRepository.listApprovalsFor(application.id);
+  const documents = await listApplicationDocuments(application.id);
 
-  return { application, checklist, approvalHistory };
+  return { application, checklist, approvalHistory, documents };
 }
 
 /** Operator-only: tick/untick a document as submitted, with a comment. */

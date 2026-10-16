@@ -160,6 +160,7 @@ import {
   postApproveTradeLicenseApplication,
   postRejectTradeLicenseApplication,
   getTradeLicenseStats,
+  getTradeLicenseDocumentFile,
 } from "../controllers/tradeLicenseApplication.controller";
 import { requireAdmin, requireAdminRole } from "../middleware/requireAdmin";
 import {
@@ -572,6 +573,7 @@ adminRouter.post("/shop-rental-preferences/:id/reject", postRejectRentalPreferen
 adminRouter.get("/trade-license-applications/stats", requireNonStallPrabhari, getTradeLicenseStats);
 adminRouter.get("/trade-license-applications", requireNonStallPrabhari, getTradeLicenseApplications);
 adminRouter.get("/trade-license-applications/:id", requireNonStallPrabhari, getTradeLicenseApplicationById);
+adminRouter.get("/trade-license-applications/:id/documents/:docId", requireNonStallPrabhari, getTradeLicenseDocumentFile);
 adminRouter.post("/trade-license-applications/:id/approve", requireNonStallPrabhari, postApproveTradeLicenseApplication);
 adminRouter.post("/trade-license-applications/:id/reject", requireNonStallPrabhari, postRejectTradeLicenseApplication);
 

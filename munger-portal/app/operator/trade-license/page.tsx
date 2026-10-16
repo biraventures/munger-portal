@@ -5,6 +5,8 @@ import Link from "next/link";
 import { AlertCircle, CheckCircle2, FilePlus2, Loader2, Search, XCircle } from "lucide-react";
 import { OperatorHeader } from "@/components/operator-header";
 import { useOperatorGuard } from "@/lib/use-operator-guard";
+import { TradeLicenseDocumentList } from "@/components/trade-license-documents";
+import { openOperatorTradeLicenseDocument } from "@/lib/trade-license-api";
 import {
   fetchTradeLicenseApplicationByNumber,
   updateChecklistItem,
@@ -150,6 +152,11 @@ export default function OperatorTradeLicensePage() {
                   <span>{detail.application.requested_by}</span>
                 </div>
               </div>
+            </section>
+
+            <section className="rounded-xl border border-slate-200 bg-white p-6">
+              <h2 className="mb-4 text-base font-semibold text-slate-900">Uploaded Documents</h2>
+              <TradeLicenseDocumentList documents={detail.documents} open={(docId) => openOperatorTradeLicenseDocument(detail.application.id, docId)} />
             </section>
 
             <section className="rounded-xl border border-slate-200 bg-white p-6">

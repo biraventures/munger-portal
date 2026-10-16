@@ -10,9 +10,15 @@ import {
   fetchTradeLicenseApplicationDetail,
   approveTradeLicenseApplication,
   rejectTradeLicenseApplication,
+  openAdminTradeLicenseDocument,
 } from "@/lib/admin-trade-license-api";
-import type { TradeLicenseApplicationDetail } from "@/lib/trade-license-api";
+import { businessCategoryLabel, type TradeLicenseApplicationDetail } from "@/lib/trade-license-api";
+import { TradeLicenseDocumentList } from "@/components/trade-license-documents";
 import { ADMIN_ROLE_LABELS, type AdminRole } from "@/lib/admin-auth";
+
+function fmtDate(v: string | null): string {
+  return v ? new Date(v).toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata", day: "2-digit", month: "short", year: "numeric" }) : "—";
+}
 
 function displayVal(v: string | number | boolean | null | undefined): string {
   if (v === null || v === undefined || v === "") return "—";
@@ -117,6 +123,13 @@ export default function TradeLicenseRequestDetailPage() {
               <StageBadge status={detail.application.status} currentStage={detail.application.current_stage as AdminRole} />
             </div>
 
+            {detail.application.status === "approved" && detail.application.license_issued_on && (
+              <div className="rounded-xl border border-green-200 bg-green-50 p-4 text-sm text-green-800">
+                Licence issued on <b>{fmtDate(detail.application.license_issued_on)}</b>, valid till <b>{fmtDate(detail.application.license_valid_till)}</b> (
+                {detail.application.duration_years} year{detail.application.duration_years === 1 ? "" : "s"} from issue).
+              </div>
+            )}
+
             <section className="rounded-xl border border-slate-200 bg-white p-6">
               <h2 className="mb-4 text-base font-semibold text-slate-900">Application Details</h2>
               <div className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-3">
@@ -126,19 +139,28 @@ export default function TradeLicenseRequestDetailPage() {
                 <div><span className="block text-[10px] font-semibold uppercase tracking-wide text-slate-400">Email</span><span>{displayVal(detail.application.email)}</span></div>
                 <div><span className="block text-[10px] font-semibold uppercase tracking-wide text-slate-400">Entity Type</span><span>{displayVal(detail.application.entity_type)}</span></div>
                 <div><span className="block text-[10px] font-semibold uppercase tracking-wide text-slate-400">Entity (Hindi)</span><span>{displayVal(detail.application.entity_name_hindi)}</span></div>
-                <div><span className="block text-[10px] font-semibold uppercase tracking-wide text-slate-400">Business Type</span><span>{displayVal(detail.application.type_of_business)}</span></div>
+                <div className="sm:col-span-2"><span className="block text-[10px] font-semibold uppercase tracking-wide text-slate-400">Business Type</span><span>{displayVal(businessCategoryLabel(detail.application.business_category))}</span></div>
+                <div><span className="block text-[10px] font-semibold uppercase tracking-wide text-slate-400">Business (description)</span><span>{displayVal(detail.application.type_of_business)}</span></div>
+                <div><span className="block text-[10px] font-semibold uppercase tracking-wide text-slate-400">Nagar Nigam stall/shop</span><span>{displayVal(detail.application.is_nnm_shop)}{detail.application.nnm_shop_no ? ` — ${detail.application.nnm_shop_no}` : ""}</span></div>
                 <div className="sm:col-span-2"><span className="block text-[10px] font-semibold uppercase tracking-wide text-slate-400">Address</span><span>{displayVal(detail.application.complete_address)}</span></div>
                 <div><span className="block text-[10px] font-semibold uppercase tracking-wide text-slate-400">Holding No</span><span>{displayVal(detail.application.holding_no)}</span></div>
                 <div><span className="block text-[10px] font-semibold uppercase tracking-wide text-slate-400">Commercial Area</span><span>{displayVal(detail.application.commercial_area_sqft)} sqft</span></div>
                 <div><span className="block text-[10px] font-semibold uppercase tracking-wide text-slate-400">Area Ownership</span><span>{displayVal(detail.application.area_ownership)}</span></div>
                 <div><span className="block text-[10px] font-semibold uppercase tracking-wide text-slate-400">Houseowner</span><span>{displayVal(detail.application.houseowner_name)}</span></div>
-                <div><span className="block text-[10px] font-semibold uppercase tracking-wide text-slate-400">TAN/GSTR</span><span>{displayVal(detail.application.tan_or_gstr_number)}</span></div>
-                <div><span className="block text-[10px] font-semibold uppercase tracking-wide text-slate-400">PAN</span><span>{displayVal(detail.application.pan_number)}</span></div>
+                <div><span className="block text-[10px] font-semibold uppercase tracking-wide text-slate-400">GST registered</span><span>{displayVal(detail.application.is_gst_registered)}</span></div>
+                <div><span className="block text-[10px] font-semibold uppercase tracking-wide text-slate-400">GSTIN / TAN</span><span>{displayVal(detail.application.tan_or_gstr_number)}</span></div>
+                <div><span className="block text-[10px] font-semibold uppercase tracking-wide text-slate-400">PAN (applicant)</span><span>{displayVal(detail.application.pan_number)}</span></div>
+                <div><span className="block text-[10px] font-semibold uppercase tracking-wide text-slate-400">PAN (firm)</span><span>{displayVal(detail.application.firm_pan_number)}</span></div>
                 <div><span className="block text-[10px] font-semibold uppercase tracking-wide text-slate-400">Duration</span><span>{detail.application.duration_years} year(s)</span></div>
                 <div><span className="block text-[10px] font-semibold uppercase tracking-wide text-slate-400">Turnover</span><span>{displayVal(detail.application.annual_turnover_bracket)}</span></div>
-                <div><span className="block text-[10px] font-semibold uppercase tracking-wide text-slate-400">BPL Proof</span><span>{displayVal(detail.application.bpl_proof_attached)}</span></div>
+                <div><span className="block text-[10px] font-semibold uppercase tracking-wide text-slate-400">BPL</span><span>{detail.application.is_bpl === null ? displayVal(detail.application.bpl_proof_attached) : displayVal(detail.application.is_bpl)}</span></div>
                 <div><span className="block text-[10px] font-semibold uppercase tracking-wide text-slate-400">Holding Receipt</span><span>{displayVal(detail.application.holding_receipt_attached)}</span></div>
               </div>
+            </section>
+
+            <section className="rounded-xl border border-slate-200 bg-white p-6">
+              <h2 className="mb-4 text-base font-semibold text-slate-900">Uploaded Documents</h2>
+              <TradeLicenseDocumentList documents={detail.documents} open={(docId) => openAdminTradeLicenseDocument(id, docId)} />
             </section>
 
             <section className="rounded-xl border border-slate-200 bg-white p-6">

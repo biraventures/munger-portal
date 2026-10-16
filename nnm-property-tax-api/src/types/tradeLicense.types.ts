@@ -26,6 +26,12 @@ export interface TradeLicenseApplicationInput {
   areaOwnership?: TradeLicenseAreaOwnership | null;
   houseownerName?: string | null;
   annualTurnoverBracket?: TradeLicenseTurnoverBracket | null;
+  isBpl?: boolean | null;
+  isGstRegistered?: boolean | null;
+  firmPanNumber?: string | null;
+  businessCategory?: string | null;
+  isNnmShop?: boolean | null;
+  nnmShopNo?: string | null;
 }
 
 export interface TradeLicenseApplicationRow {
@@ -62,6 +68,14 @@ export interface TradeLicenseApplicationRow {
   reviewed_at: Date | null;
   review_notes: string | null;
   renewed_from_application_id: number | null;
+  is_bpl: boolean | null;
+  is_gst_registered: boolean | null;
+  firm_pan_number: string | null;
+  business_category: string | null;
+  is_nnm_shop: boolean | null;
+  nnm_shop_no: string | null;
+  license_issued_on: string | null;
+  license_valid_till: string | null;
 }
 
 export interface TradeLicenseDocumentChecklistRow {

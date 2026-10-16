@@ -1,5 +1,5 @@
 import { getAdminToken, type AdminRole } from "./admin-auth";
-import type { TradeLicenseApplicationDetail } from "./trade-license-api";
+import { openBlob, type TradeLicenseApplicationDetail } from "./trade-license-api";
 
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_PROPERTY_TAX_API_URL || "http://localhost:4000/api/v1";
@@ -81,4 +81,10 @@ export async function fetchTradeLicenseStats(): Promise<TradeLicenseReportingSta
   const res = await fetch(`${API_BASE_URL}/admin/trade-license-applications/stats`, { headers: authHeaders() });
   if (!res.ok) throw new Error("Could not load the reporting dashboard.");
   return res.json();
+}
+/** Opens an uploaded application document in a new tab. */
+export async function openAdminTradeLicenseDocument(applicationId: number, docId: string): Promise<void> {
+  const token = getAdminToken();
+  if (!token) throw new Error("Not logged in — please log in again.");
+  await openBlob(`${API_BASE_URL}/admin/trade-license-applications/${applicationId}/documents/${docId}`, token);
 }

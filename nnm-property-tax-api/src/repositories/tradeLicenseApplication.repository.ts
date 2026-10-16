@@ -11,9 +11,11 @@ import { TRADE_LICENSE_APPROVAL_STAGE_ORDER } from "../types/admin.types";
 
 export type TradeLicenseApplicationStatus = "pending" | "approved" | "rejected";
 
-async function generateApplicationNumber(): Promise<string> {
+type Queryable = Pick<typeof pool, "query">;
+
+async function generateApplicationNumber(db: Queryable = pool): Promise<string> {
   const year = new Date().getFullYear();
-  const { rows } = await pool.query<{ max: string | null }>(
+  const { rows } = await db.query<{ max: string | null }>(
     `SELECT max(split_part(application_number, '-', 3)::int) AS max
      FROM trade_license_applications
      WHERE application_number LIKE $1`,
@@ -29,19 +31,21 @@ export const tradeLicenseApplicationRepository = {
     input: TradeLicenseApplicationInput,
     requestedBy: string,
     renewedFromApplicationId: number | null,
+    db: Queryable = pool,
   ): Promise<TradeLicenseApplicationRow> {
-    const applicationNumber = await generateApplicationNumber();
+    const applicationNumber = await generateApplicationNumber(db);
 
-    const { rows } = await pool.query<TradeLicenseApplicationRow>(
+    const { rows } = await db.query<TradeLicenseApplicationRow>(
       `INSERT INTO trade_license_applications (
         application_number, application_type, applicant_name, relation_type, relation_name,
         mobile, email, entity_name, entity_name_hindi, entity_type, type_of_business,
         complete_address, holding_no, commercial_area_sqft, area_ownership, houseowner_name,
         duration_years, annual_turnover_bracket, tan_or_gstr_number, pan_number,
         bpl_proof_attached, holding_receipt_attached, status, current_stage, requested_by, requested_at,
-        renewed_from_application_id
+        renewed_from_application_id, is_bpl, is_gst_registered, firm_pan_number, business_category, is_nnm_shop, nnm_shop_no
       ) VALUES (
-        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,'pending',$23,$24, now(), $25
+        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,'pending',$23,$24, now(), $25,
+        $26,$27,$28,$29,$30,$31
       ) RETURNING *`,
       [
         applicationNumber,
@@ -69,12 +73,18 @@ export const tradeLicenseApplicationRepository = {
         TRADE_LICENSE_APPROVAL_STAGE_ORDER[0],
         requestedBy,
         renewedFromApplicationId,
+        input.isBpl ?? null,
+        input.isGstRegistered ?? null,
+        input.firmPanNumber ?? null,
+        input.businessCategory ?? null,
+        input.isNnmShop ?? null,
+        input.isNnmShop ? input.nnmShopNo ?? null : null,
       ],
     );
     const application = rows[0]!;
 
     for (const documentName of TRADE_LICENSE_REQUIRED_DOCUMENTS) {
-      await pool.query(
+      await db.query(
         `INSERT INTO trade_license_document_checklist (application_id, document_name) VALUES ($1,$2)`,
         [application.id, documentName],
       );
@@ -206,7 +216,11 @@ export const tradeLicenseApplicationRepository = {
   async finalize(id: number, atStage: AdminRole, status: "approved" | "rejected"): Promise<TradeLicenseApplicationRow | null> {
     const { rows } = await pool.query<TradeLicenseApplicationRow>(
       `UPDATE trade_license_applications
-       SET status = $3, final_decided_at = now()
+       SET status = $3::varchar, final_decided_at = now(),
+           -- Valid from the date of issue for the duration applied for (e.g. 1 year from 16-10-2026 = till 15-10-2027).
+           license_issued_on = CASE WHEN $3::varchar = 'approved' THEN (now() AT TIME ZONE 'Asia/Kolkata')::date END,
+           license_valid_till = CASE WHEN $3::varchar = 'approved'
+             THEN ((now() AT TIME ZONE 'Asia/Kolkata')::date + make_interval(years => COALESCE(duration_years, 1)) - interval '1 day')::date END
        WHERE id = $1 AND status = 'pending' AND current_stage = $2
        RETURNING *`,
       [id, atStage, status],
