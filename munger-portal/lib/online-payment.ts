@@ -1,3 +1,5 @@
+import type { ReceiptData } from "./payment-api";
+
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_PROPERTY_TAX_API_URL || "http://localhost:4000/api/v1";
 
@@ -39,6 +41,8 @@ export interface ConfirmPaymentResult {
   receiptNo: string | null;
   holdingNo: string;
   amount: string;
+  order_id?: string;
+  receipt?: ReceiptData | null;
 }
 
 /**
