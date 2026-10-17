@@ -59,6 +59,8 @@ export default function ChangeRequestDetailPage() {
     jamabandiAreaSqft: "",
     documentAreaSqft: "",
     holdingAreaSqft: "",
+    entire: true,
+    mutateAreaSqft: "",
     khataNo: "",
     khesraNo: "",
     surveySheetNo: "",
@@ -80,6 +82,8 @@ export default function ChangeRequestDetailPage() {
             khesraNo: v.khesraNo || d.landRecord?.khesraNo || "",
             surveySheetNo: v.surveySheetNo || d.landRecord?.surveySheetNo || "",
             surveyWard: v.surveyWard || d.landRecord?.surveyWard || "",
+            entire: d.landRecord?.mutateEntire ?? true,
+            mutateAreaSqft: v.mutateAreaSqft || d.landRecord?.mutateAreaSqft || "",
           }));
         }
       })
@@ -236,6 +240,19 @@ export default function ChangeRequestDetailPage() {
 
             {detail.verification && <AreaVerificationView v={detail.verification} />}
 
+            {detail.lineage && detail.lineage.length > 0 && (
+              <section className="rounded-xl border border-blue-200 bg-blue-50 p-6 text-sm text-blue-900">
+                <h2 className="mb-2 text-base font-semibold">New holding created</h2>
+                {detail.lineage.map((l) => (
+                  <p key={l.child_holding_no}>
+                    <b className="font-mono">{l.child_holding_no}</b> created for the transferred {Number(l.area_sqft).toLocaleString("en-IN")} sq ft; holding{" "}
+                    <b className="font-mono">{l.parent_holding_no}</b> continues with {Number(l.parent_area_after).toLocaleString("en-IN")} sq ft (was{" "}
+                    {Number(l.parent_area_before).toLocaleString("en-IN")}). The new holding is flagged for a floor survey.
+                  </p>
+                ))}
+              </section>
+            )}
+
             <section className="rounded-xl border border-slate-200 bg-white p-6">
               <h2 className="mb-4 text-base font-semibold text-slate-900">Audit trail</h2>
               <MutationTimeline key={trailKey} changeRequestId={id} />
@@ -284,7 +301,7 @@ export default function ChangeRequestDetailPage() {
                         className="inline-flex items-center gap-1.5 rounded-md border border-amber-300 px-5 py-2.5 text-sm font-semibold text-amber-700 hover:bg-amber-50 disabled:opacity-60"
                       >
                         <RotateCcw className="h-4 w-4" />
-                        Revert to Operator
+                        {detail.request.public_application_id ? "Send back to applicant" : "Revert to Operator"}
                       </button>
                     </>
                   ) : (
@@ -294,7 +311,7 @@ export default function ChangeRequestDetailPage() {
                         disabled={acting !== null}
                         className="rounded-md bg-amber-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-amber-700 disabled:opacity-60"
                       >
-                        {acting === "revert" ? "Reverting…" : "Confirm Revert to Operator"}
+                        {acting === "revert" ? "Sending back…" : detail.request.public_application_id ? "Confirm — send back to applicant" : "Confirm Revert to Operator"}
                       </button>
                       <button
                         onClick={() => {
@@ -313,11 +330,12 @@ export default function ChangeRequestDetailPage() {
               <section className="rounded-xl border border-amber-200 bg-amber-50 p-6">
                 <h2 className="mb-1 flex items-center gap-1.5 text-base font-semibold text-amber-900">
                   <RotateCcw className="h-4 w-4" />
-                  Reverted to Operator
+                  {detail.request.public_application_id ? "Sent back to the applicant" : "Reverted to Operator"}
                 </h2>
                 <p className="text-sm text-amber-800">
                   Sent back by {detail.request.reverted_by} ({ADMIN_ROLE_LABELS[detail.request.reverted_from_stage as keyof typeof ADMIN_ROLE_LABELS] ?? detail.request.reverted_from_stage})
-                  {detail.request.reverted_at ? ` on ${new Date(detail.request.reverted_at).toLocaleDateString("en-IN")}` : ""} - awaiting operator correction.
+                  {detail.request.reverted_at ? ` on ${new Date(detail.request.reverted_at).toLocaleDateString("en-IN")}` : ""} -{" "}
+                  {detail.request.public_application_id ? "awaiting the applicant's online correction." : "awaiting operator correction."}
                 </p>
                 {detail.request.revert_comment && <p className="mt-1 text-sm text-amber-700">&ldquo;{detail.request.revert_comment}&rdquo;</p>}
               </section>

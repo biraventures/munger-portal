@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { CheckCircle2, Clock, Edit3, FileCheck2, Forward, Link2, Loader2, RotateCcw, Send, XCircle } from "lucide-react";
+import { CheckCircle2, Clock, Edit3, FileCheck2, Forward, GitBranch, Link2, Loader2, RotateCcw, Send, XCircle } from "lucide-react";
 import { DESK_LABEL, fetchTimeline, formatDuration, TIMELINE_LABEL, type MutationTimeline as Timeline, type TimelineKind } from "@/lib/mutation-api";
 
 const ICON: Record<TimelineKind, { icon: typeof Clock; tone: string }> = {
@@ -16,6 +16,7 @@ const ICON: Record<TimelineKind, { icon: typeof Clock; tone: string }> = {
   resubmitted: { icon: Send, tone: "text-nnm-blue" },
   applicant_edited: { icon: Edit3, tone: "text-slate-500" },
   area_verified: { icon: FileCheck2, tone: "text-green-600" },
+  holding_created: { icon: GitBranch, tone: "text-nnm-blue" },
 };
 
 function when(iso: string): string {
@@ -79,7 +80,7 @@ export function MutationTimeline({ changeRequestId, applicationId }: { changeReq
               {e.comment && <p className="mt-0.5 text-slate-600">&ldquo;{e.comment}&rdquo;</p>}
               {e.kind === "area_verified" && d && (
                 <p className="mt-0.5 text-xs text-slate-600">
-                  Jamabandi {String(d.jamabandiAreaSqft)} · Document {String(d.documentAreaSqft)} · Holding {String(d.holdingAreaSqft)} sq ft
+                  {d.isPartial ? `Partial: ${String(d.mutateAreaSqft)} sq ft mutated · ` : ""}Jamabandi {String(d.jamabandiAreaSqft)} · Document {String(d.documentAreaSqft)} · Holding {String(d.holdingAreaSqft)} sq ft
                   {d.areasMatch ? " — match" : " — DIFFER"} · Khata {String(d.khataNo)}, Khesra {String(d.khesraNo)}, Sheet {String(d.surveySheetNo)}, Ward {String(d.surveyWard)}
                 </p>
               )}

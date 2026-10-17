@@ -17,6 +17,8 @@ export interface DocTypeSpec {
   photoOnly?: boolean;
   /** Mandatory always, or only for some bases of transfer. */
   required: boolean | ((basis: string) => boolean);
+  /** The applicant names the document ("other" slots). */
+  named?: boolean;
 }
 
 export const DOC_TYPES: DocTypeSpec[] = [
@@ -28,6 +30,8 @@ export const DOC_TYPES: DocTypeSpec[] = [
   { type: "jamabandi_old", label: "Old jamabandi receipt", required: false },
   { type: "shudhi_patra", label: "Mutation correction slip (Shudhi patra) issued by CO", required: false },
   { type: "affidavit", label: "Affidavit on stamp paper", required: false },
+  { type: "other_1", label: "Other document 1", hint: "Any other document you want to give - name it below", required: false, named: true },
+  { type: "other_2", label: "Other document 2", hint: "Any other document you want to give - name it below", required: false, named: true },
 ];
 
 export function isRequired(spec: DocTypeSpec, basis: string): boolean {
@@ -47,13 +51,28 @@ export interface HoldingLookup {
   address?: string;
   taxPaidTillYear?: string | null;
   solidWastePaidTillYear?: string | null;
+  areaSqft?: string | null;
   canApply?: boolean;
   duesPending?: string;
   message?: string | null;
 }
 
-export async function lookupHolding(holdingNo: string): Promise<HoldingLookup> {
-  const res = await fetch(`${API_BASE_URL}/public/mutation/holding/${encodeURIComponent(holdingNo.trim())}`);
+/** fetch that gives up after `ms` with a plain message, so a slow or unreachable server never leaves a spinner turning. */
+async function fetchWithTimeout(url: string, init: RequestInit = {}, ms = 20000): Promise<Response> {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), ms);
+  try {
+    return await fetch(url, { ...init, signal: ctrl.signal });
+  } catch (err) {
+    if (ctrl.signal.aborted) throw new Error("The server took too long to answer. Please try again in a minute; if it keeps happening, contact the Nagar Nigam office.");
+    throw new Error(err instanceof Error && err.message ? `Could not reach the server (${err.message}). Check the internet connection and try again.` : "Could not reach the server.");
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+export async function lookupHolding(holdingNo: string, mobile: string): Promise<HoldingLookup> {
+  const res = await fetchWithTimeout(`${API_BASE_URL}/public/mutation/holding/${encodeURIComponent(holdingNo.trim())}?mobile=${encodeURIComponent(mobile.trim())}`);
   return json(res, "Could not check this holding number.");
 }
 
@@ -77,6 +96,9 @@ export interface CreateApplicationBody {
   khesraNo?: string | null;
   surveySheetNo?: string | null;
   surveyWard?: string | null;
+  holdingAreaSqft?: number | null;
+  mutateEntire: boolean;
+  mutateAreaSqft?: number | null;
 }
 
 export const SURVEY_WARDS = ["A", "B", "C", "D", "E", "F"] as const;
@@ -86,15 +108,26 @@ export async function createApplication(body: CreateApplicationBody): Promise<{ 
   return json(res, "Could not start the application.");
 }
 
+/** The applicant went back from the documents step and changed the details - same draft, documents kept. */
+export async function updateApplication(applicationId: string, token: string, body: CreateApplicationBody): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/public/mutation/applications/${applicationId}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json", "X-Upload-Token": token },
+    body: JSON.stringify(body),
+  });
+  await json(res, "Could not save the details.");
+}
+
 export interface UploadedDoc {
   id: string;
   doc_type: string;
   file_name: string;
   size_bytes: string;
+  label?: string | null;
 }
 
-export function uploadDocument(applicationId: string, token: string, docType: string, file: File, onProgress?: (pct: number) => void): Promise<UploadedDoc> {
-  const q = new URLSearchParams({ type: docType, fileName: file.name });
+export function uploadDocument(applicationId: string, token: string, docType: string, file: File, onProgress?: (pct: number) => void, label?: string): Promise<UploadedDoc> {
+  const q = new URLSearchParams({ type: docType, fileName: file.name, ...(label ? { label } : {}) });
   return xhrUpload(`${API_BASE_URL}/public/mutation/applications/${applicationId}/documents?${q}`, { "X-Upload-Token": token }, file, onProgress);
 }
 
@@ -141,6 +174,7 @@ export interface ApplicationStatus {
   status: string;
   remarks: string | null;
   decidedAt: string | null;
+  newHoldingNo?: string | null;
   trail?: {
     events: { at: string; kind: TimelineKind; desk: string | null; comment: string | null; minutesAtDesk: number | null }[];
     currentDesk: string | null;
@@ -168,6 +202,9 @@ export interface EditableApplication {
   khesraNo: string | null;
   surveySheetNo: string | null;
   surveyWard: string | null;
+  holdingAreaSqft: string | null;
+  mutateEntire: boolean;
+  mutateAreaSqft: string | null;
 }
 
 export interface OpenEditResult {
@@ -182,11 +219,12 @@ export interface OpenEditResult {
   documents: (UploadedDoc & { label: string })[];
 }
 
-export async function openForEdit(applicationNo: string, mobile: string, holdingNo: string): Promise<OpenEditResult> {
+/** The applicant's own view (application number + mobile); opens an edit session when it may still be changed. */
+export async function openForEdit(applicationNo: string, mobile: string): Promise<OpenEditResult> {
   const res = await fetch(`${API_BASE_URL}/public/mutation/edit/open`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ applicationNo, mobile, holdingNo }),
+    body: JSON.stringify({ applicationNo, mobile }),
   });
   return json(res, "Could not open the application.");
 }
@@ -207,6 +245,9 @@ export interface EditBody {
   khesraNo?: string | null;
   surveySheetNo?: string | null;
   surveyWard?: string | null;
+  holdingAreaSqft?: number | null;
+  mutateEntire: boolean;
+  mutateAreaSqft?: number | null;
 }
 
 export async function saveEdit(id: string, token: string, body: EditBody): Promise<{ resubmitted: boolean; changed: string[] }> {
@@ -218,8 +259,8 @@ export async function saveEdit(id: string, token: string, body: EditBody): Promi
   return json(res, "Could not save the changes.");
 }
 
-export function uploadEditDocument(id: string, token: string, docType: string, file: File, onProgress?: (pct: number) => void): Promise<UploadedDoc> {
-  const q = new URLSearchParams({ type: docType, fileName: file.name });
+export function uploadEditDocument(id: string, token: string, docType: string, file: File, onProgress?: (pct: number) => void, label?: string): Promise<UploadedDoc> {
+  const q = new URLSearchParams({ type: docType, fileName: file.name, ...(label ? { label } : {}) });
   return xhrUpload(`${API_BASE_URL}/public/mutation/edit/${id}/documents?${q}`, { "X-Edit-Token": token }, file, onProgress);
 }
 
@@ -241,7 +282,8 @@ export type TimelineKind =
   | "sent_back"
   | "resubmitted"
   | "applicant_edited"
-  | "area_verified";
+  | "area_verified"
+  | "holding_created";
 
 export interface MutationTimeline {
   changeRequestId: string | null;
@@ -276,6 +318,7 @@ export const TIMELINE_LABEL: Record<TimelineKind, string> = {
   resubmitted: "Resubmitted",
   applicant_edited: "Edited by applicant",
   area_verified: "Areas & land record verified",
+  holding_created: "New holding created",
 };
 
 /** "3 d 4 h", "5 h 20 min", "12 min" */
@@ -320,7 +363,7 @@ function adminHeaders(): HeadersInit {
 export interface StaffApplicationListItem {
   id: string;
   application_no: string;
-  status: "awaiting_holding" | "in_chain" | "rejected";
+  status: "awaiting_holding" | "returned" | "in_chain" | "rejected";
   holding_no: string | null;
   entered_old_holding_no: string | null;
   entered_ward: string | null;
@@ -356,6 +399,27 @@ export async function fetchStaffApplication(id: string): Promise<StaffApplicatio
 export async function linkApplication(id: string, holdingNo: string): Promise<{ changeRequestId: string }> {
   const res = await fetch(`${API_BASE_URL}/admin/mutation-applications/${id}/link`, { method: "POST", headers: adminHeaders(), body: JSON.stringify({ holdingNo }) });
   return json(res, "Could not link the application.");
+}
+
+/** Tax Daroga: back to the applicant for correction (holding not yet identified). */
+export async function returnStaffApplication(id: string, remarks: string): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/admin/mutation-applications/${id}/return`, { method: "POST", headers: adminHeaders(), body: JSON.stringify({ remarks }) });
+  await json(res, "Could not send the application back.");
+}
+
+export interface LineageRow {
+  parent_holding_no: string;
+  child_holding_no: string;
+  area_sqft: string;
+  parent_area_before: string;
+  parent_area_after: string;
+  created_by: string;
+  created_at: string;
+}
+
+export async function fetchHoldingLineage(holdingNo: string): Promise<LineageRow[]> {
+  const res = await fetch(`${API_BASE_URL}/admin/holdings/${encodeURIComponent(holdingNo)}/lineage`, { headers: adminHeaders(), cache: "no-store" });
+  return (await json<{ lineage: LineageRow[] }>(res, "Could not load the holding lineage.")).lineage;
 }
 
 export async function rejectStaffApplication(id: string, remarks: string): Promise<void> {

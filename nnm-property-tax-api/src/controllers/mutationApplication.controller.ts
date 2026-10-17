@@ -17,7 +17,9 @@ import {
   rejectApplication,
   removeDocument,
   submitApplication,
-  openForEdit,
+  viewApplication,
+  updateDraft,
+  returnToApplicant,
   saveEdit,
   addEditDocument,
   removeEditDocument,
@@ -31,13 +33,20 @@ const landRecord = {
   surveySheetNo: z.string().trim().max(64).nullish(),
   surveyWard: z.enum(["A", "B", "C", "D", "E", "F"]).nullish().or(z.literal("").transform(() => null)),
 };
+const areaInput = {
+  holdingAreaSqft: z.coerce.number().positive().max(10_000_000).nullish(),
+  mutateEntire: z.boolean().default(true),
+  mutateAreaSqft: z.coerce.number().positive().max(10_000_000).nullish(),
+};
 const yearRange = z.string().trim().regex(/^\d{4}-\d{4}$/, "Year as YYYY-YYYY, e.g. 2024-2025").nullish().or(z.literal(""));
 
 /** GET /api/v1/public/mutation/holding/:holdingNo - ward, address, paid-till years and whether dues are pending. */
 export const getHoldingForMutation = asyncHandler(async (req: Request, res: Response) => {
   const p = z.object({ holdingNo: holdingNoSchema }).safeParse(req.params);
   if (!p.success) throw ApiError.badRequest("Enter a valid holding number.");
-  const result = await lookupHoldingForMutation(p.data.holdingNo);
+  const m = mobile.safeParse(req.query.mobile ?? "");
+  if (!m.success) throw ApiError.badRequest("Enter your 10-digit mobile number first.");
+  const result = await lookupHoldingForMutation(p.data.holdingNo, m.data);
   res.locals.lookupMatched = result.found;
   res.status(200).json(result);
 });
@@ -68,6 +77,7 @@ const createSchema = z
     longitude: z.number().min(85).max(88),
     gpsAccuracy: z.number().nonnegative().max(100000).nullish(),
     ...landRecord,
+    ...areaInput,
   })
   .refine((d) => !!d.holdingNo || !!d.manual, { message: "Enter the holding number, or the old holding number with the ward." });
 
@@ -79,6 +89,19 @@ export const postCreateApplication = asyncHandler(async (req: Request, res: Resp
     throw ApiError.badRequest(first?.path[0] === "latitude" || first?.path[0] === "longitude" ? "Capture the GPS location at the holding (within Munger)." : first?.message ?? "Check the form.", b.error.flatten().fieldErrors);
   }
   res.status(201).json(await createDraft({ ...b.data, newOwnerEmail: b.data.newOwnerEmail || null }, req.ip ?? null));
+});
+
+/** PUT /api/v1/public/mutation/applications/:id (X-Upload-Token) - the applicant went back and changed the draft's details. */
+export const putUpdateDraft = asyncHandler(async (req: Request, res: Response) => {
+  const id = idParam.safeParse(req.params.id);
+  if (!id.success) throw ApiError.notFound("Application not found.");
+  const b = createSchema.safeParse(req.body);
+  if (!b.success) {
+    const first = b.error.issues[0];
+    throw ApiError.badRequest(first?.path[0] === "latitude" || first?.path[0] === "longitude" ? "Capture the GPS location at the holding (within Munger)." : first?.message ?? "Check the form.");
+  }
+  await updateDraft(id.data, token(req), { ...b.data, newOwnerEmail: b.data.newOwnerEmail || null });
+  res.status(200).json({ applicationId: id.data });
 });
 
 const idParam = z.string().regex(/^\d{1,18}$/);
@@ -93,7 +116,8 @@ export const postApplicationDocument = asyncHandler(async (req: Request, res: Re
   if (!id.success) throw ApiError.notFound("Application not found.");
   const type = String(req.query.type ?? "");
   const fileName = typeof req.query.fileName === "string" ? req.query.fileName : "";
-  res.status(201).json({ document: await addDocument(req, id.data, token(req), type, fileName) });
+  const label = typeof req.query.label === "string" ? req.query.label.slice(0, 100) : null;
+  res.status(201).json({ document: await addDocument(req, id.data, token(req), type, fileName, label) });
 });
 
 /** GET /api/v1/public/mutation/applications/:id/documents - the draft's uploads so far. */
@@ -132,14 +156,13 @@ export const getApplicationStatus = asyncHandler(async (req: Request, res: Respo
 const editOpenSchema = z.object({
   applicationNo: z.string().trim().regex(/^[A-Za-z0-9]{6,24}$/, "Enter the application number."),
   mobile,
-  holdingNo: z.string().trim().min(1, "Enter the holding number given in the application.").max(32),
 });
 
 /** POST /api/v1/public/mutation/edit/open - application number + mobile + holding number -> a 60-minute edit session. */
 export const postOpenForEdit = asyncHandler(async (req: Request, res: Response) => {
   const b = editOpenSchema.safeParse(req.body);
   if (!b.success) throw ApiError.badRequest(b.error.issues[0]?.message ?? "Check the details.");
-  const result = await openForEdit(b.data.applicationNo, b.data.mobile, b.data.holdingNo);
+  const result = await viewApplication(b.data.applicationNo, b.data.mobile);
   res.locals.editMatched = true;
   res.status(200).json(result);
 });
@@ -157,6 +180,7 @@ const editSchema = z.object({
   transferBasis: z.enum(["sale_deed", "partition", "gift", "inheritance", "auction"]),
   transferDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Enter the date of transfer."),
   ...landRecord,
+  ...areaInput,
 });
 
 function editToken(req: Request): string {
@@ -178,7 +202,8 @@ export const postEditDocument = asyncHandler(async (req: Request, res: Response)
   if (!id.success) throw ApiError.notFound("Application not found.");
   const type = String(req.query.type ?? "");
   const fileName = typeof req.query.fileName === "string" ? req.query.fileName : "";
-  res.status(201).json({ document: await addEditDocument(req, id.data, editToken(req), type, fileName) });
+  const label = typeof req.query.label === "string" ? req.query.label.slice(0, 100) : null;
+  res.status(201).json({ document: await addEditDocument(req, id.data, editToken(req), type, fileName, label) });
 });
 
 /** DELETE /api/v1/public/mutation/edit/:id/documents/:docId (X-Edit-Token) */
@@ -194,7 +219,7 @@ export const deleteEditDocument = asyncHandler(async (req: Request, res: Respons
 
 /** GET /api/v1/admin/mutation-applications?status= */
 export const getMutationApplications = asyncHandler(async (req: Request, res: Response) => {
-  const s = z.enum(["awaiting_holding", "in_chain", "rejected"]).optional().safeParse(req.query.status || undefined);
+  const s = z.enum(["awaiting_holding", "returned", "in_chain", "rejected"]).optional().safeParse(req.query.status || undefined);
   if (!s.success) throw ApiError.badRequest("Invalid filter");
   res.status(200).json({ applications: await listApplications({ status: s.data }) });
 });
@@ -234,5 +259,15 @@ export const postRejectMutationApplication = asyncHandler(async (req: Request, r
   if (!id.success) throw ApiError.notFound("Application not found.");
   if (!b.success) throw ApiError.badRequest(b.error.issues[0]?.message ?? "Give the reason.");
   await rejectApplication(id.data, b.data.remarks, req.admin!.displayName);
+  res.status(200).json({ ok: true });
+});
+
+/** POST /api/v1/admin/mutation-applications/:id/return - Tax Daroga: back to the applicant for correction (holding not yet identified). */
+export const postReturnToApplicant = asyncHandler(async (req: Request, res: Response) => {
+  const id = idParam.safeParse(req.params.id);
+  if (!id.success) throw ApiError.notFound("Application not found.");
+  const b = z.object({ remarks: z.string().trim().min(3, "Say what the applicant must correct.").max(500) }).safeParse(req.body);
+  if (!b.success) throw ApiError.badRequest(b.error.issues[0]?.message ?? "Say what the applicant must correct.");
+  await returnToApplicant(id.data, b.data.remarks, req.admin!.displayName, req.admin!.role);
   res.status(200).json({ ok: true });
 });

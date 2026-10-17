@@ -160,7 +160,7 @@ export const changeRequestRepository = {
 
   /** The operator's worklist - every request currently reverted and awaiting correction. Not restricted to who originally submitted it, since any operator at the counter can pick one up. */
   async listReverted(): Promise<ChangeRequestRow[]> {
-    const { rows } = await pool.query<ChangeRequestRow>(`SELECT * FROM property_change_requests WHERE status = 'reverted' ORDER BY reverted_at ASC`);
+    const { rows } = await pool.query<ChangeRequestRow>(`SELECT * FROM property_change_requests WHERE status = 'reverted' AND public_application_id IS NULL ORDER BY reverted_at ASC`);
     return rows;
   },
 

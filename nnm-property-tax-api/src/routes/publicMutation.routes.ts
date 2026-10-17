@@ -8,6 +8,7 @@ import {
   postApplicationDocument,
   postCreateApplication,
   postSubmitApplication,
+  putUpdateDraft,
   postOpenForEdit,
   putEditApplication,
   postEditDocument,
@@ -32,6 +33,7 @@ const statusLimit = rateLimit({ ...base, windowMs: 15 * 60 * 1000, max: 60, mess
 
 publicMutationRouter.get("/holding/:holdingNo", lookupLimit, getHoldingForMutation);
 publicMutationRouter.post("/applications", createLimit, postCreateApplication);
+publicMutationRouter.put("/applications/:id", uploadLimit, putUpdateDraft);
 publicMutationRouter.post("/applications/:id/documents", uploadLimit, postApplicationDocument);
 publicMutationRouter.get("/applications/:id/documents", uploadLimit, getDraftDocuments);
 publicMutationRouter.delete("/applications/:id/documents/:docId", uploadLimit, deleteDraftDocument);

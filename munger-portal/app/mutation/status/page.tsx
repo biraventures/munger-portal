@@ -107,7 +107,7 @@ function StatusContent() {
           Apply for a new mutation
         </Link>
         <Link href="/mutation/edit" className="inline-block text-sm font-semibold text-nnm-blue hover:underline">
-          Change a submitted application
+          View / correct my application
         </Link>
       </div>
     </div>

@@ -31,7 +31,8 @@ export type TimelineKind =
   | "sent_back"
   | "resubmitted"
   | "applicant_edited"
-  | "area_verified";
+  | "area_verified"
+  | "holding_created";
 
 export interface TimelineEvent {
   at: string;
@@ -89,6 +90,12 @@ interface CrRow {
   final_stage: string;
   final_decided_at: Date | null;
   public_application_id: string | null;
+}
+
+function auditKind(event: string): TimelineKind {
+  if (event === "applicant_resubmitted") return "resubmitted";
+  if (event === "returned_to_applicant") return "sent_back";
+  return event as TimelineKind;
 }
 
 const mins = (a: Date, b: Date) => Math.max(0, Math.round((b.getTime() - a.getTime()) / 60000));
@@ -152,6 +159,20 @@ export async function buildTimeline(ref: { changeRequestId?: string; application
         WHERE change_request_id = $1 OR ($2::bigint IS NOT NULL AND application_id = $2::bigint)`,
       [cr.id, app?.id ?? null],
     );
+    const { rows: lineage } = await pool.query<{ child_holding_no: string; area_sqft: string; parent_area_after: string; created_by: string; created_at: Date }>(
+      `SELECT child_holding_no, area_sqft, parent_area_after, created_by, created_at FROM holding_lineage WHERE change_request_id = $1`,
+      [cr.id],
+    );
+    for (const l of lineage) {
+      push({
+        at: l.created_at,
+        kind: "holding_created",
+        stage: null,
+        actor: l.created_by,
+        comment: `New holding ${l.child_holding_no} created for the transferred ${Number(l.area_sqft)} sq ft; holding ${cr.holding_no} continues with ${Number(l.parent_area_after)} sq ft`,
+        details: { childHoldingNo: l.child_holding_no },
+      });
+    }
     for (const r of reverts) {
       push({ at: r.reverted_at, kind: "sent_back", stage: r.reverted_from_stage, actor: r.reverted_by, comment: r.comment, details: null });
       if (r.resubmitted_at) {
@@ -163,7 +184,7 @@ export async function buildTimeline(ref: { changeRequestId?: string; application
     for (const x of audits) {
       push({
         at: x.at,
-        kind: x.event === "applicant_resubmitted" ? "resubmitted" : (x.event as TimelineKind),
+        kind: auditKind(x.event),
         stage: x.stage,
         actor: x.actor,
         comment: x.comment,
@@ -175,7 +196,7 @@ export async function buildTimeline(ref: { changeRequestId?: string; application
       `SELECT event, stage, actor, comment, details, at FROM mutation_audit_events WHERE application_id = $1`,
       [app.id],
     );
-    for (const x of audits) push({ at: x.at, kind: x.event as TimelineKind, stage: x.stage, actor: x.actor, comment: x.comment, details: x.details });
+    for (const x of audits) push({ at: x.at, kind: auditKind(x.event), stage: x.stage, actor: x.actor, comment: x.comment, details: x.details });
   }
 
   ev.sort((a, b) => a.at.getTime() - b.at.getTime() || a.seq - b.seq);
@@ -254,7 +275,7 @@ export async function buildTimeline(ref: { changeRequestId?: string; application
 
   const first = ev[0]?.at ?? now;
   const last = holder ? now : ev[ev.length - 1]?.at ?? now;
-  const status = cr ? cr.status : app?.status === "rejected" ? "not_accepted" : app?.status === "awaiting_holding" ? "awaiting_holding" : "pending";
+  const status = cr ? cr.status : app?.status === "rejected" ? "not_accepted" : app?.status === "awaiting_holding" ? "awaiting_holding" : app?.status === "returned" ? "returned" : "pending";
   const order = ["tax_daroga", "mutation_nodal_clerk", "deputy_commissioner", "commissioner", "correction"];
   return {
     changeRequestId: cr?.id ?? null,
@@ -279,7 +300,7 @@ export function publicTimeline(t: MutationTimeline) {
         at: e.at,
         kind: e.kind,
         desk: e.stage ? DESK_LABEL[e.stage] ?? e.stage : null,
-        comment: ["sent_back", "rejected", "not_accepted"].includes(e.kind) ? e.comment : e.kind === "applicant_edited" ? e.comment : null,
+        comment: ["sent_back", "rejected", "not_accepted", "applicant_edited", "holding_created"].includes(e.kind) ? e.comment : null,
         minutesAtDesk: e.minutesAtDesk,
       })),
     currentDesk: t.currentDesk ? DESK_LABEL[t.currentDesk] ?? t.currentDesk : null,
@@ -313,7 +334,8 @@ export async function pendingSummary() {
   const { rows: extra } = await pool.query<{ awaiting_holding: number; awaiting_since: Date | null; reverted_online: number; reverted_counter: number; reverted_since: Date | null }>(
     `SELECT (SELECT count(*)::int FROM mutation_applications WHERE status = 'awaiting_holding') AS awaiting_holding,
             (SELECT min(submitted_at) FROM mutation_applications WHERE status = 'awaiting_holding') AS awaiting_since,
-            (SELECT count(*)::int FROM property_change_requests WHERE status = 'reverted' AND approval_tier = 'mutation' AND public_application_id IS NOT NULL) AS reverted_online,
+            (SELECT count(*)::int FROM property_change_requests WHERE status = 'reverted' AND approval_tier = 'mutation' AND public_application_id IS NOT NULL)
+              + (SELECT count(*)::int FROM mutation_applications WHERE status = 'returned') AS reverted_online,
             (SELECT count(*)::int FROM property_change_requests WHERE status = 'reverted' AND approval_tier = 'mutation' AND public_application_id IS NULL) AS reverted_counter,
             (SELECT min(reverted_at) FROM property_change_requests WHERE status = 'reverted' AND approval_tier = 'mutation') AS reverted_since`,
   );
@@ -339,7 +361,7 @@ export async function pendingSummary() {
 export async function recordAuditEvent(e: {
   changeRequestId?: string | number | null;
   applicationId?: string | number | null;
-  event: "applicant_edited" | "applicant_resubmitted" | "area_verified";
+  event: "applicant_edited" | "applicant_resubmitted" | "area_verified" | "returned_to_applicant";
   stage?: string | null;
   actor: string;
   actorRole?: string | null;

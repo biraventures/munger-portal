@@ -1,5 +1,6 @@
 import type { Request, Response } from "express";
 import { buildTimeline, pendingSummary } from "../services/mutationAudit.service";
+import { holdingLineage } from "../services/changeRequest.service";
 import { z } from "zod";
 import {
   listChangeRequests,
@@ -50,6 +51,7 @@ const notesBodySchema = z.object({
       jamabandiAreaSqft: areaSqft,
       documentAreaSqft: areaSqft,
       holdingAreaSqft: areaSqft,
+      mutateAreaSqft: areaSqft.nullish(),
       khataNo: z.string().trim().min(1, "Enter the khata number.").max(64),
       khesraNo: z.string().trim().min(1, "Enter the khesra number.").max(64),
       surveySheetNo: z.string().trim().min(1, "Enter the survey sheet number.").max(64),
@@ -120,4 +122,11 @@ export const getApplicationTimeline = asyncHandler(async (req: Request, res: Res
 /** GET /api/v1/admin/mutation-pending-summary - what is waiting at each desk. */
 export const getMutationPendingSummary = asyncHandler(async (_req: Request, res: Response) => {
   res.status(200).json(await pendingSummary());
+});
+
+/** GET /api/v1/admin/holdings/:holdingNo/lineage - holdings created from / that created this one through mutation. */
+export const getHoldingLineage = asyncHandler(async (req: Request, res: Response) => {
+  const h = z.string().trim().min(1).max(32).safeParse(req.params.holdingNo);
+  if (!h.success) throw ApiError.badRequest("Invalid holding number");
+  res.status(200).json({ lineage: await holdingLineage(h.data) });
 });

@@ -40,6 +40,15 @@ export function MutationApplicationPanel({ applicationId }: { applicationId: str
         {row("New owner email", a.new_owner_email)}
         {row("Applicant", `${a.applicant_name} (${a.applicant_mobile})`)}
         {row("Basis of mutation", `${a.basis_label}, dated ${fmtDate(a.transfer_date)}`)}
+        {a.holding_area_sqft &&
+          row(
+            "Area to be mutated",
+            String(a.mutate_entire) === "true"
+              ? `Entire holding (${Number(a.holding_area_sqft)} sq ft)`
+              : `PART — ${Number(a.mutate_area_sqft)} of ${Number(a.holding_area_sqft)} sq ft (a new holding will be created)`,
+          )}
+        {(a.khata_no || a.khesra_no || a.survey_sheet_no || a.survey_ward) &&
+          row("Land record (as given)", `Khata ${a.khata_no ?? "-"}, Khesra ${a.khesra_no ?? "-"}, Sheet ${a.survey_sheet_no ?? "-"}, Ward ${a.survey_ward ?? "-"}`)}
         {a.entered_old_holding_no && row("Entered by applicant", `Old holding ${a.entered_old_holding_no}, ward ${a.entered_ward}, ${a.entered_address}; tax paid till ${a.entered_tax_paid_till ?? "?"}, user charge till ${a.entered_sw_paid_till ?? "?"}`)}
         {row(
           "GPS at holding",
@@ -62,7 +71,7 @@ export function MutationApplicationPanel({ applicationId }: { applicationId: str
               title={d.file_name}
             >
               <FileText className="h-3.5 w-3.5" />
-              {d.label.split(" (")[0]}
+              {d.doc_type.startsWith("other_") ? d.label : d.label.split(" (")[0]}
             </button>
           ))}
         </div>

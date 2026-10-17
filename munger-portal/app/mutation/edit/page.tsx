@@ -6,6 +6,10 @@ import { AlertCircle, CheckCircle2, Loader2, Lock, Trash2, Upload } from "lucide
 import { SiteHeader } from "@/components/site-header";
 import { SiteFooter } from "@/components/site-footer";
 import {
+  fetchApplicationStatus,
+  formatDuration,
+  TIMELINE_LABEL,
+  type ApplicationStatus,
   DOC_TYPES,
   isRequired,
   openForEdit,
@@ -26,13 +30,17 @@ function today(): string {
   return new Date(Date.now() + 5.5 * 3600 * 1000).toISOString().slice(0, 10);
 }
 
-type Form = Omit<EditableApplication, "applicationNo" | "holdingNo" | "manual" | "newOwnerAadhaarMasked"> & {
+type Form = Omit<EditableApplication, "applicationNo" | "holdingNo" | "manual" | "newOwnerAadhaarMasked" | "holdingAreaSqft" | "mutateAreaSqft"> & {
   newOwnerAadhaar: string;
   manual: { oldHoldingNo: string; ward: string; address: string } | null;
+  holdingAreaSqft: string;
+  mutateAreaSqft: string;
 };
 
 export default function MutationEditPage() {
-  const [lookup, setLookup] = useState({ applicationNo: "", mobile: "", holdingNo: "" });
+  const [lookup, setLookup] = useState({ applicationNo: "", mobile: "" });
+  const [viewed, setViewed] = useState<{ app: EditableApplication; docs: UploadedDoc[]; status: ApplicationStatus | null } | null>(null);
+  const [otherLabels, setOtherLabels] = useState<Record<string, string>>({ other_1: "", other_2: "" });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [locked, setLocked] = useState<string | null>(null);
@@ -46,10 +54,13 @@ export default function MutationEditPage() {
     e.preventDefault();
     setError(null);
     setLocked(null);
-    if (!lookup.applicationNo.trim() || !lookup.mobile.trim() || !lookup.holdingNo.trim()) return setError("Enter all three: application number, mobile number and holding number.");
+    setViewed(null);
+    if (!lookup.applicationNo.trim() || !lookup.mobile.trim()) return setError("Enter the application number and the mobile number.");
     setBusy(true);
     try {
-      const r = await openForEdit(lookup.applicationNo.trim().toUpperCase(), lookup.mobile.trim(), lookup.holdingNo.trim());
+      const r = await openForEdit(lookup.applicationNo.trim().toUpperCase(), lookup.mobile.trim());
+      const status = await fetchApplicationStatus(lookup.applicationNo.trim()).catch(() => null);
+      if (r.application) setViewed({ app: r.application, docs: r.documents, status });
       if (!r.editable || !r.application || !r.applicationId || !r.editToken) {
         setLocked(r.reason ?? "This application can no longer be changed.");
         return;
@@ -71,6 +82,9 @@ export default function MutationEditPage() {
         khesraNo: a.khesraNo ?? "",
         surveySheetNo: a.surveySheetNo ?? "",
         surveyWard: a.surveyWard ?? "",
+        holdingAreaSqft: a.holdingAreaSqft ?? "",
+        mutateEntire: a.mutateEntire,
+        mutateAreaSqft: a.mutateAreaSqft ?? "",
         manual: a.manual ? { oldHoldingNo: a.manual.oldHoldingNo ?? "", ward: a.manual.ward ?? "", address: a.manual.address ?? "" } : null,
       });
       setDocs(r.documents);
@@ -95,7 +109,7 @@ export default function MutationEditPage() {
       }
       setUploading({ type, pct: 0 });
       try {
-        const d = await uploadEditDocument(session.id, session.token, type, file, (pct) => setUploading({ type, pct }));
+        const d = await uploadEditDocument(session.id, session.token, type, file, (pct) => setUploading({ type, pct }), otherLabels[type] || undefined);
         setDocs((prev) => [...prev, d]);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Upload failed.");
@@ -140,6 +154,9 @@ export default function MutationEditPage() {
         khesraNo: f.khesraNo || null,
         surveySheetNo: f.surveySheetNo || null,
         surveyWard: f.surveyWard || null,
+        holdingAreaSqft: session.app.holdingNo ? null : Number(f.holdingAreaSqft) || null,
+        mutateEntire: f.mutateEntire,
+        mutateAreaSqft: f.mutateEntire ? null : Number(f.mutateAreaSqft) || null,
       });
       setDone(r);
       window.scrollTo({ top: 0, behavior: "smooth" });
@@ -157,10 +174,10 @@ export default function MutationEditPage() {
         <section className="bg-gradient-to-br from-nnm-blue to-nnm-blue-dark py-14 text-white">
           <div className="mx-auto max-w-6xl px-6">
             <span className="mb-2.5 block font-mono text-[12.5px] uppercase tracking-[0.14em] text-nnm-gold">Counter 01B</span>
-            <h1 className="mb-3 font-display text-3xl font-semibold sm:text-4xl">Change a Mutation Application</h1>
+            <h1 className="mb-3 font-display text-3xl font-semibold sm:text-4xl">My Mutation Application</h1>
             <p className="max-w-xl text-[17px] text-white/80">
-              Correct the details or documents of an application you submitted — possible until the office starts examining it, or when it
-              has been sent back to you for correction.
+              View your application with its application number and mobile number. You can correct it until the Tax Daroga starts examining
+              it, or when the office sends it back to you for correction.
             </p>
           </div>
         </section>
@@ -188,7 +205,7 @@ export default function MutationEditPage() {
             ) : !session || !f ? (
               <form onSubmit={open} className={cardClass}>
                 <h2 className="mb-4 text-base font-semibold text-slate-900">Open your application</h2>
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <div>
                     <label className={labelClass}>Application number</label>
                     <input
@@ -203,10 +220,6 @@ export default function MutationEditPage() {
                     <label className={labelClass}>Mobile number (applicant or new owner)</label>
                     <input value={lookup.mobile} onChange={(e) => setLookup({ ...lookup, mobile: e.target.value })} inputMode="tel" maxLength={14} className={inputClass} />
                   </div>
-                  <div>
-                    <label className={labelClass}>Holding number (old or new, as given)</label>
-                    <input value={lookup.holdingNo} onChange={(e) => setLookup({ ...lookup, holdingNo: e.target.value })} maxLength={32} className={inputClass} />
-                  </div>
                 </div>
                 <button disabled={busy} className="mt-4 inline-flex items-center gap-2 rounded-md bg-nnm-blue px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-60">
                   {busy && <Loader2 className="h-4 w-4 animate-spin" />}
@@ -218,6 +231,7 @@ export default function MutationEditPage() {
                     {locked}
                   </p>
                 )}
+                {viewed && <ApplicationSummary app={viewed.app} docs={viewed.docs} status={viewed.status} />}
               </form>
             ) : (
               <form onSubmit={save} className="space-y-5">
@@ -258,6 +272,36 @@ export default function MutationEditPage() {
                     </div>
                   </div>
                 )}
+
+                <div className={cardClass}>
+                  <h2 className="mb-4 text-base font-semibold text-slate-900">Area</h2>
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <div>
+                      <label className={labelClass}>Total area of the holding (sq ft)</label>
+                      {session.app.holdingNo ? (
+                        <p className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm">{Number(f.holdingAreaSqft).toLocaleString("en-IN")} sq ft (holding record)</p>
+                      ) : (
+                        <input type="number" min="0" step="0.01" value={f.holdingAreaSqft} onChange={set("holdingAreaSqft")} className={inputClass} />
+                      )}
+                    </div>
+                    <div>
+                      <label className={labelClass}>Area to be mutated (sq ft)</label>
+                      <label className="mb-2 flex items-center gap-2 text-sm text-slate-700">
+                        <input type="checkbox" checked={f.mutateEntire} onChange={(e) => setF((p) => (p ? { ...p, mutateEntire: e.target.checked } : p))} className="h-4 w-4" />
+                        Entire area of the holding
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        disabled={f.mutateEntire}
+                        value={f.mutateEntire ? f.holdingAreaSqft : f.mutateAreaSqft}
+                        onChange={set("mutateAreaSqft")}
+                        className={`${inputClass} disabled:bg-slate-100`}
+                      />
+                    </div>
+                  </div>
+                </div>
 
                 <div className={cardClass}>
                   <h2 className="mb-4 text-base font-semibold text-slate-900">New holding owner</h2>
@@ -361,6 +405,15 @@ export default function MutationEditPage() {
                               {spec.label}
                               {req && <span className="text-red-600"> *</span>}
                               {mine.length > 0 && <CheckCircle2 className="ml-1 inline h-4 w-4 text-green-600" />}
+                              {spec.named && (
+                                <input
+                                  value={otherLabels[spec.type] ?? ""}
+                                  onChange={(e) => setOtherLabels({ ...otherLabels, [spec.type]: e.target.value })}
+                                  placeholder="Name of the document"
+                                  maxLength={100}
+                                  className="mt-1 block w-full max-w-xs rounded-md border border-slate-300 px-2 py-1 text-xs font-normal"
+                                />
+                              )}
                             </div>
                             <label
                               className={`inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 ${uploading ? "pointer-events-none opacity-50" : ""}`}
@@ -381,7 +434,10 @@ export default function MutationEditPage() {
                           </div>
                           {mine.map((d) => (
                             <div key={d.id} className="mt-1 flex items-center gap-2 text-xs text-slate-600">
-                              <span className="truncate">{d.file_name}</span>
+                              <span className="truncate">
+                                {d.label && d.doc_type.startsWith("other_") ? `${d.label} — ` : ""}
+                                {d.file_name}
+                              </span>
                               <button type="button" onClick={() => onRemove(d.id)} className="text-red-600" aria-label="Remove">
                                 <Trash2 className="h-3.5 w-3.5" />
                               </button>
@@ -403,6 +459,70 @@ export default function MutationEditPage() {
         </section>
       </main>
       <SiteFooter />
+    </div>
+  );
+}
+
+/** Read-only view of the application: details, documents and progress. */
+function ApplicationSummary({ app, docs, status }: { app: EditableApplication; docs: UploadedDoc[]; status: ApplicationStatus | null }) {
+  const row = (k: string, v: string | null | undefined) =>
+    v ? (
+      <div>
+        <span className="text-slate-500">{k}:</span> {v}
+      </div>
+    ) : null;
+  const basis = TRANSFER_BASIS.find((b) => b.value === app.transferBasis)?.label ?? app.transferBasis;
+  return (
+    <div className="mt-5 space-y-4 border-t border-slate-100 pt-4 text-sm">
+      {status && (
+        <div>
+          <p className="text-base font-semibold text-nnm-blue">{status.status}</p>
+          {status.remarks && <p className="mt-1 rounded-md bg-slate-50 p-2 text-slate-700">Remarks: {status.remarks}</p>}
+        </div>
+      )}
+      <div className="grid grid-cols-1 gap-1 sm:grid-cols-2">
+        {row("Application no", app.applicationNo)}
+        {row("Holding no", app.holdingNo ?? (app.manual ? `${app.manual.oldHoldingNo} (old), ward ${app.manual.ward}` : null))}
+        {row("New owner", `${app.newOwnerName}${app.newOwnerRelationName ? ` ${app.newOwnerRelationType ?? ""} ${app.newOwnerRelationName}` : ""}`)}
+        {row("New owner's mobile", app.newOwnerMobile)}
+        {row("Aadhaar", app.newOwnerAadhaarMasked)}
+        {row("Applicant", `${app.applicantName} (${app.applicantMobile})`)}
+        {row("Basis", `${basis}, dated ${app.transferDate.split("-").reverse().join("-")}`)}
+        {row("Area", app.holdingAreaSqft ? (app.mutateEntire ? `Entire holding, ${Number(app.holdingAreaSqft)} sq ft` : `${Number(app.mutateAreaSqft)} of ${Number(app.holdingAreaSqft)} sq ft`) : null)}
+        {row("Khata / Khesra", app.khataNo || app.khesraNo ? `${app.khataNo ?? "-"} / ${app.khesraNo ?? "-"}` : null)}
+        {row("Survey sheet / ward", app.surveySheetNo || app.surveyWard ? `${app.surveySheetNo ?? "-"} / ${app.surveyWard ?? "-"}` : null)}
+      </div>
+      <div>
+        <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">Documents</p>
+        <ul className="list-disc pl-5 text-slate-700">
+          {docs.map((d) => (
+            <li key={d.id}>
+              {d.label} — <span className="text-slate-500">{d.file_name}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+      {status?.trail && status.trail.events.length > 0 && (
+        <div>
+          <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">Progress</p>
+          <ol className="space-y-1.5 border-l border-slate-200 pl-4">
+            {status.trail.events
+              .filter((e) => e.kind !== "entered_chain")
+              .map((e, i) => (
+                <li key={i}>
+                  <b>{TIMELINE_LABEL[e.kind]}</b>
+                  {e.desk ? ` — ${e.desk}` : ""}{" "}
+                  <span className="text-xs text-slate-500">
+                    {new Date(e.at).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}
+                    {e.minutesAtDesk !== null ? ` · took ${formatDuration(e.minutesAtDesk)}` : ""}
+                  </span>
+                  {e.comment && <span className="block text-xs text-slate-600">&ldquo;{e.comment}&rdquo;</span>}
+                </li>
+              ))}
+            {status.trail.currentDesk && <li className="font-semibold text-amber-800">Now with the {status.trail.currentDesk}</li>}
+          </ol>
+        </div>
+      )}
     </div>
   );
 }

@@ -9,6 +9,9 @@ export interface VerificationDraft {
   jamabandiAreaSqft: string;
   documentAreaSqft: string;
   holdingAreaSqft: string;
+  /** Ticked: the entire holding is mutated. */
+  entire: boolean;
+  mutateAreaSqft: string;
   khataNo: string;
   khesraNo: string;
   surveySheetNo: string;
@@ -20,17 +23,45 @@ export function areasOf(v: VerificationDraft): number[] {
   return [v.jamabandiAreaSqft, v.documentAreaSqft, v.holdingAreaSqft].map((x) => Number(x));
 }
 
+/** Area being mutated: the holding's area when the entire holding is mutated. */
+export function mutateArea(v: VerificationDraft): number {
+  return v.entire ? Number(v.holdingAreaSqft) : Number(v.mutateAreaSqft);
+}
+
+export function isPartial(v: VerificationDraft): boolean {
+  return !v.entire && mutateArea(v) < Number(v.holdingAreaSqft) - AREA_TOLERANCE_SQFT;
+}
+
+/** Entire holding: jamabandi = document = holding. Part: jamabandi = document = area being mutated. */
+export function areasMatch(v: VerificationDraft): boolean {
+  const [j, d, h] = areasOf(v) as [number, number, number];
+  const compared = isPartial(v) ? [j, d, mutateArea(v)] : [j, d, h];
+  return Math.max(...compared) - Math.min(...compared) <= AREA_TOLERANCE_SQFT;
+}
+
 export function verificationProblem(v: VerificationDraft): string | null {
   const a = areasOf(v);
   if (a.some((x) => !(x > 0))) return "Enter all three areas in sq ft.";
+  if (!v.entire && !(Number(v.mutateAreaSqft) > 0)) return "Enter the area being mutated, or tick 'Entire holding'.";
+  if (mutateArea(v) > Number(v.holdingAreaSqft) + AREA_TOLERANCE_SQFT) return "The area being mutated cannot be more than the holding's area.";
   if (!v.khataNo.trim() || !v.khesraNo.trim() || !v.surveySheetNo.trim() || !v.surveyWard) return "Enter the khata, khesra, survey sheet number and survey ward.";
-  if (Math.max(...a) - Math.min(...a) > AREA_TOLERANCE_SQFT && v.remarks.trim().length < 5) return "The areas do not match — explain the difference in the remarks.";
+  if (!areasMatch(v) && v.remarks.trim().length < 5) return "The areas do not match — explain the difference in the remarks.";
   return null;
 }
 
 export function toBody(v: VerificationDraft): AreaVerificationBody {
   const [jamabandiAreaSqft, documentAreaSqft, holdingAreaSqft] = areasOf(v) as [number, number, number];
-  return { jamabandiAreaSqft, documentAreaSqft, holdingAreaSqft, khataNo: v.khataNo, khesraNo: v.khesraNo, surveySheetNo: v.surveySheetNo, surveyWard: v.surveyWard, remarks: v.remarks || null };
+  return {
+    jamabandiAreaSqft,
+    documentAreaSqft,
+    holdingAreaSqft,
+    mutateAreaSqft: v.entire ? null : Number(v.mutateAreaSqft),
+    khataNo: v.khataNo,
+    khesraNo: v.khesraNo,
+    surveySheetNo: v.surveySheetNo,
+    surveyWard: v.surveyWard,
+    remarks: v.remarks || null,
+  };
 }
 
 const input = "w-full rounded-md border border-slate-300 bg-white px-2.5 py-2 text-sm outline-none focus:ring-2 focus:ring-nnm-blue";
@@ -40,8 +71,9 @@ const label = "mb-1 block text-xs font-medium text-slate-600";
 export function AreaVerificationForm({ value, onChange, recordArea }: { value: VerificationDraft; onChange: (v: VerificationDraft) => void; recordArea: string | null }) {
   const set = (k: keyof VerificationDraft) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => onChange({ ...value, [k]: e.target.value });
   const a = areasOf(value);
-  const filled = a.every((x) => x > 0);
-  const match = filled && Math.max(...a) - Math.min(...a) <= AREA_TOLERANCE_SQFT;
+  const filled = a.every((x) => x > 0) && (value.entire || Number(value.mutateAreaSqft) > 0);
+  const match = filled && areasMatch(value);
+  const partial = filled && isPartial(value);
   return (
     <div className="mb-4 space-y-3 rounded-lg border border-slate-200 bg-white p-4">
       <p className="text-sm font-semibold text-slate-900">Area &amp; land record verification (required to forward)</p>
@@ -60,9 +92,33 @@ export function AreaVerificationForm({ value, onChange, recordArea }: { value: V
           {recordArea && <p className="mt-0.5 text-[11px] text-slate-400">Holding record shows {recordArea} sq ft</p>}
         </div>
       </div>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <div className="sm:col-span-1">
+          <label className={label}>Area being mutated (sq ft)</label>
+          <label className="mb-1 flex items-center gap-2 text-xs text-slate-700">
+            <input type="checkbox" checked={value.entire} onChange={(e) => onChange({ ...value, entire: e.target.checked })} /> Entire holding
+          </label>
+          <input
+            type="number"
+            min="0"
+            step="0.01"
+            disabled={value.entire}
+            value={value.entire ? value.holdingAreaSqft : value.mutateAreaSqft}
+            onChange={set("mutateAreaSqft")}
+            className={`${input} disabled:bg-slate-100`}
+          />
+        </div>
+        {partial && (
+          <p className="self-end rounded-md bg-blue-50 px-3 py-2 text-xs text-blue-900 sm:col-span-2">
+            Partial mutation: on final approval holding continues with {(Number(value.holdingAreaSqft) - mutateArea(value)).toLocaleString("en-IN")} sq ft, and a
+            new MMC holding of {mutateArea(value).toLocaleString("en-IN")} sq ft is created for the new owner. Jamabandi and document areas are compared with
+            the part being mutated.
+          </p>
+        )}
+      </div>
       {filled && (
         <p className={`rounded-md px-3 py-1.5 text-xs font-semibold ${match ? "bg-green-50 text-green-800" : "bg-red-50 text-red-700"}`}>
-          {match ? "✓ The three areas match." : "✗ The areas do not match — explain the difference below (e.g. partition of part of the holding)."}
+          {match ? "✓ The areas match." : "✗ The areas do not match — explain the difference below."}
         </p>
       )}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -115,6 +171,12 @@ export function AreaVerificationView({ v }: { v: AreaVerification }) {
           {Number(v.holding_area_sqft).toLocaleString("en-IN")} sq ft
         </div>
       </div>
+      {v.is_partial && (
+        <p className="mt-3 rounded-md bg-blue-50 px-3 py-2 text-sm text-blue-900">
+          Partial mutation: <b>{Number(v.mutate_area_sqft).toLocaleString("en-IN")} sq ft</b> of {Number(v.holding_area_sqft).toLocaleString("en-IN")} sq ft
+          transferred — a new MMC holding is created on final approval.
+        </p>
+      )}
       <p className={`mt-3 text-sm font-semibold ${v.areas_match ? "text-green-700" : "text-red-700"}`}>
         {v.areas_match ? "✓ Areas match" : "✗ Areas differ"}
         {v.remarks ? ` — “${v.remarks}”` : ""}

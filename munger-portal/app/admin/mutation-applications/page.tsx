@@ -8,11 +8,12 @@ import { MutationApplicationPanel } from "@/components/admin/mutation-applicatio
 import { MutationPendingSummary } from "@/components/admin/mutation-pending-summary";
 import { MutationTimeline } from "@/components/admin/mutation-timeline";
 import { useAdminGuard } from "@/lib/use-admin-guard";
-import { fetchStaffApplications, linkApplication, rejectStaffApplication, TRANSFER_BASIS, type StaffApplicationListItem } from "@/lib/mutation-api";
+import { fetchStaffApplications, linkApplication, rejectStaffApplication, returnStaffApplication, TRANSFER_BASIS, type StaffApplicationListItem } from "@/lib/mutation-api";
 
 const ALLOWED = ["tax_daroga", "mutation_nodal_clerk", "deputy_commissioner", "commissioner", "city_manager"];
 const FILTERS = [
   { value: "awaiting_holding", label: "Holding to be identified" },
+  { value: "returned", label: "Sent back to applicant" },
   { value: "in_chain", label: "In the mutation chain" },
   { value: "rejected", label: "Not accepted" },
   { value: "", label: "All" },
@@ -27,8 +28,9 @@ const STAGE: Record<string, string> = {
 function progress(a: StaffApplicationListItem): string {
   if (a.status === "awaiting_holding") return "Holding to be identified";
   if (a.status === "rejected") return "Not accepted";
+  if (a.status === "returned") return "Sent back to applicant";
   if (a.change_request_status === "pending") return `With ${STAGE[a.current_stage ?? ""] ?? a.current_stage}`;
-  if (a.change_request_status === "reverted") return "Sent back to operator";
+  if (a.change_request_status === "reverted") return "Sent back to applicant";
   return a.change_request_status ? a.change_request_status.charAt(0).toUpperCase() + a.change_request_status.slice(1) : "-";
 }
 
@@ -66,11 +68,12 @@ export default function MutationApplicationsPage() {
   }
   const isDaroga = admin.role === "tax_daroga";
 
-  async function act(id: string, kind: "link" | "reject") {
+  async function act(id: string, kind: "link" | "reject" | "return") {
     setBusy(true);
     setError(null);
     try {
       if (kind === "link") await linkApplication(id, holdingNo.trim());
+      else if (kind === "return") await returnStaffApplication(id, remarks.trim());
       else await rejectStaffApplication(id, remarks.trim());
       setOpen(null);
       setHoldingNo("");
@@ -163,9 +166,16 @@ export default function MutationApplicationsPage() {
                           </div>
                         </div>
                         <div className="space-y-2">
-                          <label className="block text-xs font-medium text-slate-600">Or turn it down (reason is shown to the applicant)</label>
+                          <label className="block text-xs font-medium text-slate-600">Or send it back for correction / turn it down (shown to the applicant)</label>
                           <div className="flex gap-2">
                             <input value={remarks} onChange={(e) => setRemarks(e.target.value)} maxLength={500} className="w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm" />
+                            <button
+                              onClick={() => act(a.id, "return")}
+                              disabled={busy || remarks.trim().length < 3}
+                              className="whitespace-nowrap rounded-md border border-amber-300 px-3 py-1.5 text-xs font-semibold text-amber-700 disabled:opacity-60"
+                            >
+                              Send back
+                            </button>
                             <button
                               onClick={() => act(a.id, "reject")}
                               disabled={busy || remarks.trim().length < 3}

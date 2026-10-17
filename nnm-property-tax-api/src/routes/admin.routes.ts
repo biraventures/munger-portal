@@ -18,6 +18,7 @@ import {
   getChangeRequestTimeline,
   getApplicationTimeline,
   getMutationPendingSummary,
+  getHoldingLineage,
 } from "../controllers/changeRequest.controller";
 import {
   getDiscrepancyRequests,
@@ -200,6 +201,7 @@ import {
   getMutationApplications,
   postLinkMutationApplication,
   postRejectMutationApplication,
+  postReturnToApplicant,
 } from "../controllers/mutationApplication.controller";
 import {
   getTlNotice,
@@ -526,6 +528,8 @@ adminRouter.get("/mutation-applications/:id", requireMutationApplicationRole, ge
 adminRouter.get("/mutation-applications/:id/documents/:docId/file", requireMutationApplicationRole, getMutationApplicationDocument);
 adminRouter.post("/mutation-applications/:id/link", requireAdminRole("tax_daroga"), postLinkMutationApplication);
 adminRouter.post("/mutation-applications/:id/reject", requireAdminRole("tax_daroga"), postRejectMutationApplication);
+adminRouter.post("/mutation-applications/:id/return", requireAdminRole("tax_daroga"), postReturnToApplicant);
+adminRouter.get("/holdings/:holdingNo/lineage", requireAdminRole("tax_daroga", "mutation_nodal_clerk", "deputy_commissioner", "commissioner", "city_manager"), getHoldingLineage);
 
 // Trade licence field survey: the Tax Collector records visits and prints the notices; the City Manager (who signs them)
 // and senior officers see every business and its notice status.

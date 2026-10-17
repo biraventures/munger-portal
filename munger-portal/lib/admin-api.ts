@@ -139,7 +139,15 @@ export interface ChangeRequestDetail {
   currentFloors: Record<string, unknown>[];
   approvalHistory: ChangeRequestApproval[];
   verification?: AreaVerification | null;
-  landRecord?: { khataNo: string | null; khesraNo: string | null; surveySheetNo: string | null; surveyWard: string | null } | null;
+  landRecord?: {
+    khataNo: string | null;
+    khesraNo: string | null;
+    surveySheetNo: string | null;
+    surveyWard: string | null;
+    mutateAreaSqft: string | null;
+    mutateEntire: boolean;
+  } | null;
+  lineage?: { parent_holding_no: string; child_holding_no: string; area_sqft: string; parent_area_before: string; parent_area_after: string; created_at: string }[];
 }
 
 export async function fetchChangeRequestDetail(id: number): Promise<ChangeRequestDetail> {
@@ -152,6 +160,7 @@ export interface AreaVerificationBody {
   jamabandiAreaSqft: number;
   documentAreaSqft: number;
   holdingAreaSqft: number;
+  mutateAreaSqft?: number | null;
   khataNo: string;
   khesraNo: string;
   surveySheetNo: string;
@@ -164,6 +173,8 @@ export interface AreaVerification {
   document_area_sqft: string;
   holding_area_sqft: string;
   areas_match: boolean;
+  mutate_area_sqft: string | null;
+  is_partial: boolean;
   khata_no: string;
   khesra_no: string;
   survey_sheet_no: string;

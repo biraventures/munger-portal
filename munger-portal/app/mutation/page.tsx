@@ -8,6 +8,7 @@ import { SiteFooter } from "@/components/site-footer";
 import { PROPERTY_TAX_SEARCH_PATH } from "@/lib/config";
 import {
   createApplication,
+  updateApplication,
   SURVEY_WARDS,
   DOC_TYPES,
   isRequired,
@@ -47,6 +48,7 @@ export default function MutationApplicationPage() {
   // Step 1 - holding
   const [mode, setMode] = useState<"holding" | "manual">("holding");
   const [holdingNo, setHoldingNo] = useState("");
+  const [lookupMobile, setLookupMobile] = useState("");
   const [holding, setHolding] = useState<HoldingLookup | null>(null);
   const [manual, setManual] = useState({ oldHoldingNo: "", ward: "", address: "", taxPaidTillYear: "", solidWastePaidTillYear: "" });
 
@@ -68,6 +70,8 @@ export default function MutationApplicationPage() {
     surveyWard: "",
   });
   const [applicantIsOwner, setApplicantIsOwner] = useState(false);
+  const [area, setArea] = useState({ total: "", entire: true, part: "" });
+  const [otherLabels, setOtherLabels] = useState<Record<string, string>>({ other_1: "", other_2: "" });
   const [gps, setGps] = useState<{ lat: number; lng: number; acc: number } | null>(null);
   const [gpsBusy, setGpsBusy] = useState(false);
 
@@ -84,10 +88,13 @@ export default function MutationApplicationPage() {
     e.preventDefault();
     setError(null);
     setHolding(null);
+    const m = lookupMobile.replace(/[\s-]/g, "").replace(/^(\+91|91|0)(?=\d{10}$)/, "");
+    if (!/^[6-9]\d{9}$/.test(m)) return setError("Enter your 10-digit mobile number first.");
     if (!holdingNo.trim()) return setError("Enter the holding number.");
     setBusy(true);
     try {
-      const r = await lookupHolding(holdingNo);
+      const r = await lookupHolding(holdingNo, m);
+      setF((p) => ({ ...p, applicantMobile: p.applicantMobile || m }));
       if (!r.found) setError("This holding number was not found. Check it, or apply with the old holding number and ward instead.");
       setHolding(r.found ? r : null);
     } catch (err) {
@@ -134,9 +141,14 @@ export default function MutationApplicationPage() {
     if (!applicantName.trim() || !applicantMobile.trim()) return setError("Enter the applicant's name and mobile number.");
     if (!f.transferBasis || !f.transferDate) return setError("Choose the basis of mutation and the date of transfer.");
     if (!gps) return setError("Capture the GPS location of the holding (stand at the holding and tap the button).");
+    const total = recordArea ?? Number(area.total);
+    if (!(total > 0)) return setError("Enter the total area of the holding in sq ft.");
+    const part = area.entire ? total : Number(area.part);
+    if (!(part > 0)) return setError("Enter the area to be mutated in sq ft, or tick 'Entire area'.");
+    if (part > total) return setError(`The area to be mutated cannot be more than the total area (${total} sq ft).`);
     setBusy(true);
     try {
-      const r = await createApplication({
+      const body = {
         holdingNo: mode === "holding" ? holding?.holdingNo ?? holdingNo.trim() : null,
         manual: mode === "manual" ? { ...manual } : null,
         newOwnerName: f.newOwnerName,
@@ -156,8 +168,16 @@ export default function MutationApplicationPage() {
         khesraNo: f.khesraNo || null,
         surveySheetNo: f.surveySheetNo || null,
         surveyWard: f.surveyWard || null,
-      });
-      setDraft({ id: r.applicationId, token: r.uploadToken });
+        holdingAreaSqft: total,
+        mutateEntire: area.entire || part >= total,
+        mutateAreaSqft: part,
+      };
+      // Coming back from the documents step: the same draft is updated, its documents are kept.
+      if (draft) await updateApplication(draft.id, draft.token, body);
+      else {
+        const r = await createApplication(body);
+        setDraft({ id: r.applicationId, token: r.uploadToken });
+      }
       setStep("documents");
       window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (err) {
@@ -166,6 +186,8 @@ export default function MutationApplicationPage() {
       setBusy(false);
     }
   }
+
+  const recordArea = mode === "holding" && holding?.areaSqft ? Number(holding.areaSqft) : null;
 
   async function onPick(type: string, files: FileList | null) {
     if (!draft || !files?.length) return;
@@ -177,7 +199,7 @@ export default function MutationApplicationPage() {
       }
       setUploading({ type, pct: 0 });
       try {
-        const d = await uploadDocument(draft.id, draft.token, type, file, (pct) => setUploading({ type, pct }));
+        const d = await uploadDocument(draft.id, draft.token, type, file, (pct) => setUploading({ type, pct }), otherLabels[type] || undefined);
         setDocs((prev) => [...prev, d]);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Upload failed.");
@@ -241,7 +263,7 @@ export default function MutationApplicationPage() {
               </Link>{" "}
               ·{" "}
               <Link href="/mutation/edit" className="font-semibold text-nnm-gold underline">
-                Change a submitted application
+                View / correct my application
               </Link>
             </p>
           </div>
@@ -278,9 +300,16 @@ export default function MutationApplicationPage() {
 
                 {mode === "holding" ? (
                   <>
-                    <form onSubmit={checkHolding} className="flex gap-2">
-                      <input value={holdingNo} onChange={(e) => setHoldingNo(e.target.value)} placeholder="e.g. MUNG-02002" className={inputClass} maxLength={32} />
-                      <button disabled={busy} className="inline-flex items-center gap-2 rounded-md bg-nnm-blue px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">
+                    <form onSubmit={checkHolding} className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_1fr_auto]">
+                      <div>
+                        <label className={labelClass}>Your mobile number</label>
+                        <input value={lookupMobile} onChange={(e) => setLookupMobile(e.target.value)} inputMode="tel" placeholder="10-digit mobile" className={inputClass} maxLength={14} />
+                      </div>
+                      <div>
+                        <label className={labelClass}>Holding number</label>
+                        <input value={holdingNo} onChange={(e) => setHoldingNo(e.target.value)} placeholder="e.g. MUNG-02002" className={inputClass} maxLength={32} />
+                      </div>
+                      <button disabled={busy} className="inline-flex items-center justify-center gap-2 self-end rounded-md bg-nnm-blue px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60">
                         {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
                         Check
                       </button>
@@ -433,6 +462,43 @@ export default function MutationApplicationPage() {
                 </div>
 
                 <div className={cardClass}>
+                  <h2 className="mb-4 text-base font-semibold text-slate-900">Area</h2>
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <div>
+                      <label className={labelClass}>Total area of the holding (sq ft)</label>
+                      {recordArea ? (
+                        <p className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm">{recordArea.toLocaleString("en-IN")} sq ft (as in the holding record)</p>
+                      ) : (
+                        <input type="number" min="0" step="0.01" inputMode="decimal" value={area.total} onChange={(e) => setArea({ ...area, total: e.target.value })} className={inputClass} />
+                      )}
+                    </div>
+                    <div>
+                      <label className={labelClass}>Area to be mutated (sq ft)</label>
+                      <label className="mb-2 flex items-center gap-2 text-sm text-slate-700">
+                        <input type="checkbox" checked={area.entire} onChange={(e) => setArea({ ...area, entire: e.target.checked })} className="h-4 w-4" />
+                        Entire area of the holding
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        inputMode="decimal"
+                        disabled={area.entire}
+                        value={area.entire ? String(recordArea ?? area.total) : area.part}
+                        onChange={(e) => setArea({ ...area, part: e.target.value })}
+                        className={`${inputClass} disabled:bg-slate-100`}
+                      />
+                    </div>
+                  </div>
+                  {!area.entire && (
+                    <p className="mt-3 rounded-md bg-amber-50 p-3 text-xs text-amber-900">
+                      Only part of the holding is being transferred: once approved, the existing holding continues (with its area reduced) and a new
+                      holding with a new MMC number is created for the transferred part in the new owner&apos;s name.
+                    </p>
+                  )}
+                </div>
+
+                <div className={cardClass}>
                   <h2 className="mb-4 text-base font-semibold text-slate-900">Transfer</h2>
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <div>
@@ -525,6 +591,15 @@ export default function MutationApplicationPage() {
                                 {mine.length > 0 && <CheckCircle2 className="ml-1 inline h-4 w-4 text-green-600" />}
                               </div>
                               {spec.hint && <div className="text-xs text-slate-500">{spec.hint}</div>}
+                              {spec.named && (
+                                <input
+                                  value={otherLabels[spec.type] ?? ""}
+                                  onChange={(e) => setOtherLabels({ ...otherLabels, [spec.type]: e.target.value })}
+                                  placeholder="Name of the document (e.g. registered will)"
+                                  maxLength={100}
+                                  className="mt-1.5 w-full max-w-xs rounded-md border border-slate-300 px-2 py-1 text-xs"
+                                />
+                              )}
                             </div>
                             <label className={`inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 ${uploading ? "pointer-events-none opacity-50" : ""}`}>
                               {uploading?.type === spec.type ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
@@ -559,10 +634,24 @@ export default function MutationApplicationPage() {
                   By submitting, I declare that the information and documents given are true. A false declaration may lead to rejection and
                   action under law.
                 </p>
-                <button onClick={onSubmit} disabled={busy || !!uploading} className="inline-flex items-center gap-2 rounded-md bg-nnm-blue px-6 py-2.5 text-sm font-semibold text-white disabled:opacity-60">
-                  {busy && <Loader2 className="h-4 w-4 animate-spin" />}
-                  Submit application
-                </button>
+                <div className="flex flex-wrap gap-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setError(null);
+                      setStep("details");
+                      window.scrollTo({ top: 0, behavior: "smooth" });
+                    }}
+                    disabled={busy || !!uploading}
+                    className="rounded-md border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700"
+                  >
+                    Back to details
+                  </button>
+                  <button onClick={onSubmit} disabled={busy || !!uploading} className="inline-flex items-center gap-2 rounded-md bg-nnm-blue px-6 py-2.5 text-sm font-semibold text-white disabled:opacity-60">
+                    {busy && <Loader2 className="h-4 w-4 animate-spin" />}
+                    Submit application
+                  </button>
+                </div>
               </div>
             )}
 

@@ -2,7 +2,9 @@ import { changeRequestRepository } from "../repositories/changeRequest.repositor
 import { propertyRepository } from "../repositories/property.repository";
 import { entryRevertEventRepository } from "../repositories/entryRevertEvent.repository";
 import { applyPropertySave, assertExemptionOrderBelongs } from "./propertySave.service";
-import { liveInputForApplication } from "./mutationApplication.service";
+import { liveInputForApplication, saveInputFromProperty } from "./mutationApplication.service";
+import { getNextNewHoldingNo } from "./holdingNumberSeries.service";
+import { getCurrentAssessmentYearStartNum } from "../utils/assessmentYear";
 import { classifyPropertyChange, TIER_FINAL_STAGE } from "./changeClassification.service";
 import { nextApprovalStage } from "../types/admin.types";
 import { pool } from "../config/db";
@@ -24,10 +26,17 @@ export async function getChangeRequestDetail(id: number) {
   const approvalHistory = await changeRequestRepository.listApprovalsFor(id);
   const verification = await latestVerification(id);
   // Land-record details to pre-fill the Tax Daroga's verification: the online application's, else the holding's.
-  let landRecord: { khataNo: string | null; khesraNo: string | null; surveySheetNo: string | null; surveyWard: string | null } | null = null;
+  let landRecord: {
+    khataNo: string | null;
+    khesraNo: string | null;
+    surveySheetNo: string | null;
+    surveyWard: string | null;
+    mutateAreaSqft: string | null;
+    mutateEntire: boolean;
+  } | null = null;
   if (request.approval_tier === "mutation") {
-    const { rows } = await pool.query<{ khata_no: string | null; khesra_no: string | null; survey_sheet_no: string | null; survey_ward: string | null }>(
-      `SELECT khata_no, khesra_no, survey_sheet_no, survey_ward FROM mutation_applications WHERE id = $1`,
+    const { rows } = await pool.query<{ khata_no: string | null; khesra_no: string | null; survey_sheet_no: string | null; survey_ward: string | null; mutate_area_sqft: string | null; mutate_entire: boolean }>(
+      `SELECT khata_no, khesra_no, survey_sheet_no, survey_ward, mutate_area_sqft, mutate_entire FROM mutation_applications WHERE id = $1`,
       [request.public_application_id ?? null],
     );
     const a = rows[0];
@@ -37,16 +46,24 @@ export async function getChangeRequestDetail(id: number) {
       khesraNo: a?.khesra_no ?? p?.khesra_no ?? null,
       surveySheetNo: a?.survey_sheet_no ?? p?.survey_sheet_no ?? null,
       surveyWard: a?.survey_ward ?? p?.survey_ward ?? null,
+      mutateAreaSqft: a && !a.mutate_entire ? a.mutate_area_sqft : null,
+      mutateEntire: a ? a.mutate_entire : true,
     };
   }
+  const { rows: lineage } = await pool.query(
+    `SELECT parent_holding_no, child_holding_no, area_sqft, parent_area_before, parent_area_after, created_at FROM holding_lineage WHERE change_request_id = $1`,
+    [id],
+  );
 
-  return { request, currentProperty, currentFloors, approvalHistory, verification, landRecord };
+  return { request, currentProperty, currentFloors, approvalHistory, verification, landRecord, lineage };
 }
 
 export interface AreaVerificationInput {
   jamabandiAreaSqft: number;
   documentAreaSqft: number;
   holdingAreaSqft: number;
+  /** Area being transferred; omitted = the entire holding. Less than the holding's area = partial mutation (new holding). */
+  mutateAreaSqft?: number | null;
   khataNo: string;
   khesraNo: string;
   surveySheetNo: string;
@@ -70,6 +87,8 @@ interface VerificationRow {
   remarks: string | null;
   verified_by: string;
   verified_at: Date;
+  mutate_area_sqft: string | null;
+  is_partial: boolean;
 }
 
 export async function latestVerification(changeRequestId: number): Promise<VerificationRow | null> {
@@ -81,17 +100,41 @@ export async function latestVerification(changeRequestId: number): Promise<Verif
 }
 
 async function recordVerification(request: ChangeRequestRow, v: AreaVerificationInput, admin: AdminTokenPayload): Promise<void> {
-  const areas = [v.jamabandiAreaSqft, v.documentAreaSqft, v.holdingAreaSqft];
-  const match = Math.max(...areas) - Math.min(...areas) <= AREA_TOLERANCE_SQFT;
+  const mutateArea = v.mutateAreaSqft ?? v.holdingAreaSqft;
+  if (mutateArea > v.holdingAreaSqft + AREA_TOLERANCE_SQFT) throw ApiError.badRequest("The area to be mutated cannot be more than the holding's total area.");
+  const partial = mutateArea < v.holdingAreaSqft - AREA_TOLERANCE_SQFT;
+  // Entire holding: jamabandi, document and holding areas agree. Part of it: jamabandi and document agree with the
+  // area being mutated (the rest stays with the holding).
+  const compared = partial ? [v.jamabandiAreaSqft, v.documentAreaSqft, mutateArea] : [v.jamabandiAreaSqft, v.documentAreaSqft, v.holdingAreaSqft];
+  const match = Math.max(...compared) - Math.min(...compared) <= AREA_TOLERANCE_SQFT;
   const remarks = v.remarks?.trim() || null;
   if (!match && (!remarks || remarks.length < 5)) {
-    throw ApiError.badRequest("The three areas do not match - explain the difference in the remarks (e.g. partition of part of the holding).");
+    throw ApiError.badRequest(
+      partial
+        ? "The jamabandi and document areas do not match the area being mutated - explain the difference in the remarks."
+        : "The three areas do not match - explain the difference in the remarks (or enter the area being mutated if only part of the holding is transferred).",
+    );
   }
   await pool.query(
     `INSERT INTO mutation_area_verifications (change_request_id, jamabandi_area_sqft, document_area_sqft, holding_area_sqft, areas_match,
-       khata_no, khesra_no, survey_sheet_no, survey_ward, remarks, verified_by, verified_by_username)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
-    [request.id, ...areas, match, v.khataNo.trim(), v.khesraNo.trim(), v.surveySheetNo.trim(), v.surveyWard, remarks, admin.displayName, admin.username],
+       khata_no, khesra_no, survey_sheet_no, survey_ward, remarks, verified_by, verified_by_username, mutate_area_sqft, is_partial)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
+    [
+      request.id,
+      v.jamabandiAreaSqft,
+      v.documentAreaSqft,
+      v.holdingAreaSqft,
+      match,
+      v.khataNo.trim(),
+      v.khesraNo.trim(),
+      v.surveySheetNo.trim(),
+      v.surveyWard,
+      remarks,
+      admin.displayName,
+      admin.username,
+      mutateArea,
+      partial,
+    ],
   );
   await recordAuditEvent({
     changeRequestId: request.id,
@@ -99,11 +142,13 @@ async function recordVerification(request: ChangeRequestRow, v: AreaVerification
     stage: request.current_stage,
     actor: admin.displayName,
     actorRole: admin.role,
-    comment: match ? "Areas match" : `Areas differ: ${remarks}`,
+    comment: `${partial ? `Partial mutation: ${mutateArea} of ${v.holdingAreaSqft} sq ft. ` : ""}${match ? "Areas match" : `Areas differ: ${remarks}`}`,
     details: {
       jamabandiAreaSqft: v.jamabandiAreaSqft,
       documentAreaSqft: v.documentAreaSqft,
       holdingAreaSqft: v.holdingAreaSqft,
+      mutateAreaSqft: mutateArea,
+      isPartial: partial,
       areasMatch: match,
       khataNo: v.khataNo.trim(),
       khesraNo: v.khesraNo.trim(),
@@ -187,9 +232,13 @@ export async function approveAtCurrentStage(
     : request.proposed_data;
   // The land-record details verified by the Tax Daroga go onto the holding with the mutation.
   const verified = request.approval_tier === "mutation" ? await latestVerification(id) : null;
-  const toApply = verified ? { ...base, khataNo: verified.khata_no, khesraNo: verified.khesra_no, surveySheetNo: verified.survey_sheet_no } : base;
-  await applyPropertySave(request.holding_no, toApply, request.requested_by, false);
-  if (verified) await pool.query(`UPDATE properties SET survey_ward = $2 WHERE holding_no = $1`, [request.holding_no, verified.survey_ward]);
+  if (verified?.is_partial) {
+    await applyPartialMutation(request, base, verified, admin);
+  } else {
+    const toApply = verified ? { ...base, khataNo: verified.khata_no, khesraNo: verified.khesra_no, surveySheetNo: verified.survey_sheet_no } : base;
+    await applyPropertySave(request.holding_no, toApply, request.requested_by, false);
+    if (verified) await pool.query(`UPDATE properties SET survey_ward = $2 WHERE holding_no = $1`, [request.holding_no, verified.survey_ward]);
+  }
   // If this holding was awaiting area finalization (survey_status =
   // 'surveyed'), an approved mutation on it is that finalization -
   // clears back to NULL, a no-op for every other holding.
@@ -283,6 +332,7 @@ export async function resubmitCorrectedChangeRequest(id: number, proposedData: C
   const request = await changeRequestRepository.findById(id);
   if (!request) throw ApiError.notFound("Change request not found");
   if (request.status !== "reverted") throw ApiError.badRequest("This request isn't currently awaiting correction.");
+  if (request.public_application_id) throw ApiError.badRequest("This online application was sent back to the applicant - they correct and resubmit it online.");
 
   await assertExemptionOrderBelongs(request.holding_no, proposedData);
 
@@ -301,4 +351,89 @@ export async function resubmitCorrectedChangeRequest(id: number, proposedData: C
 
   await entryRevertEventRepository.markResubmitted("property_mutation", id);
   return resubmitted;
+}
+/**
+ * Part of a holding transferred: the holding stays with its owner with its plot area reduced by the transferred area,
+ * and the transferred part becomes a new holding (next MMC- number) in the new owner's name. The new holding has no
+ * floor survey yet, so it is flagged for survey; its tax starts from the current year (earlier years were cleared on
+ * the parent before the mutation). The parent -> child link is kept in holding_lineage.
+ */
+async function applyPartialMutation(request: ChangeRequestRow, ownerSource: ChangeRequestRow["proposed_data"], v: VerificationRow, admin: AdminTokenPayload): Promise<string> {
+  const parent = await propertyRepository.findByHoldingNo(request.holding_no);
+  if (!parent) throw ApiError.badRequest("Holding not found.");
+  const parentFloors = await propertyRepository.findFloorsByHoldingNo(request.holding_no);
+  const transferred = Number(v.mutate_area_sqft);
+  const before = Number(parent.area_sqft);
+  const after = Math.round((before - transferred) * 100) / 100;
+  if (!(transferred > 0) || after <= 0) throw ApiError.badRequest("The area being mutated must be less than the holding's area for a partial mutation.");
+
+  const fy = getCurrentAssessmentYearStartNum();
+  const currentFy = `${fy}-${fy + 1}`;
+  const newHoldingNo = await getNextNewHoldingNo();
+  const reference = `Created by partial mutation of holding ${parent.holding_no} (${transferred} of ${before} sq ft) - mutation request #${request.id}`;
+  const parentInput = saveInputFromProperty(parent, parentFloors);
+  await applyPropertySave(
+    newHoldingNo,
+    {
+      ...parentInput,
+      ownerName: ownerSource.ownerName,
+      relationType: ownerSource.relationType ?? null,
+      relationName: ownerSource.relationName ?? null,
+      mobileNo: ownerSource.mobileNo ?? null,
+      aadhaarNumber: ownerSource.aadhaarNumber ?? null,
+      oldHoldingNo: null,
+      oldPid: null,
+      khataNo: v.khata_no,
+      khesraNo: v.khesra_no,
+      surveySheetNo: v.survey_sheet_no,
+      areaSqft: transferred,
+      vacantAreaSqft: 0,
+      arrearTax: 0,
+      penalty: 0,
+      outstandingDemand: 0,
+      penalCharge: 0,
+      waterCharge: 0,
+      boringCharge: 0,
+      formFee: 0,
+      miscCost: 0,
+      miscRebate: 0,
+      taxExemption: undefined,
+      holdingCreationYear: currentFy,
+      taxPaidTillYear: null,
+      solidWastePaidTillYear: `${fy - 1}-${fy}`,
+      floors: [],
+      changeBasis: "Mutation",
+      changeReference: reference,
+    },
+    request.requested_by,
+    true,
+  );
+  await pool.query(
+    `UPDATE properties SET survey_ward = $2, resurvey_required = TRUE,
+            resurvey_reason = $3
+      WHERE holding_no = $1`,
+    [newHoldingNo, v.survey_ward, `New holding from partial mutation of ${parent.holding_no} - survey the building / floors`],
+  );
+  await applyPropertySave(
+    parent.holding_no,
+    { ...parentInput, areaSqft: after, changeBasis: "Mutation", changeReference: `Partial mutation: ${transferred} sq ft transferred to new holding ${newHoldingNo} - mutation request #${request.id}` },
+    request.requested_by,
+    false,
+  );
+  await pool.query(
+    `INSERT INTO holding_lineage (parent_holding_no, child_holding_no, change_request_id, application_id, area_sqft, parent_area_before, parent_area_after, created_by)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+    [parent.holding_no, newHoldingNo, request.id, request.public_application_id ?? null, transferred, before, after, admin.displayName],
+  );
+  return newHoldingNo;
+}
+
+/** Holdings created from / that created this holding through mutation. */
+export async function holdingLineage(holdingNo: string) {
+  const { rows } = await pool.query(
+    `SELECT parent_holding_no, child_holding_no, kind, change_request_id, area_sqft, parent_area_before, parent_area_after, created_by, created_at
+       FROM holding_lineage WHERE parent_holding_no = $1 OR child_holding_no = $1 ORDER BY created_at`,
+    [holdingNo],
+  );
+  return rows;
 }
