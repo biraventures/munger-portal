@@ -35,6 +35,7 @@ export async function submitTradeLicenseApplication(
       missing("holding_receipt", !input.isNnmShop),
       missing("bpl_proof", !!input.isBpl),
       missing("gstr_3b", !!input.isGstRegistered),
+      missing("premises_agreement"),
       missing("pan_applicant"),
       missing("shop_photo"),
     ].filter(Boolean);

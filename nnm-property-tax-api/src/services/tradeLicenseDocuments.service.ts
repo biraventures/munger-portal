@@ -19,6 +19,7 @@ export const TL_DOC_TYPES: Record<string, { label: string; pdf: boolean }> = {
   pan_applicant: { label: "PAN card of applicant", pdf: true },
   pan_firm: { label: "PAN card of firm", pdf: true },
   shop_photo: { label: "Photo of shop", pdf: false },
+  premises_agreement: { label: "Rental / lease / sale-purchase agreement of the business premises", pdf: true },
 };
 export type TlDocType = keyof typeof TL_DOC_TYPES;
 

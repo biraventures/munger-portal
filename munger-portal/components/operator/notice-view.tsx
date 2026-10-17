@@ -45,6 +45,9 @@ export function NoticeView({
   // Present only on a reprint (see DemandNoticeReprintData) - absent on
   // a freshly-generated notice, which by definition is none of these yet.
   const status = "cancelled" in notice ? notice : null;
+  // Normally solid waste is the only charge on the notice (line D). The other charges are shown only when a holding
+  // actually carries one - they are part of the total, so hiding a non-zero one would make the total not add up.
+  const extraCharges = [p.penal_charge, p.water_charge, p.boring_charge, p.form_fee, p.misc_cost].some((v) => Number(v) > 0);
 
   return (
     <div>
@@ -63,20 +66,20 @@ export function NoticeView({
 
       <div
         ref={printRef}
-        className="printable-area rounded-xl border border-slate-200 bg-white p-8 text-[12px] text-[#222]"
+        className="printable-area rounded-xl border border-slate-200 bg-white p-6 text-[12px] text-[#222]"
         style={{ fontFamily: "Arial, sans-serif", position: "relative" }}
       >
         {status?.cancelled && <CancelledWatermark />}
         {/* Header */}
-        <div className="flex items-start justify-between gap-3 border-b-2 border-nnm-blue pb-2">
+        <div className="flex items-start justify-between gap-3 border-b-2 border-nnm-blue pb-1.5">
           <DocumentVerificationQR url={notice.verificationUrl} />
           <div className="flex-1 text-center">
-            <h1 className="m-0 text-xl font-bold text-nnm-blue">MUNGER NAGAR NIGAM</h1>
-            <div className="text-[13px] font-bold text-red-700">
+            <h1 className="m-0 text-[15px] font-bold leading-tight text-nnm-blue">MUNGER NAGAR NIGAM</h1>
+            <div className="text-[11px] font-bold text-red-700">
               HOLDING TAX — DEMAND NOTICE{notice.reminderLabel ? ` (${notice.reminderLabel.toUpperCase()})` : ""}
             </div>
           </div>
-          <div className="w-[170px] shrink-0 text-right text-[11px]">
+          <div className="w-[170px] shrink-0 text-right text-[10px] leading-snug">
             <div>
               <b className="text-nnm-blue">Demand Notice No -</b> {notice.formattedDemandNo}
             </div>
@@ -94,7 +97,7 @@ export function NoticeView({
         {status && !status.cancelled && status.superseded && <SupersededBanner />}
 
         {notice.reminderLabel && (
-          <div className="mt-2.5 rounded border border-amber-400 bg-amber-50 px-3 py-2 text-[11px] text-amber-800">
+          <div className="mt-1.5 rounded border border-amber-400 bg-amber-50 px-3 py-1 text-[11px] leading-snug text-amber-800">
             <b>This is a {notice.reminderLabel} notice.</b> It supersedes and settles the previous unsettled
             notice(s):{" "}
             {notice.previousUnsettledDemandNos.join(", ")}. Those earlier notices are no longer separately payable —
@@ -103,7 +106,7 @@ export function NoticeView({
         )}
 
         {t.partPayment && (
-          <div className="mt-2.5 rounded border border-blue-400 bg-blue-50 px-3 py-2 text-[11px] text-blue-900">
+          <div className="mt-1.5 rounded border border-blue-400 bg-blue-50 px-3 py-1 text-[11px] leading-snug text-blue-900">
             <b>PART PAYMENT NOTICE.</b> This notice covers only {t.partPayment.years} year(s):{" "}
             {t.partPayment.fromYear} to {t.partPayment.toYear}. After payment, tax will be treated as paid till{" "}
             {t.partPayment.toYear}; the remaining years up to the current year will be demanded separately.
@@ -111,20 +114,20 @@ export function NoticeView({
         )}
 
         {t.balanceAfterPartPaymentReceipt && (
-          <div className="mt-2.5 rounded border border-green-500 bg-green-50 px-3 py-2 text-[11px] text-green-900">
+          <div className="mt-1.5 rounded border border-green-500 bg-green-50 px-3 py-1 text-[11px] leading-snug text-green-900">
             <b>BALANCE DEMAND AFTER PART PAYMENT.</b> Part payment has been received vide Receipt No {t.balanceAfterPartPaymentReceipt}. This
             notice shows the dues that remain pending against this holding.
           </div>
         )}
 
         {/* Not-a-receipt banner */}
-        <div className="mt-2.5 rounded border-2 border-red-700 bg-red-50 px-3 py-2.5 text-center text-[13px] font-bold text-red-700">
+        <div className="mt-1.5 rounded border border-red-700 bg-red-50 px-2 py-1 text-center text-[10.5px] font-bold text-red-700">
           THIS IS NOT THE PAYMENT RECEIPT. KINDLY COLLECT THE PAYMENT RECEIPT WHEN YOU PAY THE TAX.
         </div>
 
         {/* Info grid */}
-        <div className="mt-3.5 flex gap-5">
-          <div className="flex-1 space-y-0.5">
+        <div className="mt-1.5 flex gap-5 text-[11px]">
+          <div className="flex-1 leading-[1.35]">
             <div>
               <b className="inline-block w-[150px]">Owner Name</b> {str(p.owner_name)}
             </div>
@@ -144,7 +147,7 @@ export function NoticeView({
               <b className="inline-block w-[150px]">Ward</b> {str(p.ward)}
             </div>
           </div>
-          <div className="flex-1 space-y-0.5">
+          <div className="flex-1 leading-[1.35]">
             <div>
               <b className="inline-block w-[150px]">Holding No</b> {str(p.holding_no)}
             </div>
@@ -168,17 +171,17 @@ export function NoticeView({
         </div>
 
         {/* Floor breakdown */}
-        <table className="mt-2.5 w-full border-collapse text-[11px]">
+        <table className="mt-2 w-full border-collapse text-[11px] leading-tight">
           <thead>
             <tr className="bg-slate-100">
-              <th className="border border-slate-400 px-1.5 py-0.5 text-left">Floor</th>
-              <th className="border border-slate-400 px-1.5 py-0.5 text-left">Area</th>
-              <th className="border border-slate-400 px-1.5 py-0.5 text-left">Const.</th>
-              <th className="border border-slate-400 px-1.5 py-0.5 text-left">Usage</th>
-              <th className="border border-slate-400 px-1.5 py-0.5 text-left">Occ.</th>
-              <th className="border border-slate-400 px-1.5 py-0.5 text-right">Rate</th>
-              <th className="border border-slate-400 px-1.5 py-0.5 text-right">ARV</th>
-              <th className="border border-slate-400 px-1.5 py-0.5 text-right">Tax @ 9%</th>
+              <th className="border border-slate-400 px-1.5 py-px text-left">Floor</th>
+              <th className="border border-slate-400 px-1.5 py-px text-left">Area</th>
+              <th className="border border-slate-400 px-1.5 py-px text-left">Const.</th>
+              <th className="border border-slate-400 px-1.5 py-px text-left">Usage</th>
+              <th className="border border-slate-400 px-1.5 py-px text-left">Occ.</th>
+              <th className="border border-slate-400 px-1.5 py-px text-right">Rate</th>
+              <th className="border border-slate-400 px-1.5 py-px text-right">ARV</th>
+              <th className="border border-slate-400 px-1.5 py-px text-right">Tax @ 9%</th>
             </tr>
           </thead>
           <tbody>
@@ -189,10 +192,10 @@ export function NoticeView({
               // an error to whoever reads the notice. Same total ARV/Tax either
               // way (unaffected below); just collapsed to one line here.
               <tr>
-                <td className="border border-slate-400 px-1.5 py-0.5" colSpan={2}>
+                <td className="border border-slate-400 px-1.5 py-px" colSpan={2}>
                   <b>Total Built-up Area</b>
                 </td>
-                <td className="border border-slate-400 px-1.5 py-0.5" colSpan={6}>
+                <td className="border border-slate-400 px-1.5 py-px" colSpan={6}>
                   {calc.vacant.groundFloorBuiltArea} sqft
                 </td>
               </tr>
@@ -200,52 +203,52 @@ export function NoticeView({
               calc.breakdown.map((row, i) =>
                 row.error ? (
                   <tr key={i}>
-                    <td colSpan={8} className="border border-slate-400 px-1.5 py-0.5 text-red-700">
+                    <td colSpan={8} className="border border-slate-400 px-1.5 py-px text-red-700">
                       {row.floor}: {row.error}
                     </td>
                   </tr>
                 ) : row.demolished ? (
                   <tr key={i} className="italic text-slate-400">
-                    <td className="border border-slate-400 px-1.5 py-0.5">{row.floor} (Demolished)</td>
-                    <td colSpan={4} className="border border-slate-400 px-1.5 py-0.5">
+                    <td className="border border-slate-400 px-1.5 py-px">{row.floor} (Demolished)</td>
+                    <td colSpan={4} className="border border-slate-400 px-1.5 py-px">
                       Not part of current total — historical reference only
                     </td>
-                    <td className="border border-slate-400 px-1.5 py-0.5 text-right">—</td>
-                    <td className="border border-slate-400 px-1.5 py-0.5 text-right">{row.floorArv || "N/A"}</td>
-                    <td className="border border-slate-400 px-1.5 py-0.5 text-right">{row.floorTax || "N/A"}</td>
+                    <td className="border border-slate-400 px-1.5 py-px text-right">—</td>
+                    <td className="border border-slate-400 px-1.5 py-px text-right">{row.floorArv || "N/A"}</td>
+                    <td className="border border-slate-400 px-1.5 py-px text-right">{row.floorTax || "N/A"}</td>
                   </tr>
                 ) : (
                   <tr key={i}>
-                    <td className="border border-slate-400 px-1.5 py-0.5">{row.floor}</td>
-                    <td className="border border-slate-400 px-1.5 py-0.5">{row.area}</td>
-                    <td className="border border-slate-400 px-1.5 py-0.5">{row.constType}</td>
-                    <td className="border border-slate-400 px-1.5 py-0.5">{row.usage}</td>
-                    <td className="border border-slate-400 px-1.5 py-0.5">{row.occupancy}</td>
-                    <td className="border border-slate-400 px-1.5 py-0.5 text-right">{row.rate}</td>
-                    <td className="border border-slate-400 px-1.5 py-0.5 text-right">{row.floorArv}</td>
-                    <td className="border border-slate-400 px-1.5 py-0.5 text-right">{row.floorTax}</td>
+                    <td className="border border-slate-400 px-1.5 py-px">{row.floor}</td>
+                    <td className="border border-slate-400 px-1.5 py-px">{row.area}</td>
+                    <td className="border border-slate-400 px-1.5 py-px">{row.constType}</td>
+                    <td className="border border-slate-400 px-1.5 py-px">{row.usage}</td>
+                    <td className="border border-slate-400 px-1.5 py-px">{row.occupancy}</td>
+                    <td className="border border-slate-400 px-1.5 py-px text-right">{row.rate}</td>
+                    <td className="border border-slate-400 px-1.5 py-px text-right">{row.floorArv}</td>
+                    <td className="border border-slate-400 px-1.5 py-px text-right">{row.floorTax}</td>
                   </tr>
                 ),
               )
             )}
             <tr className={Number(calc.vacant.tax) <= 0 ? "text-slate-400" : ""}>
-              <td className="border border-slate-400 px-1.5 py-0.5">Vacant Land</td>
-              <td className="border border-slate-400 px-1.5 py-0.5">{calc.vacant.taxableArea}</td>
-              <td colSpan={3} className="border border-slate-400 px-1.5 py-0.5">
+              <td className="border border-slate-400 px-1.5 py-px">Vacant Land</td>
+              <td className="border border-slate-400 px-1.5 py-px">{calc.vacant.taxableArea}</td>
+              <td colSpan={3} className="border border-slate-400 px-1.5 py-px">
                 —
               </td>
-              <td className="border border-slate-400 px-1.5 py-0.5 text-right">{calc.vacant.rate}</td>
-<td className="border border-slate-400 px-1.5 py-0.5 text-right">{vacantArv(calc)}</td>
-              <td className="border border-slate-400 px-1.5 py-0.5 text-right">{calc.vacant.tax}</td>
+              <td className="border border-slate-400 px-1.5 py-px text-right">{calc.vacant.rate}</td>
+<td className="border border-slate-400 px-1.5 py-px text-right">{vacantArv(calc)}</td>
+              <td className="border border-slate-400 px-1.5 py-px text-right">{calc.vacant.tax}</td>
             </tr>
             <tr>
-              <td colSpan={6} className="border border-slate-400 px-1.5 py-0.5">
+              <td colSpan={6} className="border border-slate-400 px-1.5 py-px">
                 <b>Total ARV / Current Year Tax (before rebate)</b>
               </td>
-              <td className="border border-slate-400 px-1.5 py-0.5 text-right">
+              <td className="border border-slate-400 px-1.5 py-px text-right">
                 <b>{totalArv(calc)}</b>
               </td>
-              <td className="border border-slate-400 px-1.5 py-0.5 text-right">
+              <td className="border border-slate-400 px-1.5 py-px text-right">
                 <b>{calc.currentTax}</b>
               </td>
             </tr>
@@ -253,29 +256,29 @@ export function NoticeView({
         </table>
 
         {t.partPayment && (
-          <table className="mt-2.5 w-full border-collapse text-[11px]">
+          <table className="mt-2 w-full border-collapse text-[11px] leading-tight">
             <thead>
               <tr>
-                <th className="border border-slate-400 bg-slate-100 px-1.5 py-0.5 text-left">Particulars</th>
-                <th className="border border-slate-400 bg-slate-100 px-1.5 py-0.5 text-right">Amount</th>
+                <th className="border border-slate-400 bg-slate-100 px-1.5 py-px text-left">Particulars</th>
+                <th className="border border-slate-400 bg-slate-100 px-1.5 py-px text-right">Amount</th>
               </tr>
             </thead>
             <tbody>
               <tr>
-                <td className="border border-slate-400 px-1.5 py-0.5">
+                <td className="border border-slate-400 px-1.5 py-px">
                   Tax Amount — {t.partPayment.fromYear} to {t.partPayment.toYear} ({t.partPayment.years} year(s))
                 </td>
-                <td className="border border-slate-400 px-1.5 py-0.5 text-right">{t.arrearsBaseTax}</td>
+                <td className="border border-slate-400 px-1.5 py-px text-right">{t.arrearsBaseTax}</td>
               </tr>
               <tr>
-                <td className="border border-slate-400 px-1.5 py-0.5">Penalty (late fee on the above years, as on {notice.date})</td>
-                <td className="border border-slate-400 px-1.5 py-0.5 text-right">{t.penalty}</td>
+                <td className="border border-slate-400 px-1.5 py-px">Penalty (late fee on the above years, as on {notice.date})</td>
+                <td className="border border-slate-400 px-1.5 py-px text-right">{t.penalty}</td>
               </tr>
               <tr>
-                <td className="border border-slate-400 px-1.5 py-0.5">
+                <td className="border border-slate-400 px-1.5 py-px">
                   <b>Total Amount Due (Part Payment)</b>
                 </td>
-                <td className="border border-slate-400 px-1.5 py-0.5 text-right">
+                <td className="border border-slate-400 px-1.5 py-px text-right">
                   <b>{t.grandTotal}</b>
                 </td>
               </tr>
@@ -285,33 +288,33 @@ export function NoticeView({
 
         {/* Totals table */}
         {!t.partPayment && (
-        <table className="mt-2.5 w-full border-collapse text-[11px]">
+        <table className="mt-2 w-full border-collapse text-[11px] leading-tight">
           <thead>
             <tr>
-              <th className="border border-slate-400 bg-slate-100 px-1.5 py-0.5 text-left" colSpan={5}>
+              <th className="border border-slate-400 bg-slate-100 px-1.5 py-px text-left" colSpan={5}>
                 Particulars
               </th>
-              <th className="border border-slate-400 bg-slate-100 px-1.5 py-0.5 text-right">Amount</th>
+              <th className="border border-slate-400 bg-slate-100 px-1.5 py-px text-right">Amount</th>
             </tr>
           </thead>
           <tbody>
             <tr>
-              <td colSpan={5} className="border-x border-slate-400 px-1.5 py-0.5">
+              <td colSpan={5} className="border-x border-slate-400 px-1.5 py-px">
                 <b>A. Tax Amount — Current Year{t.currentYear ? ` (${t.currentYear.year})` : ""}</b>
               </td>
-              <td className="border-x border-slate-400 px-1.5 py-0.5 text-right">
+              <td className="border-x border-slate-400 px-1.5 py-px text-right">
                 <b>{t.currentTaxBase}</b>
               </td>
             </tr>
             <tr>
-              <td colSpan={5} className="border-x border-slate-400 px-1.5 py-0.5 pl-6 italic text-slate-500">
+              <td colSpan={5} className="border-x border-slate-400 px-1.5 py-px pl-6 italic text-slate-500">
                 — of which, Vacant Land Tax (Taxable Vacant Area: {calc.vacant.taxableArea} sqft @ ₹{calc.vacant.rate}/sqft)
               </td>
-              <td className="border-x border-slate-400 px-1.5 py-0.5 text-right italic text-slate-500">{calc.vacant.tax}</td>
+              <td className="border-x border-slate-400 px-1.5 py-px text-right italic text-slate-500">{calc.vacant.tax}</td>
             </tr>
             {Number(t.currentTaxAreaRebate) > 0 && (
               <tr>
-                <td colSpan={5} className="border-x border-slate-400 px-1.5 py-0.5 pl-6 italic text-slate-500">
+                <td colSpan={5} className="border-x border-slate-400 px-1.5 py-px pl-6 italic text-slate-500">
                   {String(t.currentTaxAreaRebateReason ?? "").startsWith("Exempt from holding tax") ? (
                     <>— {t.currentTaxAreaRebateReason} — the whole year&apos;s holding tax is waived; solid waste user charge still applies</>
                   ) : (
@@ -322,50 +325,50 @@ export function NoticeView({
                     </>
                   )}
                 </td>
-                <td className="border-x border-slate-400 px-1.5 py-0.5 text-right italic text-slate-500">
+                <td className="border-x border-slate-400 px-1.5 py-px text-right italic text-slate-500">
                   −{t.currentTaxAreaRebate}
                 </td>
               </tr>
             )}
             {Number(t.yearWiseArrears) > 0 && (
               <tr>
-                <td colSpan={5} className="border-x border-slate-400 px-1.5 py-0.5">
+                <td colSpan={5} className="border-x border-slate-400 px-1.5 py-px">
                   <b>B. Tax Amount — Previous Years{arrearsLabel ? ` (${arrearsLabel})` : ""} (Outstanding Demand, before penalty)</b>
                 </td>
-                <td className="border-x border-slate-400 px-1.5 py-0.5 text-right">
+                <td className="border-x border-slate-400 px-1.5 py-px text-right">
                   <b>{t.arrearsBaseTax}</b>
                 </td>
               </tr>
             )}
             {Number(t.penalty) > 0 && (
               <tr>
-                <td colSpan={5} className="border-x border-slate-400 px-1.5 py-0.5 pl-6 italic text-slate-500">
+                <td colSpan={5} className="border-x border-slate-400 px-1.5 py-px pl-6 italic text-slate-500">
                   — Penalty (late fee on arrears{arrearsLabel ? ` ${arrearsLabel}` : ""} above, computed per pending year)
                 </td>
-                <td className="border-x border-slate-400 px-1.5 py-0.5 text-right italic text-slate-500">{t.penalty}</td>
+                <td className="border-x border-slate-400 px-1.5 py-px text-right italic text-slate-500">{t.penalty}</td>
               </tr>
             )}
             {Number(t.totalFineAmount) > 0 && (
               <tr>
-                <td colSpan={5} className="border-x border-slate-400 px-1.5 py-0.5">
+                <td colSpan={5} className="border-x border-slate-400 px-1.5 py-px">
                   <b>C. Total Fine Amount</b> (2%/month up to 31 Mar 2013, 1.5%/month after, since 1 Oct, current year)
                 </td>
-                <td className="border-x border-slate-400 px-1.5 py-0.5 text-right">
+                <td className="border-x border-slate-400 px-1.5 py-px text-right">
                   <b>{t.totalFineAmount}</b>
                 </td>
               </tr>
             )}
             {Number(t.currentTaxRebate) > 0 && (
               <tr>
-                <td colSpan={5} className="border-x border-slate-400 px-1.5 py-0.5">
+                <td colSpan={5} className="border-x border-slate-400 px-1.5 py-px">
                   − Early-Payment Rebate on Current Year Tax
                 </td>
-                <td className="border-x border-slate-400 px-1.5 py-0.5 text-right">{t.currentTaxRebate}</td>
+                <td className="border-x border-slate-400 px-1.5 py-px text-right">{t.currentTaxRebate}</td>
               </tr>
             )}
             <tr>
-              <td colSpan={5} className="border-x border-slate-400 px-1.5 py-0.5">
-                Solid Waste User Charge
+              <td colSpan={5} className="border-x border-slate-400 px-1.5 py-px">
+                {extraCharges ? "Solid Waste User Charge" : <b>D. Solid Waste User Charge</b>}
                 {t.solidWaste && (
                   <span className="text-[10px] text-slate-600">
                     {" "}
@@ -374,67 +377,71 @@ export function NoticeView({
                   </span>
                 )}
               </td>
-              <td className="border-x border-slate-400 px-1.5 py-0.5 text-right">{str(p.solid_waste_charge)}</td>
+              <td className="border-x border-slate-400 px-1.5 py-px text-right">{extraCharges ? str(p.solid_waste_charge) : <b>{str(p.solid_waste_charge)}</b>}</td>
             </tr>
             {Number(p.penal_charge) > 0 && (
               <tr>
-                <td colSpan={5} className="border-x border-slate-400 px-1.5 py-0.5">
+                <td colSpan={5} className="border-x border-slate-400 px-1.5 py-px">
                   Penal Charge
                 </td>
-                <td className="border-x border-slate-400 px-1.5 py-0.5 text-right">{str(p.penal_charge)}</td>
+                <td className="border-x border-slate-400 px-1.5 py-px text-right">{str(p.penal_charge)}</td>
               </tr>
             )}
-            <tr>
-              <td colSpan={5} className="border-x border-slate-400 px-1.5 py-0.5">
-                Water Charge
-              </td>
-              <td className="border-x border-slate-400 px-1.5 py-0.5 text-right">{str(p.water_charge)}</td>
-            </tr>
+            {Number(p.water_charge) > 0 && (
+              <tr>
+                <td colSpan={5} className="border-x border-slate-400 px-1.5 py-px">
+                  Water Charge
+                </td>
+                <td className="border-x border-slate-400 px-1.5 py-px text-right">{str(p.water_charge)}</td>
+              </tr>
+            )}
             {Number(p.boring_charge) > 0 && (
               <tr>
-                <td colSpan={5} className="border-x border-slate-400 px-1.5 py-0.5">
+                <td colSpan={5} className="border-x border-slate-400 px-1.5 py-px">
                   Boring Charge
                 </td>
-                <td className="border-x border-slate-400 px-1.5 py-0.5 text-right">{str(p.boring_charge)}</td>
+                <td className="border-x border-slate-400 px-1.5 py-px text-right">{str(p.boring_charge)}</td>
               </tr>
             )}
             {Number(p.form_fee) > 0 && (
               <tr>
-                <td colSpan={5} className="border-x border-slate-400 px-1.5 py-0.5">
+                <td colSpan={5} className="border-x border-slate-400 px-1.5 py-px">
                   Form Fee
                 </td>
-                <td className="border-x border-slate-400 px-1.5 py-0.5 text-right">{str(p.form_fee)}</td>
+                <td className="border-x border-slate-400 px-1.5 py-px text-right">{str(p.form_fee)}</td>
               </tr>
             )}
             {Number(p.misc_cost) > 0 && (
               <tr>
-                <td colSpan={5} className="border-x border-slate-400 px-1.5 py-0.5">
+                <td colSpan={5} className="border-x border-slate-400 px-1.5 py-px">
                   Miscellaneous Cost ({str(p.misc_cost_reason)})
                 </td>
-                <td className="border-x border-slate-400 px-1.5 py-0.5 text-right">{str(p.misc_cost)}</td>
+                <td className="border-x border-slate-400 px-1.5 py-px text-right">{str(p.misc_cost)}</td>
               </tr>
             )}
-            <tr>
-              <td colSpan={5} className="border-x border-slate-400 px-1.5 py-0.5">
-                <b>D. Solid Waste + Other Charges (subtotal)</b>
-              </td>
-              <td className="border-x border-slate-400 px-1.5 py-0.5 text-right">
-                <b>{t.otherCharges}</b>
-              </td>
-            </tr>
+            {extraCharges && (
+              <tr>
+                <td colSpan={5} className="border-x border-slate-400 px-1.5 py-px">
+                  <b>D. Solid Waste + Other Charges (subtotal)</b>
+                </td>
+                <td className="border-x border-slate-400 px-1.5 py-px text-right">
+                  <b>{t.otherCharges}</b>
+                </td>
+              </tr>
+            )}
             {Number(p.misc_rebate) > 0 && (
               <tr>
-                <td colSpan={5} className="border-x border-slate-400 px-1.5 py-0.5">
+                <td colSpan={5} className="border-x border-slate-400 px-1.5 py-px">
                   − Miscellaneous Rebate ({str(p.misc_rebate_reason)})
                 </td>
-                <td className="border-x border-slate-400 px-1.5 py-0.5 text-right">{str(p.misc_rebate)}</td>
+                <td className="border-x border-slate-400 px-1.5 py-px text-right">{str(p.misc_rebate)}</td>
               </tr>
             )}
             <tr>
-              <td colSpan={5} className="border-x border-b border-slate-400 px-1.5 py-0.5">
+              <td colSpan={5} className="border-x border-b border-slate-400 px-1.5 py-px">
                 <b>Total Amount Due (A + B + Penalty + C + D, less any rebate above)</b>
               </td>
-              <td className="border-x border-b border-slate-400 px-1.5 py-0.5 text-right">
+              <td className="border-x border-b border-slate-400 px-1.5 py-px text-right">
                 <b>{t.grandTotal}</b>
               </td>
             </tr>
@@ -443,7 +450,7 @@ export function NoticeView({
         )}
 
         {/* Demand line */}
-        <div className="mt-3.5 rounded border border-amber-400 bg-amber-50 px-3 py-2.5">
+        <div className="mt-2 rounded border border-amber-400 bg-amber-50 px-3 py-1 text-[11px] leading-snug">
           You are hereby notified that an amount of <b>Rs. {t.grandTotal}</b> is outstanding against Holding No{" "}
           <b>{str(p.holding_no)}</b>
           {t.partPayment ? ` as part payment for ${t.partPayment.fromYear} to ${t.partPayment.toYear}` : ""}. Please clear the dues at the
@@ -452,7 +459,7 @@ export function NoticeView({
 
         <HindiTaxTerms />
 
-        <div className="mt-4 border-t border-slate-300 pt-2 text-[9.5px] text-slate-500">
+        <div className="mt-2 border-t border-slate-300 pt-1 text-[9.5px] leading-snug text-slate-500">
           This is a computer generated demand notice. This notice is not a payment receipt.
           <br />
           This demand notice is generated based on the measurements provided by holding owner or captured during
@@ -480,6 +487,40 @@ export function NoticeView({
             )}
           </div>
         )}
+
+        {/* Tear-off receiving slip: one copy is printed; the holder keeps the notice and the slip comes back signed. */}
+        <div className="mt-3 border-t-2 border-dashed border-slate-500 pt-1 text-[10px] leading-tight" style={{ breakInside: "avoid", pageBreakInside: "avoid" }}>
+          <p className="mb-1">
+            <span className="text-slate-600">✂ यहाँ से काटें / Cut here</span> &nbsp;
+            <b className="text-[11px] text-nnm-blue">RECEIVING SLIP / प्राप्ति पर्ची — Munger Nagar Nigam, Holding Tax Demand Notice</b>
+          </p>
+          <table className="w-full border-collapse">
+            <tbody>
+              <tr>
+                <td className="whitespace-nowrap border border-slate-400 px-1.5 py-0.5">
+                  Demand No: <b>{notice.formattedDemandNo}</b>
+                </td>
+                <td className="whitespace-nowrap border border-slate-400 px-1.5 py-0.5">
+                  Holding No: <b>{str(p.holding_no)}</b>
+                </td>
+                <td className="whitespace-nowrap border border-slate-400 px-1.5 py-0.5">
+                  Date: <b>{notice.date}</b>
+                </td>
+                <td className="whitespace-nowrap border border-slate-400 px-1.5 py-0.5">
+                  Total: <b>Rs. {t.grandTotal}</b>
+                </td>
+                <td className="border border-slate-400 px-1.5 py-0.5">
+                  Owner: <b>{str(p.owner_name)}</b>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+          <p className="mt-1 leading-[1.8]">
+            मैंने यह मांग सूचना दिनांक ____________ को प्राप्त की। / I received this demand notice on ____________.
+            <br />
+            प्राप्तकर्ता का नाम / Name: ______________________ &nbsp; मोबाइल / Mobile: ______________ &nbsp; हस्ताक्षर / Signature: ______________________
+          </p>
+        </div>
       </div>
     </div>
   );

@@ -75,7 +75,7 @@ export function businessCategoryLabel(value: string | null | undefined): string 
   return BUSINESS_CATEGORIES.find((c) => c.value === value)?.label ?? value;
 }
 
-export type TradeLicenseDocType = "holding_receipt" | "bpl_proof" | "gstr_3b" | "pan_applicant" | "pan_firm" | "shop_photo";
+export type TradeLicenseDocType = "holding_receipt" | "bpl_proof" | "gstr_3b" | "pan_applicant" | "pan_firm" | "shop_photo" | "premises_agreement";
 
 export interface TradeLicenseDocument {
   id: string;
