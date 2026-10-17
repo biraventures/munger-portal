@@ -1,4 +1,5 @@
 import { getAdminToken } from "./admin-auth";
+import { blobToBase64, prepareUpload } from "./upload-limits";
 
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_PROPERTY_TAX_API_URL || "http://localhost:4000/api/v1";
@@ -57,18 +58,6 @@ export async function fetchPublicDocumentsAdmin(): Promise<PublicDocumentAdminLi
   return res.json();
 }
 
-function readFileAsBase64(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = reader.result as string;
-      // Strip the "data:...;base64," prefix FileReader adds.
-      resolve(result.split(",")[1] ?? "");
-    };
-    reader.onerror = () => reject(new Error("Could not read the selected file."));
-    reader.readAsDataURL(file);
-  });
-}
 
 export async function uploadPublicDocument(input: {
   title: string;
@@ -78,7 +67,8 @@ export async function uploadPublicDocument(input: {
   isPublished: boolean;
   file: File;
 }): Promise<PublicDocument> {
-  const fileDataBase64 = await readFileAsBase64(input.file);
+  const upload = await prepareUpload(input.file);
+  const fileDataBase64 = await blobToBase64(upload.blob);
   const res = await fetch(`${API_BASE_URL}/admin/public-documents`, {
     method: "POST",
     headers: authHeaders(),
@@ -88,7 +78,7 @@ export async function uploadPublicDocument(input: {
       category: input.category,
       documentDate: input.documentDate,
       isPublished: input.isPublished,
-      fileName: input.file.name,
+      fileName: upload.name,
       fileDataBase64,
     }),
   });

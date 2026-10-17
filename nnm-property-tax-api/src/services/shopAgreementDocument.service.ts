@@ -5,6 +5,7 @@ import { ApiError } from "../utils/ApiError";
 import { SHOP_PUBLICATION_STAGE_ORDER, nextShopPublicationStage } from "../types/admin.types";
 import type { ShopAgreementDocumentMeta, ShopAgreementDocumentRequestMeta } from "../types/shop.types";
 import type { AdminRole } from "../types/admin.types";
+import { assertUploadSize } from "../utils/uploadLimits";
 
 // The app's JSON body-parser limit is 10MB (see app.ts) - base64
 // encoding a PDF grows its size by roughly a third, so 7MB raw stays
@@ -37,6 +38,7 @@ export async function uploadShopAgreementDocument(
   // %PDF magic bytes - a lightweight check that this is actually a PDF, not just a file renamed with a .pdf extension.
   const isPdf = fileData.length >= 4 && fileData.subarray(0, 4).toString("ascii") === "%PDF";
   if (!isPdf) throw ApiError.badRequest("Only PDF files are accepted.");
+  assertUploadSize("application/pdf", fileData.length);
 
   const existingLive = await shopAgreementDocumentRepository.findMetaByShopNo(shopNo);
   return shopAgreementDocumentRequestRepository.create({

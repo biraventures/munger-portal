@@ -1,4 +1,5 @@
 import { getAdminToken } from "./admin-auth";
+import { prepareUpload } from "./upload-limits";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_PROPERTY_TAX_API_URL || "http://localhost:4000/api/v1";
 
@@ -127,17 +128,22 @@ export interface UploadedDoc {
 }
 
 export function uploadDocument(applicationId: string, token: string, docType: string, file: File, onProgress?: (pct: number) => void, label?: string): Promise<UploadedDoc> {
-  const q = new URLSearchParams({ type: docType, fileName: file.name, ...(label ? { label } : {}) });
-  return xhrUpload(`${API_BASE_URL}/public/mutation/applications/${applicationId}/documents?${q}`, { "X-Upload-Token": token }, file, onProgress);
+  return xhrUpload(
+    (fileName) => `${API_BASE_URL}/public/mutation/applications/${applicationId}/documents?${new URLSearchParams({ type: docType, fileName, ...(label ? { label } : {}) })}`,
+    { "X-Upload-Token": token },
+    file,
+    onProgress,
+  );
 }
 
-function xhrUpload(url: string, headers: Record<string, string>, file: File, onProgress?: (pct: number) => void): Promise<UploadedDoc> {
+/** A photo is shrunk to at most 750 KB first; a PDF must be at most 2 MB. */
+async function xhrUpload(urlFor: (fileName: string) => string, headers: Record<string, string>, file: File, onProgress?: (pct: number) => void): Promise<UploadedDoc> {
+  const { blob, name, type } = await prepareUpload(file);
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
-    xhr.open("POST", url);
+    xhr.open("POST", urlFor(name));
     for (const [k, v] of Object.entries(headers)) xhr.setRequestHeader(k, v);
-    const type = file.type || (file.name.toLowerCase().endsWith(".pdf") ? "application/pdf" : "image/jpeg");
-    xhr.setRequestHeader("Content-Type", type);
+    xhr.setRequestHeader("Content-Type", type || "image/jpeg");
     xhr.upload.onprogress = (e) => {
       if (e.lengthComputable && onProgress) onProgress(Math.round((e.loaded / e.total) * 100));
     };
@@ -149,10 +155,10 @@ function xhrUpload(url: string, headers: Record<string, string>, file: File, onP
         /* not JSON */
       }
       if (xhr.status >= 200 && xhr.status < 300 && body.document) resolve(body.document);
-      else reject(new Error(body.error || (xhr.status === 413 ? "The file is too large (limit 10 MB)." : "Upload failed. Please try again.")));
+      else reject(new Error(body.error || (xhr.status === 413 ? "The file is too large (PDF up to 2 MB, photo up to 750 KB)." : "Upload failed. Please try again.")));
     };
     xhr.onerror = () => reject(new Error("Upload failed - check the internet connection."));
-    xhr.send(file);
+    xhr.send(blob);
   });
 }
 
@@ -260,8 +266,12 @@ export async function saveEdit(id: string, token: string, body: EditBody): Promi
 }
 
 export function uploadEditDocument(id: string, token: string, docType: string, file: File, onProgress?: (pct: number) => void, label?: string): Promise<UploadedDoc> {
-  const q = new URLSearchParams({ type: docType, fileName: file.name, ...(label ? { label } : {}) });
-  return xhrUpload(`${API_BASE_URL}/public/mutation/edit/${id}/documents?${q}`, { "X-Edit-Token": token }, file, onProgress);
+  return xhrUpload(
+    (fileName) => `${API_BASE_URL}/public/mutation/edit/${id}/documents?${new URLSearchParams({ type: docType, fileName, ...(label ? { label } : {}) })}`,
+    { "X-Edit-Token": token },
+    file,
+    onProgress,
+  );
 }
 
 export async function removeEditDocument(id: string, token: string, docId: string): Promise<void> {

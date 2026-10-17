@@ -1,4 +1,5 @@
 import { getOperatorToken } from "./auth";
+import { assertPdfSize } from "./upload-limits";
 
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_PROPERTY_TAX_API_URL || "http://localhost:4000/api/v1";
@@ -600,6 +601,7 @@ function readFileAsBase64(file: File): Promise<string> {
 
 /** Queues the signed agreement PDF for review - does NOT become the live document immediately. See ShopAgreementDocumentRequest.current_stage for where it stands. */
 export async function uploadShopAgreementDocument(shopNo: string, file: File): Promise<ShopAgreementDocumentRequest> {
+  assertPdfSize(file);
   const fileDataBase64 = await readFileAsBase64(file);
   const res = await fetch(`${API_BASE_URL}/shops/${encodeURIComponent(shopNo)}/agreement-document`, {
     method: "POST",

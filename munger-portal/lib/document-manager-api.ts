@@ -2,6 +2,7 @@ import { getAdminToken } from "./admin-auth";
 import { getAttendanceToken } from "./attendance-auth";
 import { getOperatorToken } from "./auth";
 import type { PublicDocument } from "./public-documents-api";
+import { blobToBase64, prepareUpload } from "./upload-limits";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_PROPERTY_TAX_API_URL || "http://localhost:4000/api/v1";
 
@@ -51,19 +52,12 @@ export async function fetchManagedDocuments(as: DocumentLogin): Promise<ManagedD
   return (await res.json()).documents;
 }
 
-function toBase64(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const r = new FileReader();
-    r.onload = () => resolve(String(r.result).split(",")[1] ?? "");
-    r.onerror = () => reject(new Error("Could not read the selected file."));
-    r.readAsDataURL(file);
-  });
-}
 
 export async function uploadManagedDocument(
   as: DocumentLogin,
   input: { title: string; description: string; category: string; documentDate: string; file: File },
 ): Promise<ManagedDocument> {
+  const upload = await prepareUpload(input.file);
   const res = await fetch(`${API_BASE_URL}/document-manager/documents`, {
     method: "POST",
     headers: headers(as),
@@ -72,8 +66,8 @@ export async function uploadManagedDocument(
       description: input.description || null,
       category: input.category,
       documentDate: input.documentDate,
-      fileName: input.file.name,
-      fileDataBase64: await toBase64(input.file),
+      fileName: upload.name,
+      fileDataBase64: await blobToBase64(upload.blob),
     }),
   });
   if (!res.ok) throw await fail(res, "Could not upload this document.");

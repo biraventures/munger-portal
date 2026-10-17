@@ -21,6 +21,7 @@ import {
   type EditableApplication,
   type UploadedDoc,
 } from "@/lib/mutation-api";
+import { formatBytes, isPdfFile, MAX_PDF_BYTES } from "@/lib/upload-limits";
 
 const inputClass = "w-full rounded-md border border-slate-300 bg-white px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-nnm-blue";
 const labelClass = "mb-1 block text-xs font-medium text-slate-600";
@@ -103,8 +104,8 @@ export default function MutationEditPage() {
     if (!session || !files) return;
     setError(null);
     for (const file of Array.from(files)) {
-      if (file.size > 10 * 1024 * 1024) {
-        setError(`${file.name} is larger than 10 MB.`);
+      if (isPdfFile(file) && file.size > MAX_PDF_BYTES) {
+        setError(`${file.name} is ${formatBytes(file.size)} - a PDF can be at most 2 MB. Scan it at a lower resolution or in black and white.`);
         continue;
       }
       setUploading({ type, pct: 0 });
@@ -393,7 +394,7 @@ export default function MutationEditPage() {
 
                 <div className={cardClass}>
                   <h2 className="mb-1 text-base font-semibold text-slate-900">Documents</h2>
-                  <p className="mb-3 text-xs text-slate-500">Add a corrected file first, then remove the wrong one. PDF, JPG or PNG, up to 10 MB.</p>
+                  <p className="mb-3 text-xs text-slate-500">Add a corrected file first, then remove the wrong one. PDF up to 2 MB; JPG / PNG photos are reduced to 750 KB automatically.</p>
                   <div className="divide-y divide-slate-100">
                     {DOC_TYPES.map((spec) => {
                       const mine = docs.filter((d) => d.doc_type === spec.type);

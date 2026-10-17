@@ -15,6 +15,7 @@ import {
   type ManagedDocument,
 } from "@/lib/document-manager-api";
 import { formatDocumentDate, formatFileSize } from "@/lib/public-documents-api";
+import { isPdfFile, isPhotoFile, MAX_PDF_BYTES } from "@/lib/upload-limits";
 
 const inputClass = "w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-nnm-blue focus:outline-none";
 const BACK: Record<DocumentLogin, string> = { admin: "/admin/dashboard", operator: "/operator/dashboard", attendance: "/attendance/dashboard" };
@@ -68,7 +69,8 @@ function Inner() {
     e.preventDefault();
     if (!me) return;
     if (!file) return setError("Choose a file to upload.");
-    if (file.size > me.maxFileBytes) return setError(`File is too large (limit ${formatFileSize(me.maxFileBytes)}).`);
+    if (isPdfFile(file) && file.size > MAX_PDF_BYTES) return setError(`This PDF is ${formatFileSize(file.size)} - a PDF can be at most 2 MB.`);
+    if (!isPdfFile(file) && !isPhotoFile(file) && file.size > me.maxFileBytes) return setError(`File is too large (limit ${formatFileSize(me.maxFileBytes)}).`);
     setBusy(true);
     setError(null);
     setMsg(null);
@@ -190,7 +192,7 @@ function Inner() {
                   <input type="date" value={documentDate} onChange={(e) => setDocumentDate(e.target.value)} required className={inputClass} />
                 </div>
                 <input ref={fileRef} type="file" accept={me.allowedExtensions.map((x) => `.${x}`).join(",")} onChange={(e) => setFile(e.target.files?.[0] ?? null)} className="text-sm" />
-                <p className="text-xs text-slate-400">Allowed: {me.allowedExtensions.join(", ")} · up to {formatFileSize(me.maxFileBytes)}</p>
+                <p className="text-xs text-slate-400">Allowed: {me.allowedExtensions.join(", ")} · PDF up to 2 MB, photos reduced to 750 KB automatically, other files up to {formatFileSize(me.maxFileBytes)}</p>
                 <button type="submit" disabled={busy} className="rounded-md bg-nnm-blue px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">
                   {busy ? "Uploading…" : "Upload"}
                 </button>

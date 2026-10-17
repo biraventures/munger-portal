@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { AlertCircle, Camera, Loader2, Trash2, X } from "lucide-react";
 import { fetchAssetPhotos, uploadAssetPhoto, deleteAssetPhoto, fetchAssetPhotoBlob, type AssetPhotoMeta } from "@/lib/attendance-api";
+import { blobToBase64, shrinkPhoto } from "@/lib/upload-limits";
 
 const IDENTIFICATION_SLOTS: { type: string; label: string }[] = [
   { type: "front", label: "Front" },
@@ -13,84 +14,10 @@ const IDENTIFICATION_SLOTS: { type: string; label: string }[] = [
   { type: "chassis_engine_plate", label: "Chassis/engine plate" },
 ];
 
-const MAX_PHOTO_BYTES = 500 * 1024; // hard cap, must match the backend's enforced limit
-
-/** Reads a File as a data URL. */
-function readFileAsDataUrl(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result as string);
-    reader.onerror = () => reject(new Error("Could not read this file."));
-    reader.readAsDataURL(file);
-  });
-}
-
-/** Loads an image element from a data URL. */
-function loadImage(dataUrl: string): Promise<HTMLImageElement> {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => resolve(img);
-    img.onerror = () => reject(new Error("Could not read this image."));
-    img.src = dataUrl;
-  });
-}
-
-/** Draws an image onto a canvas at the given max dimension (preserving aspect ratio) and returns a JPEG data URL at the given quality. */
-function drawToJpegDataUrl(img: HTMLImageElement, maxDimension: number, quality: number): string {
-  const scale = Math.min(1, maxDimension / Math.max(img.width, img.height));
-  const width = Math.round(img.width * scale);
-  const height = Math.round(img.height * scale);
-  const canvas = document.createElement("canvas");
-  canvas.width = width;
-  canvas.height = height;
-  const ctx = canvas.getContext("2d");
-  if (!ctx) throw new Error("Could not process this image.");
-  ctx.drawImage(img, 0, 0, width, height);
-  return canvas.toDataURL("image/jpeg", quality);
-}
-
-/**
- * Reads a File, compressing it down to (at most) MAX_PHOTO_BYTES if
- * it's above that threshold - a photo under the limit is uploaded
- * as-is, untouched. Compression re-encodes as JPEG, first by lowering
- * quality and then, if that alone isn't enough, by also shrinking the
- * image's dimensions - repeating with progressively lower settings
- * until it fits or a reasonable attempt limit is reached. Returns raw
- * base64 (no data-URL prefix) ready for upload, and the final byte
- * size actually used, so the caller can surface it if compression
- * still couldn't bring an unusually large or complex image under the
- * cap even at the lowest attempted settings.
- */
-async function compressImageToBase64(file: File): Promise<{ base64: string; mimeType: string; sizeBytes: number }> {
-  const originalDataUrl = await readFileAsDataUrl(file);
-  const stripPrefix = (dataUrl: string) => dataUrl.slice(dataUrl.indexOf(",") + 1);
-  const base64ByteLength = (b64: string) => Math.ceil((b64.length * 3) / 4);
-
-  if (file.size <= MAX_PHOTO_BYTES) {
-    return { base64: stripPrefix(originalDataUrl), mimeType: file.type, sizeBytes: file.size };
-  }
-
-  const img = await loadImage(originalDataUrl);
-  const attempts: { maxDimension: number; quality: number }[] = [
-    { maxDimension: 1600, quality: 0.8 },
-    { maxDimension: 1600, quality: 0.6 },
-    { maxDimension: 1200, quality: 0.6 },
-    { maxDimension: 1200, quality: 0.4 },
-    { maxDimension: 900, quality: 0.4 },
-    { maxDimension: 900, quality: 0.3 },
-    { maxDimension: 640, quality: 0.3 },
-  ];
-
-  let best: { dataUrl: string; bytes: number } | null = null;
-  for (const { maxDimension, quality } of attempts) {
-    const dataUrl = drawToJpegDataUrl(img, maxDimension, quality);
-    const bytes = base64ByteLength(stripPrefix(dataUrl));
-    if (!best || bytes < best.bytes) best = { dataUrl, bytes };
-    if (bytes <= MAX_PHOTO_BYTES) break;
-  }
-
-  if (!best) throw new Error("Could not compress this photo.");
-  return { base64: stripPrefix(best.dataUrl), mimeType: "image/jpeg", sizeBytes: best.bytes };
+/** The photo shrunk to at most 750 KB, as raw base64 ready for upload. */
+async function compressImageToBase64(file: File): Promise<{ base64: string; mimeType: string }> {
+  const blob = await shrinkPhoto(file);
+  return { base64: await blobToBase64(blob), mimeType: blob.type || "image/jpeg" };
 }
 
 function Thumbnail({ photoId }: { photoId: number }) {

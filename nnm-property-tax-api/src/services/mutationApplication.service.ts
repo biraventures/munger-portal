@@ -18,6 +18,7 @@ import { isTaxExemptForYear } from "../utils/taxExemption";
 import type { FloorRow, PropertyRow } from "../types/property.types";
 import type { PropertySaveInput } from "../types/propertySave.types";
 import { recordAuditEvent } from "./mutationAudit.service";
+import { uploadLimitFor, uploadLimitMessage } from "../utils/uploadLimits";
 
 /**
  * Online mutation applications from the public (migration 131).
@@ -401,7 +402,8 @@ async function storeDocument(req: Request, app: MutationApplicationRow, docType:
   const mime = String(req.headers["content-type"] ?? "").split(";")[0]!.trim().toLowerCase();
   const ext = mime === "application/pdf" ? "pdf" : mime === "image/jpeg" ? "jpg" : mime === "image/png" ? "png" : null;
   if (!ext || (ext === "pdf" && !spec.pdf)) throw ApiError.badRequest(spec.pdf ? "Upload a PDF, JPG or PNG file." : "Upload a JPG or PNG photo.");
-  if (Number(req.headers["content-length"] ?? 0) > MAX_DOC_BYTES) throw new ApiError(413, "The file is too large - the limit is 10 MB.");
+  const limit = uploadLimitFor(mime) ?? MAX_DOC_BYTES;
+  if (Number(req.headers["content-length"] ?? 0) > limit) throw new ApiError(413, uploadLimitMessage(mime));
   const { rows: count } = await pool.query<{ n: number }>(`SELECT count(*)::int AS n FROM mutation_application_documents WHERE application_id = $1 AND doc_type = $2`, [app.id, docType]);
   if ((count[0]?.n ?? 0) >= MAX_FILES_PER_TYPE) throw ApiError.badRequest(`At most ${MAX_FILES_PER_TYPE} files for one document type.`);
 
@@ -416,8 +418,8 @@ async function storeDocument(req: Request, app: MutationApplicationRow, docType:
       req.on("data", (chunk: Buffer) => {
         size += chunk.length;
         if (head.length < 8) head = Buffer.concat([head, chunk]).subarray(0, 8);
-        if (size > MAX_DOC_BYTES) {
-          reject(new ApiError(413, "The file is too large - the limit is 10 MB."));
+        if (size > limit) {
+          reject(new ApiError(413, uploadLimitMessage(mime)));
           req.unpipe(out);
           out.destroy();
         }

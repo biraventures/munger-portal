@@ -26,6 +26,7 @@ import {
   type WardDriverToday,
   type WardAssistantToday,
 } from "@/lib/attendance-api";
+import { blobToBase64, shrinkPhoto } from "@/lib/upload-limits";
 
 const STRINGS = {
   en: {
@@ -379,9 +380,11 @@ export default function JamadarAttendancePage() {
       const ctx = canvas.getContext("2d");
       if (!ctx) throw new Error(s.captureError);
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
-      const base64 = dataUrl.split(",")[1] ?? "";
-      await uploadWardPhoto(base64, "image/jpeg");
+      const captured = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.85));
+      if (!captured) throw new Error(s.captureError);
+      // At most 750 KB - shrunk further if the camera's full-size frame is larger.
+      const photo = await shrinkPhoto(new File([captured], "group.jpg", { type: "image/jpeg" }));
+      await uploadWardPhoto(await blobToBase64(photo), "image/jpeg");
       setPhotoUploaded(true);
       stopCamera();
     } catch (err) {

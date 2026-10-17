@@ -5,6 +5,7 @@ import { attendanceWardRepository } from "../repositories/attendanceWard.reposit
 import { istDateString } from "../utils/istDate";
 import { env } from "../config/env";
 import { ApiError } from "../utils/ApiError";
+import { MAX_PHOTO_BYTES, uploadLimitMessage } from "../utils/uploadLimits";
 
 const ALLOWED_MIME_TO_EXT: Record<string, string> = {
   "image/jpeg": "jpg",
@@ -37,10 +38,8 @@ export async function uploadWardGroupPhoto(
   const buffer = Buffer.from(base64Data, "base64");
   // A conservative cap - the client should already be compressing to
   // well under this before sending; this is a backstop, not the primary control.
-  const MAX_BYTES = 8 * 1024 * 1024;
-  if (buffer.length === 0 || buffer.length > MAX_BYTES) {
-    throw ApiError.badRequest("Photo must be a non-empty file under 8MB.");
-  }
+  if (buffer.length === 0) throw ApiError.badRequest("The photo is empty.");
+  if (buffer.length > MAX_PHOTO_BYTES) throw ApiError.badRequest(uploadLimitMessage("image/jpeg", buffer.length));
 
   const relativePath = path.join(today.slice(0, 7), `ward_${wardId}_${today}.${ext}`); // e.g. "2026-08/ward_3_2026-08-14.jpg"
   const fullPath = path.join(env.PHOTO_UPLOAD_DIR, relativePath);

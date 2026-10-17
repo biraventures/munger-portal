@@ -4,6 +4,7 @@ import { assetPhotoRepository } from "../repositories/assetPhoto.repository";
 import { assetRepository } from "../repositories/asset.repository";
 import { asyncHandler } from "../middleware/asyncHandler";
 import { ApiError } from "../utils/ApiError";
+import { MAX_PHOTO_BYTES, uploadLimitMessage } from "../utils/uploadLimits";
 
 const PHOTO_TYPES = [
   "front", "rear", "left", "right", "number_plate", "chassis_engine_plate",
@@ -27,7 +28,7 @@ const uploadBodySchema = z.object({
 // check is the actual enforcement (a bypassed/failed client-side
 // compression must never result in an oversized photo landing in the
 // database).
-const MAX_PHOTO_BYTES = 500 * 1024;
+
 
 /** POST /api/v1/attendance/assets/:id/photos - any fleet-edit role. One photo per call. */
 export const postUploadAssetPhoto = asyncHandler(async (req: Request, res: Response) => {
@@ -46,7 +47,7 @@ export const postUploadAssetPhoto = asyncHandler(async (req: Request, res: Respo
     throw ApiError.badRequest("Could not decode the uploaded photo.");
   }
   if (fileData.length === 0) throw ApiError.badRequest("The uploaded photo is empty.");
-  if (fileData.length > MAX_PHOTO_BYTES) throw ApiError.badRequest("This photo is too large (max 500KB) - please compress it before uploading.");
+  if (fileData.length > MAX_PHOTO_BYTES) throw ApiError.badRequest(uploadLimitMessage("image/jpeg", fileData.length));
   if (!bodyParsed.data.mimeType.startsWith("image/")) throw ApiError.badRequest("Only image files are accepted here.");
 
   const photo = await assetPhotoRepository.create({

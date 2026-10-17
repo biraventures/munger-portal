@@ -1,5 +1,6 @@
 import { getOperatorToken } from "./auth";
 import { getAdminToken } from "./admin-auth";
+import { blobToBase64, prepareUpload } from "./upload-limits";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_PROPERTY_TAX_API_URL || "http://localhost:4000/api/v1";
 
@@ -85,20 +86,12 @@ export async function fetchTaxExemptionOptions(as: ExemptionLogin = "operator"):
   return res.json();
 }
 
-function toBase64(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const r = new FileReader();
-    r.onload = () => resolve(String(r.result).split(",")[1] ?? "");
-    r.onerror = () => reject(new Error("Could not read the selected file."));
-    r.readAsDataURL(file);
-  });
-}
 
 export async function uploadExemptionOrder(holdingNo: string, file: File, as: ExemptionLogin = "operator"): Promise<string> {
   const res = await fetch(`${API_BASE_URL}/properties/${encodeURIComponent(holdingNo)}/exemption-order`, {
     method: "POST",
     headers: { Authorization: `Bearer ${token(as)}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ fileName: file.name, fileDataBase64: await toBase64(file) }),
+    body: JSON.stringify(await (async () => { const u = await prepareUpload(file); return { fileName: u.name, fileDataBase64: await blobToBase64(u.blob) }; })()),
   });
   if (!res.ok) throw await fail(res, "Could not upload the order copy.");
   return String((await res.json()).document.id);

@@ -1,4 +1,5 @@
 import { getAdminToken } from "./admin-auth";
+import { blobToBase64, shrinkPhoto } from "./upload-limits";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_PROPERTY_TAX_API_URL || "http://localhost:4000/api/v1";
 
@@ -16,35 +17,10 @@ async function failureMessage(res: Response, fallback: string): Promise<string> 
   return `${fallback} (error ${res.status}).`;
 }
 
-/**
- * Shrinks a phone photo before upload (longest side 1600px, JPEG) so it
- * stays far below the server's size limits and uploads quickly on a
- * mobile connection. Falls back to the original file if the browser
- * cannot decode it.
- */
+/** Shrinks a phone photo to at most 750 KB (JPEG) before upload, so it goes quickly on a mobile connection. */
 export async function prepareImageForUpload(file: File): Promise<{ base64: string; mimeType: string }> {
-  const readAsBase64 = (blob: Blob) =>
-    new Promise<string>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(String(reader.result).split(",")[1] ?? "");
-      reader.onerror = reject;
-      reader.readAsDataURL(blob);
-    });
-  try {
-    const bitmap = await createImageBitmap(file);
-    const scale = Math.min(1, 1600 / Math.max(bitmap.width, bitmap.height));
-    const canvas = document.createElement("canvas");
-    canvas.width = Math.round(bitmap.width * scale);
-    canvas.height = Math.round(bitmap.height * scale);
-    const ctx = canvas.getContext("2d");
-    if (!ctx) throw new Error("no canvas");
-    ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.82));
-    if (!blob) throw new Error("no blob");
-    return { base64: await readAsBase64(blob), mimeType: "image/jpeg" };
-  } catch {
-    return { base64: await readAsBase64(file), mimeType: file.type || "image/jpeg" };
-  }
+  const blob = await shrinkPhoto(file);
+  return { base64: await blobToBase64(blob), mimeType: blob.type || "image/jpeg" };
 }
 
 // ---------------------------------------------------------------------------

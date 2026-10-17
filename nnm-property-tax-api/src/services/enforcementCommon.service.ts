@@ -7,6 +7,7 @@ import { pool } from "../config/db";
 import { env } from "../config/env";
 import { ApiError } from "../utils/ApiError";
 import type { AttendanceRole, AttendanceTokenPayload } from "../types/attendance.types";
+import { MAX_PDF_BYTES, MAX_PHOTO_BYTES, uploadLimitMessage } from "../utils/uploadLimits";
 
 /** Who may do what in the two enforcement modules (all through the attendance login). */
 export const ENCROACHMENT_OFFICER: AttendanceRole[] = ["city_manager"];
@@ -70,12 +71,12 @@ export function checkGps(lat: unknown, lng: unknown): { lat: number; lng: number
 // ------------------------------------------------------------------------- media
 
 const MEDIA_TYPES: Record<string, { kind: "photo" | "video" | "document"; ext: string; maxBytes: number }> = {
-  "image/jpeg": { kind: "photo", ext: "jpg", maxBytes: 12 * 1024 * 1024 },
-  "image/png": { kind: "photo", ext: "png", maxBytes: 12 * 1024 * 1024 },
+  "image/jpeg": { kind: "photo", ext: "jpg", maxBytes: MAX_PHOTO_BYTES },
+  "image/png": { kind: "photo", ext: "png", maxBytes: MAX_PHOTO_BYTES },
   "video/mp4": { kind: "video", ext: "mp4", maxBytes: 120 * 1024 * 1024 },
   "video/webm": { kind: "video", ext: "webm", maxBytes: 120 * 1024 * 1024 },
   "video/quicktime": { kind: "video", ext: "mov", maxBytes: 120 * 1024 * 1024 },
-  "application/pdf": { kind: "document", ext: "pdf", maxBytes: 20 * 1024 * 1024 },
+  "application/pdf": { kind: "document", ext: "pdf", maxBytes: MAX_PDF_BYTES },
 };
 
 const PURPOSES = new Set([
@@ -103,7 +104,7 @@ export async function receiveMedia(req: Request, module: EnforcementModule, purp
   const spec = MEDIA_TYPES[mime];
   if (!spec) throw ApiError.badRequest("Only JPEG/PNG photos, MP4/WebM/MOV videos or PDF files are accepted.");
   const declared = Number(req.headers["content-length"] ?? 0);
-  if (declared > spec.maxBytes) throw new ApiError(413, `File too large - the limit is ${Math.round(spec.maxBytes / 1048576)} MB for this type.`);
+  if (declared > spec.maxBytes) throw new ApiError(413, spec.kind === "video" ? `File too large - the limit is ${Math.round(spec.maxBytes / 1048576)} MB for a video.` : uploadLimitMessage(mime));
 
   const rel = path.join("enforcement", module, `${purpose}-${Date.now()}-${crypto.randomBytes(6).toString("hex")}.${spec.ext}`);
   const full = path.join(env.PHOTO_UPLOAD_DIR, rel);
@@ -118,7 +119,7 @@ export async function receiveMedia(req: Request, module: EnforcementModule, purp
         size += chunk.length;
         if (head.length < 16) head = Buffer.concat([head, chunk]).subarray(0, 16);
         if (size > spec.maxBytes) {
-          reject(new ApiError(413, `File too large - the limit is ${Math.round(spec.maxBytes / 1048576)} MB for this type.`));
+          reject(new ApiError(413, spec.kind === "video" ? `File too large - the limit is ${Math.round(spec.maxBytes / 1048576)} MB for a video.` : uploadLimitMessage(mime)));
           req.unpipe(out);
           out.destroy();
         }

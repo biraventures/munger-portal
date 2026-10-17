@@ -1,6 +1,7 @@
 import { publicDocumentRepository } from "../repositories/publicDocument.repository";
 import { ApiError } from "../utils/ApiError";
 import type { PublicDocumentMeta } from "../types/publicDocument.types";
+import { assertUploadSize } from "../utils/uploadLimits";
 
 /**
  * The whole app reads JSON bodies up to 10 MB (see app.ts), and base64
@@ -43,6 +44,7 @@ export async function uploadPublicDocument(
 
   const ext = (input.fileName.split(".").pop() ?? "").toLowerCase();
   const mimeType = ALLOWED_TYPES[ext];
+  if (mimeType) assertUploadSize(mimeType, input.fileData.length);
   if (!mimeType) {
     throw ApiError.badRequest(`Unsupported file type. Allowed: ${ALLOWED_EXTENSIONS.join(", ")}.`);
   }

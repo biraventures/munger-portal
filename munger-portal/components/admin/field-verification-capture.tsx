@@ -5,6 +5,7 @@ import { Camera, CheckCircle2, ChevronDown, ChevronUp, CreditCard, FileText, Loa
 import { getCurrentGpsPosition } from "@/lib/geolocation";
 import { fileToBase64 } from "@/components/admin/discrepancy-capture-section";
 import { recordFieldVerification } from "@/lib/admin-api";
+import { shrinkPhotoFile } from "@/lib/upload-limits";
 
 interface FieldVerificationState {
   gpsLat: number | null;
@@ -58,7 +59,7 @@ function PhotoSlot({
           )}
         </span>
       </label>
-      <input id={inputId} type="file" accept="image/jpeg,image/png" capture="environment" onChange={(e) => onChange(e.target.files?.[0] ?? null)} className="hidden" />
+      <input id={inputId} type="file" accept="image/jpeg,image/png" capture="environment" onChange={async (e) => { const f = e.target.files?.[0]; onChange(f ? await shrinkPhotoFile(f) : null); }} className="hidden" />
     </div>
   );
 }
