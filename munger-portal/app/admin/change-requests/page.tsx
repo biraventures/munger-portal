@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Loader2, AlertCircle } from "lucide-react";
 import { AdminHeader } from "@/components/admin-header";
 import { StageBadge } from "@/components/admin/stage-badge";
+import { MutationPendingSummary } from "@/components/admin/mutation-pending-summary";
 import { useAdminGuard } from "@/lib/use-admin-guard";
 import { fetchChangeRequests, fetchDashboardSummaryAdmin, type ChangeRequestSummary, type ChangeRequestStatus, type DashboardSummary } from "@/lib/admin-api";
 
@@ -62,7 +63,8 @@ export default function ChangeRequestsPage() {
     <div className="min-h-screen bg-slate-50">
       <AdminHeader admin={admin} />
 
-      <main className="mx-auto max-w-4xl px-6 py-10">
+      <main className="mx-auto max-w-5xl px-6 py-10">
+        <MutationPendingSummary highlight={admin.role} />
         <h1 className="mb-1 text-2xl font-semibold text-slate-900">Mutation Approvals</h1>
         <p className="mb-3 text-sm text-slate-500">Property changes move through Tax Daroga → Mutation Nodal Clerk → City Manager/DMC → Commissioner.</p>
 

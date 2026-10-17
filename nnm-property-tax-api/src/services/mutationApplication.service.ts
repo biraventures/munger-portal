@@ -13,6 +13,7 @@ import { TIER_FINAL_STAGE } from "./changeClassification.service";
 import { annualSolidWasteCharge, solidWasteYearsDue } from "./charges.service";
 import type { FloorRow, PropertyRow } from "../types/property.types";
 import type { PropertySaveInput } from "../types/propertySave.types";
+import { recordAuditEvent } from "./mutationAudit.service";
 
 /**
  * Online mutation applications from the public (migration 131).
@@ -103,6 +104,14 @@ export interface MutationApplicationRow {
   handling_remarks: string | null;
   created_at: Date;
   submitted_at: Date | null;
+  khata_no: string | null;
+  khesra_no: string | null;
+  survey_sheet_no: string | null;
+  survey_ward: string | null;
+  edit_token_hash: string | null;
+  edit_token_expires_at: Date | null;
+  edit_count: number;
+  last_edited_at: Date | null;
 }
 
 // --------------------------------------------------------------------------------------------------- helpers
@@ -211,6 +220,11 @@ export interface CreateApplicationInput {
   latitude: number;
   longitude: number;
   gpsAccuracy?: number | null;
+  /** Land-record details as the applicant knows them (optional - the Tax Daroga records the verified ones). */
+  khataNo?: string | null;
+  khesraNo?: string | null;
+  surveySheetNo?: string | null;
+  surveyWard?: "A" | "B" | "C" | "D" | "E" | "F" | null;
 }
 
 export async function createDraft(input: CreateApplicationInput, ip: string | null): Promise<{ applicationId: string; uploadToken: string }> {
@@ -234,8 +248,9 @@ export async function createDraft(input: CreateApplicationInput, ip: string | nu
     `INSERT INTO mutation_applications (
        holding_no, entered_old_holding_no, entered_ward, entered_address, entered_tax_paid_till, entered_sw_paid_till,
        new_owner_name, new_owner_relation_type, new_owner_relation_name, new_owner_mobile, new_owner_aadhaar, new_owner_email,
-       applicant_name, applicant_mobile, transfer_basis, transfer_date, latitude, longitude, gps_accuracy_m, upload_token_hash, created_ip)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21) RETURNING id`,
+       applicant_name, applicant_mobile, transfer_basis, transfer_date, latitude, longitude, gps_accuracy_m, upload_token_hash, created_ip,
+       khata_no, khesra_no, survey_sheet_no, survey_ward)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25) RETURNING id`,
     [
       holdingNo,
       holdingNo ? null : input.manual!.oldHoldingNo.trim(),
@@ -258,6 +273,10 @@ export async function createDraft(input: CreateApplicationInput, ip: string | nu
       input.gpsAccuracy ?? null,
       hashToken(token),
       ip,
+      input.khataNo?.trim() || null,
+      input.khesraNo?.trim() || null,
+      input.surveySheetNo?.trim() || null,
+      input.surveyWard ?? null,
     ],
   );
   return { applicationId: rows[0]!.id, uploadToken: token };
@@ -266,6 +285,11 @@ export async function createDraft(input: CreateApplicationInput, ip: string | nu
 /** Streams one document (raw body: PDF / JPEG / PNG, up to 10 MB) into the draft. */
 export async function addDocument(req: Request, id: string, token: string, docType: string, fileName: string) {
   const app = await draftWithToken(id, token);
+  return storeDocument(req, app, docType, fileName);
+}
+
+/** Streams one document into an application (draft, or one the applicant is editing). */
+async function storeDocument(req: Request, app: MutationApplicationRow, docType: string, fileName: string) {
   const spec = DOC_TYPES[docType];
   if (!spec) throw ApiError.badRequest("Unknown document type.");
   const mime = String(req.headers["content-type"] ?? "").split(";")[0]!.trim().toLowerCase();
@@ -480,6 +504,7 @@ export async function applicationStatus(applicationNo: string) {
   } else if (a.cr_status === "reverted") status = "Returned for correction at the Nagar Nigam office";
   else status = `Under process - with the ${STAGE_LABEL[a.cr_stage ?? ""] ?? "office"}`;
   return {
+    id: a.id,
     applicationNo: a.application_no,
     holdingNo: a.holding_no ?? null,
     basis: TRANSFER_BASIS[a.transfer_basis],
@@ -579,4 +604,295 @@ export async function liveInputForApplication(applicationId: string, holdingNo: 
     changeBasis: "Mutation",
     changeReference: proposed.changeReference ?? null,
   };
+}
+
+// --------------------------------------------------------------------------------------------------- applicant edits
+
+/**
+ * The applicant may change a submitted application while no office desk has acted on it yet - holding still to be
+ * identified, or with the Tax Daroga before any decision or verification - or after it was sent back for correction
+ * (saving then resubmits it to the Tax Daroga). Every change is written to the case's audit trail.
+ */
+async function editState(app: MutationApplicationRow): Promise<{ editable: boolean; reason: string | null; sentBack: boolean; crId: string | null }> {
+  if (app.status === "awaiting_holding") return { editable: true, reason: null, sentBack: false, crId: null };
+  if (app.status === "rejected") return { editable: false, reason: "This application was not accepted - it cannot be changed. You may apply afresh.", sentBack: false, crId: null };
+  if (app.status !== "in_chain" || !app.change_request_id) return { editable: false, reason: "This application cannot be changed.", sentBack: false, crId: null };
+  const { rows } = await pool.query<{ status: string; current_stage: string; acted: boolean }>(
+    `SELECT c.status, c.current_stage,
+            EXISTS (SELECT 1 FROM change_request_approvals a WHERE a.change_request_id = c.id
+                     AND a.decided_at > COALESCE((SELECT max(resubmitted_at) FROM entry_revert_events r WHERE r.entry_type = 'property_mutation' AND r.entry_id = c.id), c.requested_at))
+         OR EXISTS (SELECT 1 FROM mutation_area_verifications v WHERE v.change_request_id = c.id
+                     AND v.verified_at > COALESCE((SELECT max(resubmitted_at) FROM entry_revert_events r WHERE r.entry_type = 'property_mutation' AND r.entry_id = c.id), c.requested_at)) AS acted
+       FROM property_change_requests c WHERE c.id = $1`,
+    [app.change_request_id],
+  );
+  const c = rows[0];
+  if (!c) return { editable: false, reason: "This application cannot be changed.", sentBack: false, crId: null };
+  if (c.status === "reverted") return { editable: true, reason: null, sentBack: true, crId: app.change_request_id };
+  if (c.status === "pending" && c.current_stage === "tax_daroga" && !c.acted) return { editable: true, reason: null, sentBack: false, crId: app.change_request_id };
+  if (c.status === "pending") {
+    return {
+      editable: false,
+      reason: `The application is already being examined (now with the ${STAGE_LABEL[c.current_stage] ?? "office"}), so it can no longer be changed online. If something is wrong, contact the Nagar Nigam office.`,
+      sentBack: false,
+      crId: null,
+    };
+  }
+  return { editable: false, reason: `This application has already been ${c.status}. It cannot be changed.`, sentBack: false, crId: null };
+}
+
+function sameHolding(a: string | null | undefined, b: string): boolean {
+  const norm = (x: string) => x.trim().toUpperCase().replace(/\s+/g, "");
+  return !!a && norm(a) === norm(b);
+}
+
+function editView(app: MutationApplicationRow) {
+  const d = app.transfer_date instanceof Date ? app.transfer_date : new Date(app.transfer_date);
+  return {
+    applicationNo: app.application_no,
+    holdingNo: app.holding_no,
+    manual: app.holding_no ? null : { oldHoldingNo: app.entered_old_holding_no, ward: app.entered_ward, address: app.entered_address },
+    newOwnerName: app.new_owner_name,
+    newOwnerRelationType: app.new_owner_relation_type,
+    newOwnerRelationName: app.new_owner_relation_name,
+    newOwnerMobile: app.new_owner_mobile,
+    newOwnerAadhaarMasked: `XXXX XXXX ${app.new_owner_aadhaar.slice(-4)}`,
+    newOwnerEmail: app.new_owner_email,
+    applicantName: app.applicant_name,
+    applicantMobile: app.applicant_mobile,
+    transferBasis: app.transfer_basis,
+    transferDate: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`,
+    khataNo: app.khata_no,
+    khesraNo: app.khesra_no,
+    surveySheetNo: app.survey_sheet_no,
+    surveyWard: app.survey_ward,
+  };
+}
+
+/** Opens a submitted application for editing: application number + mobile (applicant's or new owner's) + holding number (as given). */
+export async function openForEdit(applicationNo: string, mobile: string, holdingNo: string) {
+  const { rows } = await pool.query<MutationApplicationRow>(`SELECT * FROM mutation_applications WHERE application_no = $1`, [applicationNo.trim().toUpperCase()]);
+  const app = rows[0];
+  // One answer for every mismatch, so the form cannot be used to probe which part is wrong.
+  const fail = () => ApiError.notFound("No application matches these details. Check the application number, mobile number and holding number.");
+  if (!app || (app.applicant_mobile !== mobile && app.new_owner_mobile !== mobile)) throw fail();
+  if (!sameHolding(app.holding_no, holdingNo) && !sameHolding(app.entered_old_holding_no, holdingNo)) throw fail();
+  const state = await editState(app);
+  if (!state.editable) return { matched: true as const, editable: false, reason: state.reason, application: null, documents: [], editToken: null, applicationId: null, sentBack: false };
+  const token = crypto.randomBytes(24).toString("base64url");
+  await pool.query(`UPDATE mutation_applications SET edit_token_hash = $2, edit_token_expires_at = now() + interval '60 minutes' WHERE id = $1`, [app.id, hashToken(token)]);
+  let revertComment: string | null = null;
+  if (state.sentBack && state.crId) {
+    const { rows: c } = await pool.query<{ revert_comment: string | null }>(`SELECT revert_comment FROM property_change_requests WHERE id = $1`, [state.crId]);
+    revertComment = c[0]?.revert_comment ?? null;
+  }
+  return {
+    matched: true as const,
+    editable: true,
+    reason: null,
+    sentBack: state.sentBack,
+    revertComment,
+    applicationId: app.id,
+    editToken: token,
+    application: editView(app),
+    documents: (await listDocuments(app.id)).map((d) => ({ ...d, label: DOC_TYPES[d.doc_type as string]?.label ?? d.doc_type })),
+  };
+}
+
+async function appForEdit(id: string, token: string): Promise<{ app: MutationApplicationRow; state: Awaited<ReturnType<typeof editState>> }> {
+  const app = /^\d{1,18}$/.test(id) ? await findById(id) : null;
+  if (!app || !token || !app.edit_token_hash || !app.edit_token_expires_at || app.edit_token_expires_at < new Date()) {
+    throw ApiError.notFound("Your editing session has expired - open the application again.");
+  }
+  const given = Buffer.from(hashToken(token), "hex");
+  const stored = Buffer.from(app.edit_token_hash, "hex");
+  if (given.length !== stored.length || !crypto.timingSafeEqual(given, stored)) throw ApiError.notFound("Your editing session has expired - open the application again.");
+  const state = await editState(app);
+  if (!state.editable) throw ApiError.badRequest(state.reason ?? "This application can no longer be changed.");
+  return { app, state };
+}
+
+export interface EditApplicationInput {
+  manual?: { oldHoldingNo: string; ward: string; address: string } | null;
+  newOwnerName: string;
+  newOwnerRelationType?: "S/O" | "D/O" | "W/O" | "C/O" | null;
+  newOwnerRelationName?: string | null;
+  newOwnerMobile: string;
+  /** Blank keeps the Aadhaar number on file. */
+  newOwnerAadhaar?: string | null;
+  newOwnerEmail?: string | null;
+  applicantName: string;
+  applicantMobile: string;
+  transferBasis: string;
+  transferDate: string;
+  khataNo?: string | null;
+  khesraNo?: string | null;
+  surveySheetNo?: string | null;
+  surveyWard?: "A" | "B" | "C" | "D" | "E" | "F" | null;
+}
+
+const EDIT_LABELS: Record<string, string> = {
+  new_owner_name: "new owner's name",
+  new_owner_relation_type: "relation",
+  new_owner_relation_name: "relation's name",
+  new_owner_mobile: "new owner's mobile",
+  new_owner_aadhaar: "Aadhaar number",
+  new_owner_email: "email",
+  applicant_name: "applicant's name",
+  applicant_mobile: "applicant's mobile",
+  transfer_basis: "basis of mutation",
+  transfer_date: "date of transfer",
+  entered_old_holding_no: "old holding number",
+  entered_ward: "ward",
+  entered_address: "address",
+  khata_no: "khata number",
+  khesra_no: "khesra number",
+  survey_sheet_no: "survey sheet number",
+  survey_ward: "survey ward",
+};
+
+/** Saves the applicant's changes; an application that was sent back is resubmitted to the Tax Daroga. */
+export async function saveEdit(id: string, token: string, input: EditApplicationInput): Promise<{ resubmitted: boolean; changed: string[] }> {
+  const { app, state } = await appForEdit(id, token);
+  if (input.newOwnerAadhaar && !isValidAadhaar(input.newOwnerAadhaar)) throw ApiError.badRequest("The Aadhaar number is not valid - please check it.");
+  if (!TRANSFER_BASIS[input.transferBasis]) throw ApiError.badRequest("Choose the basis of mutation.");
+  if (new Date(input.transferDate) > new Date()) throw ApiError.badRequest("The date of transfer cannot be in the future.");
+  if (input.manual && app.holding_no) throw ApiError.badRequest("The holding of this application is already identified - it cannot be changed.");
+  await assertMobileLimit([input.applicantMobile, input.newOwnerMobile], app.id);
+
+  const { rows: docs } = await pool.query<{ doc_type: string }>(`SELECT DISTINCT doc_type FROM mutation_application_documents WHERE application_id = $1`, [app.id]);
+  const have = new Set(docs.map((d) => d.doc_type));
+  const required = [...MANDATORY_DOCS, ...(input.transferBasis === "inheritance" ? ["vanshavali"] : [])];
+  const missing = required.filter((t) => !have.has(t));
+  if (missing.length) throw ApiError.badRequest(`Upload: ${missing.map((t) => DOC_TYPES[t]!.label).join("; ")}.`);
+
+  const next: Record<string, unknown> = {
+    new_owner_name: input.newOwnerName.trim(),
+    new_owner_relation_type: input.newOwnerRelationType ?? null,
+    new_owner_relation_name: input.newOwnerRelationName?.trim() || null,
+    new_owner_mobile: input.newOwnerMobile,
+    new_owner_aadhaar: input.newOwnerAadhaar || app.new_owner_aadhaar,
+    new_owner_email: input.newOwnerEmail?.trim() || null,
+    applicant_name: input.applicantName.trim(),
+    applicant_mobile: input.applicantMobile,
+    transfer_basis: input.transferBasis,
+    transfer_date: input.transferDate,
+    khata_no: input.khataNo?.trim() || null,
+    khesra_no: input.khesraNo?.trim() || null,
+    survey_sheet_no: input.surveySheetNo?.trim() || null,
+    survey_ward: input.surveyWard ?? null,
+  };
+  if (input.manual && !app.holding_no) {
+    next.entered_old_holding_no = input.manual.oldHoldingNo.trim();
+    next.entered_ward = normalizeWard(input.manual.ward) || input.manual.ward.trim();
+    next.entered_address = input.manual.address.trim();
+  }
+  const current = editView(app) as Record<string, unknown>;
+  const was: Record<string, unknown> = {
+    new_owner_name: app.new_owner_name,
+    new_owner_relation_type: app.new_owner_relation_type,
+    new_owner_relation_name: app.new_owner_relation_name,
+    new_owner_mobile: app.new_owner_mobile,
+    new_owner_aadhaar: app.new_owner_aadhaar,
+    new_owner_email: app.new_owner_email,
+    applicant_name: app.applicant_name,
+    applicant_mobile: app.applicant_mobile,
+    transfer_basis: app.transfer_basis,
+    transfer_date: current.transferDate,
+    khata_no: app.khata_no,
+    khesra_no: app.khesra_no,
+    survey_sheet_no: app.survey_sheet_no,
+    survey_ward: app.survey_ward,
+    entered_old_holding_no: app.entered_old_holding_no,
+    entered_ward: app.entered_ward,
+    entered_address: app.entered_address,
+  };
+  const changed = Object.keys(next).filter((k) => String(next[k] ?? "") !== String(was[k] ?? ""));
+  if (!changed.length && !state.sentBack) return { resubmitted: false, changed: [] };
+
+  const cols = Object.keys(next);
+  await pool.query(
+    `UPDATE mutation_applications SET ${cols.map((c, i) => `${c} = $${i + 2}`).join(", ")}, edit_count = edit_count + 1, last_edited_at = now() WHERE id = $1`,
+    [app.id, ...cols.map((c) => next[c])],
+  );
+  const fresh = (await findById(app.id))!;
+  const actor = `${fresh.applicant_name} (applicant)`;
+  if (changed.length) {
+    await recordAuditEvent({
+      changeRequestId: state.crId,
+      applicationId: app.id,
+      event: "applicant_edited",
+      stage: state.crId ? "tax_daroga" : null,
+      actor,
+      comment: `Changed: ${changed.map((c) => EDIT_LABELS[c] ?? c).join(", ")}`,
+      details: { fields: changed },
+    });
+  }
+
+  // Keep the change request in step with the application (owner details and reference).
+  let resubmitted = false;
+  if (state.crId) {
+    const cr = await changeRequestRepository.findById(Number(state.crId));
+    if (cr) {
+      const proposed = { ...cr.proposed_data, ...ownerOverlay(fresh), changeReference: changeReference(fresh) };
+      if (state.sentBack) {
+        await changeRequestRepository.resubmitWithCorrections(Number(state.crId), proposed, changeReference(fresh));
+        await pool.query(
+          `UPDATE entry_revert_events SET resubmitted_at = now() WHERE entry_type = 'property_mutation' AND entry_id = $1 AND resubmitted_at IS NULL`,
+          [state.crId],
+        );
+        await recordAuditEvent({ changeRequestId: state.crId, applicationId: app.id, event: "applicant_resubmitted", stage: "tax_daroga", actor, comment: "Corrected online and resubmitted" });
+        resubmitted = true;
+      } else {
+        await pool.query(`UPDATE property_change_requests SET proposed_data = $2, change_reference = $3 WHERE id = $1 AND status = 'pending'`, [
+          state.crId,
+          JSON.stringify(proposed),
+          changeReference(fresh),
+        ]);
+      }
+    }
+  }
+  return { resubmitted, changed: changed.map((c) => EDIT_LABELS[c] ?? c) };
+}
+
+export async function addEditDocument(req: Request, id: string, token: string, docType: string, fileName: string) {
+  const { app, state } = await appForEdit(id, token);
+  const doc = await storeDocument(req, app, docType, fileName);
+  await recordAuditEvent({
+    changeRequestId: state.crId,
+    applicationId: app.id,
+    event: "applicant_edited",
+    stage: state.crId ? "tax_daroga" : null,
+    actor: `${app.applicant_name} (applicant)`,
+    comment: `Document added: ${DOC_TYPES[docType]?.label ?? docType}`,
+  });
+  return doc;
+}
+
+export async function removeEditDocument(id: string, token: string, docId: string): Promise<void> {
+  const { app, state } = await appForEdit(id, token);
+  const { rows: target } = await pool.query<{ doc_type: string; n: number }>(
+    `SELECT d.doc_type, (SELECT count(*)::int FROM mutation_application_documents x WHERE x.application_id = d.application_id AND x.doc_type = d.doc_type) AS n
+       FROM mutation_application_documents d WHERE d.id = $1 AND d.application_id = $2`,
+    [docId, app.id],
+  );
+  if (!target[0]) throw ApiError.notFound("Document not found.");
+  const required = [...MANDATORY_DOCS, ...(app.transfer_basis === "inheritance" ? ["vanshavali"] : [])];
+  if (target[0].n <= 1 && required.includes(target[0].doc_type)) {
+    throw ApiError.badRequest(`"${DOC_TYPES[target[0].doc_type]?.label}" is required - upload the correct file first, then remove this one.`);
+  }
+  const { rows } = await pool.query<{ file_path: string; doc_type: string }>(
+    `DELETE FROM mutation_application_documents WHERE id = $1 AND application_id = $2 RETURNING file_path, doc_type`,
+    [docId, app.id],
+  );
+  if (!rows[0]) throw ApiError.notFound("Document not found.");
+  await fs.promises.unlink(path.join(env.PHOTO_UPLOAD_DIR, rows[0].file_path)).catch(() => undefined);
+  await recordAuditEvent({
+    changeRequestId: state.crId,
+    applicationId: app.id,
+    event: "applicant_edited",
+    stage: state.crId ? "tax_daroga" : null,
+    actor: `${app.applicant_name} (applicant)`,
+    comment: `Document removed: ${DOC_TYPES[rows[0].doc_type]?.label ?? rows[0].doc_type}`,
+  });
 }

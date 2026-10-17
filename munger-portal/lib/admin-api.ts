@@ -138,6 +138,8 @@ export interface ChangeRequestDetail {
   currentProperty: Record<string, unknown> | null;
   currentFloors: Record<string, unknown>[];
   approvalHistory: ChangeRequestApproval[];
+  verification?: AreaVerification | null;
+  landRecord?: { khataNo: string | null; khesraNo: string | null; surveySheetNo: string | null; surveyWard: string | null } | null;
 }
 
 export async function fetchChangeRequestDetail(id: number): Promise<ChangeRequestDetail> {
@@ -146,11 +148,36 @@ export async function fetchChangeRequestDetail(id: number): Promise<ChangeReques
   return res.json();
 }
 
-export async function approveChangeRequest(id: number, notes?: string): Promise<ChangeRequestSummary> {
+export interface AreaVerificationBody {
+  jamabandiAreaSqft: number;
+  documentAreaSqft: number;
+  holdingAreaSqft: number;
+  khataNo: string;
+  khesraNo: string;
+  surveySheetNo: string;
+  surveyWard: string;
+  remarks?: string | null;
+}
+
+export interface AreaVerification {
+  jamabandi_area_sqft: string;
+  document_area_sqft: string;
+  holding_area_sqft: string;
+  areas_match: boolean;
+  khata_no: string;
+  khesra_no: string;
+  survey_sheet_no: string;
+  survey_ward: string;
+  remarks: string | null;
+  verified_by: string;
+  verified_at: string;
+}
+
+export async function approveChangeRequest(id: number, notes?: string, verification?: AreaVerificationBody): Promise<ChangeRequestSummary> {
   const res = await fetch(`${API_BASE_URL}/admin/change-requests/${id}/approve`, {
     method: "POST",
     headers: authHeaders(),
-    body: JSON.stringify({ notes }),
+    body: JSON.stringify({ notes, verification }),
   });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));

@@ -8,6 +8,7 @@ import { SiteFooter } from "@/components/site-footer";
 import { PROPERTY_TAX_SEARCH_PATH } from "@/lib/config";
 import {
   createApplication,
+  SURVEY_WARDS,
   DOC_TYPES,
   isRequired,
   lookupHolding,
@@ -61,6 +62,10 @@ export default function MutationApplicationPage() {
     applicantMobile: "",
     transferBasis: "",
     transferDate: "",
+    khataNo: "",
+    khesraNo: "",
+    surveySheetNo: "",
+    surveyWard: "",
   });
   const [applicantIsOwner, setApplicantIsOwner] = useState(false);
   const [gps, setGps] = useState<{ lat: number; lng: number; acc: number } | null>(null);
@@ -147,6 +152,10 @@ export default function MutationApplicationPage() {
         latitude: gps.lat,
         longitude: gps.lng,
         gpsAccuracy: gps.acc,
+        khataNo: f.khataNo || null,
+        khesraNo: f.khesraNo || null,
+        surveySheetNo: f.surveySheetNo || null,
+        surveyWard: f.surveyWard || null,
       });
       setDraft({ id: r.applicationId, token: r.uploadToken });
       setStep("documents");
@@ -229,6 +238,10 @@ export default function MutationApplicationPage() {
               two applications.{" "}
               <Link href="/mutation/status" className="font-semibold text-nnm-gold underline">
                 Track an application
+              </Link>{" "}
+              ·{" "}
+              <Link href="/mutation/edit" className="font-semibold text-nnm-gold underline">
+                Change a submitted application
               </Link>
             </p>
           </div>
@@ -436,6 +449,32 @@ export default function MutationApplicationPage() {
                     <div>
                       <label className={labelClass}>Date of transfer</label>
                       <input type="date" max={today()} value={f.transferDate} onChange={set("transferDate")} className={inputClass} />
+                    </div>
+                    <div className="sm:col-span-2">
+                      <p className="mb-2 text-xs text-slate-500">Land record details (from the jamabandi / khatian, if you have them)</p>
+                      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                        <div>
+                          <label className={labelClass}>Khata no.</label>
+                          <input value={f.khataNo} onChange={set("khataNo")} maxLength={64} className={inputClass} />
+                        </div>
+                        <div>
+                          <label className={labelClass}>Khesra no.</label>
+                          <input value={f.khesraNo} onChange={set("khesraNo")} maxLength={64} className={inputClass} />
+                        </div>
+                        <div>
+                          <label className={labelClass}>Survey sheet no.</label>
+                          <input value={f.surveySheetNo} onChange={set("surveySheetNo")} maxLength={64} className={inputClass} />
+                        </div>
+                        <div>
+                          <label className={labelClass}>Survey ward</label>
+                          <select value={f.surveyWard} onChange={set("surveyWard")} className={inputClass}>
+                            <option value="">—</option>
+                            {SURVEY_WARDS.map((w) => (
+                              <option key={w}>{w}</option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
                     </div>
                     <div className="sm:col-span-2">
                       <label className={labelClass}>GPS location of the holding</label>

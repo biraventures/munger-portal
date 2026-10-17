@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { AlertCircle, CheckCircle2, Loader2, XCircle, RotateCcw } from "lucide-react";
+import { AlertCircle, Loader2, RotateCcw } from "lucide-react";
 import { AdminHeader } from "@/components/admin-header";
 import { StageBadge } from "@/components/admin/stage-badge";
 import { useAdminGuard } from "@/lib/use-admin-guard";
@@ -16,6 +16,8 @@ import {
 import { ADMIN_ROLE_LABELS } from "@/lib/admin-auth";
 import { TaxExemptionReview } from "@/components/admin/tax-exemption-review";
 import { MutationApplicationPanel } from "@/components/admin/mutation-application-panel";
+import { MutationTimeline } from "@/components/admin/mutation-timeline";
+import { AreaVerificationForm, AreaVerificationView, toBody, verificationProblem, type VerificationDraft } from "@/components/admin/mutation-area-verification";
 
 const FIELD_DIFF_ROWS: { label: string; currentKey: string; proposedKey: string }[] = [
   { label: "Owner Name", currentKey: "owner_name", proposedKey: "ownerName" },
@@ -53,10 +55,34 @@ export default function ChangeRequestDetailPage() {
   const [notes, setNotes] = useState("");
   const [acting, setActing] = useState<"approve" | "reject" | "revert" | null>(null);
   const [reverting, setReverting] = useState(false);
+  const [verification, setVerification] = useState<VerificationDraft>({
+    jamabandiAreaSqft: "",
+    documentAreaSqft: "",
+    holdingAreaSqft: "",
+    khataNo: "",
+    khesraNo: "",
+    surveySheetNo: "",
+    surveyWard: "",
+    remarks: "",
+  });
+  const [trailKey, setTrailKey] = useState(0);
 
   function load() {
+    setTrailKey((k) => k + 1);
     fetchChangeRequestDetail(id)
-      .then(setDetail)
+      .then((d) => {
+        setDetail(d);
+        // Pre-fill the land-record details from the application / holding (the Tax Daroga checks and corrects them).
+        if (d.landRecord) {
+          setVerification((v) => ({
+            ...v,
+            khataNo: v.khataNo || d.landRecord?.khataNo || "",
+            khesraNo: v.khesraNo || d.landRecord?.khesraNo || "",
+            surveySheetNo: v.surveySheetNo || d.landRecord?.surveySheetNo || "",
+            surveyWard: v.surveyWard || d.landRecord?.surveyWard || "",
+          }));
+        }
+      })
       .catch((err) => setError(err instanceof Error ? err.message : "Could not load this request."));
   }
 
@@ -66,11 +92,21 @@ export default function ChangeRequestDetailPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [admin, id]);
 
+  const needsVerification =
+    !!detail && !!admin && detail.request.status === "pending" && detail.request.current_stage === "tax_daroga" && detail.request.approval_tier === "mutation" && admin.role === "tax_daroga";
+
   async function handleApprove() {
+    if (needsVerification) {
+      const problem = verificationProblem(verification);
+      if (problem) {
+        setError(problem);
+        return;
+      }
+    }
     setActing("approve");
     setError(null);
     try {
-      await approveChangeRequest(id, notes || undefined);
+      await approveChangeRequest(id, notes || undefined, needsVerification ? toBody(verification) : undefined);
       load();
       setNotes("");
     } catch (err) {
@@ -198,30 +234,11 @@ export default function ChangeRequestDetailPage() {
               </section>
             )}
 
+            {detail.verification && <AreaVerificationView v={detail.verification} />}
+
             <section className="rounded-xl border border-slate-200 bg-white p-6">
-              <h2 className="mb-4 text-base font-semibold text-slate-900">Approval history</h2>
-              {detail.approvalHistory.length === 0 ? (
-                <p className="text-sm text-slate-400">No action taken yet — currently with {ADMIN_ROLE_LABELS[detail.request.current_stage]}.</p>
-              ) : (
-                <ol className="space-y-3">
-                  {detail.approvalHistory.map((a) => (
-                    <li key={a.id} className="flex items-start gap-3 text-sm">
-                      {a.decision === "approved" ? (
-                        <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-green-600" />
-                      ) : (
-                        <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-500" />
-                      )}
-                      <div>
-                        <p className="text-slate-700">
-                          <span className="font-medium">{ADMIN_ROLE_LABELS[a.stage]}</span> ({a.admin_display_name}){" "}
-                          {a.decision} — {new Date(a.decided_at).toLocaleString("en-IN")}
-                        </p>
-                        {a.notes && <p className="text-slate-500">&ldquo;{a.notes}&rdquo;</p>}
-                      </div>
-                    </li>
-                  ))}
-                </ol>
-              )}
+              <h2 className="mb-4 text-base font-semibold text-slate-900">Audit trail</h2>
+              <MutationTimeline key={trailKey} changeRequestId={id} />
             </section>
 
             {detail.request.status === "pending" && detail.request.current_stage === admin.role ? (
@@ -230,6 +247,13 @@ export default function ChangeRequestDetailPage() {
                 <p className="mb-4 text-xs text-slate-500">
                   Approving sends this to {ADMIN_ROLE_LABELS[detail.request.current_stage] === ADMIN_ROLE_LABELS["commissioner"] ? "final application" : "the next desk"}.
                 </p>
+                {needsVerification && !reverting && (
+                  <AreaVerificationForm
+                    value={verification}
+                    onChange={setVerification}
+                    recordArea={detail.currentProperty?.area_sqft != null ? String(detail.currentProperty.area_sqft) : null}
+                  />
+                )}
                 <textarea
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
@@ -245,7 +269,7 @@ export default function ChangeRequestDetailPage() {
                         disabled={acting !== null}
                         className="rounded-md bg-nnm-blue px-5 py-2.5 text-sm font-semibold text-white hover:bg-nnm-blue-dark disabled:opacity-60"
                       >
-                        {acting === "approve" ? "Approving…" : "Approve"}
+                        {acting === "approve" ? "Saving…" : detail.request.current_stage === detail.request.final_stage ? "Approve (final)" : "Approve & forward"}
                       </button>
                       <button
                         onClick={handleReject}

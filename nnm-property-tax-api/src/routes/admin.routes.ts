@@ -15,6 +15,9 @@ import {
   postApproveChangeRequest,
   postRejectChangeRequest,
   postRevertChangeRequest,
+  getChangeRequestTimeline,
+  getApplicationTimeline,
+  getMutationPendingSummary,
 } from "../controllers/changeRequest.controller";
 import {
   getDiscrepancyRequests,
@@ -254,6 +257,11 @@ adminRouter.patch("/accounts/:id/active", requireAdminRole("commissioner"), setA
 // where it was reachable by every admin role with no restriction at all.
 adminRouter.get("/change-requests", requireMutationChainRole, getChangeRequests);
 adminRouter.get("/change-requests/:id", requireMutationChainRole, getChangeRequestById);
+// Mutation audit trail and the per-desk pending summary - the chain, plus the City Manager who oversees it.
+const requireMutationViewRole = requireAdminRole("tax_daroga", "mutation_nodal_clerk", "deputy_commissioner", "commissioner", "city_manager");
+adminRouter.get("/change-requests/:id/timeline", requireMutationViewRole, getChangeRequestTimeline);
+adminRouter.get("/mutation-applications/:id/timeline", requireMutationViewRole, getApplicationTimeline);
+adminRouter.get("/mutation-pending-summary", requireMutationViewRole, getMutationPendingSummary);
 adminRouter.post("/change-requests/:id/approve", requireMutationChainRole, postApproveChangeRequest);
 adminRouter.post("/change-requests/:id/reject", requireMutationChainRole, postRejectChangeRequest);
 adminRouter.post("/change-requests/:id/revert", requireMutationChainRole, postRevertChangeRequest);

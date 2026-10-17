@@ -1,4 +1,5 @@
 import type { Request, Response } from "express";
+import { buildTimeline, pendingSummary } from "../services/mutationAudit.service";
 import { z } from "zod";
 import {
   listChangeRequests,
@@ -41,16 +42,31 @@ export const getChangeRequestById = asyncHandler(async (req: Request, res: Respo
   res.status(200).json(detail);
 });
 
-const notesBodySchema = z.object({ notes: z.string().max(2000).optional() });
+const areaSqft = z.coerce.number({ invalid_type_error: "Enter the area in sq ft." }).positive("Areas must be more than 0 sq ft.").max(10_000_000);
+const notesBodySchema = z.object({
+  notes: z.string().max(2000).optional(),
+  verification: z
+    .object({
+      jamabandiAreaSqft: areaSqft,
+      documentAreaSqft: areaSqft,
+      holdingAreaSqft: areaSqft,
+      khataNo: z.string().trim().min(1, "Enter the khata number.").max(64),
+      khesraNo: z.string().trim().min(1, "Enter the khesra number.").max(64),
+      surveySheetNo: z.string().trim().min(1, "Enter the survey sheet number.").max(64),
+      surveyWard: z.enum(["A", "B", "C", "D", "E", "F"], { errorMap: () => ({ message: "Choose the survey ward (A-F)." }) }),
+      remarks: z.string().trim().max(1000).nullish(),
+    })
+    .optional(),
+});
 
 /** POST /api/v1/admin/change-requests/:id/approve */
 export const postApproveChangeRequest = asyncHandler(async (req: Request, res: Response) => {
   const paramsParsed = idParamSchema.safeParse(req.params);
   if (!paramsParsed.success) throw ApiError.badRequest("Invalid change request id");
   const bodyParsed = notesBodySchema.safeParse(req.body);
-  if (!bodyParsed.success) throw ApiError.badRequest("Invalid request body");
+  if (!bodyParsed.success) throw ApiError.badRequest(bodyParsed.error.issues[0]?.message ?? "Invalid request body");
 
-  const result = await approveAtCurrentStage(paramsParsed.data.id, req.admin!, bodyParsed.data.notes);
+  const result = await approveAtCurrentStage(paramsParsed.data.id, req.admin!, bodyParsed.data.notes, bodyParsed.data.verification);
   res.status(200).json({ request: result });
 });
 
@@ -85,4 +101,23 @@ export const postRevertChangeRequest = asyncHandler(async (req: Request, res: Re
 export const getRevertedChangeRequests = asyncHandler(async (_req: Request, res: Response) => {
   const requests = await listRevertedChangeRequests();
   res.status(200).json({ requests });
+});
+
+/** GET /api/v1/admin/change-requests/:id/timeline - the case's audit trail with time spent at each desk. */
+export const getChangeRequestTimeline = asyncHandler(async (req: Request, res: Response) => {
+  const parsed = idParamSchema.safeParse(req.params);
+  if (!parsed.success) throw ApiError.badRequest("Invalid change request id");
+  res.status(200).json(await buildTimeline({ changeRequestId: String(parsed.data.id) }));
+});
+
+/** GET /api/v1/admin/mutation-applications/:id/timeline - same, for an online application (also before it enters the chain). */
+export const getApplicationTimeline = asyncHandler(async (req: Request, res: Response) => {
+  const parsed = idParamSchema.safeParse(req.params);
+  if (!parsed.success) throw ApiError.badRequest("Invalid id");
+  res.status(200).json(await buildTimeline({ applicationId: String(parsed.data.id) }));
+});
+
+/** GET /api/v1/admin/mutation-pending-summary - what is waiting at each desk. */
+export const getMutationPendingSummary = asyncHandler(async (_req: Request, res: Response) => {
+  res.status(200).json(await pendingSummary());
 });

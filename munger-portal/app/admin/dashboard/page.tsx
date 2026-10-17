@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Users, FileClock, FileWarning, LayoutGrid, ShoppingBag, Store, BarChart3, Award, Archive, Download, XCircle, ShieldCheck, Trash2, RefreshCw, Upload, MapPin, Map as MapIcon, ClipboardCheck, UserCheck, ClipboardList, Receipt, RotateCcw, AlertTriangle, List, Flag, Home, FileText, Printer, Landmark } from "lucide-react";
 import { AdminHeader } from "@/components/admin-header";
 import { DashboardSummaryWidget } from "@/components/dashboard-summary-widget";
+import { MutationPendingSummary } from "@/components/admin/mutation-pending-summary";
 import { useAdminGuard } from "@/lib/use-admin-guard";
 import {
   fetchChangeRequests,
@@ -205,6 +206,8 @@ export default function AdminDashboardPage() {
       <main className="mx-auto max-w-5xl px-6 py-10">
         <h1 className="mb-1 text-2xl font-semibold text-slate-900">Welcome, {admin.displayName}</h1>
         <p className="mb-8 text-sm text-slate-500">Signed in as {ADMIN_ROLE_LABELS[admin.role]}.</p>
+
+        {(isMutationChainRole || admin.role === "city_manager") && <MutationPendingSummary highlight={admin.role} />}
 
         {!isAgencyRole && admin.role !== "abhilekh_prabhari" && (
           <DashboardSummaryWidget

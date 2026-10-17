@@ -17,9 +17,20 @@ import {
   rejectApplication,
   removeDocument,
   submitApplication,
+  openForEdit,
+  saveEdit,
+  addEditDocument,
+  removeEditDocument,
 } from "../services/mutationApplication.service";
+import { buildTimeline, publicTimeline } from "../services/mutationAudit.service";
 
 const mobile = z.string().trim().transform((s) => s.replace(/[\s-]/g, "").replace(/^(\+91|91|0)(?=\d{10}$)/, "")).pipe(z.string().regex(/^[6-9]\d{9}$/, "Enter a valid 10-digit mobile number."));
+const landRecord = {
+  khataNo: z.string().trim().max(64).nullish(),
+  khesraNo: z.string().trim().max(64).nullish(),
+  surveySheetNo: z.string().trim().max(64).nullish(),
+  surveyWard: z.enum(["A", "B", "C", "D", "E", "F"]).nullish().or(z.literal("").transform(() => null)),
+};
 const yearRange = z.string().trim().regex(/^\d{4}-\d{4}$/, "Year as YYYY-YYYY, e.g. 2024-2025").nullish().or(z.literal(""));
 
 /** GET /api/v1/public/mutation/holding/:holdingNo - ward, address, paid-till years and whether dues are pending. */
@@ -56,6 +67,7 @@ const createSchema = z
     latitude: z.number().min(24).max(27),
     longitude: z.number().min(85).max(88),
     gpsAccuracy: z.number().nonnegative().max(100000).nullish(),
+    ...landRecord,
   })
   .refine((d) => !!d.holdingNo || !!d.manual, { message: "Enter the holding number, or the old holding number with the ward." });
 
@@ -107,11 +119,75 @@ export const postSubmitApplication = asyncHandler(async (req: Request, res: Resp
   res.status(200).json(await submitApplication(id.data, token(req)));
 });
 
-/** GET /api/v1/public/mutation/status/:applicationNo */
+/** GET /api/v1/public/mutation/status/:applicationNo - progress, with the trail of desks and dates (no officer names). */
 export const getApplicationStatus = asyncHandler(async (req: Request, res: Response) => {
   const n = z.string().trim().regex(/^[A-Za-z0-9]{6,24}$/).safeParse(req.params.applicationNo);
   if (!n.success) throw ApiError.badRequest("Enter the application number.");
-  res.status(200).json(await applicationStatus(n.data));
+  const status = await applicationStatus(n.data);
+  const trail = publicTimeline(await buildTimeline({ applicationId: status.id }));
+  const { id: _id, ...rest } = status;
+  res.status(200).json({ ...rest, trail });
+});
+
+const editOpenSchema = z.object({
+  applicationNo: z.string().trim().regex(/^[A-Za-z0-9]{6,24}$/, "Enter the application number."),
+  mobile,
+  holdingNo: z.string().trim().min(1, "Enter the holding number given in the application.").max(32),
+});
+
+/** POST /api/v1/public/mutation/edit/open - application number + mobile + holding number -> a 60-minute edit session. */
+export const postOpenForEdit = asyncHandler(async (req: Request, res: Response) => {
+  const b = editOpenSchema.safeParse(req.body);
+  if (!b.success) throw ApiError.badRequest(b.error.issues[0]?.message ?? "Check the details.");
+  const result = await openForEdit(b.data.applicationNo, b.data.mobile, b.data.holdingNo);
+  res.locals.editMatched = true;
+  res.status(200).json(result);
+});
+
+const editSchema = z.object({
+  manual: z.object({ oldHoldingNo: z.string().trim().min(1).max(32), ward: z.string().trim().min(1).max(16), address: z.string().trim().min(3).max(500) }).nullish(),
+  newOwnerName: z.string().trim().min(2, "Enter the new owner's name.").max(255),
+  newOwnerRelationType: z.enum(["S/O", "D/O", "W/O", "C/O"]).nullish(),
+  newOwnerRelationName: z.string().trim().max(255).nullish(),
+  newOwnerMobile: mobile,
+  newOwnerAadhaar: z.string().trim().transform((s) => s.replace(/\s/g, "")).pipe(z.string().regex(/^(\d{12})?$/, "Aadhaar number must be 12 digits.")).nullish(),
+  newOwnerEmail: z.string().trim().email("Enter a valid email address.").max(120).nullish().or(z.literal("")),
+  applicantName: z.string().trim().min(2, "Enter the applicant's name.").max(255),
+  applicantMobile: mobile,
+  transferBasis: z.enum(["sale_deed", "partition", "gift", "inheritance", "auction"]),
+  transferDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Enter the date of transfer."),
+  ...landRecord,
+});
+
+function editToken(req: Request): string {
+  return (req.header("x-edit-token") ?? "").slice(0, 100);
+}
+
+/** PUT /api/v1/public/mutation/edit/:id (header X-Edit-Token) */
+export const putEditApplication = asyncHandler(async (req: Request, res: Response) => {
+  const id = idParam.safeParse(req.params.id);
+  if (!id.success) throw ApiError.notFound("Application not found.");
+  const b = editSchema.safeParse(req.body);
+  if (!b.success) throw ApiError.badRequest(b.error.issues[0]?.message ?? "Check the form.");
+  res.status(200).json(await saveEdit(id.data, editToken(req), { ...b.data, newOwnerEmail: b.data.newOwnerEmail || null, newOwnerAadhaar: b.data.newOwnerAadhaar || null }));
+});
+
+/** POST /api/v1/public/mutation/edit/:id/documents?type=&fileName= (raw body, X-Edit-Token) */
+export const postEditDocument = asyncHandler(async (req: Request, res: Response) => {
+  const id = idParam.safeParse(req.params.id);
+  if (!id.success) throw ApiError.notFound("Application not found.");
+  const type = String(req.query.type ?? "");
+  const fileName = typeof req.query.fileName === "string" ? req.query.fileName : "";
+  res.status(201).json({ document: await addEditDocument(req, id.data, editToken(req), type, fileName) });
+});
+
+/** DELETE /api/v1/public/mutation/edit/:id/documents/:docId (X-Edit-Token) */
+export const deleteEditDocument = asyncHandler(async (req: Request, res: Response) => {
+  const id = idParam.safeParse(req.params.id);
+  const doc = idParam.safeParse(req.params.docId);
+  if (!id.success || !doc.success) throw ApiError.notFound("Document not found.");
+  await removeEditDocument(id.data, editToken(req), doc.data);
+  res.status(200).json({ ok: true });
 });
 
 // --- staff -----------------------------------------------------------------------------------------------------

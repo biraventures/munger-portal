@@ -5,6 +5,8 @@ import Link from "next/link";
 import { AlertCircle, ChevronDown, ChevronUp, Loader2 } from "lucide-react";
 import { AdminHeader } from "@/components/admin-header";
 import { MutationApplicationPanel } from "@/components/admin/mutation-application-panel";
+import { MutationPendingSummary } from "@/components/admin/mutation-pending-summary";
+import { MutationTimeline } from "@/components/admin/mutation-timeline";
 import { useAdminGuard } from "@/lib/use-admin-guard";
 import { fetchStaffApplications, linkApplication, rejectStaffApplication, TRANSFER_BASIS, type StaffApplicationListItem } from "@/lib/mutation-api";
 
@@ -85,6 +87,7 @@ export default function MutationApplicationsPage() {
     <div className="min-h-screen bg-slate-50">
       <AdminHeader admin={admin} />
       <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
+        <MutationPendingSummary highlight={admin.role} />
         <h1 className="mb-1 text-2xl font-semibold text-slate-900">Online Mutation Applications</h1>
         <p className="mb-6 text-sm text-slate-500">
           Applications from the public window. One with a verified holding number goes straight to the Tax Daroga&apos;s Mutation Approvals
@@ -133,6 +136,10 @@ export default function MutationApplicationsPage() {
                 {open === a.id && (
                   <div className="space-y-4 border-t border-slate-100 p-4">
                     <MutationApplicationPanel applicationId={a.id} />
+                    <div className="rounded-lg border border-slate-200 p-3">
+                      <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Audit trail</p>
+                      <MutationTimeline applicationId={a.id} />
+                    </div>
                     {a.handling_remarks && <p className="text-xs text-slate-600">Remarks ({a.handled_by}): {a.handling_remarks}</p>}
                     {a.change_request_id && (
                       <Link href={`/admin/change-requests/${a.change_request_id}`} className="inline-block text-sm font-semibold text-nnm-blue hover:underline">

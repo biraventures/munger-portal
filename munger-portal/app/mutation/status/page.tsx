@@ -6,7 +6,7 @@ import Link from "next/link";
 import { AlertCircle, Loader2, Search } from "lucide-react";
 import { SiteHeader } from "@/components/site-header";
 import { SiteFooter } from "@/components/site-footer";
-import { fetchApplicationStatus, type ApplicationStatus } from "@/lib/mutation-api";
+import { fetchApplicationStatus, formatDuration, TIMELINE_LABEL, type ApplicationStatus } from "@/lib/mutation-api";
 
 function StatusContent() {
   const params = useSearchParams();
@@ -73,11 +73,43 @@ function StatusContent() {
             <div>Submitted: {new Date(result.submittedAt).toLocaleDateString("en-IN")}</div>
             {result.decidedAt && <div>Decided: {new Date(result.decidedAt).toLocaleDateString("en-IN")}</div>}
           </div>
+          {result.trail && result.trail.events.length > 0 && (
+            <div className="mt-5 border-t border-slate-100 pt-4">
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Progress</p>
+              <ol className="space-y-2 border-l border-slate-200 pl-4">
+                {result.trail.events
+                  .filter((e) => e.kind !== "entered_chain")
+                  .map((e, i) => (
+                    <li key={i}>
+                      <p className="text-slate-800">
+                        <b>{TIMELINE_LABEL[e.kind]}</b>
+                        {e.desk ? ` — ${e.desk}` : ""}
+                      </p>
+                      <p className="text-xs text-slate-500">
+                        {new Date(e.at).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}
+                        {e.minutesAtDesk !== null && ` · took ${formatDuration(e.minutesAtDesk)}`}
+                      </p>
+                      {e.comment && <p className="text-xs text-slate-600">&ldquo;{e.comment}&rdquo;</p>}
+                    </li>
+                  ))}
+                {result.trail.currentDesk && (
+                  <li className="font-semibold text-amber-800">
+                    Now with the {result.trail.currentDesk} — {formatDuration(result.trail.minutesAtCurrentDesk)}
+                  </li>
+                )}
+              </ol>
+            </div>
+          )}
         </div>
       )}
-      <Link href="/mutation" className="inline-block text-sm font-semibold text-nnm-blue hover:underline">
-        Apply for a new mutation
-      </Link>
+      <div className="flex flex-wrap gap-4">
+        <Link href="/mutation" className="inline-block text-sm font-semibold text-nnm-blue hover:underline">
+          Apply for a new mutation
+        </Link>
+        <Link href="/mutation/edit" className="inline-block text-sm font-semibold text-nnm-blue hover:underline">
+          Change a submitted application
+        </Link>
+      </div>
     </div>
   );
 }

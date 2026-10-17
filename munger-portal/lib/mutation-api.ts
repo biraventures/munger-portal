@@ -73,7 +73,13 @@ export interface CreateApplicationBody {
   latitude: number;
   longitude: number;
   gpsAccuracy?: number | null;
+  khataNo?: string | null;
+  khesraNo?: string | null;
+  surveySheetNo?: string | null;
+  surveyWard?: string | null;
 }
+
+export const SURVEY_WARDS = ["A", "B", "C", "D", "E", "F"] as const;
 
 export async function createApplication(body: CreateApplicationBody): Promise<{ applicationId: string; uploadToken: string }> {
   const res = await fetch(`${API_BASE_URL}/public/mutation/applications`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
@@ -89,10 +95,14 @@ export interface UploadedDoc {
 
 export function uploadDocument(applicationId: string, token: string, docType: string, file: File, onProgress?: (pct: number) => void): Promise<UploadedDoc> {
   const q = new URLSearchParams({ type: docType, fileName: file.name });
+  return xhrUpload(`${API_BASE_URL}/public/mutation/applications/${applicationId}/documents?${q}`, { "X-Upload-Token": token }, file, onProgress);
+}
+
+function xhrUpload(url: string, headers: Record<string, string>, file: File, onProgress?: (pct: number) => void): Promise<UploadedDoc> {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
-    xhr.open("POST", `${API_BASE_URL}/public/mutation/applications/${applicationId}/documents?${q}`);
-    xhr.setRequestHeader("X-Upload-Token", token);
+    xhr.open("POST", url);
+    for (const [k, v] of Object.entries(headers)) xhr.setRequestHeader(k, v);
     const type = file.type || (file.name.toLowerCase().endsWith(".pdf") ? "application/pdf" : "image/jpeg");
     xhr.setRequestHeader("Content-Type", type);
     xhr.upload.onprogress = (e) => {
@@ -131,6 +141,167 @@ export interface ApplicationStatus {
   status: string;
   remarks: string | null;
   decidedAt: string | null;
+  trail?: {
+    events: { at: string; kind: TimelineKind; desk: string | null; comment: string | null; minutesAtDesk: number | null }[];
+    currentDesk: string | null;
+    minutesAtCurrentDesk: number | null;
+  };
+}
+
+// --- applicant edits after submission -----------------------------------------------------------------------------
+
+export interface EditableApplication {
+  applicationNo: string;
+  holdingNo: string | null;
+  manual: { oldHoldingNo: string | null; ward: string | null; address: string | null } | null;
+  newOwnerName: string;
+  newOwnerRelationType: string | null;
+  newOwnerRelationName: string | null;
+  newOwnerMobile: string;
+  newOwnerAadhaarMasked: string;
+  newOwnerEmail: string | null;
+  applicantName: string;
+  applicantMobile: string;
+  transferBasis: string;
+  transferDate: string;
+  khataNo: string | null;
+  khesraNo: string | null;
+  surveySheetNo: string | null;
+  surveyWard: string | null;
+}
+
+export interface OpenEditResult {
+  matched: true;
+  editable: boolean;
+  reason: string | null;
+  sentBack?: boolean;
+  revertComment?: string | null;
+  applicationId: string | null;
+  editToken: string | null;
+  application: EditableApplication | null;
+  documents: (UploadedDoc & { label: string })[];
+}
+
+export async function openForEdit(applicationNo: string, mobile: string, holdingNo: string): Promise<OpenEditResult> {
+  const res = await fetch(`${API_BASE_URL}/public/mutation/edit/open`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ applicationNo, mobile, holdingNo }),
+  });
+  return json(res, "Could not open the application.");
+}
+
+export interface EditBody {
+  manual?: { oldHoldingNo: string; ward: string; address: string } | null;
+  newOwnerName: string;
+  newOwnerRelationType?: string | null;
+  newOwnerRelationName?: string | null;
+  newOwnerMobile: string;
+  newOwnerAadhaar?: string | null;
+  newOwnerEmail?: string | null;
+  applicantName: string;
+  applicantMobile: string;
+  transferBasis: string;
+  transferDate: string;
+  khataNo?: string | null;
+  khesraNo?: string | null;
+  surveySheetNo?: string | null;
+  surveyWard?: string | null;
+}
+
+export async function saveEdit(id: string, token: string, body: EditBody): Promise<{ resubmitted: boolean; changed: string[] }> {
+  const res = await fetch(`${API_BASE_URL}/public/mutation/edit/${id}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json", "X-Edit-Token": token },
+    body: JSON.stringify(body),
+  });
+  return json(res, "Could not save the changes.");
+}
+
+export function uploadEditDocument(id: string, token: string, docType: string, file: File, onProgress?: (pct: number) => void): Promise<UploadedDoc> {
+  const q = new URLSearchParams({ type: docType, fileName: file.name });
+  return xhrUpload(`${API_BASE_URL}/public/mutation/edit/${id}/documents?${q}`, { "X-Edit-Token": token }, file, onProgress);
+}
+
+export async function removeEditDocument(id: string, token: string, docId: string): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/public/mutation/edit/${id}/documents/${docId}`, { method: "DELETE", headers: { "X-Edit-Token": token } });
+  await json(res, "Could not remove the file.");
+}
+
+// --- audit trail ----------------------------------------------------------------------------------------------------
+
+export type TimelineKind =
+  | "submitted"
+  | "holding_linked"
+  | "not_accepted"
+  | "entered_chain"
+  | "forwarded"
+  | "approved"
+  | "rejected"
+  | "sent_back"
+  | "resubmitted"
+  | "applicant_edited"
+  | "area_verified";
+
+export interface MutationTimeline {
+  changeRequestId: string | null;
+  applicationId: string | null;
+  applicationNo: string | null;
+  holdingNo: string | null;
+  status: string;
+  currentDesk: string | null;
+  minutesAtCurrentDesk: number | null;
+  totalMinutes: number;
+  events: { at: string; kind: TimelineKind; stage: string | null; actor: string; comment: string | null; details: Record<string, unknown> | null; minutesAtDesk: number | null }[];
+  deskTimes: { desk: string; label: string; minutes: number; visits: number; ongoing: boolean }[];
+}
+
+export const DESK_LABEL: Record<string, string> = {
+  tax_daroga: "Tax Daroga",
+  mutation_nodal_clerk: "Mutation Nodal Clerk",
+  deputy_commissioner: "Deputy Municipal Commissioner",
+  commissioner: "Municipal Commissioner",
+  correction: "Sent back for correction",
+};
+
+export const TIMELINE_LABEL: Record<TimelineKind, string> = {
+  submitted: "Submitted",
+  holding_linked: "Holding identified",
+  not_accepted: "Not accepted",
+  entered_chain: "Entered approval chain",
+  forwarded: "Forwarded",
+  approved: "Approved (final)",
+  rejected: "Rejected",
+  sent_back: "Sent back for correction",
+  resubmitted: "Resubmitted",
+  applicant_edited: "Edited by applicant",
+  area_verified: "Areas & land record verified",
+};
+
+/** "3 d 4 h", "5 h 20 min", "12 min" */
+export function formatDuration(minutes: number | null | undefined): string {
+  if (minutes === null || minutes === undefined) return "-";
+  if (minutes < 60) return `${minutes} min`;
+  const h = Math.floor(minutes / 60);
+  if (h < 24) return `${h} h ${minutes % 60} min`;
+  return `${Math.floor(h / 24)} d ${h % 24} h`;
+}
+
+export async function fetchTimeline(ref: { changeRequestId?: string | number; applicationId?: string }): Promise<MutationTimeline> {
+  const url = ref.changeRequestId ? `${API_BASE_URL}/admin/change-requests/${ref.changeRequestId}/timeline` : `${API_BASE_URL}/admin/mutation-applications/${ref.applicationId}/timeline`;
+  const res = await fetch(url, { headers: adminHeaders(), cache: "no-store" });
+  return json(res, "Could not load the audit trail.");
+}
+
+export interface PendingSummary {
+  desks: { stage: string; label: string; logins: string[]; mutations: number; otherChanges: number; oldestMinutes: number | null }[];
+  awaitingHolding: { count: number; oldestMinutes: number | null };
+  sentBack: { online: number; counter: number; oldestMinutes: number | null };
+}
+
+export async function fetchPendingSummary(): Promise<PendingSummary> {
+  const res = await fetch(`${API_BASE_URL}/admin/mutation-pending-summary`, { headers: adminHeaders(), cache: "no-store" });
+  return json(res, "Could not load the pending summary.");
 }
 
 export async function fetchApplicationStatus(applicationNo: string): Promise<ApplicationStatus> {

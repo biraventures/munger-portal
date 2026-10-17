@@ -8,6 +8,10 @@ import {
   postApplicationDocument,
   postCreateApplication,
   postSubmitApplication,
+  postOpenForEdit,
+  putEditApplication,
+  postEditDocument,
+  deleteEditDocument,
 } from "../controllers/mutationApplication.controller";
 
 /** Public online mutation window - no login. Rate-limited so holdings and applications cannot be stepped through. */
@@ -33,3 +37,18 @@ publicMutationRouter.get("/applications/:id/documents", uploadLimit, getDraftDoc
 publicMutationRouter.delete("/applications/:id/documents/:docId", uploadLimit, deleteDraftDocument);
 publicMutationRouter.post("/applications/:id/submit", uploadLimit, postSubmitApplication);
 publicMutationRouter.get("/status/:applicationNo", statusLimit, getApplicationStatus);
+
+// Applicant edits after submission: opening needs application no + mobile + holding no; only misses count (5 per 15 min
+// per application number, 20 per IP), so the three cannot be guessed.
+const editMisses = {
+  ...base,
+  windowMs: 15 * 60 * 1000,
+  skipSuccessfulRequests: true,
+  requestWasSuccessful: (_req: unknown, res: { locals: Record<string, unknown> }) => res.locals.editMatched === true,
+} as const;
+const editPerApplication = rateLimit({ ...editMisses, max: 5, keyGenerator: (req) => `${req.ip}:${String(req.body?.applicationNo ?? "").trim().toUpperCase()}`, message: { error: "Too many attempts for this application. Please wait 15 minutes." } });
+const editPerIp = rateLimit({ ...editMisses, max: 20, keyGenerator: (req) => String(req.ip), message: { error: "Too many attempts. Please wait 15 minutes." } });
+publicMutationRouter.post("/edit/open", editPerIp, editPerApplication, postOpenForEdit);
+publicMutationRouter.put("/edit/:id", uploadLimit, putEditApplication);
+publicMutationRouter.post("/edit/:id/documents", uploadLimit, postEditDocument);
+publicMutationRouter.delete("/edit/:id/documents/:docId", uploadLimit, deleteEditDocument);
