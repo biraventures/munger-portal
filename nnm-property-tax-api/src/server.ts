@@ -2,6 +2,7 @@ import { createApp } from "./app";
 import { env } from "./config/env";
 import { checkDbConnection, pool } from "./config/db";
 import { clearInterruptedIntegrations } from "./services/propertyImportStaging.service";
+import { scheduledRefreshTick } from "./services/demandRefresh.service";
 
 async function main() {
   await checkDbConnection();
@@ -13,8 +14,14 @@ async function main() {
     console.log(`NNM Property Tax API listening on port ${env.PORT} (${env.NODE_ENV})`);
   });
 
+  // Monthly demand refresh: on the 1st, 00:10-05:00 IST (see demandRefresh.service.ts). Checked every minute.
+  const refreshTimer = setInterval(() => {
+    scheduledRefreshTick().catch((err) => console.error("[demand-refresh] schedule check failed:", err));
+  }, 60 * 1000);
+
   const shutdown = async (signal: string) => {
     console.log(`${signal} received, shutting down...`);
+    clearInterval(refreshTimer);
     server.close(async () => {
       await pool.end();
       process.exit(0);

@@ -12,6 +12,7 @@
     "build": "tsc -p tsconfig.json",
     "start": "node dist/src/server.js",
     "migrate": "tsx scripts/run-migrations.ts",
+    "demand-refresh": "TZ=Asia/Kolkata tsx src/jobs/demandRefresh.job.ts manual",
     "migrate:sheets": "tsx scripts/migrate-from-sheets.ts",
     "migrate:csv": "tsx scripts/migrate-from-csv.ts",
     "backfill-tax-figures": "tsx scripts/backfill-stored-tax-figures.ts",

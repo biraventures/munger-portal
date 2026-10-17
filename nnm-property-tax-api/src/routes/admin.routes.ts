@@ -32,7 +32,7 @@ import {
   postApproveCancellation,
   postRejectCancellation,
 } from "../controllers/cancellationRequest.controller";
-import { postBulkGenerateDemandNotices } from "../controllers/demandNotice.controller";
+import { getDemandRefreshRuns, postBulkGenerateDemandNotices } from "../controllers/demandNotice.controller";
 import { postBulkRegenerateTaxHistory } from "../controllers/adminTaxHistory.controller";
 import { getDataExport } from "../controllers/export.controller";
 import {
@@ -579,6 +579,7 @@ adminRouter.post("/trade-license-applications/:id/reject", requireNonStallPrabha
 
 // Bulk demand notice generation
 adminRouter.post("/demand-notices/bulk-generate", requireSeniorAdmin, postBulkGenerateDemandNotices);
+adminRouter.get("/demand-notices/refresh-runs", requireSeniorAdmin, getDemandRefreshRuns);
 
 // Bulk tax-history-stage regeneration (backfill from current Floors)
 adminRouter.post("/tax-history/bulk-regenerate", requireSeniorAdmin, postBulkRegenerateTaxHistory);

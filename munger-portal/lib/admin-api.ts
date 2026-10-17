@@ -196,15 +196,44 @@ export interface BulkGenerateResult {
 }
 
 /** POST /api/v1/admin/demand-notices/bulk-generate — every holding with dues and floor data that has no live demand notice from the current month. */
-export async function bulkGenerateDemandNotices(): Promise<BulkGenerateResult> {
+/** Starts bulk generation as a background job (returns at once) - follow it with fetchDemandRefreshRuns. */
+export async function bulkGenerateDemandNotices(): Promise<void> {
   const res = await fetch(`${API_BASE_URL}/admin/demand-notices/bulk-generate`, {
     method: "POST",
     headers: authHeaders(),
   });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
-    throw new Error(body.error || "Bulk generation failed.");
+    throw new Error(body.error || "Could not start bulk generation.");
   }
+}
+
+export interface DemandRefreshRun {
+  id: string;
+  run_month: string;
+  trigger: "schedule" | "manual";
+  started_by: string;
+  status: "running" | "completed" | "failed" | "interrupted";
+  started_at: string;
+  finished_at: string | null;
+  total: number | null;
+  processed: number;
+  failed: number;
+  errors: { holdingNo: string; message: string }[];
+  message: string | null;
+}
+
+export interface DemandRefreshStatus {
+  runs: DemandRefreshRun[];
+  running: boolean;
+  currentMonth: string;
+  currentMonthDone: boolean;
+}
+
+/** Recent monthly demand refresh runs (automatic and manual) with live progress. */
+export async function fetchDemandRefreshRuns(): Promise<DemandRefreshStatus> {
+  const res = await fetch(`${API_BASE_URL}/admin/demand-notices/refresh-runs`, { headers: authHeaders(), cache: "no-store" });
+  if (!res.ok) throw new Error("Could not load the refresh runs.");
   return res.json();
 }
 

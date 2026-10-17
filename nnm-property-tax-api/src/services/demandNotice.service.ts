@@ -14,10 +14,22 @@ import { buildVerificationUrl } from "../utils/verificationSignature";
 import type { DemandNoticeResult, DemandNoticeReprintResult, DemandNoticeTotals } from "../types/demandNotice.types";
 import type { FrozenFloorBreakdown, TaxCalculationResult } from "../types/property.types";
 
+/**
+ * Day/month/year of an instant in India, whatever the server's own timezone - a notice generated just after midnight
+ * IST (the monthly refresh runs at 00:10) must carry the Indian date, which on a UTC server is still the previous day.
+ */
+function istDmy(date: Date): { dd: string; mm: string; yyyy: number } {
+  const d = new Date(date.getTime() + 5.5 * 3600 * 1000);
+  return { dd: String(d.getUTCDate()).padStart(2, "0"), mm: String(d.getUTCMonth() + 1).padStart(2, "0"), yyyy: d.getUTCFullYear() };
+}
+
+function istDateStr(date: Date): string {
+  const { dd, mm, yyyy } = istDmy(date);
+  return `${dd}-${mm}-${yyyy}`;
+}
+
 function formatDocNumber(n: string | number, type: "Payment" | "Demand", date: Date): string {
-  const dd = String(date.getDate()).padStart(2, "0");
-  const mm = String(date.getMonth() + 1).padStart(2, "0");
-  const yyyy = date.getFullYear();
+  const { dd, mm, yyyy } = istDmy(date);
   return `${n}/${type}/${dd}/${mm}/${yyyy}`;
 }
 
@@ -155,7 +167,7 @@ export async function generateDemandNotice(
 
   const demandNoNum = await demandNoticeRepository.getNextDemandNo();
   const demandNo = String(demandNoNum);
-  const dateStr = `${String(now.getDate()).padStart(2, "0")}-${String(now.getMonth() + 1).padStart(2, "0")}-${now.getFullYear()}`;
+  const dateStr = istDateStr(now);
   const formattedDemandNo = formatDocNumber(demandNo, "Demand", now);
 
   // Any notice(s) for this holding still unsettled (and not already
@@ -280,7 +292,7 @@ export async function getDemandNoticeForReprint(demandNo: string): Promise<Deman
   const notice = await demandNoticeRepository.findByDemandNo(demandNo);
   if (!notice) throw ApiError.notFound(`Demand notice ${demandNo} not found.`);
 
-  const dateStr = `${String(notice.notice_date.getDate()).padStart(2, "0")}-${String(notice.notice_date.getMonth() + 1).padStart(2, "0")}-${notice.notice_date.getFullYear()}`;
+  const dateStr = istDateStr(notice.notice_date);
   const shared = {
     demandNo: notice.demand_no,
     formattedDemandNo: formatDocNumber(notice.demand_no, "Demand", notice.notice_date),
@@ -384,7 +396,7 @@ export async function listDemandNoticeHistory(holdingNo: string): Promise<Demand
     cancellationPending: !n.cancelled && pendingNotices.has(n.demand_no),
     demandNo: n.demand_no,
     formattedDemandNo: formatDocNumber(n.demand_no, "Demand", n.notice_date),
-    date: `${String(n.notice_date.getDate()).padStart(2, "0")}-${String(n.notice_date.getMonth() + 1).padStart(2, "0")}-${n.notice_date.getFullYear()}`,
+    date: istDateStr(n.notice_date),
     totalAmountDemanded: n.total_amount_demanded,
     settled: n.settled,
     assessmentYear: n.assessment_year,
@@ -453,7 +465,7 @@ export async function listUnsettledDemandNotices(holdingNo: string): Promise<Uns
   return rows.map((r) => ({
     demandNo: r.demand_no,
     formattedDemandNo: formatDocNumber(r.demand_no, "Demand", r.notice_date),
-    noticeDate: `${String(r.notice_date.getDate()).padStart(2, "0")}-${String(r.notice_date.getMonth() + 1).padStart(2, "0")}-${r.notice_date.getFullYear()}`,
+    noticeDate: istDateStr(r.notice_date),
     assessmentYear: r.assessment_year,
     totalAmountDemanded: r.total_amount_demanded,
     partPayment: r.part_payment,
