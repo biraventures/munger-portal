@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { AlertCircle, BarChart3, ChevronLeft, CheckCircle2, XCircle, MapPin, LocateFixed } from "lucide-react";
 import { AttendanceHeader } from "@/components/attendance/attendance-header";
 import { useAttendanceGuard } from "@/lib/use-attendance-guard";
-import {
+import { FUNCTIONAL_STATUS_LABELS,
   fetchHighMastWardStatusDashboard,
   fetchHighMastLightsForWard,
   markFaultRepaired,
@@ -339,6 +339,16 @@ export default function HighMastStatusDashboardPage() {
                         </div>
                         <p className="font-mono text-sm font-semibold text-slate-900">{l.serialNumber}</p>
                         <p className="text-xs text-slate-500">{l.localityName}</p>
+                        <p className="mt-0.5 flex flex-wrap gap-x-3 text-[11px] text-slate-500">
+                          {l.functionalStatus && <span>Survey: {FUNCTIONAL_STATUS_LABELS[l.functionalStatus]}</span>}
+                          {l.noOfLights != null && (
+                            <span>
+                              Lamps: {l.noOfFunctionalLights ?? "?"}/{l.noOfLights} working
+                            </span>
+                          )}
+                          {l.panelStatus && <span>Panel: {l.panelStatus === "working" ? "OK" : "Not OK"}</span>}
+                          {l.switchStatus && <span>Switch: {{ working: "OK", not_working: "Not OK", automatic: "Automatic", joint: "Joint" }[l.switchStatus]}</span>}
+                        </p>
                       </div>
                       <div className="flex items-center gap-2">
                         {l.working ? (

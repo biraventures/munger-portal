@@ -75,6 +75,8 @@ export const listLightsHandler = asyncHandler(async (req: Request, res: Response
       noOfFunctionalLights: l.no_of_functional_lights,
       maintenanceAgencyId: l.maintenance_agency_id,
       remarks: l.remarks,
+      panelStatus: l.panel_status,
+      functionalStatus: l.functional_status,
     })),
   });
 });

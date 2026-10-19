@@ -250,6 +250,10 @@ export interface HighMastLightStatusRow {
   working: boolean;
   faultHistory: SegmentLightFaultHistoryRow[];
   switchStatus: "working" | "not_working" | "automatic" | "joint" | null;
+  panelStatus: "working" | "not_working" | null;
+  functionalStatus: "functional" | "partially_functional" | "non_functional" | null;
+  noOfLights: number | null;
+  noOfFunctionalLights: number | null;
   /** Optional GPS location recorded for this specific light - null until someone sets it from the status dashboard. */
   latitude: number | null;
   longitude: number | null;
@@ -263,10 +267,15 @@ export async function buildHighMastLightsForWard(wardId: number): Promise<HighMa
     locality_name: string;
     active: boolean;
     switch_status: "working" | "not_working" | "automatic" | "joint" | null;
+    panel_status: "working" | "not_working" | null;
+    functional_status: "functional" | "partially_functional" | "non_functional" | null;
+    no_of_lights: number | null;
+    no_of_functional_lights: number | null;
     latitude: number | null;
     longitude: number | null;
   }>(
-    `SELECT id, serial_number, locality_name, active, switch_status, latitude, longitude FROM lights WHERE ward_id = $1 AND light_type = 'high_mast' AND deleted_at IS NULL ORDER BY serial_number ASC`,
+    `SELECT id, serial_number, locality_name, active, switch_status, panel_status, functional_status, no_of_lights, no_of_functional_lights, latitude, longitude
+       FROM lights WHERE ward_id = $1 AND light_type = 'high_mast' AND deleted_at IS NULL ORDER BY serial_number ASC`,
     [wardId],
   );
   if (lights.length === 0) return [];
@@ -327,6 +336,10 @@ export async function buildHighMastLightsForWard(wardId: number): Promise<HighMa
       working: !history.some((h) => h.status === "open"),
       faultHistory: history,
       switchStatus: l.switch_status,
+      panelStatus: l.panel_status,
+      functionalStatus: l.functional_status,
+      noOfLights: l.no_of_lights,
+      noOfFunctionalLights: l.no_of_functional_lights,
       latitude: l.latitude,
       longitude: l.longitude,
     };
