@@ -212,7 +212,24 @@ export async function generateDemandNotice(
     ...(followsPartPaymentReceipt ? { balanceAfterPartPaymentReceipt: followsPartPaymentReceipt } : {}),
   };
 
+  // The whole period this notice demands: holding tax arrears (or the part-payment years), the current year when it is
+  // included, and the unpaid solid waste user charge years. Stored as YYYY-YYYY.
+  // (The user charge period is labelled "2024-25", the tax periods "2024-2025" - only the start year is used.)
+  const startOf = (label: string | null | undefined) => (label && /^\d{4}-\d{2,4}$/.test(label) ? Number(label.slice(0, 4)) : null);
+  const periodStarts = [
+    startOf(arrearsPeriod?.fromYear),
+    startOf(arrearsPeriod?.toYear),
+    !part && currentYearStartNum !== null && !currentCyclePaid ? currentYearStartNum : null,
+    !part ? startOf(solidWastePeriod?.fromYear) : null,
+    !part ? startOf(solidWastePeriod?.toYear) : null,
+  ].filter((y): y is number => y !== null);
+  const fyLabel = (y: number) => `${y}-${y + 1}`;
+  const demandFromYear = periodStarts.length ? fyLabel(Math.min(...periodStarts)) : property.assessment_year;
+  const demandUptoYear = part ? part.toYear : periodStarts.length ? fyLabel(Math.max(...periodStarts)) : property.assessment_year;
+
   await demandNoticeRepository.insertDemandNotice({
+    demandFromYear,
+    demandUptoYear,
     demandNo,
     holdingNo,
     generatedBy,

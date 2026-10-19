@@ -66,6 +66,8 @@ export interface AdminInfo {
   displayName: string;
   role: AdminRole;
   isDemo: boolean;
+  /** Tax collectors only - their own TC code (present after logging in with this version). */
+  taxCollectorCode?: string | null;
 }
 
 const API_BASE_URL =

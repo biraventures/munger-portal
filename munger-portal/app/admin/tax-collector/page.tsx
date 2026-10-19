@@ -33,6 +33,7 @@ import {
   type UnsettledDemandNoticeAdmin,
   type CollectionIssueType,
 } from "@/lib/admin-api";
+import { PaymentResponsibilityWarning } from "@/components/payment-responsibility-warning";
 
 const inputClass = "w-full rounded-md border border-slate-300 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-nnm-blue focus:ring-offset-1";
 const PAYMENT_MODES: readonly string[] = FIELD_PAYMENT_MODES;
@@ -693,9 +694,10 @@ export default function TaxCollectorPage() {
                 </span>
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-slate-500">Collector:</span>
-                <span className="font-medium text-slate-900">
+                <span className="text-slate-500">Tax Collector (name &amp; code):</span>
+                <span className="font-medium text-slate-900 text-right">
                   {admin?.displayName || "Tax Collector"}
+                  {admin?.taxCollectorCode ? ` (${admin.taxCollectorCode})` : ""}
                 </span>
               </div>
               <div className="flex justify-between items-center">
@@ -722,7 +724,7 @@ export default function TaxCollectorPage() {
               )}
               <div className="border-t border-slate-200 pt-2.5 flex justify-between items-baseline">
                 <span className="text-xs font-semibold uppercase tracking-wider text-teal-700">
-                  Total to Collect:
+                  Final Amount:
                 </span>
                 <span className="font-mono text-lg font-bold text-nnm-blue">
                   ₹{Number(notices?.find((n) => n.demandNo === selectedDemandNo)?.totalAmountDemanded ?? 0).toLocaleString("en-IN")}
@@ -740,9 +742,7 @@ export default function TaxCollectorPage() {
               </div>
             )}
 
-            <p className="mb-5 text-[11px] text-slate-500 leading-relaxed">
-              Upon clicking Confirm, the payment will be recorded and an official collection slip will be issued immediately.
-            </p>
+            <PaymentResponsibilityWarning />
 
             <div className="flex gap-3">
               <button

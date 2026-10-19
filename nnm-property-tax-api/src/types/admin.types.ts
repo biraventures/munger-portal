@@ -167,6 +167,8 @@ export interface AdminLoginResult {
     displayName: string;
     role: AdminRole;
     isDemo: boolean;
+    /** The Tax Collector's own code (tax collectors only). */
+    taxCollectorCode?: string | null;
   };
 }
 

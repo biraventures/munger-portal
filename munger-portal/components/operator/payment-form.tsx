@@ -20,6 +20,7 @@ import {
   type UnsettledDemandNotice,
 } from "@/lib/demand-notice-api";
 import { TaxCollectorCodeInput } from "@/components/tax-collector-code-input";
+import { PaymentResponsibilityWarning } from "@/components/payment-responsibility-warning";
 
 const inputClass =
   "w-full rounded-md border border-slate-300 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-nnm-blue focus:ring-offset-1";
@@ -379,16 +380,14 @@ export function PaymentForm({
                   {paymentMode}
                 </span>
               </div>
-              {taxCollectorCode.trim() && (
-                <div className="flex justify-between items-center">
-                  <span className="text-slate-500">Tax Collector:</span>
-                  <span className="font-medium text-slate-900">
-                    {selectedCollector
-                      ? `${selectedCollector.name} (${selectedCollector.code})`
-                      : taxCollectorCode.trim()}
-                  </span>
-                </div>
-              )}
+              <div className="flex justify-between items-center">
+                <span className="text-slate-500">Tax Collector (name &amp; code):</span>
+                <span className="font-medium text-slate-900 text-right">
+                  {selectedCollector
+                    ? `${selectedCollector.name} (${selectedCollector.code})`
+                    : taxCollectorCode.trim() || "Not entered"}
+                </span>
+              </div>
               {counter.trim() && (
                 <div className="flex justify-between items-center">
                   <span className="text-slate-500">Counter:</span>
@@ -425,7 +424,7 @@ export function PaymentForm({
               )}
               <div className="border-t border-slate-200 pt-2.5 flex justify-between items-baseline">
                 <span className="text-xs font-semibold uppercase tracking-wider text-teal-700">
-                  Total to Collect:
+                  Final Amount:
                 </span>
                 <span className="font-mono text-lg font-bold text-nnm-blue">
                   ₹
@@ -446,10 +445,7 @@ export function PaymentForm({
               </div>
             )}
 
-            <p className="mb-5 text-[11px] text-slate-500 leading-relaxed">
-              Upon confirmation, this payment will be recorded in the system and
-              an official municipal receipt will be generated.
-            </p>
+            <PaymentResponsibilityWarning />
 
             <div className="flex gap-3">
               <button
