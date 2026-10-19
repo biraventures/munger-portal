@@ -29,7 +29,7 @@ export const getChangeRequests = asyncHandler(async (req: Request, res: Response
   if (!parsed.success) throw ApiError.badRequest("Invalid query", parsed.error.flatten().fieldErrors);
 
   const admin = req.admin!;
-  const requests = await listChangeRequests(parsed.data.status, parsed.data.myStage ? admin.role : undefined);
+  const requests = await listChangeRequests(parsed.data.status, parsed.data.myStage || admin.role === "tax_surveyor" ? admin.role : undefined, admin);
   res.status(200).json({ requests, myRole: admin.role, stageOrder: ADMIN_ROLES });
 });
 
@@ -39,8 +39,19 @@ const idParamSchema = z.object({ id: z.coerce.number().int().positive() });
 export const getChangeRequestById = asyncHandler(async (req: Request, res: Response) => {
   const parsed = idParamSchema.safeParse(req.params);
   if (!parsed.success) throw ApiError.badRequest("Invalid change request id");
-  const detail = await getChangeRequestDetail(parsed.data.id);
+  const detail = await getChangeRequestDetail(parsed.data.id, req.admin);
   res.status(200).json(detail);
+});
+
+export const fieldReportSchema = z.object({
+  visitedOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Enter the date of the site visit."),
+  siteMatches: z.boolean({ required_error: "Say whether the site matches the application." }),
+  measuredPlotAreaSqft: z.coerce.number().nonnegative().max(10_000_000).nullish(),
+  measuredBuiltupSqft: z.coerce.number().nonnegative().max(10_000_000).nullish(),
+  remarks: z.string().trim().min(10, "Write the field report (at least a line on what was found).").max(3000),
+  latitude: z.number().min(24).max(27).nullish(),
+  longitude: z.number().min(85).max(88).nullish(),
+  photos: z.array(z.object({ base64: z.string().min(10).max(1_100_000), mimeType: z.string().max(20) })).max(4).optional(),
 });
 
 const areaSqft = z.coerce.number({ invalid_type_error: "Enter the area in sq ft." }).positive("Areas must be more than 0 sq ft.").max(10_000_000);
@@ -51,7 +62,7 @@ const notesBodySchema = z.object({
       jamabandiAreaSqft: areaSqft,
       documentAreaSqft: areaSqft,
       holdingAreaSqft: areaSqft,
-      mutateAreaSqft: areaSqft.nullish(),
+      mutateAreaSqft: z.coerce.number().nonnegative().max(10_000_000).nullish(),
       khataNo: z.string().trim().min(1, "Enter the khata number.").max(64),
       khesraNo: z.string().trim().min(1, "Enter the khesra number.").max(64),
       surveySheetNo: z.string().trim().min(1, "Enter the survey sheet number.").max(64),
@@ -59,6 +70,15 @@ const notesBodySchema = z.object({
       remarks: z.string().trim().max(1000).nullish(),
     })
     .optional(),
+  // Tax Daroga (mutation): the Tax Surveyor for the field report, and the demand register's number for a new holding.
+  assignment: z
+    .object({
+      surveyorUsername: z.string().trim().min(1, "Choose the Tax Surveyor."),
+      registerOldHoldingNo: z.string().trim().max(32).nullish(),
+    })
+    .optional(),
+  // Tax Surveyor: the field report.
+  fieldReport: fieldReportSchema.optional(),
 });
 
 /** POST /api/v1/admin/change-requests/:id/approve */
@@ -68,7 +88,8 @@ export const postApproveChangeRequest = asyncHandler(async (req: Request, res: R
   const bodyParsed = notesBodySchema.safeParse(req.body);
   if (!bodyParsed.success) throw ApiError.badRequest(bodyParsed.error.issues[0]?.message ?? "Invalid request body");
 
-  const result = await approveAtCurrentStage(paramsParsed.data.id, req.admin!, bodyParsed.data.notes, bodyParsed.data.verification);
+  const b = bodyParsed.data;
+  const result = await approveAtCurrentStage(paramsParsed.data.id, req.admin!, b.notes, b.verification, b.assignment, b.fieldReport);
   res.status(200).json({ request: result });
 });
 

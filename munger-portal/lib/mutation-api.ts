@@ -53,6 +53,7 @@ export interface HoldingLookup {
   taxPaidTillYear?: string | null;
   solidWastePaidTillYear?: string | null;
   areaSqft?: string | null;
+  floors?: { floorLabel: string; buildupSqft: number; usage: string }[];
   canApply?: boolean;
   duesPending?: string;
   message?: string | null;
@@ -100,6 +101,7 @@ export interface CreateApplicationBody {
   holdingAreaSqft?: number | null;
   mutateEntire: boolean;
   mutateAreaSqft?: number | null;
+  mutateFloors?: string[] | null;
 }
 
 export const SURVEY_WARDS = ["A", "B", "C", "D", "E", "F"] as const;
@@ -211,6 +213,7 @@ export interface EditableApplication {
   holdingAreaSqft: string | null;
   mutateEntire: boolean;
   mutateAreaSqft: string | null;
+  mutateFloors?: string[] | null;
 }
 
 export interface OpenEditResult {
@@ -223,6 +226,7 @@ export interface OpenEditResult {
   editToken: string | null;
   application: EditableApplication | null;
   documents: (UploadedDoc & { label: string })[];
+  holdingFloors?: { floorLabel: string; buildupSqft: number; usage: string }[];
 }
 
 /** The applicant's own view (application number + mobile); opens an edit session when it may still be changed. */
@@ -254,6 +258,7 @@ export interface EditBody {
   holdingAreaSqft?: number | null;
   mutateEntire: boolean;
   mutateAreaSqft?: number | null;
+  mutateFloors?: string[] | null;
 }
 
 export async function saveEdit(id: string, token: string, body: EditBody): Promise<{ resubmitted: boolean; changed: string[] }> {
@@ -293,6 +298,8 @@ export type TimelineKind =
   | "resubmitted"
   | "applicant_edited"
   | "area_verified"
+  | "surveyor_assigned"
+  | "field_report"
   | "holding_created";
 
 export interface MutationTimeline {
@@ -310,6 +317,7 @@ export interface MutationTimeline {
 
 export const DESK_LABEL: Record<string, string> = {
   tax_daroga: "Tax Daroga",
+  tax_surveyor: "Tax Surveyor (field report)",
   mutation_nodal_clerk: "Mutation Nodal Clerk",
   deputy_commissioner: "Deputy Municipal Commissioner",
   commissioner: "Municipal Commissioner",
@@ -328,6 +336,8 @@ export const TIMELINE_LABEL: Record<TimelineKind, string> = {
   resubmitted: "Resubmitted",
   applicant_edited: "Edited by applicant",
   area_verified: "Areas & land record verified",
+  surveyor_assigned: "Sent for field verification",
+  field_report: "Field report",
   holding_created: "New holding created",
 };
 

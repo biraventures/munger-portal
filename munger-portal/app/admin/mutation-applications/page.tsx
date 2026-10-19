@@ -20,6 +20,7 @@ const FILTERS = [
 ];
 const STAGE: Record<string, string> = {
   tax_daroga: "Tax Daroga",
+  tax_surveyor: "Tax Surveyor",
   mutation_nodal_clerk: "Mutation Nodal Clerk",
   deputy_commissioner: "DMC",
   commissioner: "Commissioner",

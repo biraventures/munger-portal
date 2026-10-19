@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { CheckCircle2, Clock, Edit3, FileCheck2, Forward, GitBranch, Link2, Loader2, RotateCcw, Send, XCircle } from "lucide-react";
+import { CheckCircle2, ClipboardCheck, Clock, Edit3, FileCheck2, Forward, GitBranch, Link2, Loader2, RotateCcw, Send, UserCheck, XCircle } from "lucide-react";
 import { DESK_LABEL, fetchTimeline, formatDuration, TIMELINE_LABEL, type MutationTimeline as Timeline, type TimelineKind } from "@/lib/mutation-api";
 
 const ICON: Record<TimelineKind, { icon: typeof Clock; tone: string }> = {
@@ -16,6 +16,8 @@ const ICON: Record<TimelineKind, { icon: typeof Clock; tone: string }> = {
   resubmitted: { icon: Send, tone: "text-nnm-blue" },
   applicant_edited: { icon: Edit3, tone: "text-slate-500" },
   area_verified: { icon: FileCheck2, tone: "text-green-600" },
+  surveyor_assigned: { icon: UserCheck, tone: "text-nnm-blue" },
+  field_report: { icon: ClipboardCheck, tone: "text-green-600" },
   holding_created: { icon: GitBranch, tone: "text-nnm-blue" },
 };
 

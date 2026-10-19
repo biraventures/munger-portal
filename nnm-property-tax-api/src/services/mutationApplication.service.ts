@@ -128,6 +128,8 @@ export interface MutationApplicationRow {
   holding_area_sqft: string | null;
   mutate_area_sqft: string | null;
   mutate_entire: boolean;
+  /** Floor-wise mutation: floor labels transferred; NULL = every floor (migration 140). */
+  mutate_floors: string[] | null;
 }
 
 // --------------------------------------------------------------------------------------------------- helpers
@@ -190,6 +192,7 @@ async function checkHolding(holdingNo: string): Promise<HoldingCheck & { propert
     taxPaidTillYear: p.tax_paid_till_year,
     solidWastePaidTillYear: p.solid_waste_paid_till_year ?? null,
     areaSqft: p.area_sqft,
+    floors: await holdingFloorList(p.holding_no),
   };
   if (p.is_disputed) return { ok: false, reason: "This holding is under a dispute. Please contact the Holding Tax Section, Nagar Nigam Munger.", duesPending: 0, property: p, info };
   // Only EARLIER years must be cleared: the current year's holding tax and user charge may stay unpaid, so the new
@@ -214,6 +217,20 @@ async function checkHolding(holdingNo: string): Promise<HoldingCheck & { propert
   const { rows } = await pool.query(`SELECT 1 FROM mutation_applications WHERE holding_no = $1 AND status IN ('awaiting_holding', 'returned') LIMIT 1`, [holdingNo]);
   if (rows.length) return { ok: false, reason: "An online mutation application for this holding is already waiting to be processed.", duesPending: 0, property: p, info };
   return { ok: true, reason: null, duesPending: 0, property: p, info };
+}
+
+/** The holding's floors for the floor-wise choice: one entry per floor (built-up area summed over its rows). */
+export async function holdingFloorList(holdingNo: string): Promise<{ floorLabel: string; buildupSqft: number; usage: string }[]> {
+  const floors = await propertyRepository.findFloorsByHoldingNo(holdingNo);
+  const by = new Map<string, { floorLabel: string; buildupSqft: number; usage: string }>();
+  for (const f of floors) {
+    if (f.closing_year) continue;
+    const e = by.get(f.floor_label) ?? { floorLabel: f.floor_label, buildupSqft: 0, usage: f.usage_type };
+    e.buildupSqft += Number(f.buildup_sqft);
+    by.set(f.floor_label, e);
+  }
+  const order = (l: string) => (l.startsWith("Basement") ? -1 : Number(l.split(" - ")[1] ?? 99));
+  return [...by.values()].sort((a, b) => order(a.floorLabel) - order(b.floorLabel));
 }
 
 /** Public holding lookup for the form: ward, address and paid-till years only (no owner name, mobile or Aadhaar). */
@@ -304,17 +321,30 @@ export interface CreateApplicationInput {
   /** Entire holding, or only part of it (then a new holding is created for the part). */
   mutateEntire?: boolean;
   mutateAreaSqft?: number | null;
+  /** Floor-wise: the floors bought (labels); omitted / all floors = the whole building. */
+  mutateFloors?: string[] | null;
 }
 
 /** Total and mutated area: the holding's record area for a verified holding; the mutated part cannot exceed it. */
-function areaFields(input: Pick<CreateApplicationInput, "holdingAreaSqft" | "mutateEntire" | "mutateAreaSqft">, recordArea: number | null) {
+function areaFields(input: Pick<CreateApplicationInput, "holdingAreaSqft" | "mutateEntire" | "mutateAreaSqft">, recordArea: number | null, someFloorsOnly = false) {
   const total = recordArea ?? input.holdingAreaSqft ?? null;
   if (!(total && total > 0)) throw ApiError.badRequest("Enter the total area of the holding in sq ft.");
   const entire = input.mutateEntire !== false;
   const part = entire ? total : input.mutateAreaSqft ?? 0;
-  if (!(part > 0)) throw ApiError.badRequest("Enter the area to be mutated in sq ft.");
+  // Only an upper floor bought: the land may stay with the seller (0 sq ft).
+  if (!(part > 0) && !(someFloorsOnly && part === 0)) throw ApiError.badRequest("Enter the area to be mutated in sq ft.");
   if (part > total) throw ApiError.badRequest(`The area to be mutated cannot be more than the holding's total area (${total} sq ft).`);
   return { total, entire: entire || part >= total, part };
+}
+
+/** The floors chosen, checked against the holding's; NULL when the whole building (or no floor list) is transferred. */
+async function chosenFloors(holdingNo: string | null, requested: string[] | null | undefined): Promise<string[] | null> {
+  if (!holdingNo || !requested) return null;
+  const labels = (await holdingFloorList(holdingNo)).map((f) => f.floorLabel);
+  const chosen = [...new Set(requested)].filter((f) => labels.includes(f));
+  if (requested.length && chosen.length !== new Set(requested).size) throw ApiError.badRequest("A chosen floor is not part of this holding.");
+  if (!chosen.length) throw ApiError.badRequest("Choose at least one floor being transferred.");
+  return chosen.length >= labels.length ? null : chosen;
 }
 
 /** Validates a draft's details and returns the column values shared by create and update. */
@@ -335,8 +365,10 @@ async function draftValues(input: CreateApplicationInput, excludeId?: string) {
   } else if (!input.manual) {
     throw ApiError.badRequest("Enter the holding number, or the old holding number with the ward.");
   }
-  const area = areaFields(input, recordArea);
+  const floors = await chosenFloors(holdingNo, input.mutateFloors);
+  const area = areaFields(input, recordArea, !!floors);
   return {
+    mutate_floors: floors ? JSON.stringify(floors) : null,
     holding_no: holdingNo,
     entered_old_holding_no: holdingNo ? null : input.manual!.oldHoldingNo.trim(),
     entered_ward: holdingNo ? null : normalizeWard(input.manual!.ward) || input.manual!.ward.trim(),
@@ -592,6 +624,7 @@ export async function submitApplication(id: string, token: string): Promise<{ ap
 
 const STAGE_LABEL: Record<string, string> = {
   tax_daroga: "Tax Daroga",
+  tax_surveyor: "Tax Surveyor (field verification)",
   mutation_nodal_clerk: "Mutation Nodal Clerk",
   deputy_commissioner: "Deputy Municipal Commissioner",
   commissioner: "Municipal Commissioner",
@@ -795,6 +828,7 @@ function editView(app: MutationApplicationRow) {
     holdingAreaSqft: app.holding_area_sqft,
     mutateEntire: app.mutate_entire,
     mutateAreaSqft: app.mutate_area_sqft,
+    mutateFloors: app.mutate_floors,
   };
 }
 
@@ -831,6 +865,7 @@ export async function viewApplication(applicationNo: string, mobile: string) {
     applicationId: app.id,
     editToken,
     application: editView(app),
+    holdingFloors: app.holding_no ? await holdingFloorList(app.holding_no) : [],
     documents: (await listDocuments(app.id)).map(({ id, doc_type, file_name, size_bytes, label }) => ({ id, doc_type, file_name, size_bytes, label })),
   };
 }
@@ -868,6 +903,7 @@ export interface EditApplicationInput {
   holdingAreaSqft?: number | null;
   mutateEntire?: boolean;
   mutateAreaSqft?: number | null;
+  mutateFloors?: string[] | null;
 }
 
 const EDIT_LABELS: Record<string, string> = {
@@ -891,6 +927,7 @@ const EDIT_LABELS: Record<string, string> = {
   holding_area_sqft: "total area of the holding",
   mutate_entire: "entire / part of the holding",
   mutate_area_sqft: "area to be mutated",
+  mutate_floors: "floors being transferred",
 };
 
 /** Saves the applicant's changes; an application that was sent back is resubmitted to the Tax Daroga. */
@@ -908,8 +945,10 @@ export async function saveEdit(id: string, token: string, input: EditApplication
   const missing = required.filter((t) => !have.has(t));
   if (missing.length) throw ApiError.badRequest(`Upload: ${missing.map((t) => DOC_TYPES[t]!.label).join("; ")}.`);
 
-  const area = areaFields(input, app.holding_no ? Number(app.holding_area_sqft) || null : null);
+  const floors = await chosenFloors(app.holding_no, input.mutateFloors);
+  const area = areaFields(input, app.holding_no ? Number(app.holding_area_sqft) || null : null, !!floors);
   const next: Record<string, unknown> = {
+    mutate_floors: floors ? JSON.stringify(floors) : null,
     holding_area_sqft: area.total,
     mutate_entire: area.entire,
     mutate_area_sqft: area.part,
@@ -955,6 +994,7 @@ export async function saveEdit(id: string, token: string, input: EditApplication
     holding_area_sqft: app.holding_area_sqft === null ? null : Number(app.holding_area_sqft),
     mutate_entire: app.mutate_entire,
     mutate_area_sqft: app.mutate_area_sqft === null ? null : Number(app.mutate_area_sqft),
+    mutate_floors: app.mutate_floors ? JSON.stringify(app.mutate_floors) : null,
   };
   const changed = Object.keys(next).filter((k) => String(next[k] ?? "") !== String(was[k] ?? ""));
   if (!changed.length && !state.sentBack) return { resubmitted: false, changed: [] };

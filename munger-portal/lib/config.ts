@@ -46,6 +46,16 @@ export const services = [
     live: true,
   },
   {
+    counter: "COUNTER 01C",
+    title: "New Holding Request",
+    description:
+      "House or building never assessed for holding tax? Request a new holding online with its details, documents and photos - and track it.",
+    icon: "file-text",
+    cta: "Apply Now",
+    href: "/new-holding",
+    live: true,
+  },
+  {
     counter: "COUNTER 02",
     title: "Solid Waste Management",
     description:

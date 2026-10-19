@@ -1,3 +1,4 @@
+import type { FieldReport, FieldReportBody } from "./field-report";
 import { getAdminToken, type AdminRole } from "./admin-auth";
 import type { DemandNoticeReprintData } from "./demand-notice-api";
 import type { ReceiptData } from "./payment-api";
@@ -134,7 +135,12 @@ export interface ChangeRequestApproval {
 }
 
 export interface ChangeRequestDetail {
-  request: ChangeRequestSummary & { proposed_data: Record<string, unknown> };
+  request: ChangeRequestSummary & {
+    proposed_data: Record<string, unknown>;
+    assigned_surveyor_username?: string | null;
+    assigned_surveyor_name?: string | null;
+    register_old_holding_no?: string | null;
+  };
   currentProperty: Record<string, unknown> | null;
   currentFloors: Record<string, unknown>[];
   approvalHistory: ChangeRequestApproval[];
@@ -146,8 +152,11 @@ export interface ChangeRequestDetail {
     surveyWard: string | null;
     mutateAreaSqft: string | null;
     mutateEntire: boolean;
+    /** Floor-wise mutation: floors being transferred; null = every floor. */
+    mutateFloors?: string[] | null;
   } | null;
-  lineage?: { parent_holding_no: string; child_holding_no: string; area_sqft: string; parent_area_before: string; parent_area_after: string; created_at: string }[];
+  lineage?: { parent_holding_no: string; child_holding_no: string; area_sqft: string; parent_area_before: string; parent_area_after: string; created_at: string; floors?: string[] | null }[];
+  fieldReports?: FieldReport[];
 }
 
 export async function fetchChangeRequestDetail(id: number): Promise<ChangeRequestDetail> {
@@ -175,6 +184,7 @@ export interface AreaVerification {
   areas_match: boolean;
   mutate_area_sqft: string | null;
   is_partial: boolean;
+  mutate_floors?: string[] | null;
   khata_no: string;
   khesra_no: string;
   survey_sheet_no: string;
@@ -184,11 +194,16 @@ export interface AreaVerification {
   verified_at: string;
 }
 
-export async function approveChangeRequest(id: number, notes?: string, verification?: AreaVerificationBody): Promise<ChangeRequestSummary> {
+export async function approveChangeRequest(
+  id: number,
+  notes?: string,
+  verification?: AreaVerificationBody,
+  extra?: { assignment?: { surveyorUsername: string; registerOldHoldingNo?: string | null }; fieldReport?: FieldReportBody },
+): Promise<ChangeRequestSummary> {
   const res = await fetch(`${API_BASE_URL}/admin/change-requests/${id}/approve`, {
     method: "POST",
     headers: authHeaders(),
-    body: JSON.stringify({ notes, verification }),
+    body: JSON.stringify({ notes, verification, ...extra }),
   });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));

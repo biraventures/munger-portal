@@ -1,6 +1,6 @@
 import { pool } from "../config/db";
 import { ApiError } from "../utils/ApiError";
-import { APPROVAL_STAGE_ORDER } from "../types/admin.types";
+import { APPROVAL_STAGE_ORDER, nextApprovalStage, type AdminRole } from "../types/admin.types";
 
 /**
  * Audit trail of one mutation case, oldest first: submission, holding identification, every stage's decision with its
@@ -14,6 +14,7 @@ import { APPROVAL_STAGE_ORDER } from "../types/admin.types";
 
 export const DESK_LABEL: Record<string, string> = {
   tax_daroga: "Tax Daroga",
+  tax_surveyor: "Tax Surveyor (field report)",
   mutation_nodal_clerk: "Mutation Nodal Clerk",
   deputy_commissioner: "Deputy Municipal Commissioner",
   commissioner: "Municipal Commissioner",
@@ -32,6 +33,8 @@ export type TimelineKind =
   | "resubmitted"
   | "applicant_edited"
   | "area_verified"
+  | "surveyor_assigned"
+  | "field_report"
   | "holding_created";
 
 export interface TimelineEvent {
@@ -90,6 +93,7 @@ interface CrRow {
   final_stage: string;
   final_decided_at: Date | null;
   public_application_id: string | null;
+  approval_tier: string;
 }
 
 function auditKind(event: string): TimelineKind {
@@ -240,8 +244,7 @@ export async function buildTimeline(ref: { changeRequestId?: string; application
         break;
       case "forwarded": {
         close();
-        const i = APPROVAL_STAGE_ORDER.indexOf(e.stage as (typeof APPROVAL_STAGE_ORDER)[number]);
-        holder = APPROVAL_STAGE_ORDER[i + 1] ?? null;
+        holder = nextApprovalStage(e.stage as AdminRole, cr?.approval_tier ?? "mutation");
         since = e.at;
         break;
       }
@@ -361,7 +364,7 @@ export async function pendingSummary() {
 export async function recordAuditEvent(e: {
   changeRequestId?: string | number | null;
   applicationId?: string | number | null;
-  event: "applicant_edited" | "applicant_resubmitted" | "area_verified" | "returned_to_applicant";
+  event: "applicant_edited" | "applicant_resubmitted" | "area_verified" | "returned_to_applicant" | "surveyor_assigned" | "field_report";
   stage?: string | null;
   actor: string;
   actorRole?: string | null;

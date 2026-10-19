@@ -66,11 +66,16 @@ export const ADMIN_ROLE_LABELS: Record<AdminRole, string> = {
  * applies the change; not every request needs to reach the end of this
  * list.
  */
-export const APPROVAL_STAGE_ORDER: AdminRole[] = ["tax_daroga", "mutation_nodal_clerk", "deputy_commissioner", "commissioner"];
+export const APPROVAL_STAGE_ORDER: AdminRole[] = ["tax_daroga", "tax_surveyor", "mutation_nodal_clerk", "deputy_commissioner", "commissioner"];
 
-export function nextApprovalStage(stage: AdminRole): AdminRole | null {
-  const idx = APPROVAL_STAGE_ORDER.indexOf(stage);
-  return idx >= 0 && idx < APPROVAL_STAGE_ORDER.length - 1 ? APPROVAL_STAGE_ORDER[idx + 1]! : null;
+/**
+ * The next desk. The Tax Surveyor's field report is part of a MUTATION only (owner change, migration 140); every other
+ * edit goes from the Tax Daroga straight to the Mutation Nodal Clerk.
+ */
+export function nextApprovalStage(stage: AdminRole, tier?: string | null): AdminRole | null {
+  const order = tier === "mutation" ? APPROVAL_STAGE_ORDER : APPROVAL_STAGE_ORDER.filter((s) => s !== "tax_surveyor");
+  const idx = order.indexOf(stage);
+  return idx >= 0 && idx < order.length - 1 ? order[idx + 1]! : null;
 }
 
 /**

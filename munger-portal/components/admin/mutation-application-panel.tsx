@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { FileText, Loader2 } from "lucide-react";
+import { floorName } from "@/components/mutation/floor-choice";
 import { fetchStaffApplication, openApplicationDocument, type StaffApplicationDetail } from "@/lib/mutation-api";
 
 function fmtDate(v: string | null | undefined): string {
@@ -47,6 +48,8 @@ export function MutationApplicationPanel({ applicationId }: { applicationId: str
               ? `Entire holding (${Number(a.holding_area_sqft)} sq ft)`
               : `PART — ${Number(a.mutate_area_sqft)} of ${Number(a.holding_area_sqft)} sq ft (a new holding will be created)`,
           )}
+        {Array.isArray((a as Record<string, unknown>).mutate_floors) &&
+          row("Floors bought (floor-wise mutation)", ((a as Record<string, unknown>).mutate_floors as string[]).map(floorName).join(", "))}
         {(a.khata_no || a.khesra_no || a.survey_sheet_no || a.survey_ward) &&
           row("Land record (as given)", `Khata ${a.khata_no ?? "-"}, Khesra ${a.khesra_no ?? "-"}, Sheet ${a.survey_sheet_no ?? "-"}, Ward ${a.survey_ward ?? "-"}`)}
         {a.entered_old_holding_no && row("Entered by applicant", `Old holding ${a.entered_old_holding_no}, ward ${a.entered_ward}, ${a.entered_address}; tax paid till ${a.entered_tax_paid_till ?? "?"}, user charge till ${a.entered_sw_paid_till ?? "?"}`)}

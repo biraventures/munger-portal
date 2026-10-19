@@ -2,6 +2,7 @@ import fs from "node:fs";
 import type { Request, Response } from "express";
 import { z } from "zod";
 import { asyncHandler } from "../middleware/asyncHandler";
+import { pool } from "../config/db";
 import { ApiError } from "../utils/ApiError";
 import { holdingNoSchema } from "../utils/holdingNoSchema";
 import {
@@ -36,7 +37,9 @@ const landRecord = {
 const areaInput = {
   holdingAreaSqft: z.coerce.number().positive().max(10_000_000).nullish(),
   mutateEntire: z.boolean().default(true),
-  mutateAreaSqft: z.coerce.number().positive().max(10_000_000).nullish(),
+  // 0 is allowed when only upper floors are bought (the land stays with the seller).
+  mutateAreaSqft: z.coerce.number().nonnegative().max(10_000_000).nullish(),
+  mutateFloors: z.array(z.string().trim().min(1).max(40)).max(12).nullish(),
 };
 const yearRange = z.string().trim().regex(/^\d{4}-\d{4}$/, "Year as YYYY-YYYY, e.g. 2024-2025").nullish().or(z.literal(""));
 
@@ -219,15 +222,24 @@ export const deleteEditDocument = asyncHandler(async (req: Request, res: Respons
 
 /** GET /api/v1/admin/mutation-applications?status= */
 export const getMutationApplications = asyncHandler(async (req: Request, res: Response) => {
+  if (req.admin?.role === "tax_surveyor") throw new ApiError(403, "Open your field-report cases from Mutation Approvals.");
   const s = z.enum(["awaiting_holding", "returned", "in_chain", "rejected"]).optional().safeParse(req.query.status || undefined);
   if (!s.success) throw ApiError.badRequest("Invalid filter");
   res.status(200).json({ applications: await listApplications({ status: s.data }) });
 });
 
+/** A Tax Surveyor may open only the applications of the mutations assigned to him. */
+async function assertSurveyorAssigned(req: Request, applicationId: string): Promise<void> {
+  if (req.admin?.role !== "tax_surveyor") return;
+  const { rows } = await pool.query(`SELECT 1 FROM property_change_requests WHERE public_application_id = $1 AND assigned_surveyor_username = $2 LIMIT 1`, [applicationId, req.admin.username]);
+  if (!rows.length) throw new ApiError(403, "This application is not assigned to you.");
+}
+
 /** GET /api/v1/admin/mutation-applications/:id - details and documents (also for the change request page). */
 export const getMutationApplication = asyncHandler(async (req: Request, res: Response) => {
   const id = idParam.safeParse(req.params.id);
   if (!id.success) throw ApiError.notFound("Application not found.");
+  await assertSurveyorAssigned(req, id.data);
   res.status(200).json(await getApplicationForStaff(id.data));
 });
 
@@ -236,6 +248,7 @@ export const getMutationApplicationDocument = asyncHandler(async (req: Request, 
   const id = idParam.safeParse(req.params.id);
   const doc = idParam.safeParse(req.params.docId);
   if (!id.success || !doc.success) throw ApiError.notFound("Document not found.");
+  await assertSurveyorAssigned(req, id.data);
   const f = await documentFileForStaff(id.data, doc.data);
   if (!fs.existsSync(f.fullPath)) throw ApiError.notFound("The file is missing from storage.");
   res.setHeader("Content-Type", f.mime);

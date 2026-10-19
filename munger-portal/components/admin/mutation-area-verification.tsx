@@ -17,7 +17,11 @@ export interface VerificationDraft {
   surveySheetNo: string;
   surveyWard: string;
   remarks: string;
+  /** Floor-wise mutation: the floors the applicant is buying (labels); null = the whole building. */
+  floors?: string[] | null;
 }
+
+export const floorName = (label: string) => label.split(" - ")[0]!;
 
 export function areasOf(v: VerificationDraft): number[] {
   return [v.jamabandiAreaSqft, v.documentAreaSqft, v.holdingAreaSqft].map((x) => Number(x));
@@ -29,7 +33,7 @@ export function mutateArea(v: VerificationDraft): number {
 }
 
 export function isPartial(v: VerificationDraft): boolean {
-  return !v.entire && mutateArea(v) < Number(v.holdingAreaSqft) - AREA_TOLERANCE_SQFT;
+  return !!v.floors?.length || (!v.entire && mutateArea(v) < Number(v.holdingAreaSqft) - AREA_TOLERANCE_SQFT);
 }
 
 /** Entire holding: jamabandi = document = holding. Part: jamabandi = document = area being mutated. */
@@ -42,7 +46,9 @@ export function areasMatch(v: VerificationDraft): boolean {
 export function verificationProblem(v: VerificationDraft): string | null {
   const a = areasOf(v);
   if (a.some((x) => !(x > 0))) return "Enter all three areas in sq ft.";
-  if (!v.entire && !(Number(v.mutateAreaSqft) > 0)) return "Enter the area being mutated, or tick 'Entire holding'.";
+  if (!v.entire && !(Number(v.mutateAreaSqft) > 0) && !(v.floors?.length && v.mutateAreaSqft.trim() !== "" && Number(v.mutateAreaSqft) === 0)) {
+    return v.floors?.length ? "Enter the land area being transferred (0 if the land stays with the seller)." : "Enter the area being mutated, or tick 'Entire holding'.";
+  }
   if (mutateArea(v) > Number(v.holdingAreaSqft) + AREA_TOLERANCE_SQFT) return "The area being mutated cannot be more than the holding's area.";
   if (!v.khataNo.trim() || !v.khesraNo.trim() || !v.surveySheetNo.trim() || !v.surveyWard) return "Enter the khata, khesra, survey sheet number and survey ward.";
   if (!areasMatch(v) && v.remarks.trim().length < 5) return "The areas do not match — explain the difference in the remarks.";
@@ -71,7 +77,7 @@ const label = "mb-1 block text-xs font-medium text-slate-600";
 export function AreaVerificationForm({ value, onChange, recordArea }: { value: VerificationDraft; onChange: (v: VerificationDraft) => void; recordArea: string | null }) {
   const set = (k: keyof VerificationDraft) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => onChange({ ...value, [k]: e.target.value });
   const a = areasOf(value);
-  const filled = a.every((x) => x > 0) && (value.entire || Number(value.mutateAreaSqft) > 0);
+  const filled = a.every((x) => x > 0) && (value.entire || Number(value.mutateAreaSqft) > 0 || (!!value.floors?.length && value.mutateAreaSqft.trim() !== ""));
   const match = filled && areasMatch(value);
   const partial = filled && isPartial(value);
   return (
@@ -92,11 +98,17 @@ export function AreaVerificationForm({ value, onChange, recordArea }: { value: V
           {recordArea && <p className="mt-0.5 text-[11px] text-slate-400">Holding record shows {recordArea} sq ft</p>}
         </div>
       </div>
+      {!!value.floors?.length && (
+        <p className="rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-900">
+          <b>Floor-wise mutation:</b> the applicant is buying only {value.floors.map(floorName).join(", ")}. These floors go to a new MMC holding; the
+          other floors stay with the present holding. Enter the land area that goes with them (0 when the land stays with the seller).
+        </p>
+      )}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <div className="sm:col-span-1">
-          <label className={label}>Area being mutated (sq ft)</label>
+          <label className={label}>{value.floors?.length ? "Land area being transferred (sq ft)" : "Area being mutated (sq ft)"}</label>
           <label className="mb-1 flex items-center gap-2 text-xs text-slate-700">
-            <input type="checkbox" checked={value.entire} onChange={(e) => onChange({ ...value, entire: e.target.checked })} /> Entire holding
+            <input type="checkbox" checked={value.entire} onChange={(e) => onChange({ ...value, entire: e.target.checked })} /> {value.floors?.length ? "Entire land" : "Entire holding"}
           </label>
           <input
             type="number"
@@ -110,9 +122,10 @@ export function AreaVerificationForm({ value, onChange, recordArea }: { value: V
         </div>
         {partial && (
           <p className="self-end rounded-md bg-blue-50 px-3 py-2 text-xs text-blue-900 sm:col-span-2">
-            Partial mutation: on final approval holding continues with {(Number(value.holdingAreaSqft) - mutateArea(value)).toLocaleString("en-IN")} sq ft, and a
-            new MMC holding of {mutateArea(value).toLocaleString("en-IN")} sq ft is created for the new owner. Jamabandi and document areas are compared with
-            the part being mutated.
+            Partial mutation: on final approval the holding continues with {(Number(value.holdingAreaSqft) - mutateArea(value)).toLocaleString("en-IN")} sq ft
+            {value.floors?.length ? " and its remaining floors" : ""}, and a new MMC holding of {mutateArea(value).toLocaleString("en-IN")} sq ft
+            {value.floors?.length ? ` with ${value.floors.map(floorName).join(", ")}` : ""} is created for the new owner. Jamabandi and document areas are
+            compared with the part being mutated.
           </p>
         )}
       </div>
@@ -173,7 +186,8 @@ export function AreaVerificationView({ v }: { v: AreaVerification }) {
       </div>
       {v.is_partial && (
         <p className="mt-3 rounded-md bg-blue-50 px-3 py-2 text-sm text-blue-900">
-          Partial mutation: <b>{Number(v.mutate_area_sqft).toLocaleString("en-IN")} sq ft</b> of {Number(v.holding_area_sqft).toLocaleString("en-IN")} sq ft
+          Partial mutation: {v.mutate_floors?.length ? <><b>{v.mutate_floors.map(floorName).join(", ")}</b> with </> : null}
+          <b>{Number(v.mutate_area_sqft).toLocaleString("en-IN")} sq ft</b> of {Number(v.holding_area_sqft).toLocaleString("en-IN")} sq ft land
           transferred — a new MMC holding is created on final approval.
         </p>
       )}

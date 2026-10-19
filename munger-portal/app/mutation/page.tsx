@@ -21,6 +21,7 @@ import {
   type UploadedDoc,
 } from "@/lib/mutation-api";
 import { formatBytes, isPdfFile, MAX_PDF_BYTES } from "@/lib/upload-limits";
+import { defaultArea, FloorChoice } from "@/components/mutation/floor-choice";
 
 const inputClass = "w-full rounded-md border border-slate-300 bg-white px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-nnm-blue";
 const labelClass = "mb-1 block text-xs font-medium text-slate-600";
@@ -72,6 +73,11 @@ export default function MutationApplicationPage() {
   });
   const [applicantIsOwner, setApplicantIsOwner] = useState(false);
   const [area, setArea] = useState({ total: "", entire: true, part: "" });
+  // Floor-wise: floors being bought (all by default); areaTouched = the applicant changed the land area himself.
+  const [floorSel, setFloorSel] = useState<string[]>([]);
+  const [areaTouched, setAreaTouched] = useState(false);
+  const holdingFloors = mode === "holding" ? holding?.floors ?? [] : [];
+  const someFloors = holdingFloors.length > 1 && floorSel.length > 0 && floorSel.length < holdingFloors.length;
   const [otherLabels, setOtherLabels] = useState<Record<string, string>>({ other_1: "", other_2: "" });
   const [gps, setGps] = useState<{ lat: number; lng: number; acc: number } | null>(null);
   const [gpsBusy, setGpsBusy] = useState(false);
@@ -98,6 +104,8 @@ export default function MutationApplicationPage() {
       setF((p) => ({ ...p, applicantMobile: p.applicantMobile || m }));
       if (!r.found) setError("This holding number was not found. Check it, or apply with the old holding number and ward instead.");
       setHolding(r.found ? r : null);
+      setFloorSel(r.found ? (r.floors ?? []).map((x) => x.floorLabel) : []);
+      setAreaTouched(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not check the holding.");
     } finally {
@@ -145,7 +153,7 @@ export default function MutationApplicationPage() {
     const total = recordArea ?? Number(area.total);
     if (!(total > 0)) return setError("Enter the total area of the holding in sq ft.");
     const part = area.entire ? total : Number(area.part);
-    if (!(part > 0)) return setError("Enter the area to be mutated in sq ft, or tick 'Entire area'.");
+    if (!(part > 0) && !(someFloors && area.part.trim() !== "" && part === 0)) return setError("Enter the area to be mutated in sq ft, or tick 'Entire area'.");
     if (part > total) return setError(`The area to be mutated cannot be more than the total area (${total} sq ft).`);
     setBusy(true);
     try {
@@ -172,6 +180,7 @@ export default function MutationApplicationPage() {
         holdingAreaSqft: total,
         mutateEntire: area.entire || part >= total,
         mutateAreaSqft: part,
+        mutateFloors: someFloors ? floorSel : null,
       };
       // Coming back from the documents step: the same draft is updated, its documents are kept.
       if (draft) await updateApplication(draft.id, draft.token, body);
@@ -465,6 +474,14 @@ export default function MutationApplicationPage() {
                 <div className={cardClass}>
                   <h2 className="mb-4 text-base font-semibold text-slate-900">Area</h2>
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <FloorChoice
+                      floors={holdingFloors}
+                      selected={floorSel}
+                      onChange={(next) => {
+                        setFloorSel(next);
+                        if (!areaTouched) setArea((a) => ({ ...a, ...defaultArea(next, holdingFloors) }));
+                      }}
+                    />
                     <div>
                       <label className={labelClass}>Total area of the holding (sq ft)</label>
                       {recordArea ? (
@@ -474,9 +491,17 @@ export default function MutationApplicationPage() {
                       )}
                     </div>
                     <div>
-                      <label className={labelClass}>Area to be mutated (sq ft)</label>
+                      <label className={labelClass}>{someFloors ? "Land area going to the buyer (sq ft)" : "Area to be mutated (sq ft)"}</label>
                       <label className="mb-2 flex items-center gap-2 text-sm text-slate-700">
-                        <input type="checkbox" checked={area.entire} onChange={(e) => setArea({ ...area, entire: e.target.checked })} className="h-4 w-4" />
+                        <input
+                          type="checkbox"
+                          checked={area.entire}
+                          onChange={(e) => {
+                            setAreaTouched(true);
+                            setArea({ ...area, entire: e.target.checked });
+                          }}
+                          className="h-4 w-4"
+                        />
                         Entire area of the holding
                       </label>
                       <input
@@ -486,12 +511,15 @@ export default function MutationApplicationPage() {
                         inputMode="decimal"
                         disabled={area.entire}
                         value={area.entire ? String(recordArea ?? area.total) : area.part}
-                        onChange={(e) => setArea({ ...area, part: e.target.value })}
+                        onChange={(e) => {
+                          setAreaTouched(true);
+                          setArea({ ...area, part: e.target.value });
+                        }}
                         className={`${inputClass} disabled:bg-slate-100`}
                       />
                     </div>
                   </div>
-                  {!area.entire && (
+                  {!area.entire && !someFloors && (
                     <p className="mt-3 rounded-md bg-amber-50 p-3 text-xs text-amber-900">
                       Only part of the holding is being transferred: once approved, the existing holding continues (with its area reduced) and a new
                       holding with a new MMC number is created for the transferred part in the new owner&apos;s name.

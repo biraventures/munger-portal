@@ -16,7 +16,7 @@ const STATUS_TABS: { value: ChangeRequestStatus | "all"; label: string }[] = [
   { value: "all", label: "All" },
 ];
 
-const MUTATION_CHAIN_ROLES = ["tax_daroga", "mutation_nodal_clerk", "deputy_commissioner", "commissioner"];
+const MUTATION_CHAIN_ROLES = ["tax_daroga", "tax_surveyor", "mutation_nodal_clerk", "deputy_commissioner", "commissioner"];
 
 export default function ChangeRequestsPage() {
   const admin = useAdminGuard();
@@ -52,7 +52,7 @@ export default function ChangeRequestsPage() {
         <main className="mx-auto max-w-2xl px-6 py-10">
           <div role="alert" className="flex items-center gap-2 rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-700">
             <AlertCircle className="h-4 w-4 shrink-0" />
-            This is restricted to Tax Daroga, Mutation Nodal Clerk, Deputy Commissioner, and Commissioner.
+            This is restricted to Tax Daroga, Tax Surveyor, Mutation Nodal Clerk, Deputy Commissioner, and Commissioner.
           </div>
         </main>
       </div>

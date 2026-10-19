@@ -195,6 +195,7 @@ import {
   deletePublicDocumentHandler,
 } from "../controllers/publicDocument.controller";
 import { getKhatianFile, getKhatianHistory, getKhatians, postKhatian, postReviewKhatian } from "../controllers/khatian.controller";
+import { getFieldReportPhoto } from "../controllers/fieldReport.controller";
 import {
   getMutationApplication,
   getMutationApplicationDocument,
@@ -203,6 +204,20 @@ import {
   postRejectMutationApplication,
   postReturnToApplicant,
 } from "../controllers/mutationApplication.controller";
+import {
+  getPendingCount as getNewHoldingPendingCount,
+  getRequest as getNewHoldingRequest,
+  getRequestDocument as getNewHoldingRequestDocument,
+  getRequests as getNewHoldingRequests,
+  postApprove as postNewHoldingApprove,
+  postAssign as postNewHoldingAssign,
+  postDarogaForward as postNewHoldingDarogaForward,
+  postDmcForward as postNewHoldingDmcForward,
+  postFieldReport as postNewHoldingFieldReport,
+  postReject as postNewHoldingReject,
+  postReturn as postNewHoldingReturn,
+  postSendBack as postNewHoldingSendBack,
+} from "../controllers/newHoldingRequest.controller";
 import {
   getTlNotice,
   getTlPrintQueue,
@@ -231,7 +246,8 @@ const requireSeniorAdmin = requireAdminRole("commissioner", "deputy_commissioner
 // property-tax side of this system at all, so they're excluded from
 // mutation approvals, cancellation requests, tax collector management,
 // and trade license services below, per what was explicitly asked for.
-const requireMutationChainRole = requireAdminRole("tax_daroga", "mutation_nodal_clerk", "deputy_commissioner", "commissioner");
+// The Tax Surveyor is in the chain for the field report of a mutation (only the cases assigned to him - see changeRequest.service).
+const requireMutationChainRole = requireAdminRole("tax_daroga", "tax_surveyor", "mutation_nodal_clerk", "deputy_commissioner", "commissioner");
 const requireNonStallPrabhari = requireAdminRole(
   "tax_daroga",
   "mutation_nodal_clerk",
@@ -260,7 +276,8 @@ adminRouter.patch("/accounts/:id/active", requireAdminRole("commissioner"), setA
 adminRouter.get("/change-requests", requireMutationChainRole, getChangeRequests);
 adminRouter.get("/change-requests/:id", requireMutationChainRole, getChangeRequestById);
 // Mutation audit trail and the per-desk pending summary - the chain, plus the City Manager who oversees it.
-const requireMutationViewRole = requireAdminRole("tax_daroga", "mutation_nodal_clerk", "deputy_commissioner", "commissioner", "city_manager");
+const requireMutationViewRole = requireAdminRole("tax_daroga", "tax_surveyor", "mutation_nodal_clerk", "deputy_commissioner", "commissioner", "city_manager");
+adminRouter.get("/field-report-photos/:photoId", requireMutationViewRole, getFieldReportPhoto);
 adminRouter.get("/change-requests/:id/timeline", requireMutationViewRole, getChangeRequestTimeline);
 adminRouter.get("/mutation-applications/:id/timeline", requireMutationViewRole, getApplicationTimeline);
 adminRouter.get("/mutation-pending-summary", requireMutationViewRole, getMutationPendingSummary);
@@ -522,7 +539,7 @@ adminRouter.post("/khatian/:id/review", requireAdminRole("deputy_commissioner"),
 
 // Online mutation applications: everyone in the mutation chain can open one (and its documents); the Tax Daroga links
 // a manually entered one to its holding (or turns it down).
-const requireMutationApplicationRole = requireAdminRole("tax_daroga", "mutation_nodal_clerk", "deputy_commissioner", "commissioner", "city_manager");
+const requireMutationApplicationRole = requireAdminRole("tax_daroga", "tax_surveyor", "mutation_nodal_clerk", "deputy_commissioner", "commissioner", "city_manager");
 adminRouter.get("/mutation-applications", requireMutationApplicationRole, getMutationApplications);
 adminRouter.get("/mutation-applications/:id", requireMutationApplicationRole, getMutationApplication);
 adminRouter.get("/mutation-applications/:id/documents/:docId/file", requireMutationApplicationRole, getMutationApplicationDocument);
@@ -530,6 +547,23 @@ adminRouter.post("/mutation-applications/:id/link", requireAdminRole("tax_daroga
 adminRouter.post("/mutation-applications/:id/reject", requireAdminRole("tax_daroga"), postRejectMutationApplication);
 adminRouter.post("/mutation-applications/:id/return", requireAdminRole("tax_daroga"), postReturnToApplicant);
 adminRouter.get("/holdings/:holdingNo/lineage", requireAdminRole("tax_daroga", "mutation_nodal_clerk", "deputy_commissioner", "commissioner", "city_manager"), getHoldingLineage);
+
+// Online requests for a new holding (property never assessed): Tax Daroga (demand register no. + surveyor) -> Tax
+// Surveyor (field report) -> Tax Daroga (comments) -> DMC -> Commissioner (approves; the MMC- holding is created).
+// Each step checks the officer's role and the request's status in the service; a Tax Surveyor sees only his own.
+const requireNewHoldingRole = requireAdminRole("tax_daroga", "tax_surveyor", "mutation_nodal_clerk", "deputy_commissioner", "commissioner", "city_manager");
+adminRouter.get("/new-holding-requests", requireNewHoldingRole, getNewHoldingRequests);
+adminRouter.get("/new-holding-requests/pending-count", requireNewHoldingRole, getNewHoldingPendingCount);
+adminRouter.get("/new-holding-requests/:id", requireNewHoldingRole, getNewHoldingRequest);
+adminRouter.get("/new-holding-requests/:id/documents/:docId/file", requireNewHoldingRole, getNewHoldingRequestDocument);
+adminRouter.post("/new-holding-requests/:id/assign", requireAdminRole("tax_daroga"), postNewHoldingAssign);
+adminRouter.post("/new-holding-requests/:id/field-report", requireAdminRole("tax_surveyor"), postNewHoldingFieldReport);
+adminRouter.post("/new-holding-requests/:id/daroga-forward", requireAdminRole("tax_daroga"), postNewHoldingDarogaForward);
+adminRouter.post("/new-holding-requests/:id/dmc-forward", requireAdminRole("deputy_commissioner"), postNewHoldingDmcForward);
+adminRouter.post("/new-holding-requests/:id/send-back", requireAdminRole("deputy_commissioner", "commissioner"), postNewHoldingSendBack);
+adminRouter.post("/new-holding-requests/:id/approve", requireAdminRole("commissioner"), postNewHoldingApprove);
+adminRouter.post("/new-holding-requests/:id/return", requireAdminRole("tax_daroga"), postNewHoldingReturn);
+adminRouter.post("/new-holding-requests/:id/reject", requireAdminRole("tax_daroga", "deputy_commissioner", "commissioner"), postNewHoldingReject);
 
 // Trade licence field survey: the Tax Collector records visits and prints the notices; the City Manager (who signs them)
 // and senior officers see every business and its notice status.

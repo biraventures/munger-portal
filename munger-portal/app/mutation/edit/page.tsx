@@ -22,6 +22,7 @@ import {
   type UploadedDoc,
 } from "@/lib/mutation-api";
 import { formatBytes, isPdfFile, MAX_PDF_BYTES } from "@/lib/upload-limits";
+import { defaultArea, FloorChoice, floorName, type HoldingFloor } from "@/components/mutation/floor-choice";
 
 const inputClass = "w-full rounded-md border border-slate-300 bg-white px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-nnm-blue";
 const labelClass = "mb-1 block text-xs font-medium text-slate-600";
@@ -50,6 +51,9 @@ export default function MutationEditPage() {
   const [docs, setDocs] = useState<UploadedDoc[]>([]);
   const [uploading, setUploading] = useState<{ type: string; pct: number } | null>(null);
   const [done, setDone] = useState<{ resubmitted: boolean; changed: string[] } | null>(null);
+  const [holdingFloors, setHoldingFloors] = useState<HoldingFloor[]>([]);
+  const [floorSel, setFloorSel] = useState<string[]>([]);
+  const someFloors = holdingFloors.length > 1 && floorSel.length > 0 && floorSel.length < holdingFloors.length;
 
   async function open(e: React.FormEvent) {
     e.preventDefault();
@@ -89,6 +93,8 @@ export default function MutationEditPage() {
         manual: a.manual ? { oldHoldingNo: a.manual.oldHoldingNo ?? "", ward: a.manual.ward ?? "", address: a.manual.address ?? "" } : null,
       });
       setDocs(r.documents);
+      setHoldingFloors(r.holdingFloors ?? []);
+      setFloorSel(a.mutateFloors ?? (r.holdingFloors ?? []).map((x) => x.floorLabel));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not open the application.");
     } finally {
@@ -157,7 +163,8 @@ export default function MutationEditPage() {
         surveyWard: f.surveyWard || null,
         holdingAreaSqft: session.app.holdingNo ? null : Number(f.holdingAreaSqft) || null,
         mutateEntire: f.mutateEntire,
-        mutateAreaSqft: f.mutateEntire ? null : Number(f.mutateAreaSqft) || null,
+        mutateAreaSqft: f.mutateEntire ? null : Number(f.mutateAreaSqft) || (someFloors ? 0 : null),
+        mutateFloors: someFloors ? floorSel : null,
       });
       setDone(r);
       window.scrollTo({ top: 0, behavior: "smooth" });
@@ -277,6 +284,15 @@ export default function MutationEditPage() {
                 <div className={cardClass}>
                   <h2 className="mb-4 text-base font-semibold text-slate-900">Area</h2>
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <FloorChoice
+                      floors={holdingFloors}
+                      selected={floorSel}
+                      onChange={(next) => {
+                        setFloorSel(next);
+                        const d = defaultArea(next, holdingFloors);
+                        setF((p) => (p ? { ...p, mutateEntire: d.entire, mutateAreaSqft: d.part } : p));
+                      }}
+                    />
                     <div>
                       <label className={labelClass}>Total area of the holding (sq ft)</label>
                       {session.app.holdingNo ? (
@@ -286,7 +302,7 @@ export default function MutationEditPage() {
                       )}
                     </div>
                     <div>
-                      <label className={labelClass}>Area to be mutated (sq ft)</label>
+                      <label className={labelClass}>{someFloors ? "Land area going to the buyer (sq ft)" : "Area to be mutated (sq ft)"}</label>
                       <label className="mb-2 flex items-center gap-2 text-sm text-slate-700">
                         <input type="checkbox" checked={f.mutateEntire} onChange={(e) => setF((p) => (p ? { ...p, mutateEntire: e.target.checked } : p))} className="h-4 w-4" />
                         Entire area of the holding
@@ -490,6 +506,7 @@ function ApplicationSummary({ app, docs, status }: { app: EditableApplication; d
         {row("Applicant", `${app.applicantName} (${app.applicantMobile})`)}
         {row("Basis", `${basis}, dated ${app.transferDate.split("-").reverse().join("-")}`)}
         {row("Area", app.holdingAreaSqft ? (app.mutateEntire ? `Entire holding, ${Number(app.holdingAreaSqft)} sq ft` : `${Number(app.mutateAreaSqft)} of ${Number(app.holdingAreaSqft)} sq ft`) : null)}
+        {app.mutateFloors?.length ? row("Floors bought", app.mutateFloors.map(floorName).join(", ")) : null}
         {row("Khata / Khesra", app.khataNo || app.khesraNo ? `${app.khataNo ?? "-"} / ${app.khesraNo ?? "-"}` : null)}
         {row("Survey sheet / ward", app.surveySheetNo || app.surveyWard ? `${app.surveySheetNo ?? "-"} / ${app.surveyWard ?? "-"}` : null)}
       </div>
