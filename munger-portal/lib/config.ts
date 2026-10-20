@@ -56,6 +56,16 @@ export const services = [
     live: true,
   },
   {
+    counter: "COUNTER 01D",
+    title: "Report Faulty Streetlight / High Mast",
+    description:
+      "See which streetlights and High Mast lights in your ward are working, and report the ones that are not - with your holding number and mobile.",
+    icon: "lightbulb",
+    cta: "Report Now",
+    href: "/streetlights",
+    live: true,
+  },
+  {
     counter: "COUNTER 02",
     title: "Solid Waste Management",
     description:

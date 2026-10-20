@@ -23,6 +23,7 @@ import { documentManagerRouter } from "./documentManager.routes";
 import { whosWhoManagerRouter, whosWhoPublicRouter } from "./whosWho.routes";
 import { publicMutationRouter } from "./publicMutation.routes";
 import { publicNewHoldingRouter } from "./publicNewHolding.routes";
+import { publicStreetlightRouter } from "./publicStreetlight.routes";
 
 export const apiRouter = Router();
 
@@ -72,6 +73,7 @@ apiRouter.use("/whos-who-manager", whosWhoManagerRouter);
 // Online mutation applications from the public (migration 131).
 apiRouter.use("/public/mutation", publicMutationRouter);
 apiRouter.use("/public/new-holding", publicNewHoldingRouter);
+apiRouter.use("/public/streetlights", publicStreetlightRouter);
 
 // /admin/auth (public login) MUST be mounted before /admin (which
 // requires an admin session for everything under it) - Express tries

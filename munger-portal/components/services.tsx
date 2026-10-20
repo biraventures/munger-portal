@@ -6,6 +6,7 @@ import {
   Store,
   FileText,
   AlertTriangle,
+  Lightbulb,
   type LucideIcon,
 } from "lucide-react";
 import { services } from "@/lib/config";
@@ -17,6 +18,7 @@ const ICONS: Record<string, LucideIcon> = {
   store: Store,
   "file-text": FileText,
   "alert-triangle": AlertTriangle,
+  lightbulb: Lightbulb,
 };
 
 export function Services() {
