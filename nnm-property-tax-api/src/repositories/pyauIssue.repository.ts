@@ -46,14 +46,30 @@ export const pyauIssueRepository = {
   async create(input: {
     pyauId: number;
     dateOfIssue: string;
-    reportedByUserId: number;
+    reportedByUserId: number | null;
     issueNotes: string | null;
     assignedContractorId: number | null;
+    /** Public reports (from the website): no staff login, the citizen's mobile/holding and the problem they saw instead. */
+    reportedByType?: "staff" | "public";
+    reporterPhone?: string | null;
+    reporterHoldingNo?: string | null;
+    reportedProblem?: string | null;
   }): Promise<PyauIssueRow> {
     const { rows } = await pool.query<PyauIssueRow>(
-      `INSERT INTO pyau_issues (pyau_id, date_of_issue, reported_by_user_id, issue_notes, assigned_contractor_id)
-       VALUES ($1,$2,$3,$4,$5) RETURNING *`,
-      [input.pyauId, input.dateOfIssue, input.reportedByUserId, input.issueNotes, input.assignedContractorId],
+      `INSERT INTO pyau_issues (pyau_id, date_of_issue, reported_by_user_id, issue_notes, assigned_contractor_id,
+                                reported_by_type, reporter_phone, reporter_holding_no, reported_problem)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
+      [
+        input.pyauId,
+        input.dateOfIssue,
+        input.reportedByUserId,
+        input.issueNotes,
+        input.assignedContractorId,
+        input.reportedByType ?? "staff",
+        input.reporterPhone ?? null,
+        input.reporterHoldingNo ?? null,
+        input.reportedProblem ?? null,
+      ],
     );
     return rows[0]!;
   },

@@ -23,6 +23,7 @@ import { documentManagerRouter } from "./documentManager.routes";
 import { whosWhoManagerRouter, whosWhoPublicRouter } from "./whosWho.routes";
 import { publicMutationRouter } from "./publicMutation.routes";
 import { publicNewHoldingRouter } from "./publicNewHolding.routes";
+import { publicSubmersibleRouter } from "./publicSubmersible.routes";
 import { publicStreetlightRouter } from "./publicStreetlight.routes";
 
 export const apiRouter = Router();
@@ -74,6 +75,7 @@ apiRouter.use("/whos-who-manager", whosWhoManagerRouter);
 apiRouter.use("/public/mutation", publicMutationRouter);
 apiRouter.use("/public/new-holding", publicNewHoldingRouter);
 apiRouter.use("/public/streetlights", publicStreetlightRouter);
+apiRouter.use("/public/submersibles", publicSubmersibleRouter);
 
 // /admin/auth (public login) MUST be mounted before /admin (which
 // requires an admin session for everything under it) - Express tries

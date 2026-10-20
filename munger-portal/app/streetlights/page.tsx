@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { AlertCircle, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Lightbulb, Loader2, LogOut, XCircle } from "lucide-react";
 import { SiteHeader } from "@/components/site-header";
 import { SiteFooter } from "@/components/site-footer";
@@ -258,7 +259,10 @@ export default function PublicStreetlightPage() {
             </h1>
             <p className="max-w-2xl text-[17px] text-white/80">
               See which streetlights and High Mast lights in your ward are working, and report the ones that are not. Your report goes to the
-              ward&apos;s maintenance contractor for repair within 72 hours.
+              ward&apos;s maintenance contractor for repair within 72 hours.{" "}
+              <Link href="/submersibles" className="font-semibold text-nnm-gold underline">
+                Report a faulty submersible instead
+              </Link>
             </p>
           </div>
         </section>

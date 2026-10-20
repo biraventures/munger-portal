@@ -203,7 +203,11 @@ export interface PyauIssue {
   id: number;
   pyauId: number;
   dateOfIssue: string;
-  reportedByUserId: number;
+  reportedByUserId: number | null;
+  /** "public" = reported by a citizen from the website (holding number + mobile). */
+  reportedByType?: "staff" | "public";
+  reporterHoldingNo?: string | null;
+  reportedProblem?: string | null;
   issueNotes: string | null;
   status: "open" | "repaired";
   dateOfRepair: string | null;

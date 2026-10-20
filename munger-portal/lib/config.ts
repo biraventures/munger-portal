@@ -66,6 +66,16 @@ export const services = [
     live: true,
   },
   {
+    counter: "COUNTER 01E",
+    title: "Report Faulty Submersible",
+    description:
+      "Submersible / pyau in your ward not giving water? See which ones are working and report the faulty one - with your holding number and mobile.",
+    icon: "droplet",
+    cta: "Report Now",
+    href: "/submersibles",
+    live: true,
+  },
+  {
     counter: "COUNTER 02",
     title: "Solid Waste Management",
     description:
