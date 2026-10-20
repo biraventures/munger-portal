@@ -71,6 +71,8 @@ export interface LightRow {
   serialNumber: string;
   working: boolean;
   reportedOn: string | null;
+  /** A complaint waiting for the City Manager's verification (date it was sent). */
+  pendingOn?: string | null;
   localityName?: string;
   noOfLights?: number | null;
   noOfFunctionalLights?: number | null;
@@ -83,14 +85,15 @@ export const fetchSegmentLights = (id: number) => call<{ lights: LightRow[] }>(`
 
 export type SwitchSeen = "working" | "not_working" | "automatic" | "joint" | "unknown";
 export const reportFault = (body: { lightId: number; nonFunctionalSince: string; switchStatus: SwitchSeen; remarks: string | null }) =>
-  call<{ faultId: number; serialNumber: string }>("/faults", { method: "POST", body: JSON.stringify(body) }, "Could not send the report.");
+  call<{ reportId: number; serialNumber: string }>("/faults", { method: "POST", body: JSON.stringify(body) }, "Could not send the report.");
 
 export interface MyReport {
   id: string;
   reported_at: string;
-  status: "open" | "repaired";
-  repaired_at: string | null;
-  non_functional_since: string | null;
+  stage: "pending" | "rejected" | "approved" | "repaired";
+  verification_remarks: string | null;
+  repaired_on: string | null;
+  switch_status: string | null;
   serial_number: string;
   light_type: "streetlight" | "high_mast";
   locality_name: string;

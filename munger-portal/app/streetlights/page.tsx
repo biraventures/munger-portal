@@ -5,6 +5,7 @@ import Link from "next/link";
 import { AlertCircle, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Lightbulb, Loader2, LogOut, XCircle } from "lucide-react";
 import { SiteHeader } from "@/components/site-header";
 import { SiteFooter } from "@/components/site-footer";
+import { PendingPill, ReportStageCell } from "@/components/public-reports/report-stage";
 import {
   clearSession,
   fetchMyReports,
@@ -59,7 +60,7 @@ function LightItem({ light, title, subtitle, onReported }: { light: LightRow; ti
     try {
       await reportFault({ lightId: light.lightId, nonFunctionalSince: date, switchStatus: sw, remarks: remarks.trim() || null });
       setOpen(false);
-      onReported(`Thank you - ${title} is reported as not working and has been sent to the contractor for repair.`);
+      onReported(`Thank you - your complaint about ${title} has been sent. The City Manager will verify it and then send it to the contractor for repair. Follow it under "My reports".`);
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Could not send the report.");
     } finally {
@@ -74,7 +75,9 @@ function LightItem({ light, title, subtitle, onReported }: { light: LightRow; ti
           <p className="font-mono text-sm font-semibold text-slate-900">{title}</p>
           {subtitle && <p className="text-xs text-slate-500">{subtitle}</p>}
         </div>
-        {light.working ? (
+        {light.working && light.pendingOn ? (
+          <PendingPill on={light.pendingOn} />
+        ) : light.working ? (
           <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2.5 py-1 text-xs font-semibold text-green-700">
             <CheckCircle2 className="h-3.5 w-3.5" /> Working
           </span>
@@ -83,7 +86,7 @@ function LightItem({ light, title, subtitle, onReported }: { light: LightRow; ti
             <XCircle className="h-3.5 w-3.5" /> Not working{light.reportedOn ? ` - reported ${fmtDate(light.reportedOn)}` : ""}
           </span>
         )}
-        {light.working && !open && (
+        {light.working && !light.pendingOn && !open && (
           <button onClick={() => setOpen(true)} className="rounded-full bg-red-600 px-3 py-1 text-xs font-semibold text-white hover:bg-red-700">
             Report not working
           </button>
@@ -258,8 +261,8 @@ export default function PublicStreetlightPage() {
               <Lightbulb className="h-8 w-8" /> Report a Faulty Streetlight / High Mast
             </h1>
             <p className="max-w-2xl text-[17px] text-white/80">
-              See which streetlights and High Mast lights in your ward are working, and report the ones that are not. Your report goes to the
-              ward&apos;s maintenance contractor for repair within 72 hours.{" "}
+              See which streetlights and High Mast lights in your ward are working, and report the ones that are not. The City Manager
+              verifies each complaint and then sends it to the ward&apos;s maintenance contractor for repair within 72 hours.{" "}
               <Link href="/submersibles" className="font-semibold text-nnm-gold underline">
                 Report a faulty submersible instead
               </Link>
@@ -365,11 +368,7 @@ export default function PublicStreetlightPage() {
                                 <td className="px-4 py-2 text-xs">{wardLabel(r.ward_name)}</td>
                                 <td className="px-4 py-2 text-xs">{fmtDate(r.reported_at)}</td>
                                 <td className="px-4 py-2 text-xs">
-                                  {r.status === "repaired" ? (
-                                    <span className="font-semibold text-green-700">Repaired {fmtDate(r.repaired_at)}</span>
-                                  ) : (
-                                    <span className="font-semibold text-amber-700">With the contractor</span>
-                                  )}
+                                  <ReportStageCell stage={r.stage} repairedOn={r.repaired_on} reason={r.verification_remarks} />
                                 </td>
                               </tr>
                             ))}

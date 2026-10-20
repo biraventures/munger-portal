@@ -33,6 +33,8 @@ export interface PublicPyau {
   working: boolean;
   /** Date of the open report, if one is with the contractor; null with working=false means already recorded by NNM. */
   reportedOn: string | null;
+  /** A complaint waiting for the City Manager's verification (date it was sent). */
+  pendingOn: string | null;
 }
 
 export type PyauProblem = "no_water" | "motor_not_running" | "starter_switch" | "pipe_leak" | "tap_broken" | "tank_overflow" | "other";
@@ -50,9 +52,10 @@ export const PROBLEM_OPTIONS: { value: PyauProblem; label: string }[] = [
 export interface MyPyauReport {
   id: string;
   reported_at: string;
-  status: "open" | "repaired";
-  date_of_repair: string | null;
-  reported_problem: PyauProblem | null;
+  stage: "pending" | "rejected" | "approved" | "repaired";
+  verification_remarks: string | null;
+  repaired_on: string | null;
+  problem: PyauProblem | null;
   serial_number: string | null;
   location_address: string | null;
   ward_name: string;
@@ -61,5 +64,5 @@ export interface MyPyauReport {
 export const fetchPyauWards = () => call<{ wards: PyauWardRow[] }>("/wards", {}, "Could not load the wards.").then((r) => r.wards);
 export const fetchPyauWard = (id: number) => call<{ pyaus: PublicPyau[] }>(`/wards/${id}`, {}, "Could not load the ward.").then((r) => r.pyaus);
 export const reportPyauFault = (body: { pyauId: number; nonFunctionalSince: string; problem: PyauProblem; remarks: string | null }) =>
-  call<{ issueId: number; serialNumber: string | null }>("/faults", { method: "POST", body: JSON.stringify(body) }, "Could not send the report.");
+  call<{ reportId: number; serialNumber: string | null }>("/faults", { method: "POST", body: JSON.stringify(body) }, "Could not send the report.");
 export const fetchMyPyauReports = () => call<{ reports: MyPyauReport[] }>("/my-reports", {}, "Could not load your reports.").then((r) => r.reports);

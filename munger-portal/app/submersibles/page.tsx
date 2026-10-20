@@ -5,6 +5,7 @@ import Link from "next/link";
 import { AlertCircle, CheckCircle2, ChevronLeft, ChevronRight, Droplet, Loader2, LogOut, XCircle } from "lucide-react";
 import { SiteHeader } from "@/components/site-header";
 import { SiteFooter } from "@/components/site-footer";
+import { PendingPill, ReportStageCell } from "@/components/public-reports/report-stage";
 import {
   clearSession,
   fetchMyPyauReports,
@@ -50,7 +51,7 @@ function PyauItem({ pyau, onReported }: { pyau: PublicPyau; onReported: (msg: st
     try {
       await reportPyauFault({ pyauId: pyau.pyauId, nonFunctionalSince: date, problem, remarks: remarks.trim() || null });
       setOpen(false);
-      onReported(`Thank you - submersible ${pyau.serialNumber} is reported as not working and has been sent for repair.`);
+      onReported(`Thank you - your complaint about submersible ${pyau.serialNumber} has been sent. The City Manager will verify it and then send it for repair. Follow it under "My reports".`);
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Could not send the report.");
     } finally {
@@ -68,7 +69,9 @@ function PyauItem({ pyau, onReported }: { pyau: PublicPyau; onReported: (msg: st
             {pyau.schemeName ? ` · ${pyau.schemeName}` : ""}
           </p>
         </div>
-        {pyau.working ? (
+        {pyau.working && pyau.pendingOn ? (
+          <PendingPill on={pyau.pendingOn} />
+        ) : pyau.working ? (
           <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2.5 py-1 text-xs font-semibold text-green-700">
             <CheckCircle2 className="h-3.5 w-3.5" /> Working
           </span>
@@ -77,7 +80,7 @@ function PyauItem({ pyau, onReported }: { pyau: PublicPyau; onReported: (msg: st
             <XCircle className="h-3.5 w-3.5" /> Not working{pyau.reportedOn ? ` - reported ${fmtDate(pyau.reportedOn)}` : " - recorded by Nagar Nigam"}
           </span>
         )}
-        {pyau.working && !open && (
+        {pyau.working && !pyau.pendingOn && !open && (
           <button onClick={() => setOpen(true)} className="rounded-full bg-red-600 px-3 py-1 text-xs font-semibold text-white hover:bg-red-700">
             Report not working
           </button>
@@ -200,8 +203,8 @@ export default function PublicSubmersiblePage() {
               <Droplet className="h-8 w-8" /> Report a Faulty Submersible
             </h1>
             <p className="max-w-2xl text-[17px] text-white/80">
-              See which submersibles (pyau / water points) in your ward are working, and report the ones that are not. Your report goes to the
-              ward&apos;s maintenance contractor for repair.{" "}
+              See which submersibles (pyau / water points) in your ward are working, and report the ones that are not. The City Manager
+              verifies each complaint and then sends it to the ward&apos;s maintenance contractor for repair.{" "}
               <Link href="/streetlights" className="font-semibold text-nnm-gold underline">
                 Report a faulty streetlight instead
               </Link>
@@ -300,18 +303,14 @@ export default function PublicSubmersiblePage() {
                                 <td className="px-4 py-2">
                                   <span className="font-mono text-xs">{r.serial_number ?? "-"}</span>
                                   <span className="block text-xs text-slate-500">
-                                    {problemLabel(r.reported_problem)}
+                                    {problemLabel(r.problem)}
                                     {r.location_address ? ` · ${r.location_address}` : ""}
                                   </span>
                                 </td>
                                 <td className="px-4 py-2 text-xs">{wardLabel(r.ward_name)}</td>
                                 <td className="px-4 py-2 text-xs">{fmtDate(r.reported_at)}</td>
                                 <td className="px-4 py-2 text-xs">
-                                  {r.status === "repaired" ? (
-                                    <span className="font-semibold text-green-700">Repaired {fmtDate(r.date_of_repair)}</span>
-                                  ) : (
-                                    <span className="font-semibold text-amber-700">Sent for repair</span>
-                                  )}
+                                  <ReportStageCell stage={r.stage} repairedOn={r.repaired_on} reason={r.verification_remarks} />
                                 </td>
                               </tr>
                             ))}

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { LayoutGrid, Truck, Droplet, Lightbulb, MapPin, ClipboardList, CheckCircle2, Trash2, Languages, FileUp, Users, ShieldAlert, Gavel } from "lucide-react";
 import { AttendanceHeader } from "@/components/attendance/attendance-header";
+import { PublicComplaintsCard } from "@/components/public-reports/complaints-card";
 import { useAttendanceGuard } from "@/lib/use-attendance-guard";
 import { useAttendanceLang } from "@/lib/attendance-i18n";
 import { transliterateName } from "@/lib/hindi-name-transliterate";
@@ -216,6 +217,8 @@ export default function AttendanceDashboardPage() {
               <p className="text-sm text-slate-500">{s.highMastEntryDesc}</p>
             </Link>
           )}
+
+          {["city_manager", "municipal_commissioner", "deputy_municipal_commissioner", "attendance_admin"].includes(user.role) && <PublicComplaintsCard role={user.role} />}
 
           <Link href="/attendance/streetlights" className="flex flex-col rounded-xl border border-slate-200 bg-white p-6 transition-shadow hover:shadow-md">
             <span className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-blue-50 text-nnm-blue">

@@ -23,6 +23,7 @@ import { documentManagerRouter } from "./documentManager.routes";
 import { whosWhoManagerRouter, whosWhoPublicRouter } from "./whosWho.routes";
 import { publicMutationRouter } from "./publicMutation.routes";
 import { publicNewHoldingRouter } from "./publicNewHolding.routes";
+import { publicReportVerificationRouter } from "./publicReportVerification.routes";
 import { publicSubmersibleRouter } from "./publicSubmersible.routes";
 import { publicStreetlightRouter } from "./publicStreetlight.routes";
 
@@ -76,6 +77,8 @@ apiRouter.use("/public/mutation", publicMutationRouter);
 apiRouter.use("/public/new-holding", publicNewHoldingRouter);
 apiRouter.use("/public/streetlights", publicStreetlightRouter);
 apiRouter.use("/public/submersibles", publicSubmersibleRouter);
+// The City Manager verifies those public complaints before they go to the contractor (attendance login).
+apiRouter.use("/public-reports", publicReportVerificationRouter);
 
 // /admin/auth (public login) MUST be mounted before /admin (which
 // requires an admin session for everything under it) - Express tries

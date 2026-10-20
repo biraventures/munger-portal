@@ -3,15 +3,15 @@ import { pool } from "../config/db";
 import { env } from "../config/env";
 import { ApiError } from "../utils/ApiError";
 import { lightRepository } from "../repositories/light.repository";
-import { lightFaultRepository } from "../repositories/lightFault.repository";
-import { contractorWardRepository } from "../repositories/contractorWard.repository";
+import { checkSinceDate, myReports as myPublicReports, pendingFor, pendingMap, reportsToday, submit } from "./publicAssetReport.service";
 import { buildHighMastLightsForWard, buildSegmentLightStatus, buildStreetStatusDashboard, buildWardStatusDashboard } from "./streetlightStatusDashboard.service";
 
 /**
  * Citizens report non-working streetlights and High Mast lights. They identify themselves with a holding number and
  * the mobile number recorded on that holding; they then see the same ward -> street -> light status the officers see
  * (without who reported or repaired what) and can mark a working light as not working, with the date, the switch
- * status and remarks. The fault goes to the ward's contractor like any other.
+ * status and remarks. The complaint first waits for the City Manager to verify it (publicAssetReport.service); only
+ * on approval does it become a fault for the ward's contractor.
  */
 
 const SESSION_HOURS = 3;
@@ -82,19 +82,22 @@ export async function ward(wardId: number) {
     noOfLights: l.noOfLights,
     noOfFunctionalLights: l.noOfFunctionalLights,
   }));
-  return { streets, highMasts };
+  const pending = await pendingMap("light", highMasts.map((h) => Number(h.lightId)));
+  return { streets, highMasts: highMasts.map((h) => ({ ...h, pendingOn: pending.get(Number(h.lightId)) ?? null })) };
 }
 
 /** Lights on one street, without fault history. */
 export async function segmentLights(segmentId: number) {
-  return (await buildSegmentLightStatus(segmentId))
-    .filter((l) => l.active)
-    .map((l) => ({
-      lightId: l.lightId,
-      serialNumber: l.serialNumber,
-      working: l.working,
-      reportedOn: l.faultHistory.find((f) => f.status === "open")?.reportedAt ?? null,
-    }));
+  const lights = (await buildSegmentLightStatus(segmentId)).filter((l) => l.active);
+  const pending = await pendingMap("light", lights.map((l) => Number(l.lightId)));
+  return lights.map((l) => ({
+    lightId: l.lightId,
+    serialNumber: l.serialNumber,
+    working: l.working,
+    reportedOn: l.faultHistory.find((f) => f.status === "open")?.reportedAt ?? null,
+    /** A complaint waiting for the City Manager's verification. */
+    pendingOn: pending.get(Number(l.lightId)) ?? null,
+  }));
 }
 
 export interface PublicFaultInput {
@@ -107,9 +110,7 @@ export interface PublicFaultInput {
 export async function reportFault(session: PublicLightToken, input: PublicFaultInput) {
   const light = await lightRepository.findById(input.lightId);
   if (!light || !light.active || light.deleted_at) throw ApiError.notFound("Light not found.");
-  const since = new Date(`${input.nonFunctionalSince}T00:00:00+05:30`);
-  if (Number.isNaN(since.getTime()) || since.getTime() > Date.now()) throw ApiError.badRequest("The date it stopped working cannot be in the future.");
-  if (since.getTime() < Date.now() - 366 * 86400_000) throw ApiError.badRequest("Give a date within the last year.");
+  checkSinceDate(input.nonFunctionalSince);
 
   const { rows: open } = await pool.query<{ reported_at: Date }>(`SELECT reported_at FROM light_faults WHERE light_id = $1 AND status = 'open' ORDER BY reported_at LIMIT 1`, [light.id]);
   if (open[0]) {
@@ -117,40 +118,29 @@ export async function reportFault(session: PublicLightToken, input: PublicFaultI
       `This light is already reported as not working (on ${open[0].reported_at.toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata" })}) and is with the contractor for repair.`,
     );
   }
-  const { rows: today } = await pool.query<{ n: number }>(
-    `SELECT count(*)::int AS n FROM light_faults WHERE reporter_phone = $1 AND reported_by_type = 'public' AND reported_at > now() - interval '24 hours'`,
-    [session.phone],
-  );
-  if ((today[0]?.n ?? 0) >= MAX_REPORTS_PER_DAY) throw ApiError.badRequest(`At most ${MAX_REPORTS_PER_DAY} lights can be reported from one mobile number in a day.`);
-
-  const mapping = await contractorWardRepository.findByWard(Number(light.ward_id));
-  const switchLabel: Record<string, string> = { working: "OK", not_working: "not OK", automatic: "automatic", joint: "joint", unknown: "not known" };
-  const remarks = input.remarks?.trim().slice(0, 500) || null;
-  const fault = await lightFaultRepository.create({
-    lightId: Number(light.id),
-    reportedGpsLat: null,
-    reportedGpsLng: null,
-    deadlineAt: new Date(Date.now() + 72 * 3600_000),
-    reportedByType: "public",
-    reportedByUserId: null,
-    reporterPhone: session.phone,
-    reporterNotes: `Public report (holding ${session.holdingNo}). Switch: ${switchLabel[input.switchStatus]}.${remarks ? ` ${remarks}` : ""}`,
+  const pending = await pendingFor("light", Number(light.id));
+  if (pending) {
+    throw ApiError.badRequest(
+      `This light was already reported on ${pending.reported_at.toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata" })} and is waiting for verification by the City Manager.`,
+    );
+  }
+  if ((await reportsToday(session.phone, "light")) >= MAX_REPORTS_PER_DAY) {
+    throw ApiError.badRequest(`At most ${MAX_REPORTS_PER_DAY} lights can be reported from one mobile number in a day.`);
+  }
+  const r = await submit({
+    assetType: "light",
+    assetId: Number(light.id),
+    wardId: Number(light.ward_id),
+    phone: session.phone,
+    holdingNo: session.holdingNo,
     nonFunctionalSince: input.nonFunctionalSince,
-    assignedContractorId: mapping?.contractor_id ?? null,
-    reporterHoldingNo: session.holdingNo,
-    reportedSwitchStatus: input.switchStatus,
+    switchStatus: input.switchStatus,
+    remarks: input.remarks,
   });
-  return { faultId: Number(fault.id), serialNumber: light.serial_number };
+  return { reportId: r.reportId, serialNumber: light.serial_number };
 }
 
-/** The citizen's own reports (by mobile number), newest first. */
+/** The citizen's own light complaints (by mobile number), newest first. */
 export async function myReports(session: PublicLightToken) {
-  const { rows } = await pool.query(
-    `SELECT f.id, f.reported_at, f.status, f.repaired_at, f.non_functional_since, l.serial_number, l.light_type, l.locality_name, w.ward_name
-       FROM light_faults f JOIN lights l ON l.id = f.light_id JOIN attendance_wards w ON w.id = l.ward_id
-      WHERE f.reporter_phone = $1 AND f.reported_by_type = 'public'
-      ORDER BY f.reported_at DESC LIMIT 50`,
-    [session.phone],
-  );
-  return rows;
+  return myPublicReports(session.phone, "light");
 }
