@@ -18,6 +18,9 @@ import {
   deleteStreetSegmentMistake,
   deleteLightMistake,
   setLightGps,
+  fetchHighMastLightsForWard,
+  FUNCTIONAL_STATUS_LABELS,
+  type HighMastLightStatus,
   type WardStatus,
   type StreetStatus,
   type SegmentLightStatus,
@@ -80,11 +83,18 @@ export default function StreetlightStatusDashboardPage() {
   const [savingGpsLightId, setSavingGpsLightId] = useState<number | null>(null);
   const [locatingGps, setLocatingGps] = useState(false);
 
-  const [agencyFilter, setAgencyFilter] = useState<"" | "NN" | "EESL">("");
+  // "" = streetlights and High Masts; NN / EESL = that agency's streetlights; HM = High Mast towers only.
+  const [agencyFilter, setAgencyFilter] = useState<"" | "NN" | "EESL" | "HM">("");
+  const [wardHighMasts, setWardHighMasts] = useState<HighMastLightStatus[] | null>(null);
+  const showHighMasts = agencyFilter === "" || agencyFilter === "HM";
+  const showStreets = agencyFilter !== "HM";
 
   function load() {
-    const agency = agencyFilter || undefined;
-    Promise.all([fetchWardStatusDashboard(agency), fetchStreetStatusDashboard(agency)])
+    const agency = agencyFilter === "NN" || agencyFilter === "EESL" ? agencyFilter : undefined;
+    Promise.all([
+      fetchWardStatusDashboard(agency, agencyFilter === "HM" ? "high_mast" : undefined),
+      agencyFilter === "HM" ? Promise.resolve([] as StreetStatus[]) : fetchStreetStatusDashboard(agency),
+    ])
       .then(([w, s]) => {
         setWards(w);
         setStreets(s);
@@ -121,6 +131,15 @@ export default function StreetlightStatusDashboardPage() {
     () => wards?.find((w) => w.wardName === openWard)?.wardId ?? allWards.find((w) => w.wardName === openWard)?.id ?? null,
     [wards, allWards, openWard],
   );
+
+  // High Mast towers of the open ward (they stand on their own, not on a street segment).
+  useEffect(() => {
+    setWardHighMasts(null);
+    if (!openWardId || !showHighMasts) return;
+    fetchHighMastLightsForWard(openWardId)
+      .then(setWardHighMasts)
+      .catch(() => setWardHighMasts([]));
+  }, [openWardId, showHighMasts]);
 
   const streetTotalsForWard = useMemo(() => {
     if (streetsInOpenWard.length === 0) return null;
@@ -479,16 +498,21 @@ export default function StreetlightStatusDashboardPage() {
           Streetlight Status Dashboard
         </h1>
         <p className="mb-4 text-sm text-slate-500">
-          {openWard ? "Streets in this ward. Click a street to see individual lights." : "Click a ward to see its streets."}
+          {openWard
+            ? agencyFilter === "HM"
+              ? "High Mast lights in this ward."
+              : "Streets in this ward (click a street to see its lights), and the ward's High Mast lights."
+            : "Click a ward to see its streets and High Mast lights."}
         </p>
 
         <div className="mb-6 flex items-center gap-2">
-          <span className="text-xs font-medium text-slate-500">Agency:</span>
+          <span className="text-xs font-medium text-slate-500">Show:</span>
           {(
             [
-              ["", "Both"],
-              ["NN", "Nagar Nigam"],
-              ["EESL", "EESL"],
+              ["", "All lights"],
+              ["NN", "Nagar Nigam streetlights"],
+              ["EESL", "EESL streetlights"],
+              ["HM", "High Mast"],
             ] as const
           ).map(([value, label]) => (
             <button
@@ -544,6 +568,7 @@ export default function StreetlightStatusDashboardPage() {
                     <th className="px-4 py-2.5">Total</th>
                     <th className="px-4 py-2.5">Working</th>
                     <th className="px-4 py-2.5">Not Working</th>
+                    {agencyFilter === "" && <th className="px-4 py-2.5">of which High Mast</th>}
                   </tr>
                 </thead>
                 <tbody>
@@ -556,6 +581,12 @@ export default function StreetlightStatusDashboardPage() {
                       <td className="px-4 py-2.5">{w.totalLights}</td>
                       <td className="px-4 py-2.5 text-green-700">{w.working}</td>
                       <td className="px-4 py-2.5">{w.notWorking > 0 ? <span className="font-semibold text-red-600">{w.notWorking}</span> : 0}</td>
+                      {agencyFilter === "" && (
+                        <td className="px-4 py-2.5 text-slate-600">
+                          {w.highMast ?? 0}
+                          {w.highMastNotWorking ? <span className="ml-1 text-xs text-red-600">({w.highMastNotWorking} not working)</span> : null}
+                        </td>
+                      )}
                     </tr>
                   ))}
                 </tbody>
@@ -568,6 +599,7 @@ export default function StreetlightStatusDashboardPage() {
                       <td className="px-4 py-2.5">{wardTotals.total}</td>
                       <td className="px-4 py-2.5 text-green-700">{wardTotals.working}</td>
                       <td className="px-4 py-2.5 text-red-600">{wardTotals.notWorking}</td>
+                      {agencyFilter === "" && <td className="px-4 py-2.5 text-slate-600">{wards.reduce((n, w) => n + (w.highMast ?? 0), 0)}</td>}
                     </tr>
                   </tfoot>
                 )}
@@ -581,6 +613,8 @@ export default function StreetlightStatusDashboardPage() {
               Back to wards
             </button>
 
+            {showStreets && (
+              <>
             {streetsInOpenWard.length === 0 ? (
               <div className="rounded-xl border border-slate-200 bg-white p-6 text-center text-sm text-slate-400">No street segments in {openWard} yet.</div>
             ) : (
@@ -1036,6 +1070,76 @@ export default function StreetlightStatusDashboardPage() {
                   </div>
                 )}
               </div>
+            )}
+              </>
+            )}
+
+            {showHighMasts && (
+              <section className="mt-6 rounded-xl border border-slate-200 bg-white">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-4 py-3">
+                  <h2 className="text-sm font-semibold text-slate-800">High Mast lights in {openWard}</h2>
+                  {openWardId && (
+                    <a href={`/attendance/high-mast-status-dashboard?ward=${openWardId}`} className="text-xs font-semibold text-nnm-blue hover:underline">
+                      Mark faulty / repaired, add GPS →
+                    </a>
+                  )}
+                </div>
+                {!wardHighMasts ? (
+                  <p className="px-4 py-3 text-sm text-slate-400">Loading…</p>
+                ) : wardHighMasts.length === 0 ? (
+                  <p className="px-4 py-3 text-sm text-slate-400">No High Mast lights in this ward.</p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-slate-100 text-left text-xs font-semibold uppercase text-slate-500">
+                          <th className="px-4 py-2">Serial</th>
+                          <th className="px-4 py-2">Location</th>
+                          <th className="px-4 py-2">Status</th>
+                          <th className="px-4 py-2">Lamps working</th>
+                          <th className="px-4 py-2">Panel</th>
+                          <th className="px-4 py-2">Switch</th>
+                          <th className="px-4 py-2">GPS</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {wardHighMasts.map((l) => (
+                          <tr key={l.lightId} className="border-b border-slate-50 last:border-0">
+                            <td className="px-4 py-2 font-mono text-xs">{l.serialNumber}</td>
+                            <td className="px-4 py-2 text-xs text-slate-700">{l.localityName || "-"}</td>
+                            <td className="px-4 py-2">
+                              {l.working ? (
+                                <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-[11px] font-semibold text-green-700">
+                                  <CheckCircle2 className="h-3 w-3" /> Working
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-semibold text-red-700">
+                                  <XCircle className="h-3 w-3" /> Not working
+                                </span>
+                              )}
+                              {l.functionalStatus === "partially_functional" && (
+                                <span className="ml-1 text-[11px] text-amber-700">({FUNCTIONAL_STATUS_LABELS.partially_functional.toLowerCase()})</span>
+                              )}
+                            </td>
+                            <td className="px-4 py-2 text-xs">{l.noOfLights != null ? `${l.noOfFunctionalLights ?? "?"} / ${l.noOfLights}` : "-"}</td>
+                            <td className="px-4 py-2 text-xs">{l.panelStatus ? (l.panelStatus === "working" ? "OK" : "Not OK") : "-"}</td>
+                            <td className="px-4 py-2 text-xs">{l.switchStatus ? SWITCH_STATUS_LABELS[l.switchStatus] : "-"}</td>
+                            <td className="px-4 py-2 text-xs">
+                              {l.latitude != null && l.longitude != null ? (
+                                <a href={`https://www.google.com/maps?q=${l.latitude},${l.longitude}`} target="_blank" rel="noreferrer" className="text-nnm-blue hover:underline">
+                                  Map
+                                </a>
+                              ) : (
+                                <span className="text-amber-600">missing</span>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </section>
             )}
           </>
         )}

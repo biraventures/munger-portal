@@ -444,10 +444,15 @@ export interface WardStatus {
   totalLights: number;
   notWorking: number;
   working: number;
+  /** Of the above, High Mast lights. */
+  highMast?: number;
+  highMastNotWorking?: number;
 }
 
-export async function fetchWardStatusDashboard(agency?: "NN" | "EESL"): Promise<WardStatus[]> {
-  const qs = agency ? `?agency=${agency}` : "";
+/** `type` = "high_mast" for High Mast towers only; an agency filter covers streetlights only; neither = both kinds. */
+export async function fetchWardStatusDashboard(agency?: "NN" | "EESL", type?: "streetlight" | "high_mast"): Promise<WardStatus[]> {
+  const q = new URLSearchParams({ ...(agency ? { agency } : {}), ...(type ? { type } : {}) }).toString();
+  const qs = q ? `?${q}` : "";
   const res = await fetch(`${API_BASE_URL}/streetlight/status-dashboard/wards${qs}`, { headers: authHeaders() });
   if (!res.ok) throw new Error("Could not load the ward status dashboard.");
   const data: { wards: WardStatus[] } = await res.json();

@@ -148,7 +148,9 @@ export async function importHighMastBulkCsv(csvContent: string): Promise<HighMas
       const wn = wardNumber(wardLabel);
       let ward = wn !== null ? wardByNumber.get(wn) : wardByName.get(wardLabel.toLowerCase());
       if (!ward) {
-        ward = await attendanceWardRepository.create(wn !== null ? `Ward ${wn}` : wardLabel);
+        // Named like the wards already on file: just the number ("38") when that is how they are kept, else "Ward 38".
+        const plainNumbers = wards.some((w) => /^\d+$/.test(w.ward_name.trim()));
+        ward = await attendanceWardRepository.create(wn !== null ? (plainNumbers ? String(wn) : `Ward ${wn}`) : wardLabel);
         if (wn !== null) wardByNumber.set(wn, ward);
         wardByName.set(ward.ward_name.toLowerCase(), ward);
         result.notes.push({ row: rowNum, message: `Ward "${ward.ward_name}" was not on file - added` });

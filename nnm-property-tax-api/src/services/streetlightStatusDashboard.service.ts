@@ -6,6 +6,9 @@ export interface WardStatusRow {
   totalLights: number;
   notWorking: number;
   working: number;
+  /** Of the above, High Mast lights (and how many of them are not working). */
+  highMast?: number;
+  highMastNotWorking?: number;
 }
 
 export interface StreetStatusRow {
@@ -28,15 +31,20 @@ export interface StreetStatusRow {
  * (see WARD_SCOPED_ROLES in attendance.types.ts); omit for every
  * ward, as the cross-ward oversight roles get.
  */
-export async function buildWardStatusDashboard(agencyName?: string, wardId?: number): Promise<WardStatusRow[]> {
+export async function buildWardStatusDashboard(agencyName?: string, wardId?: number, lightType?: "streetlight" | "high_mast"): Promise<WardStatusRow[]> {
+  // An agency filter (Nagar Nigam / EESL) is about streetlights - High Mast towers are left out of it, even when the
+  // tower was installed by the same agency. lightType narrows to one kind; neither = streetlights and High Masts together.
+  const type = agencyName ? "streetlight" : lightType ?? null;
   const { rows } = await pool.query<WardStatusRow>(
     `SELECT
        w.id AS "wardId", w.ward_name AS "wardName",
-       COUNT(l.id)::int AS "totalLights",
+       COUNT(DISTINCT l.id)::int AS "totalLights",
        COUNT(DISTINCT lf.light_id)::int AS "notWorking",
-       (COUNT(l.id) - COUNT(DISTINCT lf.light_id))::int AS "working"
+       (COUNT(DISTINCT l.id) - COUNT(DISTINCT lf.light_id))::int AS "working",
+       COUNT(DISTINCT l.id) FILTER (WHERE l.light_type = 'high_mast')::int AS "highMast",
+       COUNT(DISTINCT lf.light_id) FILTER (WHERE l.light_type = 'high_mast')::int AS "highMastNotWorking"
      FROM attendance_wards w
-     LEFT JOIN lights l ON l.ward_id = w.id AND l.active = TRUE AND l.deleted_at IS NULL
+     LEFT JOIN lights l ON l.ward_id = w.id AND l.active = TRUE AND l.deleted_at IS NULL AND ($3::text IS NULL OR l.light_type = $3)
      LEFT JOIN installation_agencies ia ON ia.id = l.installation_agency_id
      LEFT JOIN light_faults lf ON lf.light_id = l.id AND lf.status = 'open'
      WHERE ($1::text IS NULL OR ia.agency_name = $1)
@@ -44,7 +52,7 @@ export async function buildWardStatusDashboard(agencyName?: string, wardId?: num
      GROUP BY w.id, w.ward_name
      HAVING COUNT(l.id) > 0
      ORDER BY w.ward_name ASC`,
-    [agencyName ?? null, wardId ?? null],
+    [agencyName ?? null, wardId ?? null, type],
   );
   return rows;
 }
@@ -183,8 +191,8 @@ export async function buildSegmentLightStatus(segmentId: number): Promise<Segmen
       faultHistory: history,
       lightSerialSeq: l.light_serial_seq,
       switchStatus: l.switch_status,
-      latitude: l.latitude,
-      longitude: l.longitude,
+      latitude: l.latitude == null ? null : Number(l.latitude),
+      longitude: l.longitude == null ? null : Number(l.longitude),
     };
   });
 }
@@ -340,8 +348,8 @@ export async function buildHighMastLightsForWard(wardId: number): Promise<HighMa
       functionalStatus: l.functional_status,
       noOfLights: l.no_of_lights,
       noOfFunctionalLights: l.no_of_functional_lights,
-      latitude: l.latitude,
-      longitude: l.longitude,
+      latitude: l.latitude == null ? null : Number(l.latitude),
+      longitude: l.longitude == null ? null : Number(l.longitude),
     };
   });
 }

@@ -25,6 +25,9 @@ function todayLocalDateString(): string {
   return `${y}-${m}-${day}`;
 }
 
+/** "38" -> "Ward 38"; a name that already says "Ward" is shown as it is. */
+const wardLabel = (name: string) => (/^\s*ward/i.test(name) ? name : `Ward ${name}`);
+
 export default function HighMastStatusDashboardPage() {
   const attendance = useAttendanceGuard();
   const [wards, setWards] = useState<WardStatus[] | null>(null);
@@ -51,7 +54,13 @@ export default function HighMastStatusDashboardPage() {
   useEffect(() => {
     if (!attendance) return;
     fetchHighMastWardStatusDashboard()
-      .then(setWards)
+      .then((w) => {
+        setWards(w);
+        // Opened from the Streetlight dashboard with ?ward=<id>: go straight to that ward.
+        const wardParam = Number(new URLSearchParams(window.location.search).get("ward"));
+        const target = wardParam ? w.find((x) => Number(x.wardId) === wardParam) : undefined;
+        if (target) openWardView(Number(target.wardId), target.wardName);
+      })
       .catch((err) => setError(err instanceof Error ? err.message : "Could not load the High Mast status dashboard."));
   }, [attendance]);
 
@@ -288,7 +297,7 @@ export default function HighMastStatusDashboardPage() {
                       onClick={() => openWardView(w.wardId, w.wardName)}
                       className="cursor-pointer border-b border-slate-100 last:border-0 hover:bg-slate-50"
                     >
-                      <td className="px-4 py-2.5 font-medium text-slate-800">Ward {w.wardName}</td>
+                      <td className="px-4 py-2.5 font-medium text-slate-800">{wardLabel(w.wardName)}</td>
                       <td className="px-4 py-2.5">{w.totalLights}</td>
                       <td className="px-4 py-2.5 text-green-700">{w.working}</td>
                       <td className="px-4 py-2.5 text-red-600">{w.notWorking}</td>
@@ -304,7 +313,7 @@ export default function HighMastStatusDashboardPage() {
               <ChevronLeft className="h-4 w-4" />
               Back to wards
             </button>
-            <h2 className="mb-3 text-base font-semibold text-slate-800">Ward {openWard.name}</h2>
+            <h2 className="mb-3 text-base font-semibold text-slate-800">{wardLabel(openWard.name)}</h2>
             {loadingLights ? (
               <p className="text-sm text-slate-400">Loading…</p>
             ) : !wardLights || wardLights.length === 0 ? (
