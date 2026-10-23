@@ -13,6 +13,7 @@ import { AlertCircle, FileWarning, Loader2, X } from "lucide-react";
 import {
   submitPayment,
   type PaymentError,
+  type PaymentInput,
   type ReceiptData,
 } from "@/lib/payment-api";
 import {
@@ -31,14 +32,24 @@ const PAYMENT_MODES: readonly string[] = COUNTER_PAYMENT_MODES;
 const TV_NUMBER_MIN = 15;
 const TV_NUMBER_MAX = 40;
 
+/** Where the form loads notices from and records the payment - the counter operator's session by default. */
+export interface PaymentFormApi {
+  fetchUnsettled: (holdingNo: string) => Promise<UnsettledDemandNotice[]>;
+  submit: (holdingNo: string, input: PaymentInput) => Promise<ReceiptData>;
+}
+const OPERATOR_API: PaymentFormApi = { fetchUnsettled: fetchUnsettledDemandNotices, submit: submitPayment };
+
 export function PaymentForm({
   holdingNo,
   ownerName,
   onSuccess,
+  api = OPERATOR_API,
 }: {
   holdingNo: string;
   ownerName?: string;
   onSuccess: (receipt: ReceiptData) => void;
+  /** e.g. the Agency Operator's admin session (see app/admin/agency-collection). */
+  api?: PaymentFormApi;
 }) {
   const [notices, setNotices] = useState<UnsettledDemandNotice[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -60,7 +71,8 @@ export function PaymentForm({
   const [showConfirmModal, setShowConfirmModal] = useState(false);
 
   useEffect(() => {
-    fetchUnsettledDemandNotices(holdingNo)
+    api
+      .fetchUnsettled(holdingNo)
       .then((list) => {
         setNotices(list);
         if (list.length > 0) setSelectedDemandNo(list[0]!.demandNo);
@@ -70,6 +82,7 @@ export function PaymentForm({
           err instanceof Error ? err.message : "Could not load demand notices.",
         ),
       );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [holdingNo]);
 
   const selected =
@@ -129,7 +142,7 @@ export function PaymentForm({
     setSubmitting(true);
     setError(null);
     try {
-      const receipt = await submitPayment(holdingNo, {
+      const receipt = await api.submit(holdingNo, {
         ...instrumentPayload(paymentMode ?? "", instrument),
         paymentMode,
         counter: counter || undefined,

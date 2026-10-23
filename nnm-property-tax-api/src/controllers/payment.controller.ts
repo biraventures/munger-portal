@@ -54,17 +54,18 @@ export const postPayment = asyncHandler(async (req: Request, res: Response) => {
   if (!paramsParsed.success) {
     throw ApiError.badRequest("Invalid holding number");
   }
-  if (req.admin && req.admin.role !== "tax_collector") {
-    throw new ApiError(403, "Only a Tax Collector or operator can record a payment.");
+  if (req.admin && req.admin.role !== "tax_collector" && req.admin.role !== "agency_operator") {
+    throw new ApiError(403, "Only a Tax Collector, the Agency Operator or an operator can record a payment.");
   }
+  const isTaxCollector = req.admin?.role === "tax_collector";
 
   const bodyParsed = paymentSchema.safeParse(req.body);
   if (!bodyParsed.success) {
     throw ApiError.badRequest("Invalid payment data", bodyParsed.error.flatten().fieldErrors);
   }
 
-  // A Tax Collector must have recorded the mandatory field details first.
-  if (req.admin) {
+  // A Tax Collector must have recorded the mandatory field details first (the Agency Operator cannot edit a holding).
+  if (isTaxCollector) {
     const prop = await propertyRepository.findByHoldingNo(paramsParsed.data.holdingNo);
     if (prop) {
       const missing: string[] = [];
@@ -79,12 +80,13 @@ export const postPayment = asyncHandler(async (req: Request, res: Response) => {
   const collectedBy = req.admin?.displayName ?? req.operator!.displayName;
   const input = { ...bodyParsed.data, instrumentDate: bodyParsed.data.instrumentDate || null };
   // A Tax Collector collecting in the field is the collector of that payment - always credited to their own code.
-  if (req.admin) {
+  // The Agency Operator, like the counter operator, names the tax collector (if any) on the form.
+  if (isTaxCollector && req.admin) {
     const me = await adminRepository.findByUsername(req.admin.username);
     if (me?.tax_collector_code) input.taxCollectorCode = me.tax_collector_code;
   }
   const actor = req.admin
-    ? { id: req.admin.sub, username: req.admin.username, role: "tax_collector" as const, ip: req.ip ?? null }
+    ? { id: req.admin.sub, username: req.admin.username, role: isTaxCollector ? ("tax_collector" as const) : ("agency_operator" as const), ip: req.ip ?? null }
     : { id: req.operator!.sub, username: req.operator!.username, role: "operator" as const, ip: req.ip ?? null };
   const result = await submitPayment(paramsParsed.data.holdingNo, input, collectedBy, actor);
   res.status(200).json(result);

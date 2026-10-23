@@ -30,7 +30,7 @@ export interface PaymentInput {
 export interface PaymentActor {
   id: number;
   username: string;
-  role: "operator" | "tax_collector";
+  role: "operator" | "tax_collector" | "agency_operator";
   ip: string | null;
 }
 

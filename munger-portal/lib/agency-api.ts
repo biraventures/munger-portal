@@ -100,22 +100,28 @@ export async function downloadAgencyReport(q: ReportQuery): Promise<void> {
 // Team Leader
 // ---------------------------------------------------------------------------
 
-export async function fetchAgencyWards(): Promise<{ ward: string; pending: number }[]> {
-  const res = await fetch(`${API_BASE_URL}/admin/agency/wards`, { headers: authHeaders() });
+/** "agency" = Team Leader (creates this month's notice when missing); "agency-operator" = Agency Operator (prints existing notices only). */
+export type AgencyNoticeBase = "agency" | "agency-operator";
+
+export async function fetchAgencyWards(base: AgencyNoticeBase = "agency"): Promise<{ ward: string; pending: number }[]> {
+  const res = await fetch(`${API_BASE_URL}/admin/${base}/wards`, { headers: authHeaders() });
   if (!res.ok) throw new Error(await failure(res, "Could not load the wards"));
   const data: { wards: { ward: string; pending: number }[] } = await res.json();
   return data.wards;
 }
 
-export async function fetchAgencyWardHoldings(ward: string): Promise<string[]> {
-  const res = await fetch(`${API_BASE_URL}/admin/agency/wards/${encodeURIComponent(ward)}/holdings`, { headers: authHeaders() });
+export async function fetchAgencyWardHoldings(ward: string, base: AgencyNoticeBase = "agency"): Promise<string[]> {
+  const res = await fetch(`${API_BASE_URL}/admin/${base}/wards/${encodeURIComponent(ward)}/holdings`, { headers: authHeaders() });
   if (!res.ok) throw new Error(await failure(res, "Could not load the holdings"));
   const data: { holdingNos: string[] } = await res.json();
   return data.holdingNos;
 }
 
-export async function prepareAgencyNotices(holdingNos: string[]): Promise<{ notices: DemandNoticeReprintData[]; errors: { holdingNo: string; message: string }[] }> {
-  const res = await fetch(`${API_BASE_URL}/admin/agency/notices`, { method: "POST", headers: authHeaders(), body: JSON.stringify({ holdingNos }) });
+export async function prepareAgencyNotices(
+  holdingNos: string[],
+  base: AgencyNoticeBase = "agency",
+): Promise<{ notices: DemandNoticeReprintData[]; errors: { holdingNo: string; message: string }[] }> {
+  const res = await fetch(`${API_BASE_URL}/admin/${base}/notices`, { method: "POST", headers: authHeaders(), body: JSON.stringify({ holdingNos }) });
   if (!res.ok) throw new Error(await failure(res, "Could not prepare the notices"));
   return res.json();
 }

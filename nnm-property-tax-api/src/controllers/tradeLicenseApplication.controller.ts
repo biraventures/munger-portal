@@ -18,6 +18,7 @@ import fs from "node:fs";
 import { asyncHandler } from "../middleware/asyncHandler";
 import { applicationDocumentFile, stageDocument } from "../services/tradeLicenseDocuments.service";
 import { ApiError } from "../utils/ApiError";
+import { isAgencyOperator, maskIds } from "../utils/maskIds";
 
 const applicationInputSchema = z.object({
   applicationType: z.enum(["new", "renewal"]),
@@ -114,7 +115,8 @@ export const getTradeLicenseApplicationById = asyncHandler(async (req: Request, 
   const parsed = idParamSchema.safeParse(req.params);
   if (!parsed.success) throw ApiError.badRequest("Invalid id");
   const detail = await getTradeLicenseApplicationDetail(parsed.data.id);
-  res.status(200).json(detail);
+  // The Agency Operator views trade licences with PAN / Aadhaar masked and without the applicant's uploaded documents.
+  res.status(200).json(isAgencyOperator(req.admin) ? { ...maskIds(detail), documents: [] } : detail);
 });
 
 const decisionBodySchema = z.object({ notes: z.string().optional() });

@@ -243,7 +243,8 @@ export default function TradeLicenseRequestDetailPage() {
               </section>
             ) : detail.application.status === "pending" ? (
               <p className="text-sm text-slate-500">
-                This application is currently with <b>{ADMIN_ROLE_LABELS[detail.application.current_stage as AdminRole]}</b> — it isn&apos;t at your desk yet.
+                This application is currently with <b>{ADMIN_ROLE_LABELS[detail.application.current_stage as AdminRole]}</b>
+                {admin.role === "agency_operator" ? " - view only (ID numbers masked, documents not shown)." : <> — it isn&apos;t at your desk yet.</>}
               </p>
             ) : null}
           </div>

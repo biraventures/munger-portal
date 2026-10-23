@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Users, FileClock, FileWarning, LayoutGrid, ShoppingBag, Store, BarChart3, Award, Archive, Download, XCircle, ShieldCheck, Trash2, RefreshCw, Upload, MapPin, Map as MapIcon, ClipboardCheck, UserCheck, ClipboardList, Receipt, RotateCcw, AlertTriangle, List, Flag, Home, FileText, Printer, Landmark } from "lucide-react";
 import { AdminHeader } from "@/components/admin-header";
+import { AgencyOperatorDashboard } from "@/components/agency/agency-operator-dashboard";
 import { DashboardSummaryWidget } from "@/components/dashboard-summary-widget";
 import { MutationPendingSummary } from "@/components/admin/mutation-pending-summary";
 import { useAdminGuard } from "@/lib/use-admin-guard";
@@ -33,7 +34,8 @@ export default function AdminDashboardPage() {
   const [newHoldingPending, setNewHoldingPending] = useState<NewHoldingPending | null>(null);
 
   useEffect(() => {
-    if (!admin) return;
+    // The Agency Operator has its own small dashboard and none of these desks.
+    if (!admin || admin.role === "agency_operator") return;
     fetchChangeRequests({ status: "pending", myStage: true })
       .then((r) => setMyStagePendingCount(r.requests.length))
       .catch(() => setMyStagePendingCount(null));
@@ -59,6 +61,9 @@ export default function AdminDashboardPage() {
   if (!admin) {
     return <div className="flex min-h-screen items-center justify-center text-sm text-slate-400">Loading…</div>;
   }
+
+  // The private agency's counter login: only its own cards (see components/agency/agency-operator-dashboard.tsx).
+  if (admin.role === "agency_operator") return <AgencyOperatorDashboard admin={admin} />;
 
   // Stall Prabhari is scoped to the shop/rental workflow only; Trade
   // License Nodal is scoped to trade licenses only - each should see

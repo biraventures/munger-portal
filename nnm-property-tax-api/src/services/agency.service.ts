@@ -407,3 +407,39 @@ export async function prepareNoticesForPrint(holdingNos: string[], generatedBy: 
   }
   return result;
 }
+
+/** The newest notice for a holding that can still be paid (not settled, cancelled or superseded) - any month. */
+const LATEST_LIVE_NOTICE_SQL = `
+  SELECT d.demand_no FROM demand_notices d
+   WHERE d.holding_no = $1 AND d.superseded = FALSE AND d.cancelled = FALSE AND d.settled = FALSE
+   ORDER BY d.notice_date DESC, d.demand_no DESC LIMIT 1`;
+
+/**
+ * Agency Operator: the same ward-wise printing as the Team Leader, but it never creates a demand notice - each holding's
+ * current notice (this month's full-dues notice, else its newest notice still open for payment) is reprinted as it is.
+ * A holding without one is reported back ("no demand notice generated yet") instead.
+ */
+export async function printExistingNotices(holdingNos: string[]): Promise<PreparedNotices> {
+  if (holdingNos.length === 0 || holdingNos.length > 25) throw ApiError.badRequest("Send between 1 and 25 holdings at a time.");
+  const { rows: stillPending } = await pool.query<{ holding_no: string }>(`SELECT p.holding_no ${PENDING_HOLDING_SQL} AND p.holding_no = ANY($1::text[])`, [holdingNos]);
+  const pendingSet = new Set(stillPending.map((r) => r.holding_no));
+  const result: PreparedNotices = { notices: [], errors: [] };
+  for (const holdingNo of holdingNos) {
+    if (!pendingSet.has(holdingNo)) {
+      result.errors.push({ holdingNo, message: "No dues pending (or disputed / no floor data) - skipped." });
+      continue;
+    }
+    try {
+      const current = await pool.query<{ demand_no: string }>(CURRENT_MONTH_LIVE_NOTICE_SQL, [holdingNo]);
+      const demandNo = current.rows[0]?.demand_no ?? (await pool.query<{ demand_no: string }>(LATEST_LIVE_NOTICE_SQL, [holdingNo])).rows[0]?.demand_no;
+      if (!demandNo) {
+        result.errors.push({ holdingNo, message: "No demand notice has been generated for this holding yet (the Nagar Nigam generates it)." });
+        continue;
+      }
+      result.notices.push(await getDemandNoticeForReprint(demandNo));
+    } catch (err) {
+      result.errors.push({ holdingNo, message: err instanceof Error ? err.message : String(err) });
+    }
+  }
+  return result;
+}

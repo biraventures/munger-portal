@@ -25,13 +25,17 @@ export default function AgencyNoticesPage() {
   const [printingPart, setPrintingPart] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const cancelRef = useRef(false);
+  // The Team Leader's print creates this month's notice when missing; the Agency Operator only reprints existing ones.
+  const allowed = admin?.role === "agency_team_leader" || admin?.role === "agency_operator";
+  const base = admin?.role === "agency_operator" ? "agency-operator" : "agency";
   const printRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!admin || admin.role !== "agency_team_leader") return;
-    fetchAgencyWards()
+    if (!admin || !allowed) return;
+    fetchAgencyWards(base)
       .then(setWards)
       .catch((err) => setError(err instanceof Error ? err.message : "Could not load the wards."));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [admin]);
 
   // Once the chosen part is on the (hidden) page, hand it to the print window.
@@ -43,14 +47,14 @@ export default function AgencyNoticesPage() {
   }, [printingPart]);
 
   if (!admin) return <div className="flex min-h-screen items-center justify-center text-sm text-slate-400">Loading…</div>;
-  if (admin.role !== "agency_team_leader") {
+  if (!allowed) {
     return (
       <div className="min-h-screen bg-slate-50">
         <AdminHeader admin={admin} />
         <main className="mx-auto max-w-2xl px-6 py-10">
           <div role="alert" className="flex items-center gap-2 rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-700">
             <AlertCircle className="h-4 w-4 shrink-0" />
-            This is restricted to the Agency Team Leader.
+            This is restricted to the Agency Team Leader and the Agency Operator.
           </div>
         </main>
       </div>
@@ -67,13 +71,13 @@ export default function AgencyNoticesPage() {
     setFinished(false);
     setPreparedWard(ward);
     try {
-      const holdingNos = await fetchAgencyWardHoldings(ward);
+      const holdingNos = await fetchAgencyWardHoldings(ward, base);
       setProgress({ done: 0, total: holdingNos.length });
       const collected: DemandNoticeReprintData[] = [];
       const collectedProblems: { holdingNo: string; message: string }[] = [];
       for (let i = 0; i < holdingNos.length; i += BATCH) {
         if (cancelRef.current) break;
-        const result = await prepareAgencyNotices(holdingNos.slice(i, i + BATCH));
+        const result = await prepareAgencyNotices(holdingNos.slice(i, i + BATCH), base);
         collected.push(...result.notices);
         collectedProblems.push(...result.errors);
         setNotices([...collected]);
@@ -103,8 +107,17 @@ export default function AgencyNoticesPage() {
             Ward-wise Demand Notices
           </h1>
           <p className="mt-1 text-sm text-slate-500">
-            Prints the demand notices of every holding in a ward whose dues are pending (tax not paid up to the present year). A current notice is created for each holding
-            (this month&apos;s notice is reused if one already exists), so the late fee is up to date.
+            {base === "agency-operator" ? (
+              <>
+                Prints the demand notices of every holding in a ward whose dues are pending (tax not paid up to the present year). Each holding&apos;s existing current
+                notice is printed as it is - no new demand is created here. A holding the Nagar Nigam has not yet issued a notice for is listed below instead.
+              </>
+            ) : (
+              <>
+                Prints the demand notices of every holding in a ward whose dues are pending (tax not paid up to the present year). A current notice is created for each
+                holding (this month&apos;s notice is reused if one already exists), so the late fee is up to date.
+              </>
+            )}
           </p>
         </div>
 

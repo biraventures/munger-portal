@@ -13,6 +13,7 @@ import {
   listReportFilterOptions,
   listWardsWithPendingHoldings,
   prepareNoticesForPrint,
+  printExistingNotices,
   type AgencyReport,
   type DatasetReport,
   type ReportFilters,
@@ -127,4 +128,11 @@ export const prepareAgencyNoticesHandler = asyncHandler(async (req: Request, res
   const parsed = prepareSchema.safeParse(req.body);
   if (!parsed.success) throw ApiError.badRequest("Send between 1 and 25 holding numbers.", parsed.error.flatten().fieldErrors);
   res.status(200).json(await prepareNoticesForPrint(parsed.data.holdingNos, req.admin!.displayName));
+});
+
+/** POST /api/v1/admin/agency-operator/notices - reprints the existing current notice of up to 25 pending holdings (never creates one). */
+export const printExistingAgencyNoticesHandler = asyncHandler(async (req: Request, res: Response) => {
+  const parsed = prepareSchema.safeParse(req.body);
+  if (!parsed.success) throw ApiError.badRequest("Send between 1 and 25 holding numbers.", parsed.error.flatten().fieldErrors);
+  res.status(200).json(await printExistingNotices(parsed.data.holdingNos));
 });

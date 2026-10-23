@@ -7,6 +7,7 @@ import { OperatorPropertySearch } from "@/components/operator/operator-property-
 import { PropertyEditorForm } from "@/components/operator/property-editor-form";
 import { exemptionFromProperty } from "@/lib/tax-exemption-api";
 import { PaymentForm } from "@/components/operator/payment-form";
+import { CollectPaymentWarningDialog } from "@/components/collect-payment-warning-dialog";
 import { ReceiptView } from "@/components/operator/receipt-view";
 import { NoticeView } from "@/components/operator/notice-view";
 import { PartPaymentPanel } from "@/components/operator/part-payment-panel";
@@ -108,6 +109,8 @@ export default function OperatorPropertyTaxPage() {
   const [searching, setSearching] = useState(false);
   const [notFoundHolding, setNotFoundHolding] = useState<string | null>(null);
   const [showPayment, setShowPayment] = useState(false);
+  // "Collect Payment" first shows the responsibility warning; the form opens only after "I understand".
+  const [showCollectWarning, setShowCollectWarning] = useState(false);
   const [receipt, setReceipt] = useState<ReceiptData | null>(null);
   const [notice, setNotice] = useState<DemandNoticeData | null>(null);
   const [generatingNotice, setGeneratingNotice] = useState(false);
@@ -393,7 +396,7 @@ export default function OperatorPropertyTaxPage() {
                 <div className="flex flex-wrap gap-3">
                   {!showPayment && !blocked && (
                     <button
-                      onClick={() => setShowPayment(true)}
+                      onClick={() => setShowCollectWarning(true)}
                       className="inline-flex items-center gap-2 rounded-md bg-nnm-gold px-6 py-3 text-sm font-semibold text-[#20240a] hover:brightness-95"
                     >
                       <Receipt className="h-4 w-4" />
@@ -424,6 +427,19 @@ export default function OperatorPropertyTaxPage() {
                     onGenerate={(years) =>
                       handleGenerateNotice(mode.holdingNo, years)
                     }
+                  />
+                )}
+
+                {showCollectWarning && (
+                  <CollectPaymentWarningDialog
+                    holdingNo={mode.holdingNo}
+                    ownerName={mode.data.master.ownerName}
+                    collectingAs={operator ? `${operator.displayName} (Counter Operator)` : null}
+                    onCancel={() => setShowCollectWarning(false)}
+                    onContinue={() => {
+                      setShowCollectWarning(false);
+                      setShowPayment(true);
+                    }}
                   />
                 )}
 

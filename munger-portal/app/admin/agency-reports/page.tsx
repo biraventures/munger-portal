@@ -17,7 +17,7 @@ import {
   type WardRow,
 } from "@/lib/agency-api";
 
-const ALLOWED = ["agency_project_manager", "commissioner", "deputy_commissioner", "city_manager", "tax_daroga", "tax_collector"];
+const ALLOWED = ["agency_project_manager", "commissioner", "deputy_commissioner", "city_manager", "tax_daroga", "tax_collector", "agency_operator"];
 const PERIODS: { id: ReportPeriod; label: string }[] = [
   { id: "daily", label: "Daily" },
   { id: "weekly", label: "Weekly" },

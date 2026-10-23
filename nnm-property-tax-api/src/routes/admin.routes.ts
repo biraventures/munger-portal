@@ -184,6 +184,7 @@ import {
   listAgencyWardsHandler,
   listAgencyWardHoldingsHandler,
   prepareAgencyNoticesHandler,
+  printExistingAgencyNoticesHandler,
 } from "../controllers/agency.controller";
 import { listDisputedHandler, getDisputeStatusHandler, flagDisputedHandler, clearDisputedHandler } from "../controllers/propertyDispute.controller";
 import { getStreetlightReportHandler } from "../controllers/streetlightReport.controller";
@@ -474,13 +475,17 @@ adminRouter.post("/tax-collectors/:username/assign-city-manager", requireAdminRo
 adminRouter.post("/tax-collectors/:username/wards", requireAdminRole("commissioner"), setTaxCollectorWardsHandler);
 // Agency logins (migration 114). The Project Manager (and senior officers) read collection / distribution / field
 // reports; the Team Leader prints ward-wise demand notices for holdings with dues pending.
-const requireAgencyReportRole = requireAdminRole("agency_project_manager", "commissioner", "deputy_commissioner", "city_manager", "tax_daroga", "tax_collector");
+const requireAgencyReportRole = requireAdminRole("agency_project_manager", "commissioner", "deputy_commissioner", "city_manager", "tax_daroga", "tax_collector", "agency_operator");
 adminRouter.get("/agency/report-filters", requireAgencyReportRole, getReportFilterOptionsHandler);
 adminRouter.get("/agency/reports", requireAgencyReportRole, getAgencyReportHandler);
 adminRouter.get("/agency/reports/export", requireAgencyReportRole, exportAgencyReportHandler);
 adminRouter.get("/agency/wards", requireAdminRole("agency_team_leader"), listAgencyWardsHandler);
 adminRouter.get("/agency/wards/:ward/holdings", requireAdminRole("agency_team_leader"), listAgencyWardHoldingsHandler);
 adminRouter.post("/agency/notices", requireAdminRole("agency_team_leader"), prepareAgencyNoticesHandler);
+// Agency Operator (migration 145): prints the ward-wise demand notices NNM has already generated - never creates one.
+adminRouter.get("/agency-operator/wards", requireAdminRole("agency_operator"), listAgencyWardsHandler);
+adminRouter.get("/agency-operator/wards/:ward/holdings", requireAdminRole("agency_operator"), listAgencyWardHoldingsHandler);
+adminRouter.post("/agency-operator/notices", requireAdminRole("agency_operator"), printExistingAgencyNoticesHandler);
 
 // Tax Collector field work (see migration 113 and collectorField.controller.ts): find a house in the MUNG-MIG- data,
 // record a house found in neither database, and upload the signed receiving copy of a printed demand notice.
@@ -567,7 +572,8 @@ adminRouter.post("/new-holding-requests/:id/reject", requireAdminRole("tax_darog
 
 // Trade licence field survey: the Tax Collector records visits and prints the notices; the City Manager (who signs them)
 // and senior officers see every business and its notice status.
-const requireTlViewRole = requireAdminRole("tax_collector", "city_manager", "deputy_commissioner", "commissioner", "trade_license_nodal");
+// (GET routes only - the Agency Operator may view, never act.)
+const requireTlViewRole = requireAdminRole("tax_collector", "city_manager", "deputy_commissioner", "commissioner", "trade_license_nodal", "agency_operator");
 adminRouter.post("/tl-survey", requireAdminRole("tax_collector"), postTlSurvey);
 adminRouter.get("/tl-surveys", requireTlViewRole, getTlSurveys);
 adminRouter.get("/tl-surveys/:id/file/:which", requireTlViewRole, getTlSurveyFile);
@@ -616,9 +622,11 @@ adminRouter.post("/shop-rental-preferences/:id/reject", postRejectRentalPreferen
 // /:id below, or Express would try to parse "stats" as an id.
 // Restricted from Stall Prabhari - trade licenses aren't part of the
 // shop/rental workflow that role is scoped to.
-adminRouter.get("/trade-license-applications/stats", requireNonStallPrabhari, getTradeLicenseStats);
-adminRouter.get("/trade-license-applications", requireNonStallPrabhari, getTradeLicenseApplications);
-adminRouter.get("/trade-license-applications/:id", requireNonStallPrabhari, getTradeLicenseApplicationById);
+// The Agency Operator may read the list and the details (ID numbers masked) - not the documents, not approve/reject.
+const requireTlApplicationRead = requireAdminRole("tax_daroga", "mutation_nodal_clerk", "deputy_commissioner", "commissioner", "city_manager", "trade_license_nodal", "agency_operator");
+adminRouter.get("/trade-license-applications/stats", requireTlApplicationRead, getTradeLicenseStats);
+adminRouter.get("/trade-license-applications", requireTlApplicationRead, getTradeLicenseApplications);
+adminRouter.get("/trade-license-applications/:id", requireTlApplicationRead, getTradeLicenseApplicationById);
 adminRouter.get("/trade-license-applications/:id/documents/:docId", requireNonStallPrabhari, getTradeLicenseDocumentFile);
 adminRouter.post("/trade-license-applications/:id/approve", requireNonStallPrabhari, postApproveTradeLicenseApplication);
 adminRouter.post("/trade-license-applications/:id/reject", requireNonStallPrabhari, postRejectTradeLicenseApplication);
