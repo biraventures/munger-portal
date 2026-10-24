@@ -1,3 +1,5 @@
+import { ApiError } from "../utils/ApiError";
+import { PERIOD_OF_ASSESSMENT_BUCKETS } from "../constants/taxRates";
 import { getCurrentAssessmentYearStartNum, parseYearStartOrNull } from "../utils/assessmentYear";
 import { calculateRebateOrLateFee } from "./charges.service";
 import { num } from "../utils/num";
@@ -58,7 +60,10 @@ const CURRENT_BASIS_FROM_YEAR = 2025;
  * (auto-generated) stage; otherwise the imported/entered stage, falling back to the auto-generated one.
  */
 export function stageForYear(stages: TaxHistoryStageRow[], y: number): TaxHistoryStageRow | null {
-  const covering = stages.filter((s) => s.start_year_used <= y && y <= s.closing_year);
+  // A stage for the "... to last year" period stays open: its closing_year is only the last year at the time it was
+  // computed, and the stage is not recomputed when a new year begins. Without this, every holding would lose (or, with
+  // assertNoMissingTaxYears, be blocked for) the year just ended on each 1 April until the holding was next saved.
+  const covering = stages.filter((s) => s.start_year_used <= y && (y <= s.closing_year || PERIOD_OF_ASSESSMENT_BUCKETS[s.period_of_assessment]?.end === "lastYear"));
   if (covering.length === 0) return null;
   const newest = (list: TaxHistoryStageRow[]) => list.reduce((a, b) => (Number(b.id) > Number(a.id) ? b : a));
   const overridden = covering.filter((s) => s.override_reason);
@@ -272,4 +277,53 @@ export function pendingArrearsPeriod(property: PropertyRow, stages: TaxHistorySt
   }
   if (first === null || last === null) return null;
   return { fromYear: yearLabel(first), toYear: yearLabel(last), years };
+}
+
+/**
+ * Pending years (from the year after tax_paid_till_year up to last year) that have NO tax assessment on file - no
+ * stage covers them, and the holding is not exempt that year. Before 2011-12 the system has no rate table, so those
+ * years need the ARV from the old demand register (Pre-2011 ARV entry, migration 146); a year missing here would
+ * otherwise be silently left out of the demand - and then marked paid by the next full payment.
+ */
+export function missingTaxYears(property: PropertyRow, stages: TaxHistoryStageRow[]): number[] {
+  const holdingCreationYear = parseYearStartOrNull(property.holding_creation_year);
+  if (holdingCreationYear === null) return [];
+  const lastYear = getCurrentAssessmentYearStartNum() - 1;
+  const taxPaidTillYear = parseYearStartOrNull(property.tax_paid_till_year) ?? holdingCreationYear - 1;
+  const pendingStart = Math.max(taxPaidTillYear + 1, holdingCreationYear);
+  const missing: number[] = [];
+  for (let y = pendingStart; y <= lastYear; y++) {
+    if (isTaxExemptForYear(property, y)) continue;
+    if (!stageForYear(stages, y)) missing.push(y);
+  }
+  return missing;
+}
+
+/** "2008-2009 to 2010-2011, 2015-2016" - consecutive years joined into ranges. */
+export function yearRangesLabel(years: number[]): string {
+  const sorted = [...years].sort((a, b) => a - b);
+  const ranges: [number, number][] = [];
+  for (const y of sorted) {
+    const last = ranges[ranges.length - 1];
+    if (last && last[1] === y - 1) last[1] = y;
+    else ranges.push([y, y]);
+  }
+  return ranges.map(([a, b]) => (a === b ? yearLabel(a) : `${yearLabel(a)} to ${yearLabel(b)}`)).join(", ");
+}
+
+/**
+ * Refuses a demand notice or a payment while any pending year has no assessment on file, so a holding can never be
+ * billed short or marked paid for years that were never assessed.
+ */
+export function assertNoMissingTaxYears(property: PropertyRow, stages: TaxHistoryStageRow[]): void {
+  const missing = missingTaxYears(property, stages);
+  if (missing.length === 0) return;
+  const pre2011 = missing.some((y) => y < 2011);
+  throw ApiError.badRequest(
+    `Holding ${property.holding_no}: no tax assessment is on file for ${yearRangesLabel(missing)}. ` +
+      (pre2011
+        ? "The Tax Daroga must enter the ARV for the years before 2011-12 from the old demand register (Admin > Pre-2011 ARV Entry) and the City Manager approve it"
+        : "The holding's floor details must be completed") +
+      " before a demand notice can be generated or a payment collected.",
+  );
 }

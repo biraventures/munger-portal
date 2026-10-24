@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Users, FileClock, FileWarning, LayoutGrid, ShoppingBag, Store, BarChart3, Award, Archive, Download, XCircle, ShieldCheck, Trash2, RefreshCw, Upload, MapPin, Map as MapIcon, ClipboardCheck, UserCheck, ClipboardList, Receipt, RotateCcw, AlertTriangle, List, Flag, Home, FileText, Printer, Landmark } from "lucide-react";
 import { AdminHeader } from "@/components/admin-header";
 import { AgencyOperatorDashboard } from "@/components/agency/agency-operator-dashboard";
+import { Pre2011ArvCard } from "@/components/admin/pre2011-arv-card";
 import { DashboardSummaryWidget } from "@/components/dashboard-summary-widget";
 import { MutationPendingSummary } from "@/components/admin/mutation-pending-summary";
 import { useAdminGuard } from "@/lib/use-admin-guard";
@@ -373,6 +374,7 @@ export default function AdminDashboardPage() {
                 </Link>
               )}
 
+              {["tax_daroga", "city_manager", "deputy_commissioner", "commissioner"].includes(admin.role) && <Pre2011ArvCard role={admin.role} />}
               {showBulkDemandNotices && (
                 <Link href="/admin/demand-notices" className={cardClass}>
                   <span className={iconWrapClass}>

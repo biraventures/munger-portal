@@ -3,7 +3,7 @@ import { demandNoticeRepository } from "../repositories/demandNotice.repository"
 import { cancellationRequestRepository } from "../repositories/cancellationRequest.repository";
 import { calculateTax } from "./taxCalculation.service";
 import { annualSolidWasteCharge, calculateRebateOrLateFee, calculateSolidWasteCharge, solidWastePendingPeriod } from "./charges.service";
-import { summarizeArrears, computePartPaymentOptions, pendingArrearsPeriod, type PartPaymentOption } from "./arrears.service";
+import { summarizeArrears, computePartPaymentOptions, pendingArrearsPeriod, assertNoMissingTaxYears, type PartPaymentOption } from "./arrears.service";
 import { parseYearStartOrNull } from "../utils/assessmentYear";
 import { num } from "../utils/num";
 import { ApiError } from "../utils/ApiError";
@@ -98,6 +98,8 @@ export async function generateDemandNotice(
   if (!followsPartPaymentReceipt) await assertNoNoticeOnHold(holdingNo);
   const floors = await propertyRepository.findFloorsByHoldingNo(holdingNo);
   const stages = await propertyRepository.findTaxHistoryByHoldingNo(holdingNo);
+  // Never bill short: every pending year must have an assessment on file (pre-2011 years need the register ARV).
+  assertNoMissingTaxYears(property, stages);
 
   const calc = calculateTax(property, floors);
   const solidWasteCharge = calculateSolidWasteCharge(property);

@@ -6,7 +6,7 @@ import { demandNoticeRepository } from "../repositories/demandNotice.repository"
 import { cancellationRequestRepository } from "../repositories/cancellationRequest.repository";
 import { calculateTax } from "./taxCalculation.service";
 import { annualSolidWasteCharge, calculateRebateOrLateFee, calculateSolidWasteCharge, solidWasteYearsDue } from "./charges.service";
-import { summarizeArrears, computeArrearsClearance } from "./arrears.service";
+import { summarizeArrears, computeArrearsClearance, assertNoMissingTaxYears } from "./arrears.service";
 import { amountInWords } from "../utils/amountInWords";
 import { parseYearStartOrNull } from "../utils/assessmentYear";
 import { num } from "../utils/num";
@@ -344,6 +344,10 @@ export async function submitPayment(
   }
   assertNotDisputed(property);
   assertNoResurveyPending(property);
+  // A counter / Tax Collector / Agency payment (these pass an actor) is refused while any pending year has no
+  // assessment - paying would mark those years paid. The online gateway callback (no actor) is not refused here: the
+  // citizen's money is already taken, and initiateOnlinePayment ran the same check before sending them to the gateway.
+  if (actor) assertNoMissingTaxYears(property, await propertyRepository.findTaxHistoryByHoldingNo(holdingNo));
 
   const notice = await demandNoticeRepository.findByDemandNo(input.demandNo);
   if (!notice || notice.holding_no !== holdingNo) {

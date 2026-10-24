@@ -167,6 +167,7 @@ import {
   getTradeLicenseDocumentFile,
 } from "../controllers/tradeLicenseApplication.controller";
 import { requireAdmin, requireAdminRole } from "../middleware/requireAdmin";
+import { getPre2011Entries, getPre2011Holding, getPre2011PendingCount, getPre2011Worklist, postPre2011Approve, postPre2011Entry, postPre2011Reject } from "../controllers/pre2011Arv.controller";
 import {
   searchMigratedHoldingsHandler,
   createUnsurveyedHouseHandler,
@@ -630,6 +631,16 @@ adminRouter.get("/trade-license-applications/:id", requireTlApplicationRead, get
 adminRouter.get("/trade-license-applications/:id/documents/:docId", requireNonStallPrabhari, getTradeLicenseDocumentFile);
 adminRouter.post("/trade-license-applications/:id/approve", requireNonStallPrabhari, postApproveTradeLicenseApplication);
 adminRouter.post("/trade-license-applications/:id/reject", requireNonStallPrabhari, postRejectTradeLicenseApplication);
+
+// Pre-2011 ARV from the old demand register (migration 146): Tax Daroga enters, City Manager approves.
+const requirePre2011View = requireAdminRole("tax_daroga", "city_manager", "deputy_commissioner", "commissioner");
+adminRouter.get("/pre2011-arv/worklist", requirePre2011View, getPre2011Worklist);
+adminRouter.get("/pre2011-arv/holding/:holdingNo", requirePre2011View, getPre2011Holding);
+adminRouter.get("/pre2011-arv/entries", requirePre2011View, getPre2011Entries);
+adminRouter.get("/pre2011-arv/pending-count", requirePre2011View, getPre2011PendingCount);
+adminRouter.post("/pre2011-arv/entries", requireAdminRole("tax_daroga"), postPre2011Entry);
+adminRouter.post("/pre2011-arv/entries/:id/approve", requireAdminRole("city_manager"), postPre2011Approve);
+adminRouter.post("/pre2011-arv/entries/:id/reject", requireAdminRole("city_manager"), postPre2011Reject);
 
 // Bulk demand notice generation
 adminRouter.post("/demand-notices/bulk-generate", requireSeniorAdmin, postBulkGenerateDemandNotices);

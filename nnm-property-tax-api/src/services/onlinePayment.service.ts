@@ -13,7 +13,7 @@ import { submitPayment, getReceiptForReprint, getReceiptData, type PrintableRece
 import { PaymentInput, PaymentResult } from "../types/payment.types";
 import { demandNoticeRepository } from "../repositories/demandNotice.repository";
 import { cancellationRequestRepository } from "../repositories/cancellationRequest.repository";
-import { computeArrearsClearance, summarizeArrears } from "./arrears.service";
+import { computeArrearsClearance, summarizeArrears, assertNoMissingTaxYears } from "./arrears.service";
 import { parseYearStartOrNull } from "../utils/assessmentYear";
 import { num } from "../utils/num";
 import { pool } from "../config/db";
@@ -68,6 +68,8 @@ export async function initiateOnlinePayment(
   assertNotDisputed(property);
   assertNoResurveyPending(property);
   await assertNoNoticeOnHold(holdingNo);
+  // Same check as the counter: no online payment while some pending years have no assessment on file.
+  assertNoMissingTaxYears(property, await propertyRepository.findTaxHistoryByHoldingNo(holdingNo));
 
   // Optional, same reasoning as the operator counter-payment flow: if a
   // code WAS given it must resolve to a real active collector, so a
