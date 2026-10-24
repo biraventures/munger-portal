@@ -15,6 +15,10 @@ import {
   postApproveChangeRequest,
   postRejectChangeRequest,
   postRevertChangeRequest,
+  getChangeRequestTimeline,
+  getApplicationTimeline,
+  getMutationPendingSummary,
+  getHoldingLineage,
 } from "../controllers/changeRequest.controller";
 import {
   getDiscrepancyRequests,
@@ -32,7 +36,7 @@ import {
   postApproveCancellation,
   postRejectCancellation,
 } from "../controllers/cancellationRequest.controller";
-import { postBulkGenerateDemandNotices } from "../controllers/demandNotice.controller";
+import { getDemandRefreshRuns, postBulkGenerateDemandNotices } from "../controllers/demandNotice.controller";
 import { postBulkRegenerateTaxHistory } from "../controllers/adminTaxHistory.controller";
 import { getDataExport } from "../controllers/export.controller";
 import {
@@ -163,6 +167,7 @@ import {
   getTradeLicenseDocumentFile,
 } from "../controllers/tradeLicenseApplication.controller";
 import { requireAdmin, requireAdminRole } from "../middleware/requireAdmin";
+import { getPre2011Entries, getPre2011Holding, getPre2011PendingCount, getPre2011Worklist, postPre2011Approve, postPre2011Entry, postPre2011Reject } from "../controllers/pre2011Arv.controller";
 import {
   searchMigratedHoldingsHandler,
   createUnsurveyedHouseHandler,
@@ -180,6 +185,7 @@ import {
   listAgencyWardsHandler,
   listAgencyWardHoldingsHandler,
   prepareAgencyNoticesHandler,
+  printExistingAgencyNoticesHandler,
 } from "../controllers/agency.controller";
 import { listDisputedHandler, getDisputeStatusHandler, flagDisputedHandler, clearDisputedHandler } from "../controllers/propertyDispute.controller";
 import { getStreetlightReportHandler } from "../controllers/streetlightReport.controller";
@@ -191,13 +197,29 @@ import {
   deletePublicDocumentHandler,
 } from "../controllers/publicDocument.controller";
 import { getKhatianFile, getKhatianHistory, getKhatians, postKhatian, postReviewKhatian } from "../controllers/khatian.controller";
+import { getFieldReportPhoto } from "../controllers/fieldReport.controller";
 import {
   getMutationApplication,
   getMutationApplicationDocument,
   getMutationApplications,
   postLinkMutationApplication,
   postRejectMutationApplication,
+  postReturnToApplicant,
 } from "../controllers/mutationApplication.controller";
+import {
+  getPendingCount as getNewHoldingPendingCount,
+  getRequest as getNewHoldingRequest,
+  getRequestDocument as getNewHoldingRequestDocument,
+  getRequests as getNewHoldingRequests,
+  postApprove as postNewHoldingApprove,
+  postAssign as postNewHoldingAssign,
+  postDarogaForward as postNewHoldingDarogaForward,
+  postDmcForward as postNewHoldingDmcForward,
+  postFieldReport as postNewHoldingFieldReport,
+  postReject as postNewHoldingReject,
+  postReturn as postNewHoldingReturn,
+  postSendBack as postNewHoldingSendBack,
+} from "../controllers/newHoldingRequest.controller";
 import {
   getTlNotice,
   getTlPrintQueue,
@@ -226,7 +248,8 @@ const requireSeniorAdmin = requireAdminRole("commissioner", "deputy_commissioner
 // property-tax side of this system at all, so they're excluded from
 // mutation approvals, cancellation requests, tax collector management,
 // and trade license services below, per what was explicitly asked for.
-const requireMutationChainRole = requireAdminRole("tax_daroga", "mutation_nodal_clerk", "deputy_commissioner", "commissioner");
+// The Tax Surveyor is in the chain for the field report of a mutation (only the cases assigned to him - see changeRequest.service).
+const requireMutationChainRole = requireAdminRole("tax_daroga", "tax_surveyor", "mutation_nodal_clerk", "deputy_commissioner", "commissioner");
 const requireNonStallPrabhari = requireAdminRole(
   "tax_daroga",
   "mutation_nodal_clerk",
@@ -254,6 +277,12 @@ adminRouter.patch("/accounts/:id/active", requireAdminRole("commissioner"), setA
 // where it was reachable by every admin role with no restriction at all.
 adminRouter.get("/change-requests", requireMutationChainRole, getChangeRequests);
 adminRouter.get("/change-requests/:id", requireMutationChainRole, getChangeRequestById);
+// Mutation audit trail and the per-desk pending summary - the chain, plus the City Manager who oversees it.
+const requireMutationViewRole = requireAdminRole("tax_daroga", "tax_surveyor", "mutation_nodal_clerk", "deputy_commissioner", "commissioner", "city_manager");
+adminRouter.get("/field-report-photos/:photoId", requireMutationViewRole, getFieldReportPhoto);
+adminRouter.get("/change-requests/:id/timeline", requireMutationViewRole, getChangeRequestTimeline);
+adminRouter.get("/mutation-applications/:id/timeline", requireMutationViewRole, getApplicationTimeline);
+adminRouter.get("/mutation-pending-summary", requireMutationViewRole, getMutationPendingSummary);
 adminRouter.post("/change-requests/:id/approve", requireMutationChainRole, postApproveChangeRequest);
 adminRouter.post("/change-requests/:id/reject", requireMutationChainRole, postRejectChangeRequest);
 adminRouter.post("/change-requests/:id/revert", requireMutationChainRole, postRevertChangeRequest);
@@ -447,13 +476,17 @@ adminRouter.post("/tax-collectors/:username/assign-city-manager", requireAdminRo
 adminRouter.post("/tax-collectors/:username/wards", requireAdminRole("commissioner"), setTaxCollectorWardsHandler);
 // Agency logins (migration 114). The Project Manager (and senior officers) read collection / distribution / field
 // reports; the Team Leader prints ward-wise demand notices for holdings with dues pending.
-const requireAgencyReportRole = requireAdminRole("agency_project_manager", "commissioner", "deputy_commissioner", "city_manager", "tax_daroga", "tax_collector");
+const requireAgencyReportRole = requireAdminRole("agency_project_manager", "commissioner", "deputy_commissioner", "city_manager", "tax_daroga", "tax_collector", "agency_operator");
 adminRouter.get("/agency/report-filters", requireAgencyReportRole, getReportFilterOptionsHandler);
 adminRouter.get("/agency/reports", requireAgencyReportRole, getAgencyReportHandler);
 adminRouter.get("/agency/reports/export", requireAgencyReportRole, exportAgencyReportHandler);
 adminRouter.get("/agency/wards", requireAdminRole("agency_team_leader"), listAgencyWardsHandler);
 adminRouter.get("/agency/wards/:ward/holdings", requireAdminRole("agency_team_leader"), listAgencyWardHoldingsHandler);
 adminRouter.post("/agency/notices", requireAdminRole("agency_team_leader"), prepareAgencyNoticesHandler);
+// Agency Operator (migration 145): prints the ward-wise demand notices NNM has already generated - never creates one.
+adminRouter.get("/agency-operator/wards", requireAdminRole("agency_operator"), listAgencyWardsHandler);
+adminRouter.get("/agency-operator/wards/:ward/holdings", requireAdminRole("agency_operator"), listAgencyWardHoldingsHandler);
+adminRouter.post("/agency-operator/notices", requireAdminRole("agency_operator"), printExistingAgencyNoticesHandler);
 
 // Tax Collector field work (see migration 113 and collectorField.controller.ts): find a house in the MUNG-MIG- data,
 // record a house found in neither database, and upload the signed receiving copy of a printed demand notice.
@@ -512,16 +545,36 @@ adminRouter.post("/khatian/:id/review", requireAdminRole("deputy_commissioner"),
 
 // Online mutation applications: everyone in the mutation chain can open one (and its documents); the Tax Daroga links
 // a manually entered one to its holding (or turns it down).
-const requireMutationApplicationRole = requireAdminRole("tax_daroga", "mutation_nodal_clerk", "deputy_commissioner", "commissioner", "city_manager");
+const requireMutationApplicationRole = requireAdminRole("tax_daroga", "tax_surveyor", "mutation_nodal_clerk", "deputy_commissioner", "commissioner", "city_manager");
 adminRouter.get("/mutation-applications", requireMutationApplicationRole, getMutationApplications);
 adminRouter.get("/mutation-applications/:id", requireMutationApplicationRole, getMutationApplication);
 adminRouter.get("/mutation-applications/:id/documents/:docId/file", requireMutationApplicationRole, getMutationApplicationDocument);
 adminRouter.post("/mutation-applications/:id/link", requireAdminRole("tax_daroga"), postLinkMutationApplication);
 adminRouter.post("/mutation-applications/:id/reject", requireAdminRole("tax_daroga"), postRejectMutationApplication);
+adminRouter.post("/mutation-applications/:id/return", requireAdminRole("tax_daroga"), postReturnToApplicant);
+adminRouter.get("/holdings/:holdingNo/lineage", requireAdminRole("tax_daroga", "mutation_nodal_clerk", "deputy_commissioner", "commissioner", "city_manager"), getHoldingLineage);
+
+// Online requests for a new holding (property never assessed): Tax Daroga (demand register no. + surveyor) -> Tax
+// Surveyor (field report) -> Tax Daroga (comments) -> DMC -> Commissioner (approves; the MMC- holding is created).
+// Each step checks the officer's role and the request's status in the service; a Tax Surveyor sees only his own.
+const requireNewHoldingRole = requireAdminRole("tax_daroga", "tax_surveyor", "mutation_nodal_clerk", "deputy_commissioner", "commissioner", "city_manager");
+adminRouter.get("/new-holding-requests", requireNewHoldingRole, getNewHoldingRequests);
+adminRouter.get("/new-holding-requests/pending-count", requireNewHoldingRole, getNewHoldingPendingCount);
+adminRouter.get("/new-holding-requests/:id", requireNewHoldingRole, getNewHoldingRequest);
+adminRouter.get("/new-holding-requests/:id/documents/:docId/file", requireNewHoldingRole, getNewHoldingRequestDocument);
+adminRouter.post("/new-holding-requests/:id/assign", requireAdminRole("tax_daroga"), postNewHoldingAssign);
+adminRouter.post("/new-holding-requests/:id/field-report", requireAdminRole("tax_surveyor"), postNewHoldingFieldReport);
+adminRouter.post("/new-holding-requests/:id/daroga-forward", requireAdminRole("tax_daroga"), postNewHoldingDarogaForward);
+adminRouter.post("/new-holding-requests/:id/dmc-forward", requireAdminRole("deputy_commissioner"), postNewHoldingDmcForward);
+adminRouter.post("/new-holding-requests/:id/send-back", requireAdminRole("deputy_commissioner", "commissioner"), postNewHoldingSendBack);
+adminRouter.post("/new-holding-requests/:id/approve", requireAdminRole("commissioner"), postNewHoldingApprove);
+adminRouter.post("/new-holding-requests/:id/return", requireAdminRole("tax_daroga"), postNewHoldingReturn);
+adminRouter.post("/new-holding-requests/:id/reject", requireAdminRole("tax_daroga", "deputy_commissioner", "commissioner"), postNewHoldingReject);
 
 // Trade licence field survey: the Tax Collector records visits and prints the notices; the City Manager (who signs them)
 // and senior officers see every business and its notice status.
-const requireTlViewRole = requireAdminRole("tax_collector", "city_manager", "deputy_commissioner", "commissioner", "trade_license_nodal");
+// (GET routes only - the Agency Operator may view, never act.)
+const requireTlViewRole = requireAdminRole("tax_collector", "city_manager", "deputy_commissioner", "commissioner", "trade_license_nodal", "agency_operator");
 adminRouter.post("/tl-survey", requireAdminRole("tax_collector"), postTlSurvey);
 adminRouter.get("/tl-surveys", requireTlViewRole, getTlSurveys);
 adminRouter.get("/tl-surveys/:id/file/:which", requireTlViewRole, getTlSurveyFile);
@@ -570,15 +623,28 @@ adminRouter.post("/shop-rental-preferences/:id/reject", postRejectRentalPreferen
 // /:id below, or Express would try to parse "stats" as an id.
 // Restricted from Stall Prabhari - trade licenses aren't part of the
 // shop/rental workflow that role is scoped to.
-adminRouter.get("/trade-license-applications/stats", requireNonStallPrabhari, getTradeLicenseStats);
-adminRouter.get("/trade-license-applications", requireNonStallPrabhari, getTradeLicenseApplications);
-adminRouter.get("/trade-license-applications/:id", requireNonStallPrabhari, getTradeLicenseApplicationById);
+// The Agency Operator may read the list and the details (ID numbers masked) - not the documents, not approve/reject.
+const requireTlApplicationRead = requireAdminRole("tax_daroga", "mutation_nodal_clerk", "deputy_commissioner", "commissioner", "city_manager", "trade_license_nodal", "agency_operator");
+adminRouter.get("/trade-license-applications/stats", requireTlApplicationRead, getTradeLicenseStats);
+adminRouter.get("/trade-license-applications", requireTlApplicationRead, getTradeLicenseApplications);
+adminRouter.get("/trade-license-applications/:id", requireTlApplicationRead, getTradeLicenseApplicationById);
 adminRouter.get("/trade-license-applications/:id/documents/:docId", requireNonStallPrabhari, getTradeLicenseDocumentFile);
 adminRouter.post("/trade-license-applications/:id/approve", requireNonStallPrabhari, postApproveTradeLicenseApplication);
 adminRouter.post("/trade-license-applications/:id/reject", requireNonStallPrabhari, postRejectTradeLicenseApplication);
 
+// Pre-2011 ARV from the old demand register (migration 146): Tax Daroga enters, City Manager approves.
+const requirePre2011View = requireAdminRole("tax_daroga", "city_manager", "deputy_commissioner", "commissioner");
+adminRouter.get("/pre2011-arv/worklist", requirePre2011View, getPre2011Worklist);
+adminRouter.get("/pre2011-arv/holding/:holdingNo", requirePre2011View, getPre2011Holding);
+adminRouter.get("/pre2011-arv/entries", requirePre2011View, getPre2011Entries);
+adminRouter.get("/pre2011-arv/pending-count", requirePre2011View, getPre2011PendingCount);
+adminRouter.post("/pre2011-arv/entries", requireAdminRole("tax_daroga"), postPre2011Entry);
+adminRouter.post("/pre2011-arv/entries/:id/approve", requireAdminRole("city_manager"), postPre2011Approve);
+adminRouter.post("/pre2011-arv/entries/:id/reject", requireAdminRole("city_manager"), postPre2011Reject);
+
 // Bulk demand notice generation
 adminRouter.post("/demand-notices/bulk-generate", requireSeniorAdmin, postBulkGenerateDemandNotices);
+adminRouter.get("/demand-notices/refresh-runs", requireSeniorAdmin, getDemandRefreshRuns);
 
 // Bulk tax-history-stage regeneration (backfill from current Floors)
 adminRouter.post("/tax-history/bulk-regenerate", requireSeniorAdmin, postBulkRegenerateTaxHistory);

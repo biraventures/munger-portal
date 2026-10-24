@@ -1,4 +1,5 @@
 import { getOperatorToken } from "./auth";
+import { prepareUpload } from "./upload-limits";
 
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_PROPERTY_TAX_API_URL || "http://localhost:4000/api/v1";
@@ -89,30 +90,11 @@ export interface TradeLicenseDocument {
 
 /**
  * Uploads one document before the application is submitted; returns the {id, token} the submission must carry.
- * A photo is shrunk to a 1600px JPEG first; a PDF goes as is.
+ * A photo is shrunk to at most 750 KB first; a PDF must be at most 2 MB.
  */
 export async function uploadTradeLicenseDocument(file: File, docType: TradeLicenseDocType): Promise<{ id: string; token: string }> {
-  let body: Blob = file;
-  let type = file.type;
-  if (file.type !== "application/pdf") {
-    try {
-      const bitmap = await createImageBitmap(file);
-      const scale = Math.min(1, 1600 / Math.max(bitmap.width, bitmap.height));
-      const canvas = document.createElement("canvas");
-      canvas.width = Math.round(bitmap.width * scale);
-      canvas.height = Math.round(bitmap.height * scale);
-      canvas.getContext("2d")!.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-      const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.82));
-      if (blob) {
-        body = blob;
-        type = "image/jpeg";
-      }
-    } catch {
-      // not decodable here - send the original and let the server check it
-    }
-  }
-  if (body.size > 8 * 1024 * 1024) throw new Error("The file is larger than 8 MB.");
-  const res = await fetch(`${API_BASE_URL}/trade-license-applications/documents?type=${docType}&fileName=${encodeURIComponent(file.name)}`, {
+  const { blob: body, name, type } = await prepareUpload(file);
+  const res = await fetch(`${API_BASE_URL}/trade-license-applications/documents?type=${docType}&fileName=${encodeURIComponent(name)}`, {
     method: "POST",
     headers: { "Content-Type": type || "application/octet-stream" },
     body,

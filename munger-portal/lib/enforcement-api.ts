@@ -1,4 +1,5 @@
 import { getAttendanceToken } from "./attendance-auth";
+import { assertPdfSize, shrinkPhoto } from "./upload-limits";
 
 export const API_BASE_URL = process.env.NEXT_PUBLIC_PROPERTY_TAX_API_URL || "http://localhost:4000/api/v1";
 
@@ -23,23 +24,6 @@ export type Purpose =
   | "encroachment_photo" | "notice_photo" | "miking_video" | "signed_notice" | "removal_photo" | "measurement_report"
   | "violation_evidence" | "followup_evidence";
 
-/** Shrinks a phone photo (longest side 1600px, JPEG) so it uploads quickly on a mobile connection. */
-async function shrinkPhoto(file: File): Promise<Blob> {
-  try {
-    const bitmap = await createImageBitmap(file);
-    const scale = Math.min(1, 1600 / Math.max(bitmap.width, bitmap.height));
-    const canvas = document.createElement("canvas");
-    canvas.width = Math.round(bitmap.width * scale);
-    canvas.height = Math.round(bitmap.height * scale);
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return file;
-    ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.82));
-    return blob ?? file;
-  } catch {
-    return file;
-  }
-}
 
 function guessType(file: File): string {
   if (file.type) return file.type;
@@ -63,6 +47,7 @@ export async function uploadMedia(
   const token = getAttendanceToken();
   if (!token) throw new Error("Not logged in - please log in again.");
   const type = guessType(file);
+  if (type === "application/pdf") assertPdfSize(file);
   const body: Blob = type.startsWith("image/") ? await shrinkPhoto(file) : file;
   const contentType = type.startsWith("image/") && body !== file ? "image/jpeg" : type;
   const params = new URLSearchParams({ module, purpose });

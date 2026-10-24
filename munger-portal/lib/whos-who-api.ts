@@ -1,6 +1,7 @@
 import { getAdminToken } from "./admin-auth";
 import { getAttendanceToken } from "./attendance-auth";
 import { getOperatorToken } from "./auth";
+import { prepareUpload, shrinkPhoto } from "./upload-limits";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_PROPERTY_TAX_API_URL || "http://localhost:4000/api/v1";
 
@@ -124,23 +125,9 @@ function readAsBase64(blob: Blob): Promise<string> {
   });
 }
 
-/** Resize the photograph to at most 800px on the long side and re-encode as JPEG, so uploads stay small. */
+/** The photograph shrunk to at most 750 KB (JPEG). */
 export async function compressPhoto(file: File): Promise<Blob> {
-  try {
-    const bitmap = await createImageBitmap(file);
-    const scale = Math.min(1, 800 / Math.max(bitmap.width, bitmap.height));
-    const canvas = document.createElement("canvas");
-    canvas.width = Math.round(bitmap.width * scale);
-    canvas.height = Math.round(bitmap.height * scale);
-    const ctx = canvas.getContext("2d");
-    if (!ctx) throw new Error("no canvas");
-    ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.85));
-    if (!blob) throw new Error("no blob");
-    return blob;
-  } catch {
-    return file;
-  }
+  return shrinkPhoto(file);
 }
 
 export async function fetchWhosWhoMe(as: WhosWhoLogin): Promise<WhosWhoMe> {
@@ -156,6 +143,7 @@ export async function fetchWhosWhoEntries(as: WhosWhoLogin): Promise<WhosWhoEntr
 }
 
 async function inputBody(i: WhosWhoInput): Promise<string> {
+  const signedForm = i.signedForm ? await prepareUpload(i.signedForm) : null;
   return JSON.stringify({
     designation: i.designation,
     wardNo: i.designation === "ward_councillor" ? i.wardNo : null,
@@ -170,8 +158,8 @@ async function inputBody(i: WhosWhoInput): Promise<string> {
     formNo: i.formNo || null,
     consentConfirmed: i.consentConfirmed,
     photoBase64: i.photo ? await readAsBase64(await compressPhoto(i.photo)) : null,
-    signedFormName: i.signedForm?.name ?? null,
-    signedFormBase64: i.signedForm ? await readAsBase64(i.signedForm) : null,
+    signedFormName: signedForm?.name ?? null,
+    signedFormBase64: signedForm ? await readAsBase64(signedForm.blob) : null,
     replacesId: i.replacesId ?? null,
   });
 }

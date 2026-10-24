@@ -69,7 +69,11 @@ export interface StreetLight {
   noOfFunctionalLights: number | null;
   maintenanceAgencyId: number | null;
   remarks: string | null;
+  panelStatus?: "working" | "not_working" | null;
+  functionalStatus?: "functional" | "partially_functional" | "non_functional" | null;
 }
+
+export const FUNCTIONAL_STATUS_LABELS: Record<string, string> = { functional: "Functional", partially_functional: "Partially functional", non_functional: "Not functional" };
 
 export async function fetchLights(lightType?: "streetlight" | "high_mast"): Promise<StreetLight[]> {
   const url = lightType ? `${API_BASE_URL}/streetlight/lights?lightType=${lightType}` : `${API_BASE_URL}/streetlight/lights`;
@@ -151,7 +155,16 @@ export async function uploadLightsCsv(csvContent: string): Promise<LightsCsvImpo
  * from uploadLightsCsv above, which expects a per-light serial number
  * already assigned - this source has none, so one is generated per row.
  */
-export async function uploadHighMastBulkCsv(csvContent: string): Promise<LightsCsvImportResult> {
+export interface HighMastBulkImportResult {
+  created: number;
+  /** Towers already on file (same ward + location) that the sheet updated. */
+  updated: number;
+  errors: { row: number; message: string }[];
+  notes: { row: number; message: string }[];
+  newAgencies: string[];
+}
+
+export async function uploadHighMastBulkCsv(csvContent: string): Promise<HighMastBulkImportResult> {
   const res = await fetch(`${API_BASE_URL}/streetlight/lights/high-mast-bulk-upload`, {
     method: "POST",
     headers: authHeaders(),
@@ -431,10 +444,15 @@ export interface WardStatus {
   totalLights: number;
   notWorking: number;
   working: number;
+  /** Of the above, High Mast lights. */
+  highMast?: number;
+  highMastNotWorking?: number;
 }
 
-export async function fetchWardStatusDashboard(agency?: "NN" | "EESL"): Promise<WardStatus[]> {
-  const qs = agency ? `?agency=${agency}` : "";
+/** `type` = "high_mast" for High Mast towers only; an agency filter covers streetlights only; neither = both kinds. */
+export async function fetchWardStatusDashboard(agency?: "NN" | "EESL", type?: "streetlight" | "high_mast"): Promise<WardStatus[]> {
+  const q = new URLSearchParams({ ...(agency ? { agency } : {}), ...(type ? { type } : {}) }).toString();
+  const qs = q ? `?${q}` : "";
   const res = await fetch(`${API_BASE_URL}/streetlight/status-dashboard/wards${qs}`, { headers: authHeaders() });
   if (!res.ok) throw new Error("Could not load the ward status dashboard.");
   const data: { wards: WardStatus[] } = await res.json();
@@ -704,6 +722,10 @@ export interface HighMastLightStatus {
   working: boolean;
   faultHistory: SegmentLightFaultHistoryEntry[];
   switchStatus: "working" | "not_working" | "automatic" | "joint" | null;
+  panelStatus?: "working" | "not_working" | null;
+  functionalStatus?: "functional" | "partially_functional" | "non_functional" | null;
+  noOfLights?: number | null;
+  noOfFunctionalLights?: number | null;
   latitude: number | null;
   longitude: number | null;
 }

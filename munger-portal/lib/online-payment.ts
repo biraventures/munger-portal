@@ -1,3 +1,5 @@
+import type { ReceiptData } from "./payment-api";
+
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_PROPERTY_TAX_API_URL || "http://localhost:4000/api/v1";
 
@@ -18,11 +20,12 @@ export async function initiateOnlinePayment(
   taxCollectorCode?: string,
   /** The payer's tick on the declaration shown before paying (the server refuses the payment without it). */
   acceptDeclaration = false,
+  demandNos?: string[],
 ): Promise<InitiatePaymentResult> {
   const res = await fetch(`${API_BASE_URL}/properties/${encodeURIComponent(holdingNo)}/pay/online/initiate`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ amount, taxCollectorCode: taxCollectorCode || undefined, acceptDeclaration }),
+    body: JSON.stringify({ amount, taxCollectorCode: taxCollectorCode || undefined, acceptDeclaration, demandNos }),
   });
 
   if (!res.ok) {
@@ -38,6 +41,8 @@ export interface ConfirmPaymentResult {
   receiptNo: string | null;
   holdingNo: string;
   amount: string;
+  order_id?: string;
+  receipt?: ReceiptData | null;
 }
 
 /**

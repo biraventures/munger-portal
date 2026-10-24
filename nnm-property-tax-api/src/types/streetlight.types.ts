@@ -44,6 +44,9 @@ export interface LightRow {
   no_of_functional_lights: number | null;
   maintenance_agency_id: number | null;
   remarks: string | null;
+  /** Migration 141. */
+  panel_status: "working" | "not_working" | null;
+  functional_status: "functional" | "partially_functional" | "non_functional" | null;
 }
 
 export interface ContractorWardRow {

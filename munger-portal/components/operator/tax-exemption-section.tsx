@@ -91,7 +91,7 @@ export function TaxExemptionSection({
             <input value={value.remarks} onChange={(e) => set("remarks", e.target.value)} className={inputClass} placeholder="Issuing authority, basis of exemption, etc." />
           </div>
           <div className="sm:col-span-2">
-            <label className={labelClass}>Copy of the exemption order (PDF / JPG / PNG, up to 5 MB)</label>
+            <label className={labelClass}>Copy of the exemption order (PDF up to 2 MB, or a JPG / PNG photo)</label>
             <input
               type="file"
               accept={(options?.allowedExtensions ?? ["pdf", "jpg", "jpeg", "png"]).map((x) => `.${x}`).join(",")}

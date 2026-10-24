@@ -14,6 +14,7 @@ import {
   formatFileSize,
   type PublicDocument,
 } from "@/lib/public-documents-api";
+import { isPdfFile, isPhotoFile, MAX_PDF_BYTES } from "@/lib/upload-limits";
 
 const inputClass = "w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-nnm-blue focus:outline-none";
 const labelClass = "mb-1 block text-xs font-semibold text-slate-600";
@@ -67,7 +68,11 @@ export default function PublicDocumentsAdminPage() {
       setFormError("Choose a file to upload.");
       return;
     }
-    if (file.size > maxFileBytes) {
+    if (isPdfFile(file) && file.size > MAX_PDF_BYTES) {
+      setFormError(`This PDF is ${formatFileSize(file.size)} - a PDF can be at most 2 MB.`);
+      return;
+    }
+    if (!isPdfFile(file) && !isPhotoFile(file) && file.size > maxFileBytes) {
       setFormError(`This file is ${formatFileSize(file.size)} - the limit is ${formatFileSize(maxFileBytes)}.`);
       return;
     }
@@ -192,7 +197,7 @@ export default function PublicDocumentsAdminPage() {
                 className="block w-full text-sm text-slate-600 file:mr-3 file:rounded-md file:border-0 file:bg-blue-50 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-nnm-blue"
               />
               <p className="mt-1 text-xs text-slate-400">
-                {allowedExtensions.length > 0 ? allowedExtensions.join(", ").toUpperCase() : "PDF, Word, Excel, JPG, PNG"} · up to {formatFileSize(maxFileBytes)}
+                {allowedExtensions.length > 0 ? allowedExtensions.join(", ").toUpperCase() : "PDF, Word, Excel, JPG, PNG"} · PDF up to 2 MB, photos reduced to 750 KB automatically, other files up to {formatFileSize(maxFileBytes)}
               </p>
             </div>
             <label className="flex items-center gap-2 text-sm text-slate-700 sm:col-span-2">

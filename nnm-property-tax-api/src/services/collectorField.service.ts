@@ -5,6 +5,7 @@ import { demandNoticeRepository } from "../repositories/demandNotice.repository"
 import { env } from "../config/env";
 import { ApiError } from "../utils/ApiError";
 import type { AdminTokenPayload } from "../types/admin.types";
+import { MAX_PHOTO_BYTES as PHOTO_LIMIT, uploadLimitMessage } from "../utils/uploadLimits";
 
 const ALLOWED_PHOTO_MIME_TO_EXT: Record<string, string> = {
   "image/jpeg": "jpg",
@@ -12,14 +13,15 @@ const ALLOWED_PHOTO_MIME_TO_EXT: Record<string, string> = {
   "image/png": "png",
 };
 
-/** Phone photos are sent as base64 inside a 10MB JSON body, so the file itself must stay well under that. */
-const MAX_PHOTO_BYTES = 6 * 1024 * 1024;
+/** Photos: at most 750 KB (the page shrinks them to fit before sending). */
+const MAX_PHOTO_BYTES = PHOTO_LIMIT;
 
 async function savePhoto(folder: string, namePrefix: string, base64Data: string, mimeType: string): Promise<string> {
   const ext = ALLOWED_PHOTO_MIME_TO_EXT[mimeType];
   if (!ext) throw ApiError.badRequest("Only JPEG or PNG photos are accepted.");
   const buffer = Buffer.from(base64Data, "base64");
-  if (buffer.length === 0 || buffer.length > MAX_PHOTO_BYTES) throw ApiError.badRequest("Photo must be a non-empty file under 6MB.");
+  if (buffer.length === 0) throw ApiError.badRequest("The photo is empty.");
+  if (buffer.length > MAX_PHOTO_BYTES) throw ApiError.badRequest(uploadLimitMessage("image/jpeg", buffer.length));
   const relativePath = path.join(folder, `${namePrefix}-${Date.now()}-${Math.floor(Math.random() * 1e6)}.${ext}`);
   const fullPath = path.join(env.PHOTO_UPLOAD_DIR, relativePath);
   await fs.promises.mkdir(path.dirname(fullPath), { recursive: true });

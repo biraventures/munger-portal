@@ -1,3 +1,4 @@
+import type { FieldReport, FieldReportBody } from "./field-report";
 import { getAdminToken, type AdminRole } from "./admin-auth";
 import type { DemandNoticeReprintData } from "./demand-notice-api";
 import type { ReceiptData } from "./payment-api";
@@ -134,10 +135,28 @@ export interface ChangeRequestApproval {
 }
 
 export interface ChangeRequestDetail {
-  request: ChangeRequestSummary & { proposed_data: Record<string, unknown> };
+  request: ChangeRequestSummary & {
+    proposed_data: Record<string, unknown>;
+    assigned_surveyor_username?: string | null;
+    assigned_surveyor_name?: string | null;
+    register_old_holding_no?: string | null;
+  };
   currentProperty: Record<string, unknown> | null;
   currentFloors: Record<string, unknown>[];
   approvalHistory: ChangeRequestApproval[];
+  verification?: AreaVerification | null;
+  landRecord?: {
+    khataNo: string | null;
+    khesraNo: string | null;
+    surveySheetNo: string | null;
+    surveyWard: string | null;
+    mutateAreaSqft: string | null;
+    mutateEntire: boolean;
+    /** Floor-wise mutation: floors being transferred; null = every floor. */
+    mutateFloors?: string[] | null;
+  } | null;
+  lineage?: { parent_holding_no: string; child_holding_no: string; area_sqft: string; parent_area_before: string; parent_area_after: string; created_at: string; floors?: string[] | null }[];
+  fieldReports?: FieldReport[];
 }
 
 export async function fetchChangeRequestDetail(id: number): Promise<ChangeRequestDetail> {
@@ -146,11 +165,45 @@ export async function fetchChangeRequestDetail(id: number): Promise<ChangeReques
   return res.json();
 }
 
-export async function approveChangeRequest(id: number, notes?: string): Promise<ChangeRequestSummary> {
+export interface AreaVerificationBody {
+  jamabandiAreaSqft: number;
+  documentAreaSqft: number;
+  holdingAreaSqft: number;
+  mutateAreaSqft?: number | null;
+  khataNo: string;
+  khesraNo: string;
+  surveySheetNo: string;
+  surveyWard: string;
+  remarks?: string | null;
+}
+
+export interface AreaVerification {
+  jamabandi_area_sqft: string;
+  document_area_sqft: string;
+  holding_area_sqft: string;
+  areas_match: boolean;
+  mutate_area_sqft: string | null;
+  is_partial: boolean;
+  mutate_floors?: string[] | null;
+  khata_no: string;
+  khesra_no: string;
+  survey_sheet_no: string;
+  survey_ward: string;
+  remarks: string | null;
+  verified_by: string;
+  verified_at: string;
+}
+
+export async function approveChangeRequest(
+  id: number,
+  notes?: string,
+  verification?: AreaVerificationBody,
+  extra?: { assignment?: { surveyorUsername: string; registerOldHoldingNo?: string | null }; fieldReport?: FieldReportBody },
+): Promise<ChangeRequestSummary> {
   const res = await fetch(`${API_BASE_URL}/admin/change-requests/${id}/approve`, {
     method: "POST",
     headers: authHeaders(),
-    body: JSON.stringify({ notes }),
+    body: JSON.stringify({ notes, verification, ...extra }),
   });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
@@ -196,15 +249,44 @@ export interface BulkGenerateResult {
 }
 
 /** POST /api/v1/admin/demand-notices/bulk-generate — every holding with dues and floor data that has no live demand notice from the current month. */
-export async function bulkGenerateDemandNotices(): Promise<BulkGenerateResult> {
+/** Starts bulk generation as a background job (returns at once) - follow it with fetchDemandRefreshRuns. */
+export async function bulkGenerateDemandNotices(): Promise<void> {
   const res = await fetch(`${API_BASE_URL}/admin/demand-notices/bulk-generate`, {
     method: "POST",
     headers: authHeaders(),
   });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
-    throw new Error(body.error || "Bulk generation failed.");
+    throw new Error(body.error || "Could not start bulk generation.");
   }
+}
+
+export interface DemandRefreshRun {
+  id: string;
+  run_month: string;
+  trigger: "schedule" | "manual";
+  started_by: string;
+  status: "running" | "completed" | "failed" | "interrupted";
+  started_at: string;
+  finished_at: string | null;
+  total: number | null;
+  processed: number;
+  failed: number;
+  errors: { holdingNo: string; message: string }[];
+  message: string | null;
+}
+
+export interface DemandRefreshStatus {
+  runs: DemandRefreshRun[];
+  running: boolean;
+  currentMonth: string;
+  currentMonthDone: boolean;
+}
+
+/** Recent monthly demand refresh runs (automatic and manual) with live progress. */
+export async function fetchDemandRefreshRuns(): Promise<DemandRefreshStatus> {
+  const res = await fetch(`${API_BASE_URL}/admin/demand-notices/refresh-runs`, { headers: authHeaders(), cache: "no-store" });
+  if (!res.ok) throw new Error("Could not load the refresh runs.");
   return res.json();
 }
 

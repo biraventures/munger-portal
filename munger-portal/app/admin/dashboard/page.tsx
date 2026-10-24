@@ -4,7 +4,10 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Users, FileClock, FileWarning, LayoutGrid, ShoppingBag, Store, BarChart3, Award, Archive, Download, XCircle, ShieldCheck, Trash2, RefreshCw, Upload, MapPin, Map as MapIcon, ClipboardCheck, UserCheck, ClipboardList, Receipt, RotateCcw, AlertTriangle, List, Flag, Home, FileText, Printer, Landmark } from "lucide-react";
 import { AdminHeader } from "@/components/admin-header";
+import { AgencyOperatorDashboard } from "@/components/agency/agency-operator-dashboard";
+import { Pre2011ArvCard } from "@/components/admin/pre2011-arv-card";
 import { DashboardSummaryWidget } from "@/components/dashboard-summary-widget";
+import { MutationPendingSummary } from "@/components/admin/mutation-pending-summary";
 import { useAdminGuard } from "@/lib/use-admin-guard";
 import {
   fetchChangeRequests,
@@ -20,6 +23,7 @@ import {
 import { fetchShopAgreementRequests, fetchRentalApplications } from "@/lib/admin-shop-api";
 import { fetchTradeLicenseApplications } from "@/lib/admin-trade-license-api";
 import { ADMIN_ROLE_LABELS } from "@/lib/admin-auth";
+import { fetchPendingCount as fetchNewHoldingPending, type PendingCount as NewHoldingPending } from "@/lib/new-holding-api";
 
 export default function AdminDashboardPage() {
   const admin = useAdminGuard();
@@ -28,9 +32,11 @@ export default function AdminDashboardPage() {
   const [myShopStagePendingCount, setMyShopStagePendingCount] = useState<number | null>(null);
   const [myRentalAppPendingCount, setMyRentalAppPendingCount] = useState<number | null>(null);
   const [myTradeLicensePendingCount, setMyTradeLicensePendingCount] = useState<number | null>(null);
+  const [newHoldingPending, setNewHoldingPending] = useState<NewHoldingPending | null>(null);
 
   useEffect(() => {
-    if (!admin) return;
+    // The Agency Operator has its own small dashboard and none of these desks.
+    if (!admin || admin.role === "agency_operator") return;
     fetchChangeRequests({ status: "pending", myStage: true })
       .then((r) => setMyStagePendingCount(r.requests.length))
       .catch(() => setMyStagePendingCount(null));
@@ -46,11 +52,19 @@ export default function AdminDashboardPage() {
     fetchTradeLicenseApplications({ status: "pending", myStage: true })
       .then((r) => setMyTradeLicensePendingCount(r.applications.length))
       .catch(() => setMyTradeLicensePendingCount(null));
+    if (["tax_daroga", "tax_surveyor", "mutation_nodal_clerk", "deputy_commissioner", "commissioner", "city_manager"].includes(admin.role)) {
+      fetchNewHoldingPending()
+        .then(setNewHoldingPending)
+        .catch(() => setNewHoldingPending(null));
+    }
   }, [admin]);
 
   if (!admin) {
     return <div className="flex min-h-screen items-center justify-center text-sm text-slate-400">Loading…</div>;
   }
+
+  // The private agency's counter login: only its own cards (see components/agency/agency-operator-dashboard.tsx).
+  if (admin.role === "agency_operator") return <AgencyOperatorDashboard admin={admin} />;
 
   // Stall Prabhari is scoped to the shop/rental workflow only; Trade
   // License Nodal is scoped to trade licenses only - each should see
@@ -84,7 +98,8 @@ export default function AdminDashboardPage() {
   // can be hidden entirely when none of its cards apply to this role,
   // rather than showing an empty section.
   const isMutationChainRole = admin.role === "tax_daroga" || admin.role === "mutation_nodal_clerk" || admin.role === "deputy_commissioner" || isCommissioner;
-  const showMutationApprovals = isMutationChainRole;
+  // The Tax Surveyor gives the field report on mutations assigned to him (migration 140).
+  const showMutationApprovals = isMutationChainRole || admin.role === "tax_surveyor";
   const showCancellationRequests = !isRestrictedRole;
   const showBulkDemandNotices = !isRestrictedRole;
   const showAllPropertyChanges = isCommissioner;
@@ -122,6 +137,9 @@ export default function AdminDashboardPage() {
   const showEmployeeDatabaseVerify = admin.role === "city_manager";
   const showEmployeeDatabaseProgress = isCommissioner;
   const showMutationApplications = isMutationChainRole || admin.role === "city_manager";
+  const showNewHoldingRequests = showMutationApplications || admin.role === "tax_surveyor";
+  const actsOnNewHolding = ["tax_daroga", "tax_surveyor", "deputy_commissioner", "commissioner"].includes(admin.role);
+  const newHoldingWaiting = newHoldingPending ? newHoldingPending.mine : null;
   const showKhatianUpload = admin.role === "abhilekh_prabhari";
   const showKhatianReview = ["deputy_commissioner", "commissioner", "city_manager"].includes(admin.role);
   const showTlSurvey = admin.role === "tax_collector";
@@ -206,6 +224,8 @@ export default function AdminDashboardPage() {
         <h1 className="mb-1 text-2xl font-semibold text-slate-900">Welcome, {admin.displayName}</h1>
         <p className="mb-8 text-sm text-slate-500">Signed in as {ADMIN_ROLE_LABELS[admin.role]}.</p>
 
+        {(isMutationChainRole || admin.role === "city_manager") && <MutationPendingSummary highlight={admin.role} />}
+
         {!isAgencyRole && admin.role !== "abhilekh_prabhari" && (
           <DashboardSummaryWidget
             fetchSummary={fetchDashboardSummaryAdmin}
@@ -289,10 +309,12 @@ export default function AdminDashboardPage() {
                   <span className={deskIconWrapClass(myStagePendingCount)}>
                     <FileClock className="h-6 w-6" strokeWidth={1.8} />
                   </span>
-                  <h3 className="mb-1.5 text-base font-semibold text-slate-900">Mutation Approvals</h3>
+                  <h3 className="mb-1.5 text-base font-semibold text-slate-900">{admin.role === "tax_surveyor" ? "Mutation Field Reports" : "Mutation Approvals"}</h3>
                   <p className="text-sm text-slate-500">
                     {myStagePendingCount === null
-                      ? "Review property change requests waiting on your desk."
+                      ? admin.role === "tax_surveyor"
+                        ? "Mutations assigned to you for a field report."
+                        : "Review property change requests waiting on your desk."
                       : `${myStagePendingCount} request${myStagePendingCount === 1 ? "" : "s"} currently waiting on your desk.`}
                   </p>
                 </Link>
@@ -305,6 +327,20 @@ export default function AdminDashboardPage() {
                   </span>
                   <h3 className="mb-1.5 text-base font-semibold text-slate-900">Online Mutation Applications</h3>
                   <p className="text-sm text-slate-500">Applications from the public window, their documents and progress; holdings to be identified.</p>
+                </Link>
+              )}
+
+              {showNewHoldingRequests && (
+                <Link href="/admin/new-holding-requests" className={actsOnNewHolding ? deskCardClass(newHoldingWaiting) : cardClass}>
+                  <span className={actsOnNewHolding ? deskIconWrapClass(newHoldingWaiting) : iconWrapClass}>
+                    <Home className="h-6 w-6" strokeWidth={1.8} />
+                  </span>
+                  <h3 className="mb-1.5 text-base font-semibold text-slate-900">New Holding Requests</h3>
+                  <p className="text-sm text-slate-500">
+                    {newHoldingWaiting === null || !actsOnNewHolding
+                      ? "Public requests for properties never assessed: demand register no., field report, comments, approval - the MMC- holding is created."
+                      : `${newHoldingWaiting} request${newHoldingWaiting === 1 ? "" : "s"} waiting on your desk.`}
+                  </p>
                 </Link>
               )}
 
@@ -338,6 +374,7 @@ export default function AdminDashboardPage() {
                 </Link>
               )}
 
+              {["tax_daroga", "city_manager", "deputy_commissioner", "commissioner"].includes(admin.role) && <Pre2011ArvCard role={admin.role} />}
               {showBulkDemandNotices && (
                 <Link href="/admin/demand-notices" className={cardClass}>
                   <span className={iconWrapClass}>

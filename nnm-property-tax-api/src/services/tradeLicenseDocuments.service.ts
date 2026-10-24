@@ -6,6 +6,7 @@ import type { PoolClient } from "pg";
 import { pool } from "../config/db";
 import { env } from "../config/env";
 import { ApiError } from "../utils/ApiError";
+import { uploadLimitFor, uploadLimitMessage } from "../utils/uploadLimits";
 
 /**
  * Documents uploaded with a trade licence application (migration 134). Each file is uploaded on its own first and
@@ -35,7 +36,8 @@ export async function stageDocument(req: Request, docType: string, fileName: str
   const mime = String(req.headers["content-type"] ?? "").split(";")[0]!.trim().toLowerCase();
   const ext = mime === "application/pdf" ? "pdf" : mime === "image/jpeg" ? "jpg" : mime === "image/png" ? "png" : null;
   if (!ext || (ext === "pdf" && !spec.pdf)) throw ApiError.badRequest(spec.pdf ? "Upload a PDF, JPG or PNG file." : "Upload a JPG or PNG photo.");
-  if (Number(req.headers["content-length"] ?? 0) > MAX_BYTES) throw new ApiError(413, "The file is too large - the limit is 8 MB.");
+  const limit = uploadLimitFor(mime) ?? MAX_BYTES;
+  if (Number(req.headers["content-length"] ?? 0) > limit) throw new ApiError(413, uploadLimitMessage(mime));
 
   const now = new Date();
   const rel = path.join("trade-license-applications", `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}`, `${docType}-${Date.now()}-${crypto.randomBytes(6).toString("hex")}.${ext}`);
@@ -49,8 +51,8 @@ export async function stageDocument(req: Request, docType: string, fileName: str
       req.on("data", (chunk: Buffer) => {
         size += chunk.length;
         if (head.length < 8) head = Buffer.concat([head, chunk]).subarray(0, 8);
-        if (size > MAX_BYTES) {
-          reject(new ApiError(413, "The file is too large - the limit is 8 MB."));
+        if (size > limit) {
+          reject(new ApiError(413, uploadLimitMessage(mime)));
           req.unpipe(out);
           out.destroy();
         }

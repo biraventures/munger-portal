@@ -16,7 +16,18 @@ import type { DemandNoticeReprintData } from "@/lib/demand-notice-api";
 import { NoticeView } from "./notice-view";
 import { ReceiptReprintView } from "./receipt-reprint-view";
 
-export function PropertyDocumentHistory({ holdingNo }: { holdingNo: string }) {
+/** Where the lists and reprints come from - the counter operator's session by default. Without requestCancellation no
+ * "Cancel" is offered (the Agency Operator may view and reprint only). */
+export interface DocumentHistoryApi {
+  fetchDemandNoticeHistory: (holdingNo: string) => Promise<DemandNoticeHistoryEntry[]>;
+  fetchDemandNoticeReprint: (demandNo: string) => Promise<DemandNoticeReprintData>;
+  fetchPaymentHistory: (holdingNo: string) => Promise<PaymentHistoryEntry[]>;
+  fetchReceiptReprint: (receiptNo: string) => Promise<PrintableReceiptHistory>;
+  requestCancellation?: (type: "demand_notice" | "receipt", id: string, reason: string) => Promise<unknown>;
+}
+const OPERATOR_HISTORY_API: DocumentHistoryApi = { fetchDemandNoticeHistory, fetchDemandNoticeReprint, fetchPaymentHistory, fetchReceiptReprint, requestCancellation };
+
+export function PropertyDocumentHistory({ holdingNo, api = OPERATOR_HISTORY_API }: { holdingNo: string; api?: DocumentHistoryApi }) {
   const [noticeHistory, setNoticeHistory] = useState<DemandNoticeHistoryEntry[] | null>(null);
   const [paymentHistory, setPaymentHistory] = useState<PaymentHistoryEntry[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -34,12 +45,15 @@ export function PropertyDocumentHistory({ holdingNo }: { holdingNo: string }) {
   // pressed - a cancellation approved by the Tax Daroga in another login otherwise leaves this list showing the old
   // status (a cancelled receipt still offering "Cancel", its notice still "settled").
   const loadHistory = useCallback(() => {
-    fetchDemandNoticeHistory(holdingNo)
+    api
+      .fetchDemandNoticeHistory(holdingNo)
       .then(setNoticeHistory)
       .catch((err) => setError(err instanceof Error ? err.message : "Could not load demand notice history."));
-    fetchPaymentHistory(holdingNo)
+    api
+      .fetchPaymentHistory(holdingNo)
       .then(setPaymentHistory)
       .catch((err) => setError(err instanceof Error ? err.message : "Could not load payment history."));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [holdingNo]);
 
   useEffect(() => {
@@ -69,7 +83,7 @@ export function PropertyDocumentHistory({ holdingNo }: { holdingNo: string }) {
   async function handleOpenNotice(demandNo: string) {
     setLoadingItem(`notice-${demandNo}`);
     try {
-      setNoticeReprint(await fetchDemandNoticeReprint(demandNo));
+      setNoticeReprint(await api.fetchDemandNoticeReprint(demandNo));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not load this notice.");
     } finally {
@@ -80,7 +94,7 @@ export function PropertyDocumentHistory({ holdingNo }: { holdingNo: string }) {
   async function handleOpenReceipt(receiptNo: string) {
     setLoadingItem(`receipt-${receiptNo}`);
     try {
-      setReceiptReprint(await fetchReceiptReprint(receiptNo));
+      setReceiptReprint(await api.fetchReceiptReprint(receiptNo));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not load this receipt.");
     } finally {
@@ -104,7 +118,8 @@ export function PropertyDocumentHistory({ holdingNo }: { holdingNo: string }) {
     setCancelSubmitting(true);
     setCancelError(null);
     try {
-      await requestCancellation(cancelling.type, cancelling.id, cancelReason);
+      if (!api.requestCancellation) return;
+      await api.requestCancellation(cancelling.type, cancelling.id, cancelReason);
       setCancelSuccess(`Cancellation request submitted for ${cancelling.type === "demand_notice" ? "demand notice" : "receipt"} #${cancelling.id} - it will take effect once Tax Daroga approves it.`);
       setCancelling(null);
       loadHistory();
@@ -139,7 +154,10 @@ export function PropertyDocumentHistory({ holdingNo }: { holdingNo: string }) {
           Refresh
         </button>
       </div>
-      <p className="mb-4 text-xs text-slate-500">Past demand notices and payment receipts. Cancellation requires Tax Daroga approval and a stated reason.</p>
+      <p className="mb-4 text-xs text-slate-500">
+        Past demand notices and payment receipts.{" "}
+        {api.requestCancellation ? "Cancellation requires Tax Daroga approval and a stated reason." : "View and reprint only - ask the Nagar Nigam counter for any cancellation."}
+      </p>
 
       {cancelSuccess && (
         <div role="status" className="mb-4 flex items-center gap-2 rounded-md border border-green-200 bg-green-50 p-3 text-sm text-green-700">
@@ -188,7 +206,7 @@ export function PropertyDocumentHistory({ holdingNo }: { holdingNo: string }) {
                       {loadingItem === `notice-${n.demandNo}` ? <Loader2 className="h-3 w-3 animate-spin" /> : <Printer className="h-3 w-3" />}
                       View
                     </button>
-                    {!n.settled && !n.cancelled && !n.cancellationPending && (
+                    {api.requestCancellation && !n.settled && !n.cancelled && !n.cancellationPending && (
                       <button
                         onClick={() => openCancel("demand_notice", n.demandNo)}
                         className="inline-flex items-center gap-1 rounded border border-red-300 px-2 py-1 font-semibold text-red-600 hover:bg-red-50"
@@ -237,7 +255,7 @@ export function PropertyDocumentHistory({ holdingNo }: { holdingNo: string }) {
                       {loadingItem === `receipt-${p.receiptNo}` ? <Loader2 className="h-3 w-3 animate-spin" /> : <Printer className="h-3 w-3" />}
                       View
                     </button>
-                    {!p.cancelled && !p.cancellationPending && (
+                    {api.requestCancellation && !p.cancelled && !p.cancellationPending && (
                       <button
                         onClick={() => openCancel("receipt", p.receiptNo)}
                         className="inline-flex items-center gap-1 rounded border border-red-300 px-2 py-1 font-semibold text-red-600 hover:bg-red-50"

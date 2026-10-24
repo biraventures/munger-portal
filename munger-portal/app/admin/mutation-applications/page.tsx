@@ -5,18 +5,22 @@ import Link from "next/link";
 import { AlertCircle, ChevronDown, ChevronUp, Loader2 } from "lucide-react";
 import { AdminHeader } from "@/components/admin-header";
 import { MutationApplicationPanel } from "@/components/admin/mutation-application-panel";
+import { MutationPendingSummary } from "@/components/admin/mutation-pending-summary";
+import { MutationTimeline } from "@/components/admin/mutation-timeline";
 import { useAdminGuard } from "@/lib/use-admin-guard";
-import { fetchStaffApplications, linkApplication, rejectStaffApplication, TRANSFER_BASIS, type StaffApplicationListItem } from "@/lib/mutation-api";
+import { fetchStaffApplications, linkApplication, rejectStaffApplication, returnStaffApplication, TRANSFER_BASIS, type StaffApplicationListItem } from "@/lib/mutation-api";
 
 const ALLOWED = ["tax_daroga", "mutation_nodal_clerk", "deputy_commissioner", "commissioner", "city_manager"];
 const FILTERS = [
   { value: "awaiting_holding", label: "Holding to be identified" },
+  { value: "returned", label: "Sent back to applicant" },
   { value: "in_chain", label: "In the mutation chain" },
   { value: "rejected", label: "Not accepted" },
   { value: "", label: "All" },
 ];
 const STAGE: Record<string, string> = {
   tax_daroga: "Tax Daroga",
+  tax_surveyor: "Tax Surveyor",
   mutation_nodal_clerk: "Mutation Nodal Clerk",
   deputy_commissioner: "DMC",
   commissioner: "Commissioner",
@@ -25,8 +29,9 @@ const STAGE: Record<string, string> = {
 function progress(a: StaffApplicationListItem): string {
   if (a.status === "awaiting_holding") return "Holding to be identified";
   if (a.status === "rejected") return "Not accepted";
+  if (a.status === "returned") return "Sent back to applicant";
   if (a.change_request_status === "pending") return `With ${STAGE[a.current_stage ?? ""] ?? a.current_stage}`;
-  if (a.change_request_status === "reverted") return "Sent back to operator";
+  if (a.change_request_status === "reverted") return "Sent back to applicant";
   return a.change_request_status ? a.change_request_status.charAt(0).toUpperCase() + a.change_request_status.slice(1) : "-";
 }
 
@@ -64,11 +69,12 @@ export default function MutationApplicationsPage() {
   }
   const isDaroga = admin.role === "tax_daroga";
 
-  async function act(id: string, kind: "link" | "reject") {
+  async function act(id: string, kind: "link" | "reject" | "return") {
     setBusy(true);
     setError(null);
     try {
       if (kind === "link") await linkApplication(id, holdingNo.trim());
+      else if (kind === "return") await returnStaffApplication(id, remarks.trim());
       else await rejectStaffApplication(id, remarks.trim());
       setOpen(null);
       setHoldingNo("");
@@ -85,6 +91,7 @@ export default function MutationApplicationsPage() {
     <div className="min-h-screen bg-slate-50">
       <AdminHeader admin={admin} />
       <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
+        <MutationPendingSummary highlight={admin.role} />
         <h1 className="mb-1 text-2xl font-semibold text-slate-900">Online Mutation Applications</h1>
         <p className="mb-6 text-sm text-slate-500">
           Applications from the public window. One with a verified holding number goes straight to the Tax Daroga&apos;s Mutation Approvals
@@ -133,6 +140,10 @@ export default function MutationApplicationsPage() {
                 {open === a.id && (
                   <div className="space-y-4 border-t border-slate-100 p-4">
                     <MutationApplicationPanel applicationId={a.id} />
+                    <div className="rounded-lg border border-slate-200 p-3">
+                      <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Audit trail</p>
+                      <MutationTimeline applicationId={a.id} />
+                    </div>
                     {a.handling_remarks && <p className="text-xs text-slate-600">Remarks ({a.handled_by}): {a.handling_remarks}</p>}
                     {a.change_request_id && (
                       <Link href={`/admin/change-requests/${a.change_request_id}`} className="inline-block text-sm font-semibold text-nnm-blue hover:underline">
@@ -156,9 +167,16 @@ export default function MutationApplicationsPage() {
                           </div>
                         </div>
                         <div className="space-y-2">
-                          <label className="block text-xs font-medium text-slate-600">Or turn it down (reason is shown to the applicant)</label>
+                          <label className="block text-xs font-medium text-slate-600">Or send it back for correction / turn it down (shown to the applicant)</label>
                           <div className="flex gap-2">
                             <input value={remarks} onChange={(e) => setRemarks(e.target.value)} maxLength={500} className="w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm" />
+                            <button
+                              onClick={() => act(a.id, "return")}
+                              disabled={busy || remarks.trim().length < 3}
+                              className="whitespace-nowrap rounded-md border border-amber-300 px-3 py-1.5 text-xs font-semibold text-amber-700 disabled:opacity-60"
+                            >
+                              Send back
+                            </button>
                             <button
                               onClick={() => act(a.id, "reject")}
                               disabled={busy || remarks.trim().length < 3}

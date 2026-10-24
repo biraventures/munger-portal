@@ -84,11 +84,14 @@ export const lightFaultRepository = {
     nonFunctionalSince?: string | null;
     localSourceName?: string | null;
     assignedContractorId: number | null;
+    reporterHoldingNo?: string | null;
+    reportedSwitchStatus?: string | null;
   }): Promise<LightFaultRow> {
     const { rows } = await pool.query<LightFaultRow>(
       `INSERT INTO light_faults
-         (light_id, reported_gps_lat, reported_gps_lng, deadline_at, reported_by_type, reported_by_user_id, reported_by_admin_username, reporter_phone, reporter_notes, non_functional_since, local_source_name, assigned_contractor_id)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *`,
+         (light_id, reported_gps_lat, reported_gps_lng, deadline_at, reported_by_type, reported_by_user_id, reported_by_admin_username, reporter_phone, reporter_notes, non_functional_since, local_source_name, assigned_contractor_id,
+          reporter_holding_no, reported_switch_status)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING *`,
       [
         input.lightId,
         input.reportedGpsLat,
@@ -102,6 +105,8 @@ export const lightFaultRepository = {
         input.nonFunctionalSince ?? null,
         input.localSourceName ?? null,
         input.assignedContractorId,
+        input.reporterHoldingNo ?? null,
+        input.reportedSwitchStatus ?? null,
       ],
     );
     return rows[0]!;

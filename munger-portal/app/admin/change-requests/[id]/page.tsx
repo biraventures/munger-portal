@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { AlertCircle, CheckCircle2, Loader2, XCircle, RotateCcw } from "lucide-react";
+import { AlertCircle, Loader2, RotateCcw } from "lucide-react";
 import { AdminHeader } from "@/components/admin-header";
 import { StageBadge } from "@/components/admin/stage-badge";
 import { useAdminGuard } from "@/lib/use-admin-guard";
@@ -16,6 +16,9 @@ import {
 import { ADMIN_ROLE_LABELS } from "@/lib/admin-auth";
 import { TaxExemptionReview } from "@/components/admin/tax-exemption-review";
 import { MutationApplicationPanel } from "@/components/admin/mutation-application-panel";
+import { MutationTimeline } from "@/components/admin/mutation-timeline";
+import { AreaVerificationForm, AreaVerificationView, floorName, isPartial, toBody, verificationProblem, type VerificationDraft } from "@/components/admin/mutation-area-verification";
+import { blankFieldReport, FieldReportForm, FieldReportList, fieldReportBody, SurveyorSelect, type FieldReportDraft } from "@/components/admin/field-report";
 
 const FIELD_DIFF_ROWS: { label: string; currentKey: string; proposedKey: string }[] = [
   { label: "Owner Name", currentKey: "owner_name", proposedKey: "ownerName" },
@@ -53,10 +56,42 @@ export default function ChangeRequestDetailPage() {
   const [notes, setNotes] = useState("");
   const [acting, setActing] = useState<"approve" | "reject" | "revert" | null>(null);
   const [reverting, setReverting] = useState(false);
+  const [verification, setVerification] = useState<VerificationDraft>({
+    jamabandiAreaSqft: "",
+    documentAreaSqft: "",
+    holdingAreaSqft: "",
+    entire: true,
+    mutateAreaSqft: "",
+    khataNo: "",
+    khesraNo: "",
+    surveySheetNo: "",
+    surveyWard: "",
+    remarks: "",
+  });
+  const [trailKey, setTrailKey] = useState(0);
+  const [surveyor, setSurveyor] = useState("");
+  const [registerNo, setRegisterNo] = useState("");
+  const [report, setReport] = useState<FieldReportDraft>(blankFieldReport);
 
   function load() {
+    setTrailKey((k) => k + 1);
     fetchChangeRequestDetail(id)
-      .then(setDetail)
+      .then((d) => {
+        setDetail(d);
+        // Pre-fill the land-record details from the application / holding (the Tax Daroga checks and corrects them).
+        if (d.landRecord) {
+          setVerification((v) => ({
+            ...v,
+            khataNo: v.khataNo || d.landRecord?.khataNo || "",
+            khesraNo: v.khesraNo || d.landRecord?.khesraNo || "",
+            surveySheetNo: v.surveySheetNo || d.landRecord?.surveySheetNo || "",
+            surveyWard: v.surveyWard || d.landRecord?.surveyWard || "",
+            entire: d.landRecord?.mutateEntire ?? true,
+            mutateAreaSqft: v.mutateAreaSqft || (d.landRecord?.mutateAreaSqft != null ? String(Number(d.landRecord.mutateAreaSqft)) : ""),
+            floors: d.landRecord?.mutateFloors ?? null,
+          }));
+        }
+      })
       .catch((err) => setError(err instanceof Error ? err.message : "Could not load this request."));
   }
 
@@ -66,13 +101,35 @@ export default function ChangeRequestDetailPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [admin, id]);
 
+  const needsVerification =
+    !!detail && !!admin && detail.request.status === "pending" && detail.request.current_stage === "tax_daroga" && detail.request.approval_tier === "mutation" && admin.role === "tax_daroga";
+
+  const isSurveyorStep = !!detail && !!admin && detail.request.status === "pending" && detail.request.current_stage === "tax_surveyor" && admin.role === "tax_surveyor";
+
   async function handleApprove() {
+    let extra: Parameters<typeof approveChangeRequest>[3];
+    if (needsVerification) {
+      const problem = verificationProblem(verification);
+      if (problem) {
+        setError(problem);
+        return;
+      }
+      if (!surveyor) return setError("Choose the Tax Surveyor who will give the field report.");
+      if (isPartial(verification) && !registerNo.trim()) return setError("This mutation creates a new holding - enter the old holding number given to it in the demand register.");
+      extra = { assignment: { surveyorUsername: surveyor, registerOldHoldingNo: isPartial(verification) ? registerNo.trim() : null } };
+    }
+    if (isSurveyorStep) {
+      const b = fieldReportBody(report);
+      if (typeof b === "string") return setError(b);
+      extra = { fieldReport: b };
+    }
     setActing("approve");
     setError(null);
     try {
-      await approveChangeRequest(id, notes || undefined);
+      await approveChangeRequest(id, notes || undefined, needsVerification ? toBody(verification) : undefined, extra);
       load();
       setNotes("");
+      setReport(blankFieldReport());
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not approve.");
     } finally {
@@ -198,30 +255,41 @@ export default function ChangeRequestDetailPage() {
               </section>
             )}
 
+            {detail.verification && <AreaVerificationView v={detail.verification} />}
+
+            {(detail.request.assigned_surveyor_name || (detail.fieldReports?.length ?? 0) > 0) && (
+              <section className="rounded-xl border border-slate-200 bg-white p-6">
+                <h2 className="mb-2 text-base font-semibold text-slate-900">Field verification</h2>
+                <p className="mb-3 text-sm text-slate-600">
+                  {detail.request.assigned_surveyor_name ? <>Tax Surveyor: <b>{detail.request.assigned_surveyor_name}</b>. </> : null}
+                  {detail.request.register_old_holding_no ? (
+                    <>
+                      Old holding no. for the new holding (demand register): <b className="font-mono">{detail.request.register_old_holding_no}</b>
+                    </>
+                  ) : null}
+                </p>
+                <FieldReportList reports={detail.fieldReports ?? []} />
+              </section>
+            )}
+
+            {detail.lineage && detail.lineage.length > 0 && (
+              <section className="rounded-xl border border-blue-200 bg-blue-50 p-6 text-sm text-blue-900">
+                <h2 className="mb-2 text-base font-semibold">New holding created</h2>
+                {detail.lineage.map((l) => (
+                  <p key={l.child_holding_no}>
+                    <b className="font-mono">{l.child_holding_no}</b> created for the transferred{" "}
+                    {l.floors?.length ? `${l.floors.map(floorName).join(", ")} with ` : ""}
+                    {Number(l.area_sqft).toLocaleString("en-IN")} sq ft land; holding <b className="font-mono">{l.parent_holding_no}</b> continues with{" "}
+                    {Number(l.parent_area_after).toLocaleString("en-IN")} sq ft (was {Number(l.parent_area_before).toLocaleString("en-IN")}).
+                    {l.floors?.length ? "" : " The new holding is flagged for a floor survey."}
+                  </p>
+                ))}
+              </section>
+            )}
+
             <section className="rounded-xl border border-slate-200 bg-white p-6">
-              <h2 className="mb-4 text-base font-semibold text-slate-900">Approval history</h2>
-              {detail.approvalHistory.length === 0 ? (
-                <p className="text-sm text-slate-400">No action taken yet — currently with {ADMIN_ROLE_LABELS[detail.request.current_stage]}.</p>
-              ) : (
-                <ol className="space-y-3">
-                  {detail.approvalHistory.map((a) => (
-                    <li key={a.id} className="flex items-start gap-3 text-sm">
-                      {a.decision === "approved" ? (
-                        <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-green-600" />
-                      ) : (
-                        <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-500" />
-                      )}
-                      <div>
-                        <p className="text-slate-700">
-                          <span className="font-medium">{ADMIN_ROLE_LABELS[a.stage]}</span> ({a.admin_display_name}){" "}
-                          {a.decision} — {new Date(a.decided_at).toLocaleString("en-IN")}
-                        </p>
-                        {a.notes && <p className="text-slate-500">&ldquo;{a.notes}&rdquo;</p>}
-                      </div>
-                    </li>
-                  ))}
-                </ol>
-              )}
+              <h2 className="mb-4 text-base font-semibold text-slate-900">Audit trail</h2>
+              <MutationTimeline key={trailKey} changeRequestId={id} />
             </section>
 
             {detail.request.status === "pending" && detail.request.current_stage === admin.role ? (
@@ -230,22 +298,53 @@ export default function ChangeRequestDetailPage() {
                 <p className="mb-4 text-xs text-slate-500">
                   Approving sends this to {ADMIN_ROLE_LABELS[detail.request.current_stage] === ADMIN_ROLE_LABELS["commissioner"] ? "final application" : "the next desk"}.
                 </p>
+                {needsVerification && !reverting && (
+                  <>
+                    <AreaVerificationForm
+                      value={verification}
+                      onChange={setVerification}
+                      recordArea={detail.currentProperty?.area_sqft != null ? String(detail.currentProperty.area_sqft) : null}
+                    />
+                    <div className="mb-4 grid grid-cols-1 gap-3 rounded-lg border border-slate-200 bg-white p-4 sm:grid-cols-2">
+                      <div>
+                        <label className="mb-1 block text-xs font-medium text-slate-600">Tax Surveyor for the field report</label>
+                        <SurveyorSelect value={surveyor} onChange={setSurveyor} />
+                      </div>
+                      {isPartial(verification) && (
+                        <div>
+                          <label className="mb-1 block text-xs font-medium text-slate-600">Old holding no. for the new holding (from the demand register)</label>
+                          <input value={registerNo} onChange={(e) => setRegisterNo(e.target.value)} maxLength={32} className="w-full rounded-md border border-slate-300 bg-white px-2.5 py-2 text-sm" />
+                          <p className="mt-0.5 text-[11px] text-slate-500">Enter the new holding in the offline demand register first, then give its number here.</p>
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )}
+                {isSurveyorStep && <FieldReportForm value={report} onChange={setReport} onError={setError} />}
                 <textarea
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
-                  placeholder={reverting ? "Comment explaining what needs to be corrected" : "Notes (required to reject, optional to approve)"}
+                  placeholder={reverting ? "Comment explaining what needs to be corrected" : isSurveyorStep ? "Notes for the next desk (optional)" : "Notes (required to reject, optional to approve)"}
                   rows={3}
                   className="mb-4 w-full rounded-md border border-slate-300 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-nnm-blue focus:ring-offset-1"
                 />
                 <div className="flex flex-wrap gap-3">
-                  {!reverting ? (
+                  {isSurveyorStep ? (
+                    <button
+                      onClick={handleApprove}
+                      disabled={acting !== null}
+                      className="rounded-md bg-nnm-blue px-5 py-2.5 text-sm font-semibold text-white hover:bg-nnm-blue-dark disabled:opacity-60"
+                    >
+                      {acting === "approve" ? "Saving…" : "Submit field report & forward"}
+                    </button>
+                  ) : !reverting ? (
                     <>
                       <button
                         onClick={handleApprove}
                         disabled={acting !== null}
                         className="rounded-md bg-nnm-blue px-5 py-2.5 text-sm font-semibold text-white hover:bg-nnm-blue-dark disabled:opacity-60"
                       >
-                        {acting === "approve" ? "Approving…" : "Approve"}
+                        {acting === "approve" ? "Saving…" : detail.request.current_stage === detail.request.final_stage ? "Approve (final)" : "Approve & forward"}
                       </button>
                       <button
                         onClick={handleReject}
@@ -260,7 +359,7 @@ export default function ChangeRequestDetailPage() {
                         className="inline-flex items-center gap-1.5 rounded-md border border-amber-300 px-5 py-2.5 text-sm font-semibold text-amber-700 hover:bg-amber-50 disabled:opacity-60"
                       >
                         <RotateCcw className="h-4 w-4" />
-                        Revert to Operator
+                        {detail.request.public_application_id ? "Send back to applicant" : "Revert to Operator"}
                       </button>
                     </>
                   ) : (
@@ -270,7 +369,7 @@ export default function ChangeRequestDetailPage() {
                         disabled={acting !== null}
                         className="rounded-md bg-amber-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-amber-700 disabled:opacity-60"
                       >
-                        {acting === "revert" ? "Reverting…" : "Confirm Revert to Operator"}
+                        {acting === "revert" ? "Sending back…" : detail.request.public_application_id ? "Confirm — send back to applicant" : "Confirm Revert to Operator"}
                       </button>
                       <button
                         onClick={() => {
@@ -289,11 +388,12 @@ export default function ChangeRequestDetailPage() {
               <section className="rounded-xl border border-amber-200 bg-amber-50 p-6">
                 <h2 className="mb-1 flex items-center gap-1.5 text-base font-semibold text-amber-900">
                   <RotateCcw className="h-4 w-4" />
-                  Reverted to Operator
+                  {detail.request.public_application_id ? "Sent back to the applicant" : "Reverted to Operator"}
                 </h2>
                 <p className="text-sm text-amber-800">
                   Sent back by {detail.request.reverted_by} ({ADMIN_ROLE_LABELS[detail.request.reverted_from_stage as keyof typeof ADMIN_ROLE_LABELS] ?? detail.request.reverted_from_stage})
-                  {detail.request.reverted_at ? ` on ${new Date(detail.request.reverted_at).toLocaleDateString("en-IN")}` : ""} - awaiting operator correction.
+                  {detail.request.reverted_at ? ` on ${new Date(detail.request.reverted_at).toLocaleDateString("en-IN")}` : ""} -{" "}
+                  {detail.request.public_application_id ? "awaiting the applicant's online correction." : "awaiting operator correction."}
                 </p>
                 {detail.request.revert_comment && <p className="mt-1 text-sm text-amber-700">&ldquo;{detail.request.revert_comment}&rdquo;</p>}
               </section>

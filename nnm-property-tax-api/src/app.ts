@@ -19,6 +19,14 @@ export function createApp() {
   // anything further upstream that a client could forge.
   app.set("trust proxy", 1);
 
+  // Parse JSON requests. The limit must be the same 10mb as below: this parser runs first, and with the default
+  // (100kb) it refused every photo / PDF sent as base64 in a JSON body (attendance, notice receiving, field
+  // verification, exemption orders, documents...) with "request entity too large".
+  app.use(express.json({ limit: "10mb" }));
+
+  // Parse application/x-www-form-urlencoded requests
+  app.use(express.urlencoded({ extended: false }));
+
   app.disable("x-powered-by");
   app.use(helmet());
   app.use(

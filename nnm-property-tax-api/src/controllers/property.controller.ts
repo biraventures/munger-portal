@@ -6,6 +6,7 @@ import { searchPropertyByHoldingNo, searchPropertyForCitizen } from "../services
 import { propertyRepository } from "../repositories/property.repository";
 import { asyncHandler } from "../middleware/asyncHandler";
 import { ApiError } from "../utils/ApiError";
+import { isAgencyOperator, maskIds } from "../utils/maskIds";
 
 const holdingNoParamSchema = z.object({
   holdingNo: holdingNoSchema,
@@ -30,7 +31,8 @@ export const getPropertyByHoldingNo = asyncHandler(async (req: Request, res: Res
     throw ApiError.notFound(result.message ?? "Property not found");
   }
 
-  res.status(200).json(result);
+  // The private agency's login sees the holding without the owner's Aadhaar number.
+  res.status(200).json(isAgencyOperator(req.admin) ? maskIds(result) : result);
 });
 
 const lookupBodySchema = z.object({

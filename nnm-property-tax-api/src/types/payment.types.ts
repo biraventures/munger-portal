@@ -30,7 +30,7 @@ export interface PaymentInput {
 export interface PaymentActor {
   id: number;
   username: string;
-  role: "operator" | "tax_collector";
+  role: "operator" | "tax_collector" | "agency_operator";
   ip: string | null;
 }
 
@@ -78,6 +78,7 @@ export interface PaymentResult {
   provisional: boolean;
   /** True when a Tax Collector recorded it in the field - the app shows a collection slip; the stamped receipt is printed in bulk at the office. */
   fieldCollection: boolean;
+  onlineDeclarationAcceptedAt?: string | null;
   arrearStagesPaid: ArrearStagePaidView[];
   /** After a PART payment: the balance demand notice for the remaining years, generated automatically. */
   followUpNotice?: DemandNoticeResult | null;

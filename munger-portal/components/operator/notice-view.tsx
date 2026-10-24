@@ -307,14 +307,14 @@ export function NoticeView({
               </td>
             </tr>
             <tr>
-              <td colSpan={5} className="border-x border-slate-400 px-1.5 py-px pl-6 italic text-slate-500">
+              <td colSpan={5} className="border-x border-slate-400 px-1.5 py-px pl-6 italic text-black">
                 — of which, Vacant Land Tax (Taxable Vacant Area: {calc.vacant.taxableArea} sqft @ ₹{calc.vacant.rate}/sqft)
               </td>
-              <td className="border-x border-slate-400 px-1.5 py-px text-right italic text-slate-500">{calc.vacant.tax}</td>
+              <td className="border-x border-slate-400 px-1.5 py-px text-right italic text-black">{calc.vacant.tax}</td>
             </tr>
             {Number(t.currentTaxAreaRebate) > 0 && (
               <tr>
-                <td colSpan={5} className="border-x border-slate-400 px-1.5 py-px pl-6 italic text-slate-500">
+                <td colSpan={5} className="border-x border-slate-400 px-1.5 py-px pl-6 italic text-black">
                   {String(t.currentTaxAreaRebateReason ?? "").startsWith("Exempt from holding tax") ? (
                     <>— {t.currentTaxAreaRebateReason} — the whole year&apos;s holding tax is waived; solid waste user charge still applies</>
                   ) : (
@@ -325,7 +325,7 @@ export function NoticeView({
                     </>
                   )}
                 </td>
-                <td className="border-x border-slate-400 px-1.5 py-px text-right italic text-slate-500">
+                <td className="border-x border-slate-400 px-1.5 py-px text-right italic text-black">
                   −{t.currentTaxAreaRebate}
                 </td>
               </tr>
@@ -342,10 +342,10 @@ export function NoticeView({
             )}
             {Number(t.penalty) > 0 && (
               <tr>
-                <td colSpan={5} className="border-x border-slate-400 px-1.5 py-px pl-6 italic text-slate-500">
+                <td colSpan={5} className="border-x border-slate-400 px-1.5 py-px pl-6 text-black">
                   — Penalty (late fee on arrears{arrearsLabel ? ` ${arrearsLabel}` : ""} above, computed per pending year)
                 </td>
-                <td className="border-x border-slate-400 px-1.5 py-px text-right italic text-slate-500">{t.penalty}</td>
+                <td className="border-x border-slate-400 px-1.5 py-px text-right text-black">{t.penalty}</td>
               </tr>
             )}
             {Number(t.totalFineAmount) > 0 && (

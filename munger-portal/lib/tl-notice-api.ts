@@ -1,4 +1,5 @@
 import { getAdminToken } from "./admin-auth";
+import { assertPdfSize, blobToBase64, isPdfFile, shrinkPhoto } from "./upload-limits";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_PROPERTY_TAX_API_URL || "http://localhost:4000/api/v1";
 
@@ -166,31 +167,12 @@ export async function openTlSurveyFile(id: string, which: "license" | "complied"
   else window.location.href = url;
 }
 
-/** A PDF goes as is (≤ 6 MB); a photo is shrunk to a 1600px JPEG first. */
+/** A PDF goes as is (at most 2 MB); a photo is shrunk to at most 750 KB. */
 export async function readLicenceFile(file: File): Promise<FileUpload> {
-  const asBase64 = (blob: Blob) =>
-    new Promise<string>((resolve, reject) => {
-      const r = new FileReader();
-      r.onload = () => resolve(String(r.result).split(",")[1] ?? "");
-      r.onerror = reject;
-      r.readAsDataURL(blob);
-    });
-  if (file.type === "application/pdf") {
-    if (file.size > 6 * 1024 * 1024) throw new Error("The PDF must be under 6 MB.");
-    return { base64: await asBase64(file), mime: "application/pdf" };
+  if (isPdfFile(file)) {
+    assertPdfSize(file);
+    return { base64: await blobToBase64(file), mime: "application/pdf" };
   }
-  try {
-    const bitmap = await createImageBitmap(file);
-    const scale = Math.min(1, 1600 / Math.max(bitmap.width, bitmap.height));
-    const canvas = document.createElement("canvas");
-    canvas.width = Math.round(bitmap.width * scale);
-    canvas.height = Math.round(bitmap.height * scale);
-    canvas.getContext("2d")!.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.82));
-    if (!blob) throw new Error("no blob");
-    return { base64: await asBase64(blob), mime: "image/jpeg" };
-  } catch {
-    if (!["image/jpeg", "image/png"].includes(file.type)) throw new Error("Upload a JPG/PNG photo or a PDF.");
-    return { base64: await asBase64(file), mime: file.type };
-  }
+  const blob = await shrinkPhoto(file);
+  return { base64: await blobToBase64(blob), mime: blob.type || "image/jpeg" };
 }

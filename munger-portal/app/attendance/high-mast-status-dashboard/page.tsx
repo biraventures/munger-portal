@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { AlertCircle, BarChart3, ChevronLeft, CheckCircle2, XCircle, MapPin, LocateFixed } from "lucide-react";
 import { AttendanceHeader } from "@/components/attendance/attendance-header";
 import { useAttendanceGuard } from "@/lib/use-attendance-guard";
-import {
+import { FUNCTIONAL_STATUS_LABELS,
   fetchHighMastWardStatusDashboard,
   fetchHighMastLightsForWard,
   markFaultRepaired,
@@ -24,6 +24,9 @@ function todayLocalDateString(): string {
   const day = String(d.getDate()).padStart(2, "0");
   return `${y}-${m}-${day}`;
 }
+
+/** "38" -> "Ward 38"; a name that already says "Ward" is shown as it is. */
+const wardLabel = (name: string) => (/^\s*ward/i.test(name) ? name : `Ward ${name}`);
 
 export default function HighMastStatusDashboardPage() {
   const attendance = useAttendanceGuard();
@@ -51,7 +54,13 @@ export default function HighMastStatusDashboardPage() {
   useEffect(() => {
     if (!attendance) return;
     fetchHighMastWardStatusDashboard()
-      .then(setWards)
+      .then((w) => {
+        setWards(w);
+        // Opened from the Streetlight dashboard with ?ward=<id>: go straight to that ward.
+        const wardParam = Number(new URLSearchParams(window.location.search).get("ward"));
+        const target = wardParam ? w.find((x) => Number(x.wardId) === wardParam) : undefined;
+        if (target) openWardView(Number(target.wardId), target.wardName);
+      })
       .catch((err) => setError(err instanceof Error ? err.message : "Could not load the High Mast status dashboard."));
   }, [attendance]);
 
@@ -288,7 +297,7 @@ export default function HighMastStatusDashboardPage() {
                       onClick={() => openWardView(w.wardId, w.wardName)}
                       className="cursor-pointer border-b border-slate-100 last:border-0 hover:bg-slate-50"
                     >
-                      <td className="px-4 py-2.5 font-medium text-slate-800">Ward {w.wardName}</td>
+                      <td className="px-4 py-2.5 font-medium text-slate-800">{wardLabel(w.wardName)}</td>
                       <td className="px-4 py-2.5">{w.totalLights}</td>
                       <td className="px-4 py-2.5 text-green-700">{w.working}</td>
                       <td className="px-4 py-2.5 text-red-600">{w.notWorking}</td>
@@ -304,7 +313,7 @@ export default function HighMastStatusDashboardPage() {
               <ChevronLeft className="h-4 w-4" />
               Back to wards
             </button>
-            <h2 className="mb-3 text-base font-semibold text-slate-800">Ward {openWard.name}</h2>
+            <h2 className="mb-3 text-base font-semibold text-slate-800">{wardLabel(openWard.name)}</h2>
             {loadingLights ? (
               <p className="text-sm text-slate-400">Loading…</p>
             ) : !wardLights || wardLights.length === 0 ? (
@@ -339,6 +348,16 @@ export default function HighMastStatusDashboardPage() {
                         </div>
                         <p className="font-mono text-sm font-semibold text-slate-900">{l.serialNumber}</p>
                         <p className="text-xs text-slate-500">{l.localityName}</p>
+                        <p className="mt-0.5 flex flex-wrap gap-x-3 text-[11px] text-slate-500">
+                          {l.functionalStatus && <span>Survey: {FUNCTIONAL_STATUS_LABELS[l.functionalStatus]}</span>}
+                          {l.noOfLights != null && (
+                            <span>
+                              Lamps: {l.noOfFunctionalLights ?? "?"}/{l.noOfLights} working
+                            </span>
+                          )}
+                          {l.panelStatus && <span>Panel: {l.panelStatus === "working" ? "OK" : "Not OK"}</span>}
+                          {l.switchStatus && <span>Switch: {{ working: "OK", not_working: "Not OK", automatic: "Automatic", joint: "Joint" }[l.switchStatus]}</span>}
+                        </p>
                       </div>
                       <div className="flex items-center gap-2">
                         {l.working ? (

@@ -20,7 +20,7 @@ import {
   type TlSurvey,
 } from "@/lib/tl-notice-api";
 
-const ALLOWED = ["tax_collector", "city_manager", "deputy_commissioner", "commissioner", "trade_license_nodal"];
+const ALLOWED = ["tax_collector", "city_manager", "deputy_commissioner", "commissioner", "trade_license_nodal", "agency_operator"];
 const FILTERS = [
   { value: "legal_action_due", label: "Legal action due" },
   { value: "notice_2", label: "2nd notice" },

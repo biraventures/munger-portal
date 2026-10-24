@@ -48,6 +48,11 @@ export interface DemandNoticeRow {
   // Part-payment notice (migration 106): paying it advances tax_paid_till_year to paid_through_year.
   part_payment: boolean;
   paid_through_year: string | null;
+  /** First and last financial year the notice demands (migration 139). */
+  demand_from_year: string | null;
+  demand_upto_year: string | null;
+  /** 'full' or 'part' - derived from part_payment. */
+  payment_type: "full" | "part";
 }
 
 export const demandNoticeRepository = {
@@ -111,6 +116,8 @@ export const demandNoticeRepository = {
     snapshot: DemandNoticeSnapshot;
     partPayment?: boolean;
     paidThroughYear?: string | null;
+    demandFromYear?: string | null;
+    demandUptoYear?: string | null;
   }): Promise<void> {
     await pool.query(
       `INSERT INTO demand_notices (
@@ -118,8 +125,9 @@ export const demandNoticeRepository = {
         current_year_tax_net, previous_years_tax_base, total_fine_amount,
         other_charges, total_amount_demanded, assessment_year,
         reminder_number, previous_unsettled_demand_nos, floor_breakdown,
-        area_rebate, area_rebate_reason, snapshot, part_payment, paid_through_year, vacant_arv
-      ) VALUES ($1,$2, now(), $3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)`,
+        area_rebate, area_rebate_reason, snapshot, part_payment, paid_through_year, vacant_arv,
+        demand_from_year, demand_upto_year
+      ) VALUES ($1,$2, now(), $3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)`,
       [
         row.demandNo,
         row.holdingNo,
@@ -140,6 +148,8 @@ export const demandNoticeRepository = {
         row.partPayment ?? false,
         row.paidThroughYear ?? null,
         row.vacantArv,
+        row.demandFromYear ?? null,
+        row.demandUptoYear ?? null,
       ],
     );
   },

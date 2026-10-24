@@ -1,4 +1,6 @@
 import type { Request, Response } from "express";
+import { buildTimeline, pendingSummary } from "../services/mutationAudit.service";
+import { holdingLineage } from "../services/changeRequest.service";
 import { z } from "zod";
 import {
   listChangeRequests,
@@ -27,7 +29,7 @@ export const getChangeRequests = asyncHandler(async (req: Request, res: Response
   if (!parsed.success) throw ApiError.badRequest("Invalid query", parsed.error.flatten().fieldErrors);
 
   const admin = req.admin!;
-  const requests = await listChangeRequests(parsed.data.status, parsed.data.myStage ? admin.role : undefined);
+  const requests = await listChangeRequests(parsed.data.status, parsed.data.myStage || admin.role === "tax_surveyor" ? admin.role : undefined, admin);
   res.status(200).json({ requests, myRole: admin.role, stageOrder: ADMIN_ROLES });
 });
 
@@ -37,20 +39,57 @@ const idParamSchema = z.object({ id: z.coerce.number().int().positive() });
 export const getChangeRequestById = asyncHandler(async (req: Request, res: Response) => {
   const parsed = idParamSchema.safeParse(req.params);
   if (!parsed.success) throw ApiError.badRequest("Invalid change request id");
-  const detail = await getChangeRequestDetail(parsed.data.id);
+  const detail = await getChangeRequestDetail(parsed.data.id, req.admin);
   res.status(200).json(detail);
 });
 
-const notesBodySchema = z.object({ notes: z.string().max(2000).optional() });
+export const fieldReportSchema = z.object({
+  visitedOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Enter the date of the site visit."),
+  siteMatches: z.boolean({ required_error: "Say whether the site matches the application." }),
+  measuredPlotAreaSqft: z.coerce.number().nonnegative().max(10_000_000).nullish(),
+  measuredBuiltupSqft: z.coerce.number().nonnegative().max(10_000_000).nullish(),
+  remarks: z.string().trim().min(10, "Write the field report (at least a line on what was found).").max(3000),
+  latitude: z.number().min(24).max(27).nullish(),
+  longitude: z.number().min(85).max(88).nullish(),
+  photos: z.array(z.object({ base64: z.string().min(10).max(1_100_000), mimeType: z.string().max(20) })).max(4).optional(),
+});
+
+const areaSqft = z.coerce.number({ invalid_type_error: "Enter the area in sq ft." }).positive("Areas must be more than 0 sq ft.").max(10_000_000);
+const notesBodySchema = z.object({
+  notes: z.string().max(2000).optional(),
+  verification: z
+    .object({
+      jamabandiAreaSqft: areaSqft,
+      documentAreaSqft: areaSqft,
+      holdingAreaSqft: areaSqft,
+      mutateAreaSqft: z.coerce.number().nonnegative().max(10_000_000).nullish(),
+      khataNo: z.string().trim().min(1, "Enter the khata number.").max(64),
+      khesraNo: z.string().trim().min(1, "Enter the khesra number.").max(64),
+      surveySheetNo: z.string().trim().min(1, "Enter the survey sheet number.").max(64),
+      surveyWard: z.enum(["A", "B", "C", "D", "E", "F"], { errorMap: () => ({ message: "Choose the survey ward (A-F)." }) }),
+      remarks: z.string().trim().max(1000).nullish(),
+    })
+    .optional(),
+  // Tax Daroga (mutation): the Tax Surveyor for the field report, and the demand register's number for a new holding.
+  assignment: z
+    .object({
+      surveyorUsername: z.string().trim().min(1, "Choose the Tax Surveyor."),
+      registerOldHoldingNo: z.string().trim().max(32).nullish(),
+    })
+    .optional(),
+  // Tax Surveyor: the field report.
+  fieldReport: fieldReportSchema.optional(),
+});
 
 /** POST /api/v1/admin/change-requests/:id/approve */
 export const postApproveChangeRequest = asyncHandler(async (req: Request, res: Response) => {
   const paramsParsed = idParamSchema.safeParse(req.params);
   if (!paramsParsed.success) throw ApiError.badRequest("Invalid change request id");
   const bodyParsed = notesBodySchema.safeParse(req.body);
-  if (!bodyParsed.success) throw ApiError.badRequest("Invalid request body");
+  if (!bodyParsed.success) throw ApiError.badRequest(bodyParsed.error.issues[0]?.message ?? "Invalid request body");
 
-  const result = await approveAtCurrentStage(paramsParsed.data.id, req.admin!, bodyParsed.data.notes);
+  const b = bodyParsed.data;
+  const result = await approveAtCurrentStage(paramsParsed.data.id, req.admin!, b.notes, b.verification, b.assignment, b.fieldReport);
   res.status(200).json({ request: result });
 });
 
@@ -85,4 +124,30 @@ export const postRevertChangeRequest = asyncHandler(async (req: Request, res: Re
 export const getRevertedChangeRequests = asyncHandler(async (_req: Request, res: Response) => {
   const requests = await listRevertedChangeRequests();
   res.status(200).json({ requests });
+});
+
+/** GET /api/v1/admin/change-requests/:id/timeline - the case's audit trail with time spent at each desk. */
+export const getChangeRequestTimeline = asyncHandler(async (req: Request, res: Response) => {
+  const parsed = idParamSchema.safeParse(req.params);
+  if (!parsed.success) throw ApiError.badRequest("Invalid change request id");
+  res.status(200).json(await buildTimeline({ changeRequestId: String(parsed.data.id) }));
+});
+
+/** GET /api/v1/admin/mutation-applications/:id/timeline - same, for an online application (also before it enters the chain). */
+export const getApplicationTimeline = asyncHandler(async (req: Request, res: Response) => {
+  const parsed = idParamSchema.safeParse(req.params);
+  if (!parsed.success) throw ApiError.badRequest("Invalid id");
+  res.status(200).json(await buildTimeline({ applicationId: String(parsed.data.id) }));
+});
+
+/** GET /api/v1/admin/mutation-pending-summary - what is waiting at each desk. */
+export const getMutationPendingSummary = asyncHandler(async (_req: Request, res: Response) => {
+  res.status(200).json(await pendingSummary());
+});
+
+/** GET /api/v1/admin/holdings/:holdingNo/lineage - holdings created from / that created this one through mutation. */
+export const getHoldingLineage = asyncHandler(async (req: Request, res: Response) => {
+  const h = z.string().trim().min(1).max(32).safeParse(req.params.holdingNo);
+  if (!h.success) throw ApiError.badRequest("Invalid holding number");
+  res.status(200).json({ lineage: await holdingLineage(h.data) });
 });

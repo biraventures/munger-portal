@@ -12,9 +12,10 @@ import {
   type WhosWhoMeta,
   type WhosWhoStatus,
 } from "../types/whosWho.types";
+import { assertUploadSize, MAX_PDF_BYTES, MAX_PHOTO_BYTES as MAX_PHOTO_LIMIT, uploadLimitMessage } from "../utils/uploadLimits";
 
-export const MAX_PHOTO_BYTES = 1024 * 1024; // the page compresses to well under this before upload
-export const MAX_SIGNED_FORM_BYTES = 5 * 1024 * 1024;
+export const MAX_PHOTO_BYTES = MAX_PHOTO_LIMIT; // the page compresses to fit before upload
+export const MAX_SIGNED_FORM_BYTES = MAX_PDF_BYTES;
 const SIGNED_FORM_TYPES: Record<string, string> = { pdf: "application/pdf", jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png" };
 
 const idSchema = z.object({ id: z.coerce.number().int().positive() });
@@ -83,7 +84,7 @@ function toFields(p: ParsedFields): WhosWhoFields {
 function decodePhoto(b64: string): { mime: string; data: Buffer } {
   const data = Buffer.from(b64, "base64");
   if (data.length === 0) throw ApiError.badRequest("The photograph is empty.");
-  if (data.length > MAX_PHOTO_BYTES) throw ApiError.badRequest("The photograph is too large - the limit is 1 MB.");
+  if (data.length > MAX_PHOTO_BYTES) throw ApiError.badRequest(uploadLimitMessage("image/jpeg", data.length));
   if (data[0] === 0xff && data[1] === 0xd8) return { mime: "image/jpeg", data };
   if (data.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) return { mime: "image/png", data };
   throw ApiError.badRequest("The photograph must be a JPG or PNG image.");
@@ -92,10 +93,11 @@ function decodePhoto(b64: string): { mime: string; data: Buffer } {
 function decodeSignedForm(name: string, b64: string): { name: string; mime: string; data: Buffer } {
   const data = Buffer.from(b64, "base64");
   if (data.length === 0) throw ApiError.badRequest("The scanned form is empty.");
-  if (data.length > MAX_SIGNED_FORM_BYTES) throw ApiError.badRequest("The scanned form is too large - the limit is 5 MB.");
+  if (data.length > MAX_SIGNED_FORM_BYTES) throw ApiError.badRequest(uploadLimitMessage("application/pdf", data.length));
   const ext = (name.split(".").pop() ?? "").toLowerCase();
   const mime = SIGNED_FORM_TYPES[ext];
   if (!mime) throw ApiError.badRequest("The scanned form must be a PDF, JPG or PNG file.");
+  assertUploadSize(mime, data.length);
   const okMagic =
     mime === "application/pdf" ? data.subarray(0, 5).toString("latin1") === "%PDF-"
     : mime === "image/jpeg" ? data[0] === 0xff && data[1] === 0xd8

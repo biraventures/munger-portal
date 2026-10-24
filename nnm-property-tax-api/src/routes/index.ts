@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { agencyOperatorScope } from "../middleware/agencyOperatorScope";
 import { propertyRouter } from "./property.routes";
 import { operatorRouter } from "./operator.routes";
 import { shopRouter } from "./shop.routes";
@@ -15,15 +16,21 @@ import { dashboardSummaryRouter } from "./dashboardSummary.routes";
 import { attendanceRouter } from "./attendance.routes";
 import { taxCollectorRouter } from "./taxCollector.routes";
 import { streetlightRouter } from "./streetlight.routes";
-import { streetlightPublicRouter } from "./streetlightPublic.routes";
 import { pyauRouter } from "./pyau.routes";
 import { enforcementRouter, encroachmentRouter, mobileCourtRouter } from "./enforcement.routes";
 import { publicDocumentRouter } from "./publicDocument.routes";
 import { documentManagerRouter } from "./documentManager.routes";
 import { whosWhoManagerRouter, whosWhoPublicRouter } from "./whosWho.routes";
 import { publicMutationRouter } from "./publicMutation.routes";
+import { publicNewHoldingRouter } from "./publicNewHolding.routes";
+import { publicReportVerificationRouter } from "./publicReportVerification.routes";
+import { publicSubmersibleRouter } from "./publicSubmersible.routes";
+import { publicStreetlightRouter } from "./publicStreetlight.routes";
 
 export const apiRouter = Router();
+
+// The Agency Operator login (a private agency) may only reach an allowlist of routes - checked here, before every route.
+apiRouter.use(agencyOperatorScope);
 
 apiRouter.get("/health", (_req, res) => {
   res.status(200).json({ status: "ok" });
@@ -53,7 +60,8 @@ apiRouter.use("/mobile-court", mobileCourtRouter);
 // system (new roles added there) for staff-facing endpoints, plus a
 // genuinely public, unauthenticated endpoint for citizen grievances.
 apiRouter.use("/streetlight", streetlightRouter);
-apiRouter.use("/streetlight-grievance", streetlightPublicRouter);
+// The old login-free "/streetlight-grievance" endpoint is no longer mounted: public complaints now go through
+// /public/streetlights (holding + mobile) and the City Manager's verification (/public-reports) before any repair.
 
 // Submersible pyau maintenance module - purely internal, no public
 // channel, no repair deadline/SLA - just an issue-to-repair log with
@@ -70,6 +78,11 @@ apiRouter.use("/whos-who", whosWhoPublicRouter);
 apiRouter.use("/whos-who-manager", whosWhoManagerRouter);
 // Online mutation applications from the public (migration 131).
 apiRouter.use("/public/mutation", publicMutationRouter);
+apiRouter.use("/public/new-holding", publicNewHoldingRouter);
+apiRouter.use("/public/streetlights", publicStreetlightRouter);
+apiRouter.use("/public/submersibles", publicSubmersibleRouter);
+// The City Manager verifies those public complaints before they go to the contractor (attendance login).
+apiRouter.use("/public-reports", publicReportVerificationRouter);
 
 // /admin/auth (public login) MUST be mounted before /admin (which
 // requires an admin session for everything under it) - Express tries

@@ -38,6 +38,8 @@ export async function adminLogin(username: string, password: string): Promise<Ad
       displayName: admin.display_name,
       role: admin.role,
       isDemo: admin.is_demo,
+      // Shown on the Tax Collector's payment confirmation.
+      taxCollectorCode: admin.tax_collector_code ?? null,
     },
   };
 }

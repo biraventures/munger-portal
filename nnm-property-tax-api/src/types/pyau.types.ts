@@ -31,7 +31,12 @@ export interface PyauIssueRow {
   id: number;
   pyau_id: number;
   date_of_issue: string;
-  reported_by_user_id: number;
+  reported_by_user_id: number | null;
+  reported_by_type: "staff" | "public";
+  reporter_phone: string | null;
+  reporter_holding_no: string | null;
+  reported_problem: string | null;
+  reported_at: string;
   issue_notes: string | null;
   status: "open" | "repaired";
   date_of_repair: string | null;

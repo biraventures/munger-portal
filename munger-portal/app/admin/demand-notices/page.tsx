@@ -1,23 +1,39 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { AlertCircle, Calculator, CheckCircle2, Download, FileWarning, Loader2 } from "lucide-react";
 import { AdminHeader } from "@/components/admin-header";
 import { useAdminGuard } from "@/lib/use-admin-guard";
 import {
   bulkGenerateDemandNotices,
+  fetchDemandRefreshRuns,
   bulkRegenerateTaxHistory,
   downloadExport,
-  type BulkGenerateResult,
+  type DemandRefreshStatus,
   type BulkRegenerateTaxHistoryResult,
   type ExportDataset,
 } from "@/lib/admin-api";
 
 export default function AdminDemandNoticesPage() {
   const admin = useAdminGuard();
-  const [running, setRunning] = useState(false);
-  const [result, setResult] = useState<BulkGenerateResult | null>(null);
+  const [starting, setStarting] = useState(false);
+  const [refresh, setRefresh] = useState<DemandRefreshStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const loadRuns = useCallback(() => {
+    fetchDemandRefreshRuns()
+      .then(setRefresh)
+      .catch(() => undefined);
+  }, []);
+  const running = !!refresh?.running;
+
+  useEffect(() => {
+    if (!admin) return;
+    loadRuns();
+    // Poll quickly while a run is going, slowly otherwise (an automatic run may start on the 1st).
+    const t = setInterval(loadRuns, running ? 3000 : 30000);
+    return () => clearInterval(t);
+  }, [admin, running, loadRuns]);
 
   const [taxHistoryRunning, setTaxHistoryRunning] = useState(false);
   const [taxHistoryResult, setTaxHistoryResult] = useState<BulkRegenerateTaxHistoryResult | null>(null);
@@ -39,16 +55,17 @@ export default function AdminDemandNoticesPage() {
   }
 
   async function handleRun() {
-    setRunning(true);
+    setStarting(true);
     setError(null);
-    setResult(null);
     try {
-      const r = await bulkGenerateDemandNotices();
-      setResult(r);
+      await bulkGenerateDemandNotices();
+      // The job starts in the background; give it a moment to register, then show its progress.
+      setTimeout(loadRuns, 1500);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Bulk generation failed.");
+      setError(err instanceof Error ? err.message : "Could not start bulk generation.");
+      loadRuns();
     } finally {
-      setRunning(false);
+      setStarting(false);
     }
   }
 
@@ -85,14 +102,18 @@ export default function AdminDemandNoticesPage() {
             only logs each notice (holding number, demand number, amount) — it does not print anything. A printable copy for any specific holding is still available from that
             property&apos;s page afterward.
           </p>
+          <p className="mb-6 rounded-md border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">
+            <b>Runs automatically every month</b> on the 1st at 00:10 (if the server is down then, as soon as it is back, up to 05:00), so every
+            holding&apos;s demand carries that month&apos;s late fee. It runs in the background — this page shows its progress and you can leave it.
+          </p>
 
           <button
             onClick={handleRun}
-            disabled={running}
+            disabled={running || starting}
             className="mb-6 inline-flex items-center gap-2 rounded-md bg-nnm-blue px-6 py-3 text-sm font-semibold text-white hover:bg-nnm-blue-dark disabled:opacity-60"
           >
-            {running ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileWarning className="h-4 w-4" />}
-            {running ? "Generating…" : "Run Bulk Generation"}
+            {running || starting ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileWarning className="h-4 w-4" />}
+            {running ? "Generation running…" : starting ? "Starting…" : "Run Bulk Generation Now"}
           </button>
 
           {error && (
@@ -102,80 +123,63 @@ export default function AdminDemandNoticesPage() {
             </div>
           )}
 
-          {result && (
-            <div className="space-y-5">
-              <div
-                className={`flex items-start gap-2.5 rounded-md border p-4 text-sm ${
-                  result.processed === 0 && result.errors.length > 0 ? "border-red-200 bg-red-50 text-red-800" : "border-green-200 bg-green-50 text-green-800"
-                }`}
-              >
-                <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
-                <div>
-                  <p className="font-semibold">
-                    {result.processed} notice{result.processed === 1 ? "" : "s"} generated
-                    {result.errors.length > 0 ? `, ${result.errors.length} holding(s) skipped or failed` : ""}.
-                  </p>
-                  {result.processed === 0 && result.errors.length === 0 && (
-                    <p className="mt-1 text-xs">No holding is eligible: every holding with dues already has a demand notice from this month.</p>
-                  )}
-                  {result.errors.length > 0 && (
-                    <ul className="mt-2 list-disc space-y-0.5 pl-5 text-xs">
-                      {Object.entries(
-                        result.errors.reduce<Record<string, number>>((acc, e) => {
-                          const key = e.message.replace(/Holding No [^ ]+/g, "Holding No …");
-                          acc[key] = (acc[key] ?? 0) + 1;
-                          return acc;
-                        }, {}),
-                      )
-                        .sort((x, y) => y[1] - x[1])
-                        .slice(0, 5)
-                        .map(([msg, n]) => (
-                          <li key={msg}>
-                            {n} × {msg}
-                          </li>
-                        ))}
-                    </ul>
-                  )}
-                </div>
-              </div>
-
-              {result.generated.length > 0 && (
-                <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-slate-200 bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
-                        <th className="px-4 py-2.5 font-medium">Holding No</th>
-                        <th className="px-4 py-2.5 font-medium">Demand No</th>
-                        <th className="px-4 py-2.5 font-medium">Type</th>
-                        <th className="px-4 py-2.5 font-medium text-right">Amount</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {result.generated.map((g) => (
-                        <tr key={g.holdingNo} className="border-b border-slate-100 last:border-0">
-                          <td className="px-4 py-2 font-mono">{g.holdingNo}</td>
-                          <td className="px-4 py-2 font-mono text-slate-500">{g.formattedDemandNo}</td>
-                          <td className="px-4 py-2 text-xs text-slate-600">{g.reminderLabel ?? "New"}</td>
-                          <td className="px-4 py-2 text-right">₹{Number(g.grandTotal).toLocaleString("en-IN")}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+          {refresh && (
+            <div className="space-y-3">
+              {!refresh.currentMonthDone && !running && (
+                <p className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+                  The demand has not yet been refreshed for {refresh.currentMonth}. Run it now, or wait for the automatic run on the 1st.
+                </p>
               )}
-
-              {result.errors.length > 0 && (
-                <div className="rounded-xl border border-red-200 bg-white p-4">
-                  <h2 className="mb-2 text-sm font-semibold text-red-700">Errors</h2>
-                  <ul className="space-y-1 text-sm text-red-600">
-                    {result.errors.map((e) => (
-                      <li key={e.holdingNo}>
-                        <span className="font-mono">{e.holdingNo}</span>: {e.message}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
+              {refresh.runs.map((r) => {
+                const pct = r.total ? Math.round(((r.processed + r.failed) / r.total) * 100) : 0;
+                const tone =
+                  r.status === "completed" ? "border-green-200 bg-green-50 text-green-900" : r.status === "running" ? "border-blue-200 bg-blue-50 text-blue-900" : "border-red-200 bg-red-50 text-red-800";
+                return (
+                  <details key={r.id} open={r.status === "running" || r === refresh.runs[0]} className={`rounded-md border p-3 text-sm ${tone}`}>
+                    <summary className="cursor-pointer">
+                      <b>{r.run_month}</b> · {r.trigger === "schedule" ? "Automatic" : `Started by ${r.started_by}`} ·{" "}
+                      {new Date(r.started_at).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })} ·{" "}
+                      <b>
+                        {r.status === "running" ? `Running ${pct}%` : r.status === "completed" ? "Completed" : r.status === "interrupted" ? "Interrupted (resumes on the next run)" : "Failed"}
+                      </b>
+                    </summary>
+                    <div className="mt-2 space-y-1.5">
+                      {r.status === "running" && (
+                        <div className="h-2 overflow-hidden rounded bg-white">
+                          <div className="h-full bg-nnm-blue transition-all" style={{ width: `${pct}%` }} />
+                        </div>
+                      )}
+                      <p>
+                        {r.processed} notice{r.processed === 1 ? "" : "s"} generated
+                        {r.failed ? `, ${r.failed} holding(s) skipped or failed` : ""}
+                        {r.total !== null ? ` — of ${r.total} holding(s) due` : ""}.
+                        {r.finished_at && ` Finished ${new Date(r.finished_at).toLocaleTimeString("en-IN", { timeZone: "Asia/Kolkata" })}.`}
+                      </p>
+                      {r.status === "completed" && r.total === 0 && <p className="text-xs">No holding was due: every holding with dues already had a notice from this month.</p>}
+                      {r.message && <p className="text-xs">{r.message}</p>}
+                      {r.errors.length > 0 && (
+                        <ul className="list-disc space-y-0.5 pl-5 text-xs">
+                          {Object.entries(
+                            r.errors.reduce<Record<string, number>>((acc, e) => {
+                              const key = e.message.replace(/Holding No [^ ]+/g, "Holding No …");
+                              acc[key] = (acc[key] ?? 0) + 1;
+                              return acc;
+                            }, {}),
+                          )
+                            .sort((x, y) => y[1] - x[1])
+                            .slice(0, 6)
+                            .map(([msg, n]) => (
+                              <li key={msg}>
+                                {n} × {msg}
+                              </li>
+                            ))}
+                        </ul>
+                      )}
+                    </div>
+                  </details>
+                );
+              })}
+              {refresh.runs.length === 0 && <p className="text-sm text-slate-500">No runs recorded yet.</p>}
             </div>
           )}
         </div>

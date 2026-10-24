@@ -29,6 +29,11 @@ export interface ChangeRequestRow {
   revision_count: number;
   /** Set when the request came from an online mutation application (migration 131). */
   public_application_id?: string | number | null;
+  /** Tax Surveyor chosen by the Tax Daroga for the field report (mutation, migration 140). */
+  assigned_surveyor_username?: string | null;
+  assigned_surveyor_name?: string | null;
+  /** Demand register's old holding number for the new holding a partial mutation creates. */
+  register_old_holding_no?: string | null;
 }
 
 export interface ChangeRequestApprovalRow {

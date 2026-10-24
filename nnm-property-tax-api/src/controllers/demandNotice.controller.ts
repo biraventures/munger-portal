@@ -1,10 +1,10 @@
 import type { Request, Response } from "express";
+import { listRefreshRuns, startManualRefresh } from "../services/demandRefresh.service";
 import { z } from "zod";
 import { holdingNoSchema } from "../utils/holdingNoSchema";
 import {
   generateDemandNotice,
   getPartPaymentOptions,
-  bulkGenerateMissingDemandNotices,
   listUnsettledDemandNotices,
   getDemandNoticeForReprint,
   listDemandNoticeHistory,
@@ -90,9 +90,14 @@ export const getDemandNoticeReprint = asyncHandler(async (req: Request, res: Res
  * not the web UI, in the source system — here it's an admin action).
  */
 export const postBulkGenerateDemandNotices = asyncHandler(async (req: Request, res: Response) => {
-  const generatedBy = req.admin ? req.admin.displayName : "System (Bulk Batch)";
-  const result = await bulkGenerateMissingDemandNotices(generatedBy);
-  res.status(200).json(result);
+  // Runs as a background job (thousands of holdings take minutes - far longer than a web request may last).
+  await startManualRefresh(req.admin ? req.admin.displayName : "System (Bulk Batch)");
+  res.status(202).json({ started: true });
+});
+
+/** GET /api/v1/admin/demand-notices/refresh-runs - recent runs (automatic and manual) with live progress. */
+export const getDemandRefreshRuns = asyncHandler(async (_req: Request, res: Response) => {
+  res.status(200).json(await listRefreshRuns());
 });
 /**
  * GET /api/v1/properties/:holdingNo/part-payment-options

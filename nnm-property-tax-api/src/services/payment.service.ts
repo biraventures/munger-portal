@@ -6,7 +6,7 @@ import { demandNoticeRepository } from "../repositories/demandNotice.repository"
 import { cancellationRequestRepository } from "../repositories/cancellationRequest.repository";
 import { calculateTax } from "./taxCalculation.service";
 import { annualSolidWasteCharge, calculateRebateOrLateFee, calculateSolidWasteCharge, solidWasteYearsDue } from "./charges.service";
-import { summarizeArrears, computeArrearsClearance } from "./arrears.service";
+import { summarizeArrears, computeArrearsClearance, assertNoMissingTaxYears } from "./arrears.service";
 import { amountInWords } from "../utils/amountInWords";
 import { parseYearStartOrNull } from "../utils/assessmentYear";
 import { num } from "../utils/num";
@@ -178,6 +178,130 @@ export async function getReceiptForReprint(receiptNo: string): Promise<Printable
   };
 }
 
+export async function getReceiptData(receiptNo: string): Promise<PaymentResult> {
+  const txn = await paymentRepository.findByReceiptNo(receiptNo);
+  if (!txn) throw ApiError.notFound(`Receipt ${receiptNo} not found.`);
+
+  const property = await propertyRepository.findByHoldingNo(txn.holding_no);
+  if (!property) throw ApiError.notFound(`Property not found for Holding No: ${txn.holding_no}`);
+
+  const floors = await propertyRepository.findFloorsByHoldingNo(txn.holding_no);
+  const stages = await propertyRepository.findTaxHistoryByHoldingNo(txn.holding_no);
+  const notice = txn.demand_no ? await demandNoticeRepository.findByDemandNo(txn.demand_no) : null;
+
+  const txnDate = txn.txn_date instanceof Date ? txn.txn_date : new Date(txn.txn_date);
+  const dateStr = `${String(txnDate.getDate()).padStart(2, "0")}-${String(txnDate.getMonth() + 1).padStart(2, "0")}-${txnDate.getFullYear()}`;
+  const formattedReceiptNo = formatDocNumber(txn.receipt_no, "Payment", txnDate);
+
+  const calc = calculateTax(property, floors);
+  const solidWasteCharge = calculateSolidWasteCharge(property);
+  const currentYearStartNum = parseYearStartOrNull(property.assessment_year);
+  const netCurrentBeforeTiming = num(calc.currentTax) - num(calc.rebate);
+  const timing =
+    currentYearStartNum !== null
+      ? calculateRebateOrLateFee(netCurrentBeforeTiming, currentYearStartNum, txnDate)
+      : { rebate: 0, lateFee: 0, net: netCurrentBeforeTiming };
+
+  const arrearsBefore = summarizeArrears(property, stages);
+  const isPart = notice ? Boolean(notice.part_payment && notice.paid_through_year) : false;
+
+  const amountReceivedNum = num(txn.amount_received);
+  const rule = reconciliationRule(txn.payment_mode);
+  const provisional = !txn.cancelled && rule === "hold" && (txn.reconcile_status === "pending" || txn.reconcile_status === "pm_verified");
+
+  const instrument: InstrumentView | null =
+    txn.instrument_no || txn.bank_name || txn.card_last4 || txn.card_holder_name
+      ? {
+          no: txn.instrument_no,
+          date: txn.instrument_date
+            ? formatYmdToDmy(
+                typeof txn.instrument_date === "string"
+                  ? txn.instrument_date
+                  : (txn.instrument_date as Date).toISOString().slice(0, 10),
+              )
+            : null,
+          bank: txn.bank_name,
+          branch: txn.branch_name,
+          cardType: txn.card_type,
+          cardHolderName: txn.card_holder_name,
+          cardLast4: txn.card_last4,
+        }
+      : null;
+
+  return {
+    receiptNo: txn.receipt_no,
+    isPartPayment: isPart,
+    formattedReceiptNo,
+    date: dateStr,
+    paymentMode: txn.payment_mode,
+    amountReceived: amountReceivedNum.toFixed(2),
+    amountInWords: amountInWords(amountReceivedNum),
+    collectedBy: txn.collected_by,
+    demandNo: txn.demand_no ?? "",
+    verificationUrl: buildVerificationUrl("receipt", txn.receipt_no),
+    taxCollectorCode: txn.tax_collector_code ?? null,
+    taxCollectorName: txn.tax_collector_name ?? null,
+    tvNumber: txn.tv_number ?? null,
+    tvDate: txn.tv_date
+      ? `${String(txn.tv_date.getDate()).padStart(2, "0")}-${String(txn.tv_date.getMonth() + 1).padStart(2, "0")}-${txn.tv_date.getFullYear()}`
+      : null,
+    instrument,
+    amountDemanded: txn.amount_demanded ?? amountReceivedNum.toFixed(2),
+    amountReceivedActual: txn.amount_received_actual ?? amountReceivedNum.toFixed(2),
+    reconcileStatus: txn.reconcile_status,
+    provisional,
+    fieldCollection: txn.collected_by_role === "tax_collector",
+    onlineDeclarationAcceptedAt: txn.online_declaration_accepted_at
+      ? new Date(txn.online_declaration_accepted_at)
+          .toLocaleString("en-IN", {
+            timeZone: "Asia/Kolkata",
+            day: "2-digit",
+            month: "2-digit",
+            year: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+            hour12: false,
+          })
+          .replace(/\//g, "-")
+          .replace(",", "")
+      : null,
+    arrearStagesPaid: txn.arrear_stages_paid ?? [],
+    property: { ...property, solid_waste_charge: solidWasteCharge.toFixed(2) } as unknown as Record<string, unknown>,
+    floors,
+    taxCalc: calc,
+    totals:
+      isPart && notice
+        ? {
+            yearWiseArrears: num(notice.previous_years_tax_base).toFixed(2),
+            currentTax: "0.00",
+            rebate: "0.00",
+            penalty: num(notice.total_fine_amount).toFixed(2),
+            outstandingDemand: num(notice.previous_years_tax_base).toFixed(2),
+            currentTaxLateFee: "0.00",
+            currentTaxRebate: "0.00",
+            currentTotal: "0.00",
+            grandTotal: amountReceivedNum.toFixed(2),
+          }
+        : {
+            yearWiseArrears: txn.previous_years_tax_base
+              ? num(txn.previous_years_tax_base).toFixed(2)
+              : arrearsBefore.totalPending.toFixed(2),
+            currentTax: calc.currentTax,
+            rebate: calc.rebate,
+            penalty: txn.total_fine_amount
+              ? num(txn.total_fine_amount).toFixed(2)
+              : arrearsBefore.penalty.toFixed(2),
+            outstandingDemand: txn.previous_years_tax_base
+              ? num(txn.previous_years_tax_base).toFixed(2)
+              : arrearsBefore.totalPending.toFixed(2),
+            currentTaxLateFee: timing.lateFee.toFixed(2),
+            currentTaxRebate: timing.rebate.toFixed(2),
+            currentTotal: timing.net.toFixed(2),
+            grandTotal: amountReceivedNum.toFixed(2),
+          },
+  };
+}
+
 export interface PaymentHistoryEntry {
   receiptNo: string;
   formattedReceiptNo: string;
@@ -220,6 +344,10 @@ export async function submitPayment(
   }
   assertNotDisputed(property);
   assertNoResurveyPending(property);
+  // A counter / Tax Collector / Agency payment (these pass an actor) is refused while any pending year has no
+  // assessment - paying would mark those years paid. The online gateway callback (no actor) is not refused here: the
+  // citizen's money is already taken, and initiateOnlinePayment ran the same check before sending them to the gateway.
+  if (actor) assertNoMissingTaxYears(property, await propertyRepository.findTaxHistoryByHoldingNo(holdingNo));
 
   const notice = await demandNoticeRepository.findByDemandNo(input.demandNo);
   if (!notice || notice.holding_no !== holdingNo) {

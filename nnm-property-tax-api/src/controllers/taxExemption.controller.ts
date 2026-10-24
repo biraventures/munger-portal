@@ -7,8 +7,9 @@ import { holdingNoSchema } from "../utils/holdingNoSchema";
 import { propertyRepository } from "../repositories/property.repository";
 import { taxExemptionRepository } from "../repositories/taxExemption.repository";
 import { TAX_EXEMPTION_CATEGORIES } from "../utils/taxExemption";
+import { assertUploadSize, MAX_PDF_BYTES, uploadLimitMessage } from "../utils/uploadLimits";
 
-export const MAX_EXEMPTION_ORDER_BYTES = 5 * 1024 * 1024;
+export const MAX_EXEMPTION_ORDER_BYTES = MAX_PDF_BYTES;
 const ORDER_TYPES: Record<string, string> = { pdf: "application/pdf", jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png" };
 
 const uploadSchema = z.object({
@@ -39,10 +40,11 @@ export const postExemptionOrder = asyncHandler(async (req: Request, res: Respons
 
   const data = Buffer.from(body.data.fileDataBase64, "base64");
   if (data.length === 0) throw ApiError.badRequest("The selected file is empty.");
-  if (data.length > MAX_EXEMPTION_ORDER_BYTES) throw ApiError.badRequest("The order copy is too large - the limit is 5 MB.");
+  if (data.length > MAX_EXEMPTION_ORDER_BYTES) throw ApiError.badRequest(uploadLimitMessage("application/pdf", data.length));
   const ext = (body.data.fileName.split(".").pop() ?? "").toLowerCase();
   const mime = ORDER_TYPES[ext];
   if (!mime) throw ApiError.badRequest("The order copy must be a PDF, JPG or PNG file.");
+  assertUploadSize(mime, data.length);
   const valid =
     mime === "application/pdf" ? data.subarray(0, 5).toString("latin1") === "%PDF-"
     : mime === "image/jpeg" ? data[0] === 0xff && data[1] === 0xd8

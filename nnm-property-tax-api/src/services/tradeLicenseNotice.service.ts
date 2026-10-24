@@ -7,6 +7,7 @@ import { ApiError } from "../utils/ApiError";
 import { adminRepository } from "../repositories/admin.repository";
 import { assertCollectorMayAccessHolding } from "../middleware/collectorWardGuard";
 import type { AdminTokenPayload } from "../types/admin.types";
+import { assertUploadSize } from "../utils/uploadLimits";
 
 /**
  * Trade licence field survey (migration 132). A Tax Collector visits a business:
@@ -44,7 +45,8 @@ async function saveFile(base64: string, mime: string, prefix: string): Promise<s
   const ext = FILE_TYPES[mime];
   if (!ext) throw ApiError.badRequest("The licence copy must be a JPG/PNG photo or a PDF.");
   const buf = Buffer.from(base64, "base64");
-  if (buf.length === 0 || buf.length > MAX_FILE_BYTES) throw ApiError.badRequest("The licence copy must be a non-empty file under 6 MB.");
+  if (buf.length === 0 || buf.length > MAX_FILE_BYTES) throw ApiError.badRequest("The licence copy is empty or too large.");
+  assertUploadSize(mime, buf.length);
   const ok = ext === "pdf" ? buf.subarray(0, 5).toString("latin1") === "%PDF-" : ext === "jpg" ? buf[0] === 0xff && buf[1] === 0xd8 : buf[0] === 0x89 && buf[1] === 0x50;
   if (!ok) throw ApiError.badRequest("The licence copy is not a valid JPG / PNG / PDF file.");
   const rel = path.join("trade-license-survey", `${prefix}-${Date.now()}-${crypto.randomBytes(4).toString("hex")}.${ext}`);

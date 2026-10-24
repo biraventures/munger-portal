@@ -84,6 +84,7 @@ async function moveHoldingNo(client: PoolClient, oldHoldingNo: string, newHoldin
   await client.query(`UPDATE property_exemption_orders SET holding_no = $1 WHERE holding_no = $2`, [newHoldingNo, oldHoldingNo]);
   await client.query(`UPDATE cancellation_requests SET holding_no = $1 WHERE holding_no = $2`, [newHoldingNo, oldHoldingNo]);
   await client.query(`UPDATE property_dispute_log SET holding_no = $1 WHERE holding_no = $2`, [newHoldingNo, oldHoldingNo]);
+  await client.query(`UPDATE pre2011_arv_entries SET holding_no = $1 WHERE holding_no = $2`, [newHoldingNo, oldHoldingNo]);
 
   await client.query(`DELETE FROM properties WHERE holding_no = $1`, [oldHoldingNo]);
 }

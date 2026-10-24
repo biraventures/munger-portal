@@ -823,7 +823,11 @@ export default function ManagePyausPage() {
                       <tr key={iss.id} className="border-t border-slate-100">
                         <td className="px-2.5 py-1.5 whitespace-nowrap">{iss.dateOfIssue}</td>
                         <td className="px-2.5 py-1.5 whitespace-nowrap">{iss.dateOfRepair ?? "-"}</td>
-                        <td className="px-2.5 py-1.5">{iss.repairBrief ?? iss.issueNotes ?? "-"}</td>
+                        <td className="px-2.5 py-1.5">
+                          {iss.reportedByType === "public" && <span className="mr-1 rounded bg-blue-50 px-1 py-0.5 text-[10px] font-semibold text-nnm-blue">PUBLIC</span>}
+                          {iss.issueNotes ?? (iss.repairBrief ? "" : "-")}
+                          {iss.repairBrief && <div className="text-green-700">Repair: {iss.repairBrief}</div>}
+                        </td>
                         <td className="px-2.5 py-1.5">{iss.amountSpent ? `Rs ${iss.amountSpent}` : "-"}</td>
                       </tr>
                     ))}

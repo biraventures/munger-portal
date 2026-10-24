@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Camera, CheckCircle2, CreditCard, FileText, Loader2, MapPin, MapPinOff } from "lucide-react";
 import { getCurrentGpsPosition } from "@/lib/geolocation";
+import { shrinkPhotoFile } from "@/lib/upload-limits";
 
 export interface CaptureState {
   gpsLat: number | null;
@@ -73,7 +74,7 @@ function PhotoSlot({
         type="file"
         accept="image/jpeg,image/png"
         capture="environment"
-        onChange={(e) => onChange(e.target.files?.[0] ?? null)}
+        onChange={async (e) => { const f = e.target.files?.[0]; onChange(f ? await shrinkPhotoFile(f) : null); }}
         className="hidden"
       />
     </div>

@@ -14,6 +14,7 @@ import { ApiError } from "../utils/ApiError";
 import type { PropertyDiscrepancyRequestRow, PropertyDiscrepancyStatus } from "../types/propertyDiscrepancy.types";
 import type { PropertySaveInput } from "../types/propertySave.types";
 import type { AdminRole, AdminTokenPayload } from "../types/admin.types";
+import { MAX_PHOTO_BYTES, uploadLimitMessage } from "../utils/uploadLimits";
 
 const FINAL_STAGE: AdminRole = PROPERTY_DISCREPANCY_APPROVAL_STAGE_ORDER[PROPERTY_DISCREPANCY_APPROVAL_STAGE_ORDER.length - 1]!;
 
@@ -30,10 +31,8 @@ async function saveDiscrepancyPhoto(holdingNo: string, kind: string, base64Data:
   if (!ext) throw ApiError.badRequest("Only JPEG or PNG photos are accepted.");
 
   const buffer = Buffer.from(base64Data, "base64");
-  const MAX_BYTES = 8 * 1024 * 1024;
-  if (buffer.length === 0 || buffer.length > MAX_BYTES) {
-    throw ApiError.badRequest("Photo must be a non-empty file under 8MB.");
-  }
+  if (buffer.length === 0) throw ApiError.badRequest("The photo is empty.");
+  if (buffer.length > MAX_PHOTO_BYTES) throw ApiError.badRequest(uploadLimitMessage("image/jpeg", buffer.length));
 
   const relativePath = path.join("discrepancy-photos", `${holdingNo}-${kind}-${Date.now()}.${ext}`);
   const fullPath = path.join(env.PHOTO_UPLOAD_DIR, relativePath);

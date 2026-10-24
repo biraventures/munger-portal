@@ -7,16 +7,27 @@ import { OperatorPropertySearch } from "@/components/operator/operator-property-
 import { PropertyEditorForm } from "@/components/operator/property-editor-form";
 import { exemptionFromProperty } from "@/lib/tax-exemption-api";
 import { PaymentForm } from "@/components/operator/payment-form";
+import { CollectPaymentWarningDialog } from "@/components/collect-payment-warning-dialog";
 import { ReceiptView } from "@/components/operator/receipt-view";
 import { NoticeView } from "@/components/operator/notice-view";
 import { PartPaymentPanel } from "@/components/operator/part-payment-panel";
 import { PropertyDocumentHistory } from "@/components/operator/property-document-history";
 import { EntryModeLauncher } from "@/components/operator/entry-mode-launcher";
 import { PartiallyKnownForm } from "@/components/operator/partially-known-form";
-import { makeBlankFloor, type FloorFormState } from "@/components/operator/floor-row";
+import {
+  makeBlankFloor,
+  type FloorFormState,
+} from "@/components/operator/floor-row";
 import { useOperatorGuard } from "@/lib/use-operator-guard";
-import { fetchFormOptions, fetchFullProperty, type FormOptions } from "@/lib/operator-api";
-import { generateDemandNotice, type DemandNoticeData } from "@/lib/demand-notice-api";
+import {
+  fetchFormOptions,
+  fetchFullProperty,
+  type FormOptions,
+} from "@/lib/operator-api";
+import {
+  generateDemandNotice,
+  type DemandNoticeData,
+} from "@/lib/demand-notice-api";
 import type { ReceiptData } from "@/lib/payment-api";
 
 type Mode =
@@ -24,9 +35,16 @@ type Mode =
   | { kind: "known-number"; holdingNo: string }
   | { kind: "new-auto" }
   | { kind: "partiallyKnown" }
-  | { kind: "edit"; holdingNo: string; data: ReturnType<typeof mapToFormState> };
+  | {
+      kind: "edit";
+      holdingNo: string;
+      data: ReturnType<typeof mapToFormState>;
+    };
 
-function mapToFormState(property: Record<string, unknown>, floors: Record<string, unknown>[]) {
+function mapToFormState(
+  property: Record<string, unknown>,
+  floors: Record<string, unknown>[],
+) {
   const str = (v: unknown) => (v === null || v === undefined ? "" : String(v));
   return {
     master: {
@@ -91,6 +109,8 @@ export default function OperatorPropertyTaxPage() {
   const [searching, setSearching] = useState(false);
   const [notFoundHolding, setNotFoundHolding] = useState<string | null>(null);
   const [showPayment, setShowPayment] = useState(false);
+  // "Collect Payment" first shows the responsibility warning; the form opens only after "I understand".
+  const [showCollectWarning, setShowCollectWarning] = useState(false);
   const [receipt, setReceipt] = useState<ReceiptData | null>(null);
   const [notice, setNotice] = useState<DemandNoticeData | null>(null);
   const [generatingNotice, setGeneratingNotice] = useState(false);
@@ -124,7 +144,11 @@ export default function OperatorPropertyTaxPage() {
       const result = await generateDemandNotice(holdingNo, partYears);
       setNotice(result);
     } catch (err) {
-      setNoticeError(err instanceof Error ? err.message : "Could not generate the demand notice.");
+      setNoticeError(
+        err instanceof Error
+          ? err.message
+          : "Could not generate the demand notice.",
+      );
     } finally {
       setGeneratingNotice(false);
     }
@@ -140,9 +164,26 @@ export default function OperatorPropertyTaxPage() {
         setMode({ kind: "idle" });
         return;
       }
-      setDispute(result.property.is_disputed ? { remarks: String(result.property.dispute_remarks ?? "") } : null);
-      setResurvey(result.property.resurvey_required ? { reason: String(result.property.resurvey_reason ?? "Total area and/or floor details are missing") } : null);
-      setMode({ kind: "edit", holdingNo, data: mapToFormState(result.property, result.floors ?? []) });
+      setDispute(
+        result.property.is_disputed
+          ? { remarks: String(result.property.dispute_remarks ?? "") }
+          : null,
+      );
+      setResurvey(
+        result.property.resurvey_required
+          ? {
+              reason: String(
+                result.property.resurvey_reason ??
+                  "Total area and/or floor details are missing",
+              ),
+            }
+          : null,
+      );
+      setMode({
+        kind: "edit",
+        holdingNo,
+        data: mapToFormState(result.property, result.floors ?? []),
+      });
     } finally {
       setSearching(false);
     }
@@ -150,7 +191,9 @@ export default function OperatorPropertyTaxPage() {
 
   function handleChooseAuto(choice: "new" | "partiallyKnown") {
     resetTransient();
-    setMode(choice === "new" ? { kind: "new-auto" } : { kind: "partiallyKnown" });
+    setMode(
+      choice === "new" ? { kind: "new-auto" } : { kind: "partiallyKnown" },
+    );
   }
 
   async function handleChooseKnownNumber(holdingNo: string) {
@@ -163,7 +206,11 @@ export default function OperatorPropertyTaxPage() {
     try {
       const result = await fetchFullProperty(holdingNo);
       if (result.found && result.property) {
-        setMode({ kind: "edit", holdingNo, data: mapToFormState(result.property, result.floors ?? []) });
+        setMode({
+          kind: "edit",
+          holdingNo,
+          data: mapToFormState(result.property, result.floors ?? []),
+        });
         return;
       }
     } finally {
@@ -173,7 +220,11 @@ export default function OperatorPropertyTaxPage() {
   }
 
   if (!operator) {
-    return <div className="flex min-h-screen items-center justify-center text-sm text-slate-400">Loading…</div>;
+    return (
+      <div className="flex min-h-screen items-center justify-center text-sm text-slate-400">
+        Loading…
+      </div>
+    );
   }
 
   return (
@@ -195,19 +246,28 @@ export default function OperatorPropertyTaxPage() {
           <NoticeView notice={notice} onClose={() => setNotice(null)} />
         ) : (
           <>
-            <h1 className="mb-1 text-2xl font-semibold text-slate-900">Property Tax</h1>
-            <p className="mb-6 text-sm text-slate-500">Search a holding to edit it, or start a new entry below.</p>
+            <h1 className="mb-1 text-2xl font-semibold text-slate-900">
+              Property Tax
+            </h1>
+            <p className="mb-6 text-sm text-slate-500">
+              Search a holding to edit it, or start a new entry below.
+            </p>
 
             <div className="mb-6">
-              <OperatorPropertySearch onSearch={handleSearch} onNew={handleChooseKnownNumber} loading={searching} />
+              <OperatorPropertySearch
+                onSearch={handleSearch}
+                onNew={handleChooseKnownNumber}
+                loading={searching}
+              />
             </div>
 
             {notFoundHolding && (
               <div className="mb-6 flex items-start gap-2.5 rounded-md border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
                 <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
                 <span>
-                  No property found for &ldquo;{notFoundHolding}&rdquo;. If it&apos;s a known MUNG- number, use the
-                  card below to create it — it&apos;s pre-filled.
+                  No property found for &ldquo;{notFoundHolding}&rdquo;. If
+                  it&apos;s a known MUNG- number, use the card below to create
+                  it — it&apos;s pre-filled.
                 </span>
               </div>
             )}
@@ -221,7 +281,9 @@ export default function OperatorPropertyTaxPage() {
 
             {formOptions && mode.kind === "idle" && (
               <div>
-                <h2 className="mb-3 text-base font-semibold text-slate-900">Start a new entry</h2>
+                <h2 className="mb-3 text-base font-semibold text-slate-900">
+                  Start a new entry
+                </h2>
                 <EntryModeLauncher
                   onChooseAuto={handleChooseAuto}
                   onChooseKnownNumber={handleChooseKnownNumber}
@@ -253,12 +315,16 @@ export default function OperatorPropertyTaxPage() {
             )}
 
             {formOptions && mode.kind === "partiallyKnown" && (
-              <PartiallyKnownForm formOptions={formOptions} onSaved={(result) => setJustCreated(result.holdingNo)} />
+              <PartiallyKnownForm
+                formOptions={formOptions}
+                onSaved={(result) => setJustCreated(result.holdingNo)}
+              />
             )}
 
             {justCreated && (
               <p className="mt-3 text-sm text-slate-500">
-                Saved as <b>{justCreated}</b>. Search that holding number above to edit it or collect a payment.
+                Saved as <b>{justCreated}</b>. Search that holding number above
+                to edit it or collect a payment.
               </p>
             )}
 
@@ -277,30 +343,52 @@ export default function OperatorPropertyTaxPage() {
                 />
 
                 {noticeError && (
-                  <div role="alert" className="flex items-center gap-2 rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+                  <div
+                    role="alert"
+                    className="flex items-center gap-2 rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-700"
+                  >
                     <AlertCircle className="h-4 w-4 shrink-0" />
                     {noticeError}
                   </div>
                 )}
 
                 {resurvey && (
-                  <div role="alert" className="flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
+                  <div
+                    role="alert"
+                    className="flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900"
+                  >
                     <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
                     <div>
-                      <b>This holding must be re-surveyed before tax can be collected.</b> No demand notice can be generated and no payment can be
-                      accepted until a surveyor has surveyed it and the total area and floor details are updated.
-                      <div className="mt-1 text-xs">Reason: {resurvey.reason}</div>
+                      <b>
+                        This holding must be re-surveyed before tax can be
+                        collected.
+                      </b>{" "}
+                      No demand notice can be generated and no payment can be
+                      accepted until a surveyor has surveyed it and the total
+                      area and floor details are updated.
+                      <div className="mt-1 text-xs">
+                        Reason: {resurvey.reason}
+                      </div>
                     </div>
                   </div>
                 )}
 
                 {dispute && (
-                  <div role="alert" className="flex items-start gap-2 rounded-md border border-red-300 bg-red-50 p-4 text-sm text-red-800">
+                  <div
+                    role="alert"
+                    className="flex items-start gap-2 rounded-md border border-red-300 bg-red-50 p-4 text-sm text-red-800"
+                  >
                     <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
                     <div>
-                      <b>This holding is marked as DISPUTED.</b> No demand notice can be generated and no payment can be accepted until the
-                      Tax Daroga, City Manager or Commissioner clears the dispute.
-                      {dispute.remarks ? <div className="mt-1 text-xs">Reason: {dispute.remarks}</div> : null}
+                      <b>This holding is marked as DISPUTED.</b> No demand
+                      notice can be generated and no payment can be accepted
+                      until the Tax Daroga, City Manager or Commissioner clears
+                      the dispute.
+                      {dispute.remarks ? (
+                        <div className="mt-1 text-xs">
+                          Reason: {dispute.remarks}
+                        </div>
+                      ) : null}
                     </div>
                   </div>
                 )}
@@ -308,7 +396,7 @@ export default function OperatorPropertyTaxPage() {
                 <div className="flex flex-wrap gap-3">
                   {!showPayment && !blocked && (
                     <button
-                      onClick={() => setShowPayment(true)}
+                      onClick={() => setShowCollectWarning(true)}
                       className="inline-flex items-center gap-2 rounded-md bg-nnm-gold px-6 py-3 text-sm font-semibold text-[#20240a] hover:brightness-95"
                     >
                       <Receipt className="h-4 w-4" />
@@ -325,7 +413,9 @@ export default function OperatorPropertyTaxPage() {
                     ) : (
                       <FileWarning className="h-4 w-4" />
                     )}
-                    {generatingNotice ? "Generating…" : "Generate Demand Notice"}
+                    {generatingNotice
+                      ? "Generating…"
+                      : "Generate Demand Notice"}
                   </button>
                 </div>
 
@@ -334,12 +424,31 @@ export default function OperatorPropertyTaxPage() {
                     key={`pp-${mode.holdingNo}`}
                     holdingNo={mode.holdingNo}
                     busy={generatingNotice}
-                    onGenerate={(years) => handleGenerateNotice(mode.holdingNo, years)}
+                    onGenerate={(years) =>
+                      handleGenerateNotice(mode.holdingNo, years)
+                    }
+                  />
+                )}
+
+                {showCollectWarning && (
+                  <CollectPaymentWarningDialog
+                    holdingNo={mode.holdingNo}
+                    ownerName={mode.data.master.ownerName}
+                    collectingAs={operator ? `${operator.displayName} (Counter Operator)` : null}
+                    onCancel={() => setShowCollectWarning(false)}
+                    onContinue={() => {
+                      setShowCollectWarning(false);
+                      setShowPayment(true);
+                    }}
                   />
                 )}
 
                 {showPayment && !blocked && (
-                  <PaymentForm holdingNo={mode.holdingNo} onSuccess={setReceipt} />
+                  <PaymentForm
+                    holdingNo={mode.holdingNo}
+                    ownerName={mode.data.master.ownerName}
+                    onSuccess={setReceipt}
+                  />
                 )}
 
                 <PropertyDocumentHistory holdingNo={mode.holdingNo} />

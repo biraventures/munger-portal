@@ -110,7 +110,7 @@ function FileField({
       ) : (
         <label className={`flex cursor-pointer items-center gap-2 rounded-md border border-dashed border-slate-300 px-3 py-2.5 text-sm text-slate-600 hover:border-nnm-blue ${busy ? "opacity-60" : ""}`}>
           {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-          {busy ? "Uploading…" : photoOnly ? "Take / choose a photo (JPG, PNG)" : "Choose file (PDF, JPG, PNG — up to 8 MB)"}
+          {busy ? "Uploading…" : photoOnly ? "Take / choose a photo (JPG, PNG)" : "Choose file (PDF up to 2 MB, or a JPG / PNG photo)"}
           <input
             type="file"
             className="hidden"

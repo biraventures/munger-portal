@@ -75,6 +75,8 @@ export const listLightsHandler = asyncHandler(async (req: Request, res: Response
       noOfFunctionalLights: l.no_of_functional_lights,
       maintenanceAgencyId: l.maintenance_agency_id,
       remarks: l.remarks,
+      panelStatus: l.panel_status,
+      functionalStatus: l.functional_status,
     })),
   });
 });
@@ -316,7 +318,7 @@ export const myPenaltyTotalHandler = asyncHandler(async (req: Request, res: Resp
 // Deputy Municipal Commissioner, and Municipal Commissioner.
 // ---------------------------------------------------------------------------
 
-const statusDashboardQuerySchema = z.object({ agency: z.enum(["NN", "EESL"]).optional() });
+const statusDashboardQuerySchema = z.object({ agency: z.enum(["NN", "EESL"]).optional(), type: z.enum(["streetlight", "high_mast"]).optional() });
 const AGENCY_NAME_BY_CODE: Record<"NN" | "EESL", string> = { NN: "Nagar Nigam", EESL: "EESL" };
 
 /** ward_parshad only ever sees their own ward on this dashboard, same as the rest of the portal (see WARD_SCOPED_ROLES) - Mayor/Deputy Mayor are cross-ward, same as City Manager/DMC/Commissioner. Undefined means "no ward restriction". */
@@ -330,7 +332,7 @@ function statusDashboardWardScope(req: Request): number | undefined {
 export const getWardStatusDashboardHandler = asyncHandler(async (req: Request, res: Response) => {
   const parsed = statusDashboardQuerySchema.safeParse(req.query);
   if (!parsed.success) throw ApiError.badRequest("Invalid query", parsed.error.flatten().fieldErrors);
-  const wards = await buildWardStatusDashboard(parsed.data.agency ? AGENCY_NAME_BY_CODE[parsed.data.agency] : undefined, statusDashboardWardScope(req));
+  const wards = await buildWardStatusDashboard(parsed.data.agency ? AGENCY_NAME_BY_CODE[parsed.data.agency] : undefined, statusDashboardWardScope(req), parsed.data.type);
   res.status(200).json({ wards });
 });
 
