@@ -7,19 +7,6 @@ import { CheckCircle2, XCircle, Loader2, AlertTriangle } from "lucide-react";
 import { confirmOnlinePayment, type ConfirmPaymentResult } from "@/lib/online-payment";
 import { ReceiptView } from "@/components/operator/receipt-view";
 
-/**
- * ⚠ The `status` field name and its "success" values below are a
- * placeholder guess, not from ICICI's real spec (not available when this
- * was built). Whatever field ICICI's redirect actually uses to indicate
- * success/failure needs to replace the check in `looksSuccessful()` below
- * — and see the backend's confirmOnlinePayment() for why this client-side
- * signal isn't trustworthy on its own regardless.
- */
-function looksSuccessful(params: Record<string, string>): boolean {
-  const status = (params.status || params.txnStatus || params.transactionStatus || "").toLowerCase();
-  return status === "success" || status === "s" || status === "00";
-}
-
 function PaymentReturnContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -41,15 +28,30 @@ function PaymentReturnContent() {
       return;
     }
 
-    confirmOnlinePayment(orderId, looksSuccessful(params), params)
-      .then((r) => {
-        setResult(r);
-        setState("done");
-      })
-      .catch((err) => {
-        setError(err instanceof Error ? err.message : "Could not confirm the payment.");
-        setState("error");
-      });
+    // The server asks the bank; while the bank has no final answer the order stays "pending", so check again
+    // every 10 seconds for up to 3 minutes.
+    let cancelled = false;
+    let tries = 0;
+    const check = () => {
+      confirmOnlinePayment(orderId)
+        .then((r) => {
+          if (cancelled) return;
+          setResult(r);
+          setState("done");
+          if (r.status === "pending" && ++tries < 18) timer = setTimeout(check, 10000);
+        })
+        .catch((err) => {
+          if (cancelled) return;
+          setError(err instanceof Error ? err.message : "Could not confirm the payment.");
+          setState("error");
+        });
+    };
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    check();
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    };
   }, [searchParams]);
 
   if (state === "confirming") {
@@ -103,6 +105,32 @@ function PaymentReturnContent() {
             View Receipt
           </button>
         </div>
+      </div>
+    );
+  }
+
+  if (result.status === "pending" || result.status === "needs_review") {
+    return (
+      <div className="mx-auto max-w-lg rounded-xl border border-amber-200 bg-amber-50 p-8 text-center">
+        {result.status === "pending" ? (
+          <Loader2 className="mx-auto mb-3 h-10 w-10 animate-spin text-amber-600" />
+        ) : (
+          <AlertTriangle className="mx-auto mb-3 h-10 w-10 text-amber-600" />
+        )}
+        <h1 className="mb-2 text-lg font-semibold text-amber-900">
+          {result.status === "pending" ? "Waiting for the bank to confirm" : "Payment received - being processed by the office"}
+        </h1>
+        <p className="mb-2 text-sm text-amber-800">
+          {result.status === "pending"
+            ? "The bank has not yet confirmed this payment. This page checks again automatically. Please do not pay a second time."
+            : "The bank has confirmed your payment, but it needs to be settled by the Holding Tax Section. Please do not pay again; contact the Municipal Corporation Office, Munger with this order reference if no receipt is issued."}
+        </p>
+        <p className="mb-5 text-sm text-amber-800">
+          Holding {result.holdingNo} · Order reference <b>{result.order_id}</b>
+        </p>
+        <Link href="/property-tax" className="text-sm font-semibold text-nnm-blue hover:underline">
+          Back to Property Tax Search
+        </Link>
       </div>
     );
   }

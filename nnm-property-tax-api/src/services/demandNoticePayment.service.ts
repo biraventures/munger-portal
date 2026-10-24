@@ -8,6 +8,7 @@ import { assertNoNoticeOnHold } from "./noticeHold.service";
 import { assertNoResurveyPending } from "./propertyResurvey.service";
 import { propertyRepository } from "../repositories/property.repository";
 import { createGatewayOrder, type InitiateResult } from "./onlinePayment.service";
+import { assertNoMissingTaxYears } from "./arrears.service";
 
 /**
  * Pay-from-QR on a demand notice. Everything is decided on the server from the
@@ -57,6 +58,7 @@ export async function getDemandNoticePaymentInfo(demandNo: string): Promise<Dema
 
   if (notice.cancelled) return { ...base, available: false, reason: "This demand notice has been cancelled." };
   if (notice.settled) return { ...base, available: false, reason: "This demand notice has already been settled." };
+  if (notice.superseded) return { ...base, available: false, reason: "A newer demand notice has been issued for this holding. Please pay against the latest notice." };
   if (!env.ONLINE_PAYMENT_ENABLED) return { ...base, available: false, reason: "Online payment is temporarily unavailable. Please pay at the Nagar Nigam office counter." };
 
   const property = await propertyRepository.findByHoldingNo(holdingNo);
@@ -65,12 +67,15 @@ export async function getDemandNoticePaymentInfo(demandNo: string): Promise<Dema
     assertNotDisputed(property);
     assertNoResurveyPending(property);
     await assertNoNoticeOnHold(holdingNo);
+    assertNoMissingTaxYears(property, await propertyRepository.findTaxHistoryByHoldingNo(holdingNo));
   } catch {
     return { ...base, available: false, reason: "Please contact the Holding Tax Section, Municipal Corporation Office, Munger." };
   }
 
   const result = await searchPropertyByHoldingNo(holdingNo);
-  const amountDue = Number(result.property?.totalPayable ?? 0);
+  if (!(Number(result.property?.totalPayable ?? 0) > 0)) return { ...base, available: false, reason: "No dues are pending against this holding." };
+  // Payment settles this notice, so the amount is the notice's own total.
+  const amountDue = Number(notice.total_amount_demanded ?? 0);
   if (!(amountDue > 0)) return { ...base, available: false, reason: "No dues are pending against this holding." };
   return { ...base, amountDue, available: true, reason: null };
 }
@@ -79,5 +84,6 @@ export async function initiatePaymentForDemandNotice(demandNo: string, declarati
   if (!declarationAccepted) throw ApiError.badRequest("Please tick the declaration to continue with the payment.");
   const info = await getDemandNoticePaymentInfo(demandNo);
   if (!info.available) throw ApiError.badRequest(info.reason ?? "Payment is not available for this notice.");
-  return createGatewayOrder(info.holdingNo, info.amountDue, info.servedBy);
+  const property = await propertyRepository.findByHoldingNo(info.holdingNo);
+  return createGatewayOrder(info.holdingNo, info.amountDue, info.servedBy, property, [demandNo]);
 }

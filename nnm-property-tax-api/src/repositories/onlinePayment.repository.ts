@@ -32,8 +32,13 @@ export interface PgRequestRow {
   demand: number[]; // INTEGER[], defaults to '{}'
   order_id: string;
   gateway: string;
-  status: "pending" | "success" | "failed";
-  gateway_response: unknown; // JSONB
+  status: "pending" | "success" | "failed" | "needs_review";
+  gateway_response: unknown; // JSONB - what the citizen's browser posted to the callback (NOT trusted)
+  bank_status_response: unknown; // JSONB - the bank's status API reply (the trusted answer)
+  bank_txn_id: string | null;
+  verified_at: Date | null;
+  last_checked_at: Date | null;
+  check_count: number;
   failure_reason: string | null;
   ip_address: string | null; // INET: returned as a string
   user_agent: string | null;
@@ -114,16 +119,35 @@ export const onlinePaymentRepository = {
   //     [orderId, receiptNo, JSON.stringify(gatewayResponse)],
   //   );
   // },
-  async markSuccess(orderId: string, receiptNo: string, gatewayResponse: unknown): Promise<void> {
+  async markSuccess(orderId: string, receiptNo: string, bankResponse: unknown, bankTxnId: string | null): Promise<void> {
     await pool.query(
       `UPDATE pg_request
-       SET status = 'success',
-           receipt_no = $2,
-           gateway_response = $3::jsonb,
-           failure_reason = NULL,
-           updated_at = now()
-       WHERE order_id = $1`,
-      [orderId, receiptNo, JSON.stringify(gatewayResponse)],
+       SET status = 'success', receipt_no = $2, bank_status_response = $3::jsonb, bank_txn_id = $4,
+           failure_reason = NULL, verified_at = now(), updated_at = now()
+       WHERE order_id = $1 AND status = 'pending'`,
+      [orderId, receiptNo, JSON.stringify(bankResponse ?? null), bankTxnId],
+    );
+  },
+
+  async markNeedsReview(orderId: string, bankResponse: unknown, bankTxnId: string | null, reason: string): Promise<void> {
+    await pool.query(
+      `UPDATE pg_request
+       SET status = 'needs_review', bank_status_response = $2::jsonb, bank_txn_id = $3, failure_reason = $4,
+           verified_at = now(), updated_at = now()
+       WHERE order_id = $1 AND status = 'pending'`,
+      [orderId, JSON.stringify(bankResponse ?? null), bankTxnId, reason],
+    );
+  },
+
+  /** What the browser posted back - kept for the record only. */
+  async saveCallback(orderId: string, body: unknown): Promise<void> {
+    await pool.query(`UPDATE pg_request SET gateway_response = $2::jsonb, updated_at = now() WHERE order_id = $1`, [orderId, JSON.stringify(body)]);
+  },
+
+  async recordCheck(orderId: string, bankResponse: unknown): Promise<void> {
+    await pool.query(
+      `UPDATE pg_request SET last_checked_at = now(), check_count = check_count + 1, bank_status_response = $2::jsonb WHERE order_id = $1`,
+      [orderId, JSON.stringify(bankResponse ?? null)],
     );
   },
 
@@ -135,16 +159,16 @@ export const onlinePaymentRepository = {
   //     [orderId, JSON.stringify(gatewayResponse)],
   //   );
   // },
-  async markFailed(orderId: string, gatewayResponse: unknown, failureReason?: string | null): Promise<void> {
+  async markFailed(orderId: string, bankResponse: unknown, failureReason?: string | null): Promise<void> {
     await pool.query(
       `UPDATE pg_request
        SET status = 'failed',
-           gateway_response = $2::jsonb,
+           bank_status_response = COALESCE($2::jsonb, bank_status_response),
            failure_reason = $3,
            updated_at = now()
        WHERE order_id = $1
          AND status = 'pending'`,
-      [orderId, JSON.stringify(gatewayResponse), failureReason ?? null],
+      [orderId, bankResponse == null ? null : JSON.stringify(bankResponse), failureReason ?? null],
     );
   },
 };

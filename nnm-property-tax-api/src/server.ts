@@ -3,6 +3,7 @@ import { env } from "./config/env";
 import { checkDbConnection, pool } from "./config/db";
 import { clearInterruptedIntegrations } from "./services/propertyImportStaging.service";
 import { scheduledRefreshTick } from "./services/demandRefresh.service";
+import { reconcilePendingOnlineOrders } from "./services/onlinePayment.service";
 
 async function main() {
   await checkDbConnection();
@@ -19,9 +20,15 @@ async function main() {
     scheduledRefreshTick().catch((err) => console.error("[demand-refresh] schedule check failed:", err));
   }, 60 * 1000);
 
+  // Online payments whose citizen never came back from the bank page: ask ICICI for their status every 5 minutes.
+  const pgReconcileTimer = setInterval(() => {
+    reconcilePendingOnlineOrders().catch((err) => console.error("[online-payment] reconciliation failed:", err));
+  }, 5 * 60 * 1000);
+
   const shutdown = async (signal: string) => {
     console.log(`${signal} received, shutting down...`);
     clearInterval(refreshTimer);
+    clearInterval(pgReconcileTimer);
     server.close(async () => {
       await pool.end();
       process.exit(0);

@@ -37,7 +37,8 @@ export async function initiateOnlinePayment(
 }
 
 export interface ConfirmPaymentResult {
-  status: "success" | "failed";
+  /** pending = the bank has not given a final answer yet; needs_review = paid at the bank, office to settle by hand. */
+  status: "success" | "failed" | "pending" | "needs_review";
   receiptNo: string | null;
   holdingNo: string;
   amount: string;
@@ -46,20 +47,14 @@ export interface ConfirmPaymentResult {
 }
 
 /**
- * Called by the payment-return page once the gateway redirects back.
- * `success` here is only as trustworthy as the gateway redirect itself —
- * see the backend's confirmOnlinePayment() warning before relying on
- * this for anything beyond internal testing.
+ * Reads the order's status for the payment-return page. The server decides it by asking ICICI directly, so
+ * nothing from the gateway redirect is sent here except the order reference.
  */
-export async function confirmOnlinePayment(
-  orderId: string,
-  success: boolean,
-  rawParams: Record<string, string>,
-): Promise<ConfirmPaymentResult> {
+export async function confirmOnlinePayment(orderId: string): Promise<ConfirmPaymentResult> {
   const res = await fetch(`${API_BASE_URL}/payments/online/confirm`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ orderId, success, ...rawParams }),
+    body: JSON.stringify({ order_id: orderId }),
   });
 
   if (!res.ok) {

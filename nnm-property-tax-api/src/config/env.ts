@@ -18,6 +18,11 @@ const envSchema = z.object({
   ICICI_AGG_ID: z.string().default(""),
   ICICI_SECRET_KEY: z.string().default(""),
   ICICI_RETURN_URL: z.string().default(""),
+  // Gateway endpoints. Default to ICICI's UAT (test) servers; production values go in the server .env:
+  //   ICICI_PG_INITIATE_URL=https://pgpay.icicibank.com/pg/api/v2/initiateSale
+  //   ICICI_PG_COMMAND_URL=https://pgpay.icicibank.com/pg/api/command
+  ICICI_PG_INITIATE_URL: z.string().url().default("https://pgpayuat.icici.bank.in/tsp/pg/api/v2/initiateSale"),
+  ICICI_PG_COMMAND_URL: z.string().url().default("https://pgpayuat.icici.bank.in/tsp/pg/api/command"),
   // Kill switch for the citizen-facing online payment gateway - default
   // false. Set to "true" once the ICICI integration is properly signed
   // and live on whichever server actually hosts this (see the warning

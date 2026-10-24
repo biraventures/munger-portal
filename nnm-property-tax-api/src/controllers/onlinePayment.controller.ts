@@ -39,41 +39,17 @@ export const postInitiateOnlinePayment = asyncHandler(async (req: Request, res: 
   res.status(200).json(result);
 });
 
-// const confirmSchema = z.object({
-//   orderId: z.string().min(1),
-//   // Accept whatever the gateway's redirect sends — exact field names
-//   // depend on ICICI's real spec. `success` is this endpoint's own
-//   // normalized boolean; adjust the mapping once that spec is known.
-//   success: z.coerce.boolean(),
-// });
-const confirmSchema = z.object({
-  responseCode: z.string().min(1),
-  merchantTxnNo: z.string().min(1),
-  paymentID: z.string().min(1).optional(),
-});
-
 /**
- * POST /api/v1/payments/online/confirm
- * Called by the citizen-facing return page after the gateway redirects
- * back. See onlinePayment.service.ts's confirmOnlinePayment() header —
- * this does NOT yet independently verify with the bank; that's the
- * critical remaining piece before this can safely go live.
+ * POST /api/v1/properties/pay/online/callback - the bank's page posts the citizen's browser here after payment.
+ * Only merchantTxnNo is taken from this form; whether the payment succeeded is asked of ICICI directly
+ * (confirmOnlinePayment), because anything in this form can be edited by whoever submits it.
  */
 export const postConfirmOnlinePayment = asyncHandler(async (req: Request, res: Response) => {
-  const parsed = confirmSchema.safeParse(req.body);
-
-  if (!parsed.success) {
-    throw ApiError.badRequest("Invalid confirmation payload", parsed.error.flatten().fieldErrors);
+  const orderId = typeof req.body?.merchantTxnNo === "string" ? req.body.merchantTxnNo.trim() : "";
+  if (!/^[A-Za-z0-9-]{1,64}$/.test(orderId)) {
+    throw ApiError.badRequest("Invalid confirmation payload");
   }
-
-  let isSuccess = false;
-
-  if (req.body?.responseCode === '0000') {
-    isSuccess = true
-  }
-
-  const result = await confirmOnlinePayment(parsed.data.merchantTxnNo, isSuccess, req.body);
-  // res.status(200).json(result);
+  const result = await confirmOnlinePayment(orderId, req.body);
   const frontendUrl = env.FRONTEND_URL.replace(/\/+$/, "");
   const basePath = env.FRONTEND_BASE_PATH.replace(/^\/+|\/+$/g, "");
 

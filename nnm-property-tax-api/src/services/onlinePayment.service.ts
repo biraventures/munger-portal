@@ -17,28 +17,16 @@ import { computeArrearsClearance, summarizeArrears, assertNoMissingTaxYears } fr
 import { parseYearStartOrNull } from "../utils/assessmentYear";
 import { num } from "../utils/num";
 import { pool } from "../config/db";
-import axios from "axios";
+import { initiateSale, statusCheck, type BankVerdict } from "./iciciGateway";
 
 const GATEWAY_NAME = "ICICI_PG";
-// const ICICI_PG_BASE_URL = "https://pgpayuat.icici.bank.in/tsp/pg/api/v2/initiateSale";
-const ICICI_PG_BASE_URL = "https://pgpayuat.icici.bank.in/tsp/pg/api/v2/initiateSale";
 
 export interface InitiateResult {
   orderId: string;
   redirectUrl: string;
 }
 
-/**
- * ⚠ PLACEHOLDER — this builds the redirect URL from only what was given
- * (merchantID + a bare query string). Real ICICI PG integration requires
- * whatever their merchant onboarding "Integration Kit" specifies —
- * typically a signed/hashed request (order ID, amount, currency, a
- * return URL, and a checksum computed with a merchant secret key). Until
- * that spec is available, this sends an unsigned request that will very
- * likely be rejected by the bank's gateway. Replace the query params
- * below once you have the real spec — everything else (order tracking,
- * confirm/callback plumbing, DB recording) is ready to use as-is.
- */
+/** Starts an online payment: validates the holding and notice, records a pending order, registers it with ICICI. */
 export async function initiateOnlinePayment(
   holdingNo: string,
   amount: number,
@@ -132,7 +120,8 @@ export async function createGatewayOrder(
   demandNos?: any[],
   req?: Request
 ): Promise<InitiateResult> {
-  const orderId = crypto.randomUUID();
+  // Bank order reference: short and alphanumeric (ICICI limits merchantTxnNo). NNM + IST yyMMddHHmmss + 5 random digits.
+  const orderId = newOrderId();
   // await onlinePaymentRepository.createPendingOrder({
   //   orderId,
   //   holdingNo,
@@ -143,21 +132,24 @@ export async function createGatewayOrder(
   //   demandNos: demandNos,
   // });
 
-  const notice = await demandNoticeRepository.findByDemandNo(demandNos![0]);
+  if (!demandNos?.length) {
+    throw ApiError.badRequest("Please generate the demand notice first - online payment is made against a demand notice.");
+  }
+  const notice = await demandNoticeRepository.findByDemandNo(demandNos[0]);
   // console.log('notice',notice);
 
   if (!notice || notice.holding_no !== holdingNo) {
-    throw ApiError.notFound(`Demand notice ${demandNos![0]} not found for this holding.`);
+    throw ApiError.notFound(`Demand notice ${demandNos[0]} not found for this holding.`);
   }
   if (notice.settled) {
-    throw ApiError.badRequest(`Demand notice ${demandNos![0]} has already been paid.`);
+    throw ApiError.badRequest(`Demand notice ${demandNos[0]} has already been paid.`);
   }
   if (notice.cancelled) {
-    throw ApiError.badRequest(`Demand notice ${demandNos![0]} has been cancelled and can no longer be paid.`);
+    throw ApiError.badRequest(`Demand notice ${demandNos[0]} has been cancelled and can no longer be paid.`);
   }
   if (notice.superseded) {
     throw ApiError.badRequest(
-      `Demand notice ${demandNos![0]} has been superseded by a newer notice for this holding - please use the current demand notice instead.`,
+      `Demand notice ${demandNos[0]} has been superseded by a newer notice for this holding - please use the current demand notice instead.`,
     );
   }
   // A pending cancellation request means tax_daroga hasn't yet decided
@@ -165,10 +157,10 @@ export async function createGatewayOrder(
   // that's unresolved would let the two outcomes race each other
   // (e.g. approval reverting a notice that was just paid seconds
   // earlier). Blocked until the request is approved or rejected.
-  const pendingCancellation = await cancellationRequestRepository.findPendingForTarget("demand_notice", demandNos![0]);
+  const pendingCancellation = await cancellationRequestRepository.findPendingForTarget("demand_notice", demandNos[0]);
   if (pendingCancellation) {
     throw ApiError.badRequest(
-      `Demand notice ${demandNos![0]} has a pending cancellation request awaiting Tax Daroga's decision - payment cannot be collected until that is resolved.`,
+      `Demand notice ${demandNos[0]} has a pending cancellation request awaiting Tax Daroga's decision - payment cannot be collected until that is resolved.`,
     );
   }
   if (!notice.assessment_year) {
@@ -176,7 +168,7 @@ export async function createGatewayOrder(
     // they predate assessment_year being recorded, so there's no safe
     // year to advance tax_paid_till_year to. Regenerate the notice instead.
     throw ApiError.badRequest(
-      `Demand notice ${demandNos![0]} is missing its assessment year — regenerate the notice and pay the new one.`,
+      `Demand notice ${demandNos[0]} is missing its assessment year — regenerate the notice and pay the new one.`,
     );
   }
   if (Number(notice.total_amount_demanded) !== Number(amount)) {
@@ -198,29 +190,30 @@ export async function createGatewayOrder(
   });
 
 
-  // TODO: replace with the real signed request per ICICI's integration
-  // spec once available (see warning above).
-  // const redirectUrl = `${ICICI_PG_BASE_URL}?merchantID=${encodeURIComponent(env.ICICI_MERCHANT_ID)}&orderId=${encodeURIComponent(
-  //   orderId,
-  // )}&amount=${encodeURIComponent(amount.toFixed(2))}&returnUrl=${encodeURIComponent(returnUrl)}`;
-
   if (!property) {
     throw ApiError.badRequest("Property details are required to initiate payment.");
   }
-
-  const payerData: PayerType = {
-    payerName: property.owner_name,
-    payerMobile: property.mobile_no,
-    amount: amount,
+  try {
+    const { redirectUrl } = await initiateSale(orderId, {
+      name: property.owner_name ?? "",
+      mobile: String(property.mobile_no ?? "").replace(/\D/g, "").slice(-10),
+      amount,
+    });
+    return { orderId, redirectUrl };
+  } catch (err) {
+    await onlinePaymentRepository.markFailed(orderId, null, `Initiation failed: ${(err as Error).message}`);
+    throw err;
   }
+}
 
-  const initiationData = await initiatePaymentDal(payerData, orderId);
-
-  return { orderId, redirectUrl: initiationData.redirectURI };
+function newOrderId(): string {
+  const ist = new Date(Date.now() + 330 * 60 * 1000).toISOString(); // IST digits in ISO layout
+  const stamp = ist.slice(2, 4) + ist.slice(5, 7) + ist.slice(8, 10) + ist.slice(11, 13) + ist.slice(14, 16) + ist.slice(17, 19);
+  return `NNM${stamp}${crypto.randomInt(0, 100000).toString().padStart(5, "0")}`;
 }
 
 export interface ConfirmResult {
-  status: "success" | "failed";
+  status: "success" | "failed" | "pending" | "needs_review";
   receiptNo: string | null;
   holdingNo: string;
   amount: string;
@@ -228,101 +221,95 @@ export interface ConfirmResult {
   receipt?: PaymentResult | PrintableReceiptHistory | null;
 }
 
-/**
- * ⚠ PLACEHOLDER — SEE WARNING BELOW BEFORE GOING LIVE.
- *
- * This currently trusts whatever status the citizen's browser reports
- * back from the gateway redirect. That is NOT safe for production: a
- * browser-supplied query parameter can be edited by anyone before it
- * reaches this endpoint, letting someone mark their own tax "paid"
- * without paying. Before this goes live, this function MUST instead
- * (or additionally) call ICICI's server-to-server status-enquiry API
- * with this orderId and trust ONLY that response — or verify a
- * signature/checksum ICICI sends in their callback, using the merchant
- * secret key from the integration kit. Neither of those is implemented
- * here because neither was available at the time this was built.
- *
- * Everything else here — idempotency, receipt assignment, DB recording
- * — is real and safe to keep once the verification step above is added.
- */
-export async function confirmOnlinePayment(
-  orderId: string,
-  reportedSuccess: boolean,
-  gatewayResponse: unknown,
-): Promise<ConfirmResult> {
-  const order = await onlinePaymentRepository.findByOrderId(orderId);
-
-  if (!order) {
-    throw ApiError.notFound(`No payment order found for ${orderId}`);
-  }
-
-  // Idempotent — a citizen refreshing the return page, or the gateway
-  // calling back twice, must not double-record or double-assign a receipt.
-  if (order.status !== "pending") {
-    let receipt: PaymentResult | PrintableReceiptHistory | null = null;
-    if (order.receipt_no) {
-      try {
-        receipt = await getReceiptData(order.receipt_no);
-      } catch (err) {
-        console.error("Could not fetch receipt data:", err);
-        try {
-          receipt = await getReceiptForReprint(order.receipt_no);
-        } catch (e) {
-          console.error("Could not fetch receipt for reprint:", e);
-        }
-      }
-    }
-    return {
-      status: order.status,
-      receiptNo: order.receipt_no,
-      holdingNo: order.holding_no,
-      amount: order.amount,
-      order_id: orderId,
-      receipt,
-    };
-  }
-
-  if (!reportedSuccess) {
-    await onlinePaymentRepository.markFailed(orderId, gatewayResponse);
-    return { status: "failed", receiptNo: null, holdingNo: order.holding_no, amount: order.amount, order_id: orderId, receipt: null };
-  }
-
-  const receiptNoNum = await paymentRepository.getNextReceiptNo();
-  const receiptNo = String(receiptNoNum);
-
-  const demandNos = order.demand
-
-  const dataToSend = {
-    paymentMode: 'Online',
-    demandNo: demandNos.join(','),
-    amountReceivedActual: Number(order.amount),
-  }
-
-  await submitPayment(order.holding_no, dataToSend, 'Citizen Self-Service');
-
-  await onlinePaymentRepository.markSuccess(orderId, receiptNo, gatewayResponse);
-
-  // Copy frozen demand notice breakdown into transactions so the receipt reprint has full breakdown
+async function receiptFor(receiptNo: string | null): Promise<PaymentResult | PrintableReceiptHistory | null> {
+  if (!receiptNo) return null;
   try {
-    if (demandNos[0]) {
-      const firstNotice = await demandNoticeRepository.findByDemandNo(String(demandNos[0]));
+    return await getReceiptData(receiptNo);
+  } catch (err) {
+    console.error("Could not fetch receipt data:", err);
+    try {
+      return await getReceiptForReprint(receiptNo);
+    } catch (e) {
+      console.error("Could not fetch receipt for reprint:", e);
+      return null;
+    }
+  }
+}
+
+/** A pending order the bank has given no final answer on for this long is closed as failed. */
+const GIVE_UP_AFTER_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Settles one online order. The outcome comes ONLY from ICICI's server-to-server status API - never from what the
+ * citizen's browser posted to the callback (that form can be edited by anyone). Called from the callback, from the
+ * payment-return page's status poll, and by the background reconciliation of orders whose citizen never came back.
+ *
+ * Runs under a Postgres advisory lock per order, so the callback, a page refresh and the reconciler can never record
+ * the same order twice (also across PM2 instances).
+ */
+export async function confirmOnlinePayment(orderId: string, callbackBody?: unknown): Promise<ConfirmResult> {
+  const lockClient = await pool.connect();
+  try {
+    await lockClient.query("SELECT pg_advisory_lock(hashtext($1))", [`pg_request:${orderId}`]);
+    const order = await onlinePaymentRepository.findByOrderId(orderId);
+    if (!order) throw ApiError.notFound(`No payment order found for ${orderId}`);
+    const result = (status: ConfirmResult["status"], receipt: PaymentResult | PrintableReceiptHistory | null = null, receiptNo = order.receipt_no): ConfirmResult => ({
+      status, receiptNo, holdingNo: order.holding_no, amount: order.amount, order_id: orderId, receipt,
+    });
+
+    if (callbackBody) await onlinePaymentRepository.saveCallback(orderId, callbackBody);
+    if (order.status !== "pending") return result(order.status, await receiptFor(order.receipt_no));
+
+    const verdict: BankVerdict = await statusCheck(orderId);
+    await onlinePaymentRepository.recordCheck(orderId, verdict.raw);
+
+    if (verdict.state === "unknown") {
+      const old = Date.now() - new Date(order.created_at).getTime() > GIVE_UP_AFTER_MS;
+      const bankAnswered = !/unreachable|not configured/.test(verdict.reason);
+      if (old && bankAnswered) {
+        await onlinePaymentRepository.markFailed(orderId, verdict.raw, `No payment confirmation from the bank within 24 hours (${verdict.reason})`);
+        return result("failed");
+      }
+      return result("pending");
+    }
+    if (verdict.state === "failed") {
+      await onlinePaymentRepository.markFailed(orderId, verdict.raw, verdict.reason);
+      return result("failed");
+    }
+
+    // The bank says the money was received.
+    if (verdict.amount != null && Math.abs(verdict.amount - Number(order.amount)) > 0.005) {
+      await onlinePaymentRepository.markNeedsReview(orderId, verdict.raw, verdict.bankTxnId, `Bank amount ${verdict.amount} differs from order amount ${order.amount}`);
+      return result("needs_review");
+    }
+    let paid: PaymentResult;
+    try {
+      paid = await submitPayment(
+        order.holding_no,
+        { paymentMode: "Online", demandNo: order.demand.join(","), amountReceivedActual: Number(order.amount) } as PaymentInput,
+        "Citizen Self-Service",
+      );
+    } catch (err) {
+      // Money is with the bank but the portal cannot record it (e.g. the notice was paid at the counter meanwhile).
+      console.error(`[online-payment] ${orderId}: bank confirmed payment but recording failed:`, err);
+      await onlinePaymentRepository.markNeedsReview(orderId, verdict.raw, verdict.bankTxnId, `Paid at bank, not recorded: ${(err as Error).message}`);
+      return result("needs_review");
+    }
+    const receiptNo = paid.receiptNo;
+    await onlinePaymentRepository.markSuccess(orderId, receiptNo, verdict.raw, verdict.bankTxnId);
+
+    // Copy the frozen demand notice breakdown onto the transaction so the receipt reprint shows it in full.
+    try {
+      const firstNotice = order.demand[0] ? await demandNoticeRepository.findByDemandNo(String(order.demand[0])) : null;
       if (firstNotice) {
         await pool.query(
           `UPDATE transactions SET
-            arv = $2,
-            vacant_arv = $3,
-            current_year_tax_net = $4,
-            previous_years_tax_base = $5,
-            total_fine_amount = $6,
-            other_charges = $7,
-            floor_breakdown = $8,
-            area_rebate = $9,
-            area_rebate_reason = $10,
-            amount_demanded = $11,
-            amount_received_actual = $12
-           WHERE order_id = $1`,
+            arv = $2, vacant_arv = $3, current_year_tax_net = $4, previous_years_tax_base = $5, total_fine_amount = $6,
+            other_charges = $7, floor_breakdown = $8, area_rebate = $9, area_rebate_reason = $10, amount_demanded = $11,
+            amount_received_actual = $12, order_id = $13, gateway = $14
+           WHERE receipt_no = $1`,
           [
-            orderId,
+            receiptNo,
             firstNotice.arv,
             firstNotice.vacant_arv,
             firstNotice.current_year_tax_net,
@@ -334,35 +321,57 @@ export async function confirmOnlinePayment(
             firstNotice.area_rebate_reason,
             firstNotice.total_amount_demanded,
             order.amount,
-          ]
+            orderId,
+            GATEWAY_NAME,
+          ],
         );
       }
+    } catch (err) {
+      console.error("Error updating transaction breakdown for online receipt:", err);
     }
-  } catch (err) {
-    console.error("Error updating transaction breakdown for online receipt:", err);
-  }
 
-  let receipt: PaymentResult | PrintableReceiptHistory | null = null;
-  if (receiptNo) {
+    return result("success", await receiptFor(receiptNo), receiptNo);
+  } finally {
+    await lockClient.query("SELECT pg_advisory_unlock(hashtext($1))", [`pg_request:${orderId}`]).catch(() => undefined);
+    lockClient.release();
+  }
+}
+
+/**
+ * Background check of orders still pending - the citizen paid but closed the browser, or the bank's redirect never
+ * arrived. Each order is re-asked with a growing gap (5 min, then every 15 min, then hourly) until the bank gives
+ * a final answer or 24 hours pass.
+ */
+export async function reconcilePendingOnlineOrders(): Promise<void> {
+  if (!env.ONLINE_PAYMENT_ENABLED) return;
+  const { rows } = await pool.query<{ order_id: string }>(
+    `SELECT order_id FROM pg_request
+      WHERE status = 'pending'
+        AND created_at < now() - interval '5 minutes'
+        AND (last_checked_at IS NULL
+             OR last_checked_at < now() - CASE WHEN check_count < 6 THEN interval '15 minutes' ELSE interval '60 minutes' END)
+      ORDER BY created_at
+      LIMIT 20`,
+  );
+  for (const r of rows) {
     try {
-      receipt = await getReceiptData(receiptNo);
-    } catch (e) {
-      console.error("Could not fetch receipt data:", e);
-      try {
-        receipt = await getReceiptForReprint(receiptNo);
-      } catch (err) {
-        console.error("Could not fetch receipt for reprint:", err);
-      }
+      const out = await confirmOnlinePayment(r.order_id);
+      if (out.status !== "pending") console.log(`[online-payment] reconciled ${r.order_id}: ${out.status}`);
+    } catch (err) {
+      console.error(`[online-payment] reconcile ${r.order_id} failed:`, err);
     }
   }
-
-  return { status: "success", receiptNo, holdingNo: order.holding_no, amount: order.amount, order_id: orderId, receipt };
 }
 
 export async function paymentStatusCheck(orderId: string) {
-  const order = await onlinePaymentRepository.findByOrderId(orderId);
+  let order = await onlinePaymentRepository.findByOrderId(orderId);
   if (!order) {
     throw ApiError.notFound(`No payment order found for ${orderId}`);
+  }
+  // Still pending (the bank's redirect was missed or the bank was slow): ask the bank now, at most every 20 seconds.
+  if (order.status === "pending" && (!order.last_checked_at || Date.now() - new Date(order.last_checked_at).getTime() > 20_000)) {
+    await confirmOnlinePayment(orderId).catch((err) => console.error(`[online-payment] status check ${orderId}:`, err));
+    order = (await onlinePaymentRepository.findByOrderId(orderId))!;
   }
 
   let receipt: PaymentResult | PrintableReceiptHistory | null = null;
@@ -383,138 +392,6 @@ export async function paymentStatusCheck(orderId: string) {
     ...order,
     receipt,
   };
-}
-
-//=============================For ICICI ORange integration================================================
-
-function generateSecureHash(payload: Record<string, any>, secretKey: string): string {
-
-  if (!secretKey) {
-    throw new Error('No secret key found')
-  }
-  //sort keys alphabetically
-  const sortedKeys = Object.keys(payload).sort();
-
-  //concatenate values only
-  const hashText = sortedKeys.map(key => payload[key]).join("");
-
-  //generate HMAC SHA256
-  const hash = crypto
-    .createHmac("sha256", secretKey)
-    .update(hashText)
-    .digest("hex")
-    .toLowerCase();
-
-  return hash
-}
-
-function validatePayer(payer: PayerType) {
-  if (!payer.payerName || !payer.payerMobile || !payer.amount) {
-    throw new Error("Missing required payer details");
-  }
-
-  if (payer?.payerEmail && !/^\S+@\S+\.\S+$/.test(payer.payerEmail)) {
-    throw new Error("Invalid email format");
-  }
-
-  if (!/^\d{10}$/.test(payer.payerMobile)) {
-    throw new Error("Invalid mobile number");
-  }
-
-  if (payer.amount <= 0) {
-    throw new Error("Invalid amount");
-  }
-}
-
-type PayerType = {
-  payerName: string;
-  payerEmail?: string;
-  payerMobile: string;
-  amount: number;
-};
-
-function getTxnDate(): string {
-  const now = new Date();
-
-  const pad = (num: number) => num.toString().padStart(2, "0");
-
-  const year = now.getFullYear();
-  const month = pad(now.getMonth() + 1);
-  const day = pad(now.getDate());
-  const hours = pad(now.getHours());
-  const minutes = pad(now.getMinutes());
-  const seconds = pad(now.getSeconds());
-
-  return `${year}${month}${day}${hours}${minutes}${seconds}`;
-}
-
-const getIciciOrangeKeys = () => {
-
-  const secretKey = env.ICICI_SECRET_KEY
-  const merchantId = env.ICICI_MERCHANT_ID
-  const aggregatorId = env.ICICI_AGG_ID
-
-  if (!secretKey || !merchantId || !aggregatorId) {
-    throw new Error('ICICI Orange keys are not properly configured in environment variables');
-  }
-
-  return { merchantId, aggregatorId, secretKey };
-};
-
-const initiatePaymentDal = async (payer: PayerType, transactionId?: string) => {
-  const payerName = payer.payerName;
-  const payerMobile = payer.payerMobile;
-  const amount = payer.amount;
-
-  validatePayer(payer)
-
-  const merchantTxnNo = transactionId
-
-  const { secretKey, merchantId, aggregatorId } = getIciciOrangeKeys()
-
-  const returnURL = env.ICICI_RETURN_URL
-
-  const preparedData: Record<string, any> = {
-    "merchantId": merchantId,
-    "aggregatorID": aggregatorId,
-    "merchantTxnNo": merchantTxnNo,
-    "amount": amount,
-    "currencyCode": "356",
-    "payType": "0",
-    "customerEmailID": "pay@property.tax",
-    "transactionType": "SALE",
-    "returnURL": returnURL,
-    "txnDate": getTxnDate(),
-    "customerMobileNo": payerMobile,
-    "customerName": payerName,
-    "addlParam1": "null",
-    "addlParam2": "nill",
-  }
-
-  const dataToReturn: Record<string, any> = {}
-
-  try {
-    const hashForRequest = generateSecureHash(preparedData, secretKey)
-    preparedData.secureHash = hashForRequest
-
-    if (!ICICI_PG_BASE_URL) {
-      throw new Error('No URL found to initiate payment')
-    }
-
-    const res = await axios.post(ICICI_PG_BASE_URL, preparedData)
-
-    if (res?.data?.responseCode !== 'R1000') {
-      throw new Error(res?.data?.responseDescription)
-    }
-
-    dataToReturn.responseCode = res?.data?.responseCode
-    dataToReturn.redirectURI = `${res?.data?.redirectURI}?tranCtx=${res?.data?.tranCtx}`
-    dataToReturn.id = res?.data?.tranCtx
-  } catch (err) {
-    console.error("Payment initiation failed:", err);
-  }
-
-  return dataToReturn
 }
 
 export const validateDemandAmount = async (amount: number, holdingNo: string, demandNo: string) => {
