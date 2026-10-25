@@ -4,6 +4,7 @@ import { attendanceShiftRepository } from "../repositories/attendanceWard.reposi
 import { istDateString, istTimeString, istShiftStartToday } from "../utils/istDate";
 import { ApiError } from "../utils/ApiError";
 import type { AttendanceTokenPayload } from "../types/attendance.types";
+import { enrolledStaffIds } from "./faceAttendance.service";
 
 export interface WardWorkerToday {
   staffId: number;
@@ -13,6 +14,8 @@ export interface WardWorkerToday {
   inTime: string | null;
   outTime: string | null;
   status: string | null;
+  /** Face enrolled - with face attendance on, Mark In/Out goes through the camera. */
+  faceEnrolled: boolean;
 }
 
 /** Port of getWorkersByWardWithToday() - every active worker in a ward, with today's attendance (if any) attached. */
@@ -24,6 +27,7 @@ export async function getWardWorkersToday(wardId: number): Promise<WardWorkerTod
 
   const shifts = await attendanceShiftRepository.listAll();
   const shiftById = new Map(shifts.map((s) => [s.id, s]));
+  const enrolled = await enrolledStaffIds(wardId);
 
   return staff.map((s) => {
     const rec = byStaffId.get(s.id);
@@ -36,6 +40,7 @@ export async function getWardWorkersToday(wardId: number): Promise<WardWorkerTod
       inTime: rec?.in_time ? istTimeString(rec.in_time) : null,
       outTime: rec?.out_time ? istTimeString(rec.out_time) : null,
       status: rec?.status ?? null,
+      faceEnrolled: enrolled.has(Number(s.id)),
     };
   });
 }

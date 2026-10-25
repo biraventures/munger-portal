@@ -39,6 +39,22 @@ const envSchema = z.object({
   // folder for development; in production point this at the SDC's NFS
   // mount (e.g. /image-upload) so photos survive an App server redeploy.
   PHOTO_UPLOAD_DIR: z.string().default("./uploads/attendance-photos"),
+  // Face-verified attendance (CompreFace, self-hosted on the APP server). Off until CompreFace is installed.
+  FACE_ATTENDANCE_ENABLED: z.preprocess((v) => (typeof v === "string" ? ["true", "1", "yes"].includes(v.trim().toLowerCase()) : v), z.boolean().default(false)),
+  COMPREFACE_URL: z.string().default("http://127.0.0.1:8000"),
+  // API key of the CompreFace *Recognition* service (CompreFace web UI > application > service). Server .env only.
+  COMPREFACE_API_KEY: z.string().default(""),
+  // Similarity (0-1) needed for the straight-on photo, and for the head-turned photo (a turned face matches less).
+  FACE_MATCH_THRESHOLD: z.coerce.number().min(0).max(1).default(0.85),
+  FACE_MATCH_THRESHOLD_TURNED: z.coerce.number().min(0).max(1).default(0.75),
+  // Liveness: straight photo must be within this many degrees of straight; the turn must move the head at least this much.
+  FACE_FRONT_MAX_YAW: z.coerce.number().default(15),
+  FACE_TURN_MIN_YAW: z.coerce.number().default(20),
+  // Which sign of CompreFace's yaw means "worker turned to their LEFT" in a rear-camera photo: 1 or -1.
+  // 0 = check only that the head turned (either way) - use until calibrated (see FACE_ATTENDANCE_SETUP.md).
+  FACE_YAW_SIGN: z.coerce.number().int().min(-1).max(1).default(0),
+  // Punch photos are deleted after this many days (the attendance record and match scores stay).
+  FACE_PHOTO_RETENTION_DAYS: z.coerce.number().int().min(7).default(90),
 
 });
 

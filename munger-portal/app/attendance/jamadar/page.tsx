@@ -27,6 +27,9 @@ import {
   type WardAssistantToday,
 } from "@/lib/attendance-api";
 import { blobToBase64, shrinkPhoto } from "@/lib/upload-limits";
+import { FaceCaptureDialog } from "@/components/attendance/face-capture-dialog";
+import { fetchFaceConfig } from "@/lib/face-attendance-api";
+import { ScanFace } from "lucide-react";
 
 const STRINGS = {
   en: {
@@ -71,6 +74,7 @@ const STRINGS = {
     loadingAssistants: "Loading assistants...",
     noTotoAssistants: "No Toto assistants on file for your ward yet.",
     noVehicleNumber: "No vehicle number on file",
+    faceBadge: "Face",
     status: {
       present: "Present",
       half_day: "Half Day",
@@ -121,6 +125,7 @@ const STRINGS = {
     loadingAssistants: "सहायक लोड हो रहे हैं...",
     noTotoAssistants: "आपके वार्ड के लिए अभी कोई टोटो सहायक दर्ज नहीं है।",
     noVehicleNumber: "कोई वाहन नंबर दर्ज नहीं है",
+    faceBadge: "चेहरा",
     status: {
       present: "उपस्थित",
       half_day: "हाफ डे",
@@ -158,6 +163,9 @@ export default function JamadarAttendancePage() {
   const [workers, setWorkers] = useState<WardWorkerToday[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [actingId, setActingId] = useState<number | null>(null);
+  // Face attendance: enrolled workers are marked through the camera (face match + head-turn liveness).
+  const [faceEnabled, setFaceEnabled] = useState(false);
+  const [faceFor, setFaceFor] = useState<{ staffId: number; name: string; purpose: "in" | "out" } | null>(null);
 
   // Toto vehicle drivers/assistants - marked by the ward Jamadar only (every
   // other vehicle type stays with the Driver Supervisor).
@@ -222,11 +230,22 @@ export default function JamadarAttendancePage() {
     loadPhotoStatus();
     loadTotoDrivers();
     loadTotoAssistants();
+    fetchFaceConfig().then((c) => setFaceEnabled(c.enabled));
     // user is stable after the guard resolves - intentionally not re-running on every render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
+  function needsFace(staffId: number): WardWorkerToday | null {
+    const w = workers?.find((x) => x.staffId === staffId);
+    return faceEnabled && w?.faceEnrolled ? w : null;
+  }
+
   async function handleMarkIn(staffId: number) {
+    const fw = needsFace(staffId);
+    if (fw) {
+      setFaceFor({ staffId, name: fw.name, purpose: "in" });
+      return;
+    }
     setActingId(staffId);
     setError(null);
     try {
@@ -253,6 +272,11 @@ export default function JamadarAttendancePage() {
   }
 
   async function handleMarkOut(staffId: number) {
+    const fw = needsFace(staffId);
+    if (fw) {
+      setFaceFor({ staffId, name: fw.name, purpose: "out" });
+      return;
+    }
     setActingId(staffId);
     setError(null);
     try {
@@ -504,6 +528,11 @@ export default function JamadarAttendancePage() {
                   <div className="flex items-center gap-2">
                     <span className="font-semibold text-slate-900">{lang === "hi" ? (w.nameHi || transliterateName(w.name)) : w.name}</span>
                     {statusBadge(w.status, lang)}
+                    {faceEnabled && w.faceEnrolled && (
+                      <span className="inline-flex items-center gap-0.5 rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-nnm-blue">
+                        <ScanFace className="h-3 w-3" /> {s.faceBadge}
+                      </span>
+                    )}
                   </div>
                   <div className="mt-0.5 text-xs text-slate-400">
                     {w.shiftName ?? s.noShift}
@@ -712,6 +741,26 @@ export default function JamadarAttendancePage() {
           </div>
         )}
       </main>
+
+      {faceFor && (
+        <FaceCaptureDialog
+          staffId={faceFor.staffId}
+          staffName={lang === "hi" ? (workers?.find((w) => w.staffId === faceFor.staffId)?.nameHi || transliterateName(faceFor.name)) : faceFor.name}
+          purpose={faceFor.purpose}
+          onClose={() => {
+            setFaceFor(null);
+            void loadWorkers();
+          }}
+          onDone={() => {
+            setFaceFor(null);
+            void loadWorkers();
+          }}
+          onManual={async (reason) => {
+            if (faceFor.purpose === "in") await markStaffIn(faceFor.staffId, reason);
+            else await markStaffOut(faceFor.staffId, reason);
+          }}
+        />
+      )}
     </div>
   );
 }

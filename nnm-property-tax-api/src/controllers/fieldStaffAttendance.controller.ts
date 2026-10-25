@@ -9,6 +9,10 @@ import {
 } from "../services/fieldStaffAttendance.service";
 import { asyncHandler } from "../middleware/asyncHandler";
 import { ApiError } from "../utils/ApiError";
+import { guardManualMark } from "../services/faceAttendance.service";
+
+/** Optional reason for marking a face-enrolled worker by hand (face attendance - see faceAttendance.service). */
+const overrideSchema = z.object({ overrideReason: z.string().max(300).nullish() });
 
 /** GET /api/v1/attendance/staff/ward/:wardId/today - jamadar's own ward (enforced by wardId in the token, not the URL) or admin. */
 export const getMyWardWorkersToday = asyncHandler(async (req: Request, res: Response) => {
@@ -24,7 +28,9 @@ const staffIdParamSchema = z.object({ staffId: z.coerce.number().int().positive(
 export const postMarkStaffIn = asyncHandler(async (req: Request, res: Response) => {
   const parsed = staffIdParamSchema.safeParse(req.params);
   if (!parsed.success) throw ApiError.badRequest("Invalid staff id");
+  const record = await guardManualMark(req.attendanceUser!, parsed.data.staffId, "in", overrideSchema.safeParse(req.body ?? {}).data?.overrideReason);
   const result = await markStaffIn(req.attendanceUser!, parsed.data.staffId);
+  await record();
   res.status(200).json({ success: true, ...result });
 });
 
@@ -42,7 +48,9 @@ export const postMarkStaffAbsent = asyncHandler(async (req: Request, res: Respon
 export const postMarkStaffOut = asyncHandler(async (req: Request, res: Response) => {
   const parsed = staffIdParamSchema.safeParse(req.params);
   if (!parsed.success) throw ApiError.badRequest("Invalid staff id");
+  const record = await guardManualMark(req.attendanceUser!, parsed.data.staffId, "out", overrideSchema.safeParse(req.body ?? {}).data?.overrideReason);
   const result = await markStaffOut(req.attendanceUser!, parsed.data.staffId);
+  await record();
   res.status(200).json({ success: true, ...result });
 });
 

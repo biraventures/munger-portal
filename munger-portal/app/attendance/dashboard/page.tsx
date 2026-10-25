@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { LayoutGrid, Truck, Droplet, Lightbulb, MapPin, ClipboardList, CheckCircle2, Trash2, Languages, FileUp, Users, ShieldAlert, Gavel } from "lucide-react";
+import { ScanFace, LayoutGrid, Truck, Droplet, Lightbulb, MapPin, ClipboardList, CheckCircle2, Trash2, Languages, FileUp, Users, ShieldAlert, Gavel } from "lucide-react";
 import { AttendanceHeader } from "@/components/attendance/attendance-header";
 import { PublicComplaintsCard } from "@/components/public-reports/complaints-card";
 import { useAttendanceGuard } from "@/lib/use-attendance-guard";
@@ -39,6 +39,8 @@ const STRINGS = {
     deactivatedStaffDesc: "Field-verify (APSWMO) and delete deactivated staff accounts.",
     correctNames: "Correct Hindi Names",
     correctNamesDesc: "Fix a wrongly auto-guessed Hindi name for a staff member, driver, or assistant.",
+    faceAttendance: "Face Attendance",
+    faceAttendanceDesc: "Mark Safai staff by face check, enrol faces, and review manual marks.",
   },
   hi: {
     loading: "लोड हो रहा है...",
@@ -68,8 +70,12 @@ const STRINGS = {
     deactivatedStaffDesc: "फील्ड-सत्यापन (एपीएसडब्ल्यूएमओ) करें और निष्क्रिय स्टाफ खाते हटाएँ।",
     correctNames: "हिंदी नाम ठीक करें",
     correctNamesDesc: "स्टाफ, ड्राइवर या सहायक के गलत ऑटो-अनुमानित हिंदी नाम को ठीक करें।",
+    faceAttendance: "चेहरा हाज़िरी",
+    faceAttendanceDesc: "चेहरा जाँच से सफ़ाई कर्मियों की हाज़िरी, चेहरा पंजीकरण, और मैन्युअल मार्क की समीक्षा।",
   },
 };
+
+const FACE_ROLES = ["sanitation_prabhari", "apswmo", "sanitation_officer", "attendance_admin"];
 
 const NAME_CORRECTION_ROLES = ["attendance_admin", "sanitation_officer", "apswmo", "sanitation_prabhari"];
 
@@ -127,6 +133,16 @@ export default function AttendanceDashboardPage() {
         <p className="mb-8 text-sm text-slate-500">{s.pickModule}</p>
 
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          {FACE_ROLES.includes(user.role) && (
+            <Link href="/attendance/face-attendance" className="flex flex-col rounded-xl border border-slate-200 bg-white p-6 transition-shadow hover:shadow-md">
+              <span className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-blue-50 text-nnm-blue">
+                <ScanFace className="h-6 w-6" strokeWidth={1.8} />
+              </span>
+              <h3 className="mb-1.5 text-base font-semibold text-slate-900">{s.faceAttendance}</h3>
+              <p className="text-sm text-slate-500">{s.faceAttendanceDesc}</p>
+            </Link>
+          )}
+
           {CORE_ATTENDANCE_ROLES.includes(user.role) && (
             <Link
               href="/attendance/attendance-management"

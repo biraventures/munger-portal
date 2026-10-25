@@ -103,6 +103,20 @@ import {
 import { getFleetRegistry, postBaselineSurvey, getBaselineSurvey, getBaselineSurveySummary, downloadBaselineSurveyPdf } from "../controllers/assetBaselineSurvey.controller";
 import { postUploadAssetPhoto, getAssetPhotos, getAssetPhotoFile, deleteAssetPhotoHandler } from "../controllers/assetPhoto.controller";
 import { requireAttendanceRole } from "../middleware/requireAttendanceRole";
+import {
+  getFaceConfig,
+  postFaceChallenge,
+  postFacePunch,
+  postFaceEnrol,
+  deleteFaceEnrolment,
+  getWardFaceEnrolments,
+  getFaceEnrolmentPhoto,
+  getFaceReview,
+  getFacePunchPhoto,
+  postFaceReview,
+  getFaceSummary,
+} from "../controllers/faceAttendance.controller";
+import { FACE_ENROL_ROLES, FACE_MARK_ROLES, FACE_REVIEW_ROLES } from "../services/faceAttendance.service";
 import { loginRateLimiter } from "../middleware/loginRateLimiter";
 
 export const attendanceRouter = Router();
@@ -128,16 +142,16 @@ attendanceRouter.get("/shifts", requireAttendanceRole(), getAttendanceShifts);
 // --- Field staff (Jamadar, own ward - any officer role can pass a wardId in the URL to view any ward, e.g. for feedback lookup) ---
 attendanceRouter.get(
   "/staff/ward/:wardId/today",
-  requireAttendanceRole(["jamadar", ...OFFICER_ROLES]),
+  requireAttendanceRole(["jamadar", ...OFFICER_ROLES, "apswmo"]),
   getMyWardWorkersToday,
 );
-attendanceRouter.post("/staff/:staffId/mark-in", requireAttendanceRole(["jamadar", "attendance_admin"]), postMarkStaffIn);
+attendanceRouter.post("/staff/:staffId/mark-in", requireAttendanceRole(["jamadar", "sanitation_prabhari", "apswmo", "attendance_admin"]), postMarkStaffIn);
 attendanceRouter.post(
   "/staff/:staffId/mark-absent",
-  requireAttendanceRole(["jamadar", "attendance_admin"]),
+  requireAttendanceRole(["jamadar", "sanitation_prabhari", "apswmo", "attendance_admin"]),
   postMarkStaffAbsent,
 );
-attendanceRouter.post("/staff/:staffId/mark-out", requireAttendanceRole(["jamadar", "attendance_admin"]), postMarkStaffOut);
+attendanceRouter.post("/staff/:staffId/mark-out", requireAttendanceRole(["jamadar", "sanitation_prabhari", "apswmo", "attendance_admin"]), postMarkStaffOut);
 attendanceRouter.post(
   "/staff/:staffId/mark-absent-officer",
   requireAttendanceRole([...OFFICER_ROLES]),
@@ -308,3 +322,16 @@ attendanceRouter.get(
   requireAttendanceRole([...OFFICER_ROLES]),
   getAttendanceDashboardSummaryHandler,
 );
+
+// --- Face-verified attendance (Safai field staff). See faceAttendance.service.ts. ---
+attendanceRouter.get("/face/config", requireAttendanceRole(), getFaceConfig);
+attendanceRouter.post("/face/challenge", requireAttendanceRole([...new Set([...FACE_MARK_ROLES, ...FACE_ENROL_ROLES])]), postFaceChallenge);
+attendanceRouter.post("/face/punch", requireAttendanceRole(FACE_MARK_ROLES), postFacePunch);
+attendanceRouter.post("/face/enrol", requireAttendanceRole(FACE_ENROL_ROLES), postFaceEnrol);
+attendanceRouter.delete("/face/enrolment/:staffId", requireAttendanceRole(FACE_ENROL_ROLES), deleteFaceEnrolment);
+attendanceRouter.get("/face/enrolment/:staffId/photo", requireAttendanceRole(FACE_REVIEW_ROLES), getFaceEnrolmentPhoto);
+attendanceRouter.get("/face/ward/:wardId/enrolments", requireAttendanceRole(FACE_ENROL_ROLES), getWardFaceEnrolments);
+attendanceRouter.get("/face/review", requireAttendanceRole(FACE_REVIEW_ROLES), getFaceReview);
+attendanceRouter.get("/face/review/:id/photo", requireAttendanceRole(FACE_REVIEW_ROLES), getFacePunchPhoto);
+attendanceRouter.post("/face/review/:id", requireAttendanceRole(FACE_REVIEW_ROLES), postFaceReview);
+attendanceRouter.get("/face/summary", requireAttendanceRole([...FACE_REVIEW_ROLES, "municipal_commissioner", "deputy_municipal_commissioner", "city_manager"]), getFaceSummary);

@@ -4,6 +4,7 @@ import { checkDbConnection, pool } from "./config/db";
 import { clearInterruptedIntegrations } from "./services/propertyImportStaging.service";
 import { scheduledRefreshTick } from "./services/demandRefresh.service";
 import { reconcilePendingOnlineOrders } from "./services/onlinePayment.service";
+import { purgeOldFaceData } from "./services/faceAttendance.service";
 
 async function main() {
   await checkDbConnection();
@@ -25,10 +26,16 @@ async function main() {
     reconcilePendingOnlineOrders().catch((err) => console.error("[online-payment] reconciliation failed:", err));
   }, 5 * 60 * 1000);
 
+  // Face attendance housekeeping (old punch photos, spent challenges) - hourly.
+  const faceHousekeepingTimer = setInterval(() => {
+    purgeOldFaceData().catch((err) => console.error("[face] housekeeping failed:", err));
+  }, 60 * 60 * 1000);
+
   const shutdown = async (signal: string) => {
     console.log(`${signal} received, shutting down...`);
     clearInterval(refreshTimer);
     clearInterval(pgReconcileTimer);
+    clearInterval(faceHousekeepingTimer);
     server.close(async () => {
       await pool.end();
       process.exit(0);
