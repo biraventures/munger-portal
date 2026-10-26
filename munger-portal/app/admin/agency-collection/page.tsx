@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { AlertCircle, Loader2, Lock, Receipt, Search } from "lucide-react";
+import { MobileHoldingLookup } from "@/components/mobile-holding-lookup";
 import { AdminHeader } from "@/components/admin-header";
 import { PaymentForm } from "@/components/operator/payment-form";
 import { ReceiptView } from "@/components/operator/receipt-view";
@@ -60,7 +61,11 @@ export default function AgencyCollectionPage() {
 
   async function search(e: React.FormEvent) {
     e.preventDefault();
-    const h = query.trim();
+    await searchHolding(query);
+  }
+
+  async function searchHolding(value: string) {
+    const h = value.trim();
     if (!h) return;
     setSearching(true);
     setError(null);
@@ -127,6 +132,14 @@ export default function AgencyCollectionPage() {
             {searching ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />} Search
           </button>
         </form>
+
+        <MobileHoldingLookup
+          as="admin"
+          onPick={(h) => {
+            setQuery(h);
+            void searchHolding(h);
+          }}
+        />
 
         {error && (
           <div role="alert" className="flex items-center gap-2 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">

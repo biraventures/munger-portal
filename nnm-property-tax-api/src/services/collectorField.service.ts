@@ -82,7 +82,7 @@ export interface ReceivingCopyInput {
 
 /**
  * The collector's signed receiving copy of a printed demand notice.
- * Maximum 2 per notice; once saved, nothing can change or remove it
+ * Exactly one per notice (migration 149); once saved, nothing can change or remove it
  * (see the trigger in migration 113). Cancelled notices cannot take a
  * new copy.
  */
@@ -92,7 +92,7 @@ export async function addReceivingCopy(demandNo: string, input: ReceivingCopyInp
   if (notice.cancelled) throw ApiError.badRequest("This demand notice has been cancelled.");
 
   const existing = (await collectorFieldRepository.listReceivingCopies({ holdingNo: notice.holding_no })).filter((c) => c.demand_no === demandNo);
-  if (existing.length >= 2) throw ApiError.badRequest("Two receiving copies are already uploaded for this notice - no more can be added.");
+  if (existing.length >= 1) throw ApiError.badRequest("The receiving copy of this notice is already uploaded - only one is allowed, and it cannot be replaced.");
 
   const photoPath = await savePhoto("notice-receiving-copies", demandNo.replace(/[^A-Za-z0-9-]/g, ""), input.photoBase64Data, input.photoMimeType);
   const row = await collectorFieldRepository.addReceivingCopy({
@@ -105,7 +105,7 @@ export async function addReceivingCopy(demandNo: string, input: ReceivingCopyInp
   });
   if (!row) {
     await fs.promises.rm(path.join(env.PHOTO_UPLOAD_DIR, photoPath), { force: true });
-    throw ApiError.badRequest("Two receiving copies are already uploaded for this notice - no more can be added.");
+    throw ApiError.badRequest("The receiving copy of this notice is already uploaded - only one is allowed, and it cannot be replaced.");
   }
   return row;
 }

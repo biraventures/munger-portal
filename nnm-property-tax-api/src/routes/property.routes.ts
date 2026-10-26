@@ -25,6 +25,7 @@ import { postRequestCancellation } from "../controllers/cancellationRequest.cont
 import { collectorHoldingParam, collectorDemandNoticeParam, collectorReceiptParam } from "../middleware/collectorWardGuard";
 import { requireOperator } from "../middleware/requireOperator";
 import { requireOperatorOrAdmin } from "../middleware/requireOperatorOrAdmin";
+import { getPropertiesByMobile } from "../controllers/propertyMobileSearch.controller";
 
 export const propertyRouter = Router();
 
@@ -73,6 +74,10 @@ propertyRouter.post("/:holdingNo/exemption-order", requireOperatorOrAdmin, postE
 // POST /api/v1/properties — create a new-entry or partially-known
 // property (holding number auto-assigned; operator only)
 propertyRouter.post("/", requireOperator, createNewEntryProperty);
+
+// GET /api/v1/properties/by-mobile?mobile= - find holdings by the owner's mobile (operator / TC / agency operator).
+// Before /:holdingNo so "by-mobile" is not read as a holding number.
+propertyRouter.get("/by-mobile", requireOperatorOrAdmin, getPropertiesByMobile);
 
 // GET /api/v1/properties/:holdingNo — operator/admin only. Holding
 // number alone is public no longer — see POST /lookup for the public,

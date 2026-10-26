@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { AlertCircle, FileWarning, Loader2, Receipt } from "lucide-react";
 import { OperatorHeader } from "@/components/operator-header";
+import { MobileHoldingLookup } from "@/components/mobile-holding-lookup";
 import { OperatorPropertySearch } from "@/components/operator/operator-property-search";
 import { PropertyEditorForm } from "@/components/operator/property-editor-form";
 import { exemptionFromProperty } from "@/lib/tax-exemption-api";
@@ -259,6 +260,9 @@ export default function OperatorPropertyTaxPage() {
                 onNew={handleChooseKnownNumber}
                 loading={searching}
               />
+              <div className="mt-3">
+                <MobileHoldingLookup as="operator" onPick={(h) => handleSearch(h)} />
+              </div>
             </div>
 
             {notFoundHolding && (

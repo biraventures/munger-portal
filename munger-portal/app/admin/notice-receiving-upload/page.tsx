@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
-import { AlertCircle, CheckCircle2, FileCheck2, Search } from "lucide-react";
+import { useEffect, useState } from "react";
+import { AlertCircle, Camera, CheckCircle2, FileCheck2, RotateCcw, Search } from "lucide-react";
+import { MobileHoldingLookup } from "@/components/mobile-holding-lookup";
 import { AdminHeader } from "@/components/admin-header";
-import { GpsButton, PhotoPicker } from "@/components/admin/field-capture";
+import { GpsButton } from "@/components/admin/field-capture";
 import { useAdminGuard } from "@/lib/use-admin-guard";
 import { sanitizeHoldingNoInput } from "@/lib/holding-no";
 import { fetchNoticesForReceiving, prepareImageForUpload, uploadReceivingCopy, type NoticeForReceiving } from "@/lib/collector-field-api";
@@ -22,6 +23,17 @@ export default function NoticeReceivingUploadPage() {
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [cameraKey, setCameraKey] = useState(0);
+  useEffect(() => {
+    if (!photo) {
+      setPreviewUrl(null);
+      return;
+    }
+    const url = URL.createObjectURL(photo);
+    setPreviewUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [photo]);
 
   if (!admin) return <div className="flex min-h-screen items-center justify-center text-sm text-slate-400">Loading…</div>;
   if (admin.role !== "tax_collector") {
@@ -54,8 +66,9 @@ export default function NoticeReceivingUploadPage() {
       }
       setProperty(result.property);
       setNotices(result.notices);
-      const firstOpen = result.notices.find((n) => n.copies_uploaded < 2);
+      const firstOpen = result.notices.find((n) => n.copies_uploaded < 1);
       setSelected(firstOpen?.demand_no ?? null);
+      setPhoto(null);
       if (result.notices.length === 0) setError("This holding has no pending demand notice (none generated yet, or the latest one is already paid or replaced by a newer reminder).");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Search failed.");
@@ -65,6 +78,7 @@ export default function NoticeReceivingUploadPage() {
   }
 
   async function handleUpload() {
+    if (uploading) return; // one tap = one upload
     if (!selected) return setError("Choose the demand notice this copy belongs to.");
     if (!photo) return setError("Take a photo of the signed receiving slip.");
     setUploading(true);
@@ -72,7 +86,7 @@ export default function NoticeReceivingUploadPage() {
     try {
       const img = await prepareImageForUpload(photo);
       await uploadReceivingCopy(selected, { photoBase64Data: img.base64, photoMimeType: img.mimeType, gpsLat: gps?.lat, gpsLng: gps?.lng });
-      setDone(`Receiving copy uploaded for notice ${selected}. It cannot be changed or removed.`);
+      setDone(`Receiving copy uploaded for notice ${selected}. Only one copy is kept per notice, and it cannot be changed or removed.`);
       setPhoto(null);
       setGps(null);
       await runSearchKeepDone(holdingNo.trim());
@@ -89,7 +103,7 @@ export default function NoticeReceivingUploadPage() {
     if (!result) return;
     setProperty(result.property);
     setNotices(result.notices);
-    const firstOpen = result.notices.find((n) => n.copies_uploaded < 2);
+    const firstOpen = result.notices.find((n) => n.copies_uploaded < 1);
     setSelected(firstOpen?.demand_no ?? null);
   }
 
@@ -104,8 +118,8 @@ export default function NoticeReceivingUploadPage() {
           Upload Notice Receiving Copy
         </h1>
         <p className="mb-6 text-sm text-slate-500">
-          After delivering a printed demand notice, photograph the receiving slip torn from its foot, signed by the receiver, and upload it here. Up to <b>2 copies</b> per notice. Once uploaded, a copy
-          <b> cannot be changed or removed</b> by anyone.
+          After delivering a printed demand notice, photograph the receiving slip torn from its foot, signed by the receiver, and upload it here. <b>One receiving copy</b> per notice: check the photo before
+          uploading and retake it if it is blurred or cut off - once uploaded it <b>cannot be changed or removed</b> by anyone.
         </p>
 
         {done && (
@@ -136,6 +150,16 @@ export default function NoticeReceivingUploadPage() {
           </button>
         </div>
 
+        <div className="-mt-3 mb-6">
+          <MobileHoldingLookup
+            as="admin"
+            onPick={(h) => {
+              setHoldingNo(h);
+              void runSearch(h);
+            }}
+          />
+        </div>
+
         {error && (
           <div role="alert" className="mb-5 flex items-center gap-2 rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-700">
             <AlertCircle className="h-4 w-4 shrink-0" />
@@ -154,7 +178,7 @@ export default function NoticeReceivingUploadPage() {
               <p className="mb-2 text-xs font-medium text-slate-500">Which demand notice is this copy for?</p>
               <div className="space-y-2">
                 {notices.map((n) => {
-                  const full = n.copies_uploaded >= 2;
+                  const full = n.copies_uploaded >= 1;
                   return (
                     <label
                       key={n.demand_no}
@@ -168,7 +192,7 @@ export default function NoticeReceivingUploadPage() {
                           {n.settled ? " (paid)" : ""}
                         </span>
                       </span>
-                      <span className="text-xs">{full ? "2 of 2 uploaded" : `${n.copies_uploaded} of 2 uploaded`}</span>
+                      <span className="text-xs">{full ? "Receiving uploaded" : "Not uploaded"}</span>
                     </label>
                   );
                 })}
@@ -177,12 +201,53 @@ export default function NoticeReceivingUploadPage() {
 
             {selectedNotice && (
               <div className="space-y-4 rounded-xl border-2 border-nnm-blue bg-white p-5">
-                <PhotoPicker label="Signed copy of the notice" file={photo} onChange={setPhoto} required />
+                {/* key: a fresh input after Retake, so choosing the camera again always fires */}
+                <input
+                  key={cameraKey}
+                  id="receiving-photo"
+                  type="file"
+                  accept="image/jpeg,image/png"
+                  capture="environment"
+                  className="hidden"
+                  onChange={(e) => setPhoto(e.target.files?.[0] ?? null)}
+                />
+                {!photo ? (
+                  <label htmlFor="receiving-photo" className="flex cursor-pointer flex-col items-center gap-2 rounded-lg border-2 border-dashed border-nnm-blue/40 bg-blue-50/50 p-6 text-center">
+                    <span className="flex h-12 w-12 items-center justify-center rounded-full bg-white text-nnm-blue shadow-sm">
+                      <Camera className="h-5 w-5" />
+                    </span>
+                    <span className="text-sm font-semibold text-slate-800">Take photo of the signed receiving slip</span>
+                    <span className="text-xs text-slate-500">Notice number, receiver&apos;s signature and date must be readable.</span>
+                  </label>
+                ) : (
+                  <div>
+                    <p className="mb-2 text-sm font-medium text-slate-700">Check the photo: is the notice number, signature and date clearly readable?</p>
+                    {previewUrl && (
+                      // eslint-disable-next-line @next/next/no-img-element -- local file preview
+                      <img src={previewUrl} alt="Receiving slip photo" className="mb-3 max-h-[60vh] w-full rounded-md border border-slate-200 object-contain" />
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPhoto(null);
+                        setCameraKey((k) => k + 1);
+                      }}
+                      disabled={uploading}
+                      className="inline-flex w-full items-center justify-center gap-1.5 rounded-md border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+                    >
+                      <RotateCcw className="h-4 w-4" /> Retake photo
+                    </button>
+                  </div>
+                )}
                 <GpsButton lat={gps?.lat ?? null} lng={gps?.lng ?? null} onCapture={(lat, lng) => setGps({ lat, lng })} label="Add my location (recommended)" />
-                <button onClick={handleUpload} disabled={uploading} className="w-full rounded-md bg-nnm-blue px-4 py-3 text-sm font-semibold text-white hover:bg-nnm-blue-dark disabled:opacity-60">
-                  {uploading ? "Uploading…" : `Upload copy ${selectedNotice.copies_uploaded + 1} of 2`}
+                <button
+                  onClick={handleUpload}
+                  disabled={uploading || !photo}
+                  className="w-full rounded-md bg-nnm-blue px-4 py-3 text-sm font-semibold text-white hover:bg-nnm-blue-dark disabled:opacity-60"
+                >
+                  {uploading ? "Uploading…" : "Upload this receiving copy"}
                 </button>
-                <p className="text-xs text-slate-400">This cannot be undone: the copy stays on record permanently.</p>
+                <p className="text-xs text-slate-400">Only one copy per notice. After upload it cannot be retaken, changed or removed.</p>
               </div>
             )}
           </div>

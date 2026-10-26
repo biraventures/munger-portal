@@ -123,11 +123,10 @@ export const collectorFieldRepository = {
   },
 
   /**
-   * Adds the next receiving copy (1, then 2) for a notice. The copy
-   * number is taken inside one statement so two simultaneous uploads
-   * cannot both become copy 1 or push the count past 2 - the UNIQUE
-   * (demand_no, copy_no) plus the CHECK (copy_no IN (1,2)) are the real
-   * guarantee; returns null when both copies already exist.
+   * Adds the one receiving copy of a notice. The notice row is locked so
+   * two simultaneous uploads cannot both get in - UNIQUE (demand_no,
+   * copy_no) plus CHECK (copy_no = 1) (migration 149) are the real
+   * guarantee; returns null when the copy already exists.
    */
   async addReceivingCopy(input: {
     demandNo: string;
@@ -146,7 +145,7 @@ export const collectorFieldRepository = {
         [input.demandNo],
       );
       const next = (existing[0]?.n ?? 0) + 1;
-      if (next > 2) {
+      if (next > 1) {
         await client.query("ROLLBACK");
         return null;
       }

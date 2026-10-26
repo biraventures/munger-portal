@@ -5,6 +5,7 @@ import Link from "next/link";
 import { AlertCircle, AlertTriangle, CheckCircle2, FileWarning, Loader2, Receipt, Search, ShieldAlert, X } from "lucide-react";
 import { fetchFormOptions, type FormOptions } from "@/lib/operator-api";
 import { sanitizeHoldingNoInput } from "@/lib/holding-no";
+import { MobileHoldingLookup } from "@/components/mobile-holding-lookup";
 import { AdminHeader } from "@/components/admin-header";
 import { useAdminGuard } from "@/lib/use-admin-guard";
 import { FieldVerificationCapture } from "@/components/admin/field-verification-capture";
@@ -218,18 +219,23 @@ export default function TaxCollectorPage() {
 
   async function handleSearch(e: React.FormEvent) {
     e.preventDefault();
-    if (!holdingNoInput.trim()) return;
+    await searchHolding(holdingNoInput);
+  }
+
+  async function searchHolding(value: string) {
+    const holdingNo = value.trim();
+    if (!holdingNo) return;
     resetForNewSearch();
     setSearching(true);
     try {
-      const res = await fetchPropertyForCollector(holdingNoInput.trim());
+      const res = await fetchPropertyForCollector(holdingNo);
       setResult(res);
       if (res.found) {
         fetchLatestSolidWasteRequest(res.property!.holding_no).then(setSwRequest).catch(() => undefined);
         fetchCollectionIssuesForHolding(res.property!.holding_no)
           .then(setHoldingIssues)
           .catch(() => setHoldingIssues([]));
-        const list = await fetchUnsettledDemandNoticesAdmin(holdingNoInput.trim());
+        const list = await fetchUnsettledDemandNoticesAdmin(holdingNo);
         setNotices(list);
         if (list.length > 0) setSelectedDemandNo(list[0]!.demandNo);
       }
@@ -333,6 +339,15 @@ export default function TaxCollectorPage() {
             {searching ? "Searching…" : "Search"}
           </button>
         </form>
+        <div className="-mt-3 mb-6">
+          <MobileHoldingLookup
+            as="admin"
+            onPick={(h) => {
+              setHoldingNoInput(h);
+              void searchHolding(h);
+            }}
+          />
+        </div>
 
         {error && (
           <div role="alert" className="mb-5 flex items-center gap-2 rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-700">

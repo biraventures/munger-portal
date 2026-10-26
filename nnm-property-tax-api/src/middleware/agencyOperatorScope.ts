@@ -27,13 +27,15 @@ const NOT_A_HOLDING = new Set([
   "lookup",
   "preview-tax",
   "pay",
+  "by-mobile",
 ]);
 
 type Rule = { method: "GET" | "POST"; path: RegExp; check?: (m: RegExpMatchArray) => boolean };
 
 const seg = "([^/]+)";
 const RULES: Rule[] = [
-  // Holdings: view, demand notices and payments (view / reprint), record a payment.
+  // Holdings: find by owner's mobile, view, demand notices and payments (view / reprint), record a payment.
+  { method: "GET", path: /^\/properties\/by-mobile$/ },
   { method: "GET", path: new RegExp(`^/properties/${seg}$`), check: (m) => !NOT_A_HOLDING.has(decodeURIComponent(m[1]!)) },
   { method: "GET", path: new RegExp(`^/properties/${seg}/demand-notices/(unsettled|history)$`) },
   { method: "GET", path: new RegExp(`^/properties/demand-notices/${seg}/print$`) },

@@ -110,7 +110,7 @@ export default function NoticeReceivingCopiesPage() {
                             {new Date(c.notice_date).toLocaleDateString("en-IN")} - ₹{c.total_amount_demanded}
                           </div>
                         </td>
-                        <td className="px-3 py-2">{c.copy_no} of 2</td>
+                        <td className="px-3 py-2">{c.copy_no === 1 ? "Receiving" : `Extra copy ${c.copy_no} (before the one-copy rule)`}</td>
                         <td className="px-3 py-2">
                           <div>{c.uploaded_by_display_name}</div>
                           <div className="text-xs text-slate-400">{new Date(c.uploaded_at).toLocaleString("en-IN")}</div>
