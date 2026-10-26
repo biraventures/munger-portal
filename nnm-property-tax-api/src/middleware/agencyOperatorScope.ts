@@ -46,6 +46,8 @@ const RULES: Rule[] = [
   { method: "GET", path: /^\/admin\/agency-operator\/wards$/ },
   { method: "GET", path: new RegExp(`^/admin/agency-operator/wards/${seg}/holdings$`) },
   { method: "POST", path: /^\/admin\/agency-operator\/notices$/ },
+  // Holdings with dues - Excel (holding / old no / ward / mobile / paid till / amount pending).
+  { method: "GET", path: /^\/admin\/agency-operator\/dues-report(\.xlsx|\/wards)$/ },
   // Tax collector (agency) reports.
   { method: "GET", path: /^\/admin\/agency\/(report-filters|reports|reports\/export)$/ },
   // Trade licence data - view only.

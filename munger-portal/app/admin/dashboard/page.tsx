@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Users, FileClock, FileWarning, LayoutGrid, ShoppingBag, Store, BarChart3, Award, Archive, Download, XCircle, ShieldCheck, Trash2, RefreshCw, Upload, MapPin, Map as MapIcon, ClipboardCheck, UserCheck, ClipboardList, Receipt, RotateCcw, AlertTriangle, List, Flag, Home, FileText, Printer, Landmark } from "lucide-react";
+import { Users, FileClock, FileWarning, LayoutGrid, ShoppingBag, Store, BarChart3, Award, Archive, Download, XCircle, ShieldCheck, Trash2, RefreshCw, Upload, MapPin, Map as MapIcon, ClipboardCheck, UserCheck, ClipboardList, Receipt, RotateCcw, AlertTriangle, List, Flag, Home, FileText, Printer, Landmark, FileSpreadsheet } from "lucide-react";
 import { AdminHeader } from "@/components/admin-header";
 import { AgencyOperatorDashboard } from "@/components/agency/agency-operator-dashboard";
 import { Pre2011ArvCard } from "@/components/admin/pre2011-arv-card";
@@ -116,6 +116,7 @@ export default function AdminDashboardPage() {
   const showMyDiscrepancyReports = admin.role === "tax_collector";
   const showAgencyReports = ["agency_project_manager", "commissioner", "deputy_commissioner", "city_manager", "tax_daroga", "tax_collector"].includes(admin.role);
   const showAgencyNotices = admin.role === "agency_team_leader";
+  const showDuesReport = ["agency_team_leader", "agency_project_manager", "tax_daroga", "city_manager", "deputy_commissioner", "commissioner"].includes(admin.role);
   const showBulkReceipts = ["tax_daroga", "commissioner", "deputy_commissioner", "city_manager"].includes(admin.role);
   const showInstrumentReconciliation = ["agency_project_manager", "tax_daroga", "commissioner", "deputy_commissioner", "city_manager"].includes(admin.role);
   const showUnsurveyedHouseEntry = admin.role === "tax_collector";
@@ -532,6 +533,16 @@ export default function AdminDashboardPage() {
                   </span>
                   <h3 className="mb-1.5 text-base font-semibold text-slate-900">Collection & Field Reports</h3>
                   <p className="text-sm text-slate-500">Collection, notice distribution, resurvey flags, new houses and collection issues - by ward and collector, daily to annual.</p>
+                </Link>
+              )}
+
+              {showDuesReport && (
+                <Link href="/admin/dues-report" className={cardClass}>
+                  <span className={iconWrapClass}>
+                    <FileSpreadsheet className="h-6 w-6" strokeWidth={1.8} />
+                  </span>
+                  <h3 className="mb-1.5 text-base font-semibold text-slate-900">Holdings with Dues (Excel)</h3>
+                  <p className="text-sm text-slate-500">Holding no., old holding no., ward, mobile, tax paid till and amount pending - for targeting collection.</p>
                 </Link>
               )}
 

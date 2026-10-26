@@ -212,9 +212,74 @@ export async function listReportFilterOptions(wardScope?: string[], selfCollecto
   return { wards: wards.sort(compareWards), collectors };
 }
 
+/** Who actually received a payment (counter operator, agency operator, tax collector, online) - as opposed to the
+ * tax collector it is credited to, which is what the collection dataset's byCollector shows. */
+export interface ReceivedByRow {
+  role: "operator" | "agency_operator" | "tax_collector" | "online" | "other";
+  roleLabel: string;
+  username: string | null;
+  name: string;
+  count: number;
+  amount: number;
+}
+
+const RECEIVED_BY_ROLE_LABEL: Record<ReceivedByRow["role"], string> = {
+  operator: "Counter Operator",
+  agency_operator: "Agency Operator",
+  tax_collector: "Tax Collector (field)",
+  online: "Online (citizen)",
+  other: "Other / older record",
+};
+
+async function runReceivedBy(f: ReportFilters): Promise<ReceivedByRow[]> {
+  const ward = "btrim(p.ward)";
+  const collUser = "COALESCE(a.username, CASE WHEN t.collected_by_role = 'tax_collector' THEN t.collected_by_username END, t.tax_collector_code)";
+  const params: unknown[] = [f.from, f.to];
+  let filterSql = "";
+  if (f.ward) {
+    params.push(f.ward);
+    filterSql += ` AND ${ward} = $${params.length}`;
+  }
+  if (f.wardScope) {
+    params.push(f.wardScope);
+    filterSql += ` AND ${ward} = ANY($${params.length}::text[])`;
+  }
+  for (const c of [f.selfCollector, f.collector]) {
+    if (!c) continue;
+    params.push(c);
+    filterSql += ` AND ${collUser} = $${params.length}`;
+  }
+  const { rows } = await pool.query<{ role: ReceivedByRow["role"]; username: string | null; name: string; n: number; amt: number }>(
+    `SELECT CASE WHEN t.payment_mode = 'Online' OR t.collected_by = 'Citizen Self-Service' THEN 'online'
+                 WHEN t.collected_by_role IN ('operator', 'agency_operator', 'tax_collector') THEN t.collected_by_role
+                 ELSE 'other' END AS role,
+            CASE WHEN t.payment_mode = 'Online' OR t.collected_by = 'Citizen Self-Service' THEN NULL ELSE t.collected_by_username END AS username,
+            CASE WHEN t.payment_mode = 'Online' OR t.collected_by = 'Citizen Self-Service' THEN 'Online payment gateway'
+                 ELSE COALESCE(o.display_name, ad.display_name, t.collected_by, '(not recorded)') END AS name,
+            COUNT(*)::int AS n, COALESCE(SUM(t.amount_received), 0)::float8 AS amt
+       FROM transactions t
+       JOIN properties p ON p.holding_no = t.holding_no
+       LEFT JOIN admins a ON a.tax_collector_code = t.tax_collector_code AND a.role = 'tax_collector'
+       LEFT JOIN operators o ON t.collected_by_role = 'operator' AND o.username = t.collected_by_username
+       LEFT JOIN admins ad ON t.collected_by_role IN ('agency_operator', 'tax_collector') AND ad.username = t.collected_by_username
+      WHERE t.status = 'success' AND t.cancelled = FALSE AND t.receipt_no IS NOT NULL
+        AND t.txn_date >= (($1::date)::timestamp AT TIME ZONE 'Asia/Kolkata')
+        AND t.txn_date <  ((($2::date) + 1)::timestamp AT TIME ZONE 'Asia/Kolkata')
+        ${filterSql}
+      GROUP BY 1, 2, 3`,
+    params,
+  );
+  const order: ReceivedByRow["role"][] = ["agency_operator", "operator", "tax_collector", "online", "other"];
+  return rows
+    .map((r) => ({ role: r.role, roleLabel: RECEIVED_BY_ROLE_LABEL[r.role], username: r.username, name: r.name, count: r.n, amount: Math.round(r.amt * 100) / 100 }))
+    .sort((a, b) => order.indexOf(a.role) - order.indexOf(b.role) || b.amount - a.amount || a.name.localeCompare(b.name));
+}
+
 export interface AgencyReport {
   filters: ReportFilters;
   collection: DatasetReport;
+  /** The same collection by who received the money (each counter / agency operator, field collector, online). */
+  receivedBy: ReceivedByRow[];
   noticesGenerated: DatasetReport;
   receivingCopies: DatasetReport;
   resurveyFlags: DatasetReport;
@@ -315,6 +380,7 @@ export async function buildAgencyReport(f: ReportFilters): Promise<AgencyReport>
   const [collection, noticesGenerated, receivingCopies, resurveyFlags, newHouses, collectionIssues] = await Promise.all(
     ["collection", "noticesGenerated", "receivingCopies", "resurveyFlags", "newHouses", "collectionIssues"].map((k) => runDataset(configs[k]!, f, wards, collList)),
   );
+  const receivedBy = await runReceivedBy(f);
 
   const wardsByAmount = [...collection!.byWard].filter((w) => w.ward !== "(no ward)").sort((a, b) => b.amount - a.amount || compareWards(a.ward, b.ward));
   const collsByAmount = [...collection!.byCollector].filter((c) => c.username !== null).sort((a, b) => b.amount - a.amount || a.name.localeCompare(b.name));
@@ -322,6 +388,7 @@ export async function buildAgencyReport(f: ReportFilters): Promise<AgencyReport>
   return {
     filters: f,
     collection: collection!,
+    receivedBy,
     noticesGenerated: noticesGenerated!,
     receivingCopies: receivingCopies!,
     resurveyFlags: resurveyFlags!,
@@ -442,4 +509,126 @@ export async function printExistingNotices(holdingNos: string[]): Promise<Prepar
     }
   }
   return result;
+}
+
+// ---------------------------------------------------------------------------
+// Dues report (Excel) - holdings with tax pending, for planning door-to-door collection
+// ---------------------------------------------------------------------------
+
+export interface DuesReportRow {
+  holdingNo: string;
+  oldHoldingNo: string | null;
+  ward: string | null;
+  ownerName: string;
+  mobileRaw: string | null;
+  /** First valid 10-digit Indian mobile found in the stored field (which may hold two numbers or a +91 / 0 prefix). */
+  mobile: string | null;
+  taxPaidTill: string | null;
+  amountPending: number | null;
+  demandNo: string | null;
+  noticeDate: string | null;
+  remarks: string;
+}
+
+export function firstMobile(raw: string | null): string | null {
+  if (!raw) return null;
+  for (const part of raw.split(/[,/;|]|\s{2,}/)) {
+    let d = part.replace(/\D/g, "");
+    if (d.length === 12 && d.startsWith("91")) d = d.slice(2);
+    else if (d.length === 11 && d.startsWith("0")) d = d.slice(1);
+    if (/^[6-9]\d{9}$/.test(d)) return d;
+  }
+  const all = raw.replace(/\D/g, "").match(/[6-9]\d{9}/);
+  return all ? all[0] : null;
+}
+
+/**
+ * Every holding with tax pending (paid only till before its assessment year, or holding an unpaid demand notice), with
+ * the amount of its current demand notice. The monthly demand refresh regenerates that notice on the 1st, so the amount
+ * includes the late fee up to this month. Holdings the agency cannot collect from are kept but marked in Remarks.
+ */
+export async function buildDuesReport(filter: { ward?: string; minAmount?: number; withMobileOnly?: boolean }): Promise<DuesReportRow[]> {
+  const params: unknown[] = [];
+  let wardClause = "";
+  if (filter.ward) {
+    if (filter.ward === "(no ward)") wardClause = `AND (p.ward IS NULL OR btrim(p.ward) = '')`;
+    else {
+      params.push(filter.ward);
+      wardClause = `AND btrim(p.ward) = $${params.length}`;
+    }
+  }
+  const { rows } = await pool.query<{
+    holding_no: string;
+    old_holding_no: string | null;
+    ward: string | null;
+    owner_name: string;
+    mobile_no: string | null;
+    tax_paid_till_year: string | null;
+    is_disputed: boolean | null;
+    resurvey_required: boolean | null;
+    on_hold: boolean;
+    has_floors: boolean;
+    demand_no: string | null;
+    notice_date: Date | null;
+    total_amount_demanded: string | null;
+    part_payment: boolean | null;
+  }>(
+    `SELECT p.holding_no, p.old_holding_no, btrim(p.ward) AS ward, p.owner_name, p.mobile_no, p.tax_paid_till_year,
+            p.is_disputed, p.resurvey_required,
+            EXISTS (SELECT 1 FROM demand_notices h WHERE h.holding_no = p.holding_no AND h.on_hold) AS on_hold,
+            EXISTS (SELECT 1 FROM floors f WHERE f.holding_no = p.holding_no) AS has_floors,
+            n.demand_no, n.notice_date, n.total_amount_demanded, n.part_payment
+       FROM properties p
+       LEFT JOIN LATERAL (
+         SELECT d.demand_no, d.notice_date, d.total_amount_demanded, d.part_payment FROM demand_notices d
+          WHERE d.holding_no = p.holding_no AND d.superseded = FALSE AND d.cancelled = FALSE AND d.settled = FALSE
+          ORDER BY COALESCE(d.part_payment, FALSE), d.notice_date DESC, d.demand_no DESC LIMIT 1
+       ) n ON TRUE
+      WHERE ((p.tax_paid_till_year IS NULL OR p.tax_paid_till_year < p.assessment_year) OR n.demand_no IS NOT NULL)
+        ${wardClause}`,
+    params,
+  );
+
+  const istMonth = (d: Date) => new Date(d.getTime() + 330 * 60000).toISOString().slice(0, 7);
+  const thisMonth = istMonth(new Date());
+  let out: DuesReportRow[] = rows.map((r) => {
+    const remarks: string[] = [];
+    if (r.is_disputed) remarks.push("Disputed - collection blocked");
+    if (r.resurvey_required) remarks.push("Re-survey pending - collection blocked");
+    if (r.on_hold) remarks.push("Cheque/DD awaiting reconciliation");
+    if (!r.has_floors) remarks.push("No floor details on record");
+    if (!r.demand_no) remarks.push("No demand notice generated yet - amount not available");
+    else if (r.part_payment) remarks.push("Part-payment notice");
+    else if (r.notice_date && istMonth(r.notice_date) !== thisMonth) remarks.push("Notice is from an earlier month - amount excludes this month's late fee");
+    return {
+      holdingNo: r.holding_no,
+      oldHoldingNo: r.old_holding_no,
+      ward: r.ward && r.ward !== "" ? r.ward : null,
+      ownerName: r.owner_name,
+      mobileRaw: r.mobile_no,
+      mobile: firstMobile(r.mobile_no),
+      taxPaidTill: r.tax_paid_till_year,
+      amountPending: r.total_amount_demanded == null ? null : Number(r.total_amount_demanded),
+      demandNo: r.demand_no,
+      noticeDate: r.notice_date ? new Date(r.notice_date.getTime() + 330 * 60000).toISOString().slice(0, 10) : null,
+      remarks: remarks.join("; "),
+    };
+  });
+  if (filter.withMobileOnly) out = out.filter((r) => r.mobile);
+  if (filter.minAmount != null && filter.minAmount > 0) out = out.filter((r) => (r.amountPending ?? 0) >= filter.minAmount!);
+  // Ward, then largest amount first - the order a field team works in.
+  return out.sort((a, b) => compareWards(a.ward ?? "~", b.ward ?? "~") || (b.amountPending ?? -1) - (a.amountPending ?? -1) || a.holdingNo.localeCompare(b.holdingNo));
+}
+
+/** Wards for the dues report, with how many holdings each would list (same rule as buildDuesReport). */
+export async function listDuesReportWards(): Promise<{ ward: string; pending: number }[]> {
+  const { rows } = await pool.query<{ ward: string | null; pending: number }>(
+    `SELECT btrim(p.ward) AS ward, COUNT(*)::int AS pending FROM properties p
+      WHERE (p.tax_paid_till_year IS NULL OR p.tax_paid_till_year < p.assessment_year)
+         OR EXISTS (SELECT 1 FROM demand_notices d WHERE d.holding_no = p.holding_no AND NOT d.superseded AND NOT d.cancelled AND NOT d.settled)
+      GROUP BY 1`,
+  );
+  return rows
+    .map((r) => ({ ward: r.ward && r.ward !== "" ? r.ward : "(no ward)", pending: r.pending }))
+    .sort((a, b) => compareWards(a.ward, b.ward));
 }

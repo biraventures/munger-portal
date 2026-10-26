@@ -39,9 +39,20 @@ export interface DatasetReport {
   byCollector: CollectorRow[];
   byType?: { type: string; count: number; amount: number }[];
 }
+export interface ReceivedByRow {
+  role: "operator" | "agency_operator" | "tax_collector" | "online" | "other";
+  roleLabel: string;
+  username: string | null;
+  name: string;
+  count: number;
+  amount: number;
+}
+
 export interface AgencyReport {
   filters: { period: ReportPeriod; from: string; to: string; ward?: string; collector?: string };
   collection: DatasetReport;
+  /** Collection by who received the money - each counter operator, agency operator, field collector, online. */
+  receivedBy?: ReceivedByRow[];
   noticesGenerated: DatasetReport;
   receivingCopies: DatasetReport;
   resurveyFlags: DatasetReport;
@@ -124,4 +135,32 @@ export async function prepareAgencyNotices(
   const res = await fetch(`${API_BASE_URL}/admin/${base}/notices`, { method: "POST", headers: authHeaders(), body: JSON.stringify({ holdingNos }) });
   if (!res.ok) throw new Error(await failure(res, "Could not prepare the notices"));
   return res.json();
+}
+
+// ---------------------------------------------------------------------------
+// Holdings with dues - Excel (Agency Operator / Team Leader / Project Manager / Tax Daroga / officers)
+// ---------------------------------------------------------------------------
+
+export async function fetchDuesReportWards(): Promise<{ ward: string; pending: number }[]> {
+  const res = await fetch(`${API_BASE_URL}/admin/agency-operator/dues-report/wards`, { headers: authHeaders() });
+  if (!res.ok) throw new Error(await failure(res, "Could not load wards"));
+  return (await res.json()).wards;
+}
+
+export async function downloadDuesReport(q: { ward?: string; minAmount?: number; withMobile?: boolean }): Promise<void> {
+  const p = new URLSearchParams();
+  if (q.ward) p.set("ward", q.ward);
+  if (q.minAmount) p.set("minAmount", String(q.minAmount));
+  if (q.withMobile) p.set("withMobile", "true");
+  const res = await fetch(`${API_BASE_URL}/admin/agency-operator/dues-report.xlsx?${p.toString()}`, { headers: authHeaders() });
+  if (!res.ok) throw new Error(await failure(res, "Could not download the report"));
+  const blob = await res.blob();
+  const today = new Date(Date.now() + 330 * 60000).toISOString().slice(0, 10);
+  const name = `holding-dues-${q.ward ? `ward-${q.ward.replace(/[^A-Za-z0-9-]/g, "")}-` : ""}${today}.xlsx`;
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = name;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
 }

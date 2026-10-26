@@ -371,6 +371,20 @@ export default function AgencyReportsPage() {
                   ))}
                   {(report.collection.byType ?? []).length === 0 && <Empty cols={4} />}
                 </Table>
+                <Table title="By who received the payment (each operator / agency operator)" head={["Received by", "Name", "Receipts", "Amount"]}>
+                  {(report.receivedBy ?? []).map((r) => (
+                    <tr key={`${r.role}-${r.username ?? r.name}`} className="border-t border-slate-100">
+                      <td className="px-3 py-2 text-slate-500">{r.roleLabel}</td>
+                      <td className="px-3 py-2 font-medium">
+                        {r.name}
+                        {r.username && <span className="text-xs font-normal text-slate-400"> ({r.username})</span>}
+                      </td>
+                      <td className="px-3 py-2 text-right">{r.count.toLocaleString("en-IN")}</td>
+                      <td className="px-3 py-2 text-right">{money(r.amount)}</td>
+                    </tr>
+                  ))}
+                  {(report.receivedBy ?? []).length === 0 && <Empty cols={4} />}
+                </Table>
                 {admin.role === "tax_collector" && (
                   <p className="text-xs text-slate-500">You see only the collection made by you, in the wards assigned to you now or earlier.</p>
                 )}

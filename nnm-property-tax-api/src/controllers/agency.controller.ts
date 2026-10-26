@@ -8,6 +8,8 @@ import { ApiError } from "../utils/ApiError";
 import { addSheetFromRows } from "../services/export.service";
 import {
   buildAgencyReport,
+  buildDuesReport,
+  listDuesReportWards,
   defaultRangeFor,
   listPendingHoldingNos,
   listReportFilterOptions,
@@ -93,6 +95,11 @@ export const exportAgencyReportHandler = asyncHandler(async (req: Request, res: 
     ...datasetRows("Collection issues", report.collectionIssues, { count: "Issues" }),
   };
   for (const [name, rows] of Object.entries(sections)) addSheetFromRows(workbook, name.slice(0, 31), rows);
+  addSheetFromRows(
+    workbook,
+    "Collection - received by",
+    report.receivedBy.map((r) => ({ "Received by": r.roleLabel, Name: r.name, Login: r.username ?? "", Receipts: r.count, "Amount (Rs)": r.amount })),
+  );
   addSheetFromRows(workbook, "Collection - by payment mode", (report.collection.byType ?? []).map((m) => ({ "Payment mode": m.type, Receipts: m.count, "Amount (Rs)": Math.round(m.amount * 100) / 100 })));
   addSheetFromRows(workbook, "Highest wards", report.ranking.highestWards.map((w) => ({ Ward: w.ward, "Amount (Rs)": w.amount, Receipts: w.count })));
   addSheetFromRows(workbook, "Lowest wards", report.ranking.lowestWards.map((w) => ({ Ward: w.ward, "Amount (Rs)": w.amount, Receipts: w.count })));
@@ -135,4 +142,81 @@ export const printExistingAgencyNoticesHandler = asyncHandler(async (req: Reques
   const parsed = prepareSchema.safeParse(req.body);
   if (!parsed.success) throw ApiError.badRequest("Send between 1 and 25 holding numbers.", parsed.error.flatten().fieldErrors);
   res.status(200).json(await printExistingNotices(parsed.data.holdingNos));
+});
+
+// ---------------------------------------------------------------------------
+// Dues report (Excel) - Agency Operator / Team Leader and tax officers
+// ---------------------------------------------------------------------------
+
+const duesQuerySchema = z.object({
+  ward: z.string().trim().max(16).transform((w) => (w === "(no ward)" ? w : normalizeWard(w))).optional(),
+  minAmount: z.coerce.number().min(0).max(1e9).optional(),
+  withMobile: z.enum(["true", "false"]).optional(),
+});
+
+/** GET /api/v1/admin/agency-operator/dues-report.xlsx?ward=&minAmount=&withMobile=true */
+export const exportDuesReportHandler = asyncHandler(async (req: Request, res: Response) => {
+  const q = duesQuerySchema.safeParse(req.query);
+  if (!q.success) throw ApiError.badRequest("Invalid filter");
+  const rows = await buildDuesReport({ ward: q.data.ward || undefined, minAmount: q.data.minAmount, withMobileOnly: q.data.withMobile === "true" });
+
+  const wb = new ExcelJS.Workbook();
+  wb.creator = "Nagar Nigam Munger";
+  const ws = wb.addWorksheet("Holdings with dues", { views: [{ state: "frozen", ySplit: 1 }] });
+  ws.columns = [
+    { header: "S.No", key: "sno", width: 7 },
+    { header: "Holding No", key: "holdingNo", width: 16 },
+    { header: "Old Holding No", key: "oldHoldingNo", width: 16 },
+    { header: "Ward No", key: "ward", width: 9 },
+    { header: "Owner Name", key: "ownerName", width: 28 },
+    { header: "Mobile (10 digit)", key: "mobile", width: 15 },
+    { header: "Phone as recorded", key: "mobileRaw", width: 22 },
+    { header: "Tax Paid Till", key: "taxPaidTill", width: 13 },
+    { header: "Total Amount Pending (Rs)", key: "amountPending", width: 16, style: { numFmt: "#,##0.00" } },
+    { header: "Demand Notice No", key: "demandNo", width: 14 },
+    { header: "Notice Date", key: "noticeDate", width: 12 },
+    { header: "Remarks", key: "remarks", width: 50 },
+  ];
+  rows.forEach((r, i) => ws.addRow({ sno: i + 1, ...r }));
+  ws.getRow(1).font = { bold: true };
+  ws.getRow(1).alignment = { wrapText: true, vertical: "middle" };
+  ws.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: ws.columns.length } };
+  const totalRow = ws.addRow({ ownerName: "TOTAL", amountPending: rows.reduce((t, r) => t + (r.amountPending ?? 0), 0) });
+  totalRow.font = { bold: true };
+
+  // Ward summary: where the money is.
+  const byWard = new Map<string, { holdings: number; withMobile: number; amount: number; noNotice: number }>();
+  for (const r of rows) {
+    const k = r.ward ?? "(no ward)";
+    const w = byWard.get(k) ?? { holdings: 0, withMobile: 0, amount: 0, noNotice: 0 };
+    w.holdings++;
+    if (r.mobile) w.withMobile++;
+    w.amount += r.amountPending ?? 0;
+    if (r.amountPending == null) w.noNotice++;
+    byWard.set(k, w);
+  }
+  const sum = wb.addWorksheet("Ward summary", { views: [{ state: "frozen", ySplit: 1 }] });
+  sum.columns = [
+    { header: "Ward No", key: "ward", width: 10 },
+    { header: "Holdings with dues", key: "holdings", width: 18 },
+    { header: "With mobile number", key: "withMobile", width: 18 },
+    { header: "Total Amount Pending (Rs)", key: "amount", width: 22, style: { numFmt: "#,##0.00" } },
+    { header: "Without a demand notice", key: "noNotice", width: 22 },
+  ];
+  [...byWard.entries()]
+    .sort((a, b) => b[1].amount - a[1].amount)
+    .forEach(([ward, w]) => sum.addRow({ ward, ...w, amount: Math.round(w.amount * 100) / 100 }));
+  sum.getRow(1).font = { bold: true };
+  sum.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: 5 } };
+
+  const today = new Date(Date.now() + 330 * 60000).toISOString().slice(0, 10);
+  res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+  res.setHeader("Content-Disposition", `attachment; filename="holding-dues-${q.data.ward ? `ward-${q.data.ward.replace(/[^A-Za-z0-9-]/g, "")}-` : ""}${today}.xlsx"`);
+  await wb.xlsx.write(res);
+  res.end();
+});
+
+/** GET /api/v1/admin/agency-operator/dues-report/wards */
+export const listDuesReportWardsHandler = asyncHandler(async (_req: Request, res: Response) => {
+  res.json({ wards: await listDuesReportWards() });
 });

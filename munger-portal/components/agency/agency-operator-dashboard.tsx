@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { BarChart3, Award, Printer, Receipt } from "lucide-react";
+import { BarChart3, Award, FileSpreadsheet, Printer, Receipt } from "lucide-react";
 import { AdminHeader } from "@/components/admin-header";
 import type { AdminInfo } from "@/lib/admin-auth";
 
@@ -23,6 +23,12 @@ export function AgencyOperatorDashboard({ admin }: { admin: AdminInfo }) {
       icon: Printer,
       title: "Ward-wise Demand Notices",
       text: "Print the demand notices already issued for every holding with dues pending in a ward. No new demand is created here.",
+    },
+    {
+      href: "/admin/dues-report",
+      icon: FileSpreadsheet,
+      title: "Holdings with Dues (Excel)",
+      text: "Download holding no., old holding no., ward, mobile, tax paid till and amount pending - for planning whom to approach first.",
     },
     {
       href: "/admin/agency-reports",
