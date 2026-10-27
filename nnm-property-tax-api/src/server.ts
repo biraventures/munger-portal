@@ -4,6 +4,7 @@ import { checkDbConnection, pool } from "./config/db";
 import { clearInterruptedIntegrations } from "./services/propertyImportStaging.service";
 import { scheduledRefreshTick } from "./services/demandRefresh.service";
 import { reconcilePendingOnlineOrders } from "./services/onlinePayment.service";
+import { reconcilePendingBpOrders } from "./services/buildingPermit.service";
 import { purgeOldFaceData } from "./services/faceAttendance.service";
 
 async function main() {
@@ -24,6 +25,7 @@ async function main() {
   // Online payments whose citizen never came back from the bank page: ask ICICI for their status every 5 minutes.
   const pgReconcileTimer = setInterval(() => {
     reconcilePendingOnlineOrders().catch((err) => console.error("[online-payment] reconciliation failed:", err));
+    reconcilePendingBpOrders().catch((err) => console.error("[bp] reconciliation failed:", err));
   }, 5 * 60 * 1000);
 
   // Face attendance housekeeping (old punch photos, spent challenges) - hourly.

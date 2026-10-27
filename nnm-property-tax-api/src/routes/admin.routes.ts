@@ -167,6 +167,7 @@ import {
   getTradeLicenseDocumentFile,
 } from "../controllers/tradeLicenseApplication.controller";
 import { requireAdmin, requireAdminRole } from "../middleware/requireAdmin";
+import * as bpc from "../controllers/buildingPermit.controller";
 import { getPre2011Entries, getPre2011Holding, getPre2011PendingCount, getPre2011Worklist, postPre2011Approve, postPre2011Entry, postPre2011Reject } from "../controllers/pre2011Arv.controller";
 import {
   searchMigratedHoldingsHandler,
@@ -678,3 +679,23 @@ adminRouter.get("/geo/ward-boundaries", requireGeoViewRole, listWardBoundariesHa
 adminRouter.post("/geo/ward-boundaries/import-kml", requireGeoEditRole, importWardBoundariesKmlHandler);
 adminRouter.delete("/geo/ward-boundaries/:id", requireGeoEditRole, deleteWardBoundaryHandler);
 adminRouter.get("/geo/export", requireGeoViewRole, exportGeoData);
+
+// Building plan permits (migration 150) - the Map Section Nodal Clerk takes each application through every office
+// stage; Commissioner / DMC / City Manager / town planning staff can view.
+const requireBpClerk = requireAdminRole("map_section_nodal_clerk");
+const requireBpView = requireAdminRole("map_section_nodal_clerk", "commissioner", "deputy_commissioner", "city_manager", "assistant_town_planning_supervisor", "assistant_architect");
+adminRouter.get("/building-permits", requireBpView, bpc.getOfficeList);
+adminRouter.get("/building-permits/:id", requireBpView, bpc.getOfficeDetail);
+adminRouter.get("/building-permits/:id/documents/:docId/file", requireBpView, bpc.getOfficeFile);
+adminRouter.get("/building-permits/:id/permit-letter", requireBpView, bpc.getOfficePermitLetter);
+adminRouter.post("/building-permits/:id/documents", requireBpClerk, bpc.postOfficeDocument);
+adminRouter.delete("/building-permits/:id/documents/:docId", requireBpClerk, bpc.deleteOfficeDocument);
+adminRouter.post("/building-permits/:id/site-report", requireBpClerk, bpc.postSiteReport);
+adminRouter.post("/building-permits/:id/site-complete", requireBpClerk, bpc.postSiteComplete);
+adminRouter.post("/building-permits/:id/scrutiny", requireBpClerk, bpc.postScrutiny);
+adminRouter.post("/building-permits/:id/counter-payment", requireBpClerk, bpc.postCounterPayment);
+adminRouter.post("/building-permits/:id/processing", requireBpClerk, bpc.postProcessing);
+adminRouter.post("/building-permits/:id/authority", requireBpClerk, bpc.postAuthority);
+adminRouter.post("/building-permits/:id/issue", requireBpClerk, bpc.postIssue);
+adminRouter.post("/building-permits/:id/return", requireBpClerk, bpc.postReturn);
+adminRouter.post("/building-permits/:id/reject", requireBpClerk, bpc.postReject);

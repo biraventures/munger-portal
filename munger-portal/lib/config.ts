@@ -76,6 +76,16 @@ export const services = [
     live: true,
   },
   {
+    counter: "COUNTER 01F",
+    title: "Building Plan Permit",
+    description:
+      "Calculate the development fee, permit fee and labour cess, apply online for building plan approval with your documents and drawing - and track it.",
+    icon: "building",
+    cta: "Apply Now",
+    href: "/building-permit",
+    live: true,
+  },
+  {
     counter: "COUNTER 02",
     title: "Solid Waste Management",
     description:

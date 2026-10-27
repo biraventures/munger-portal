@@ -19,7 +19,8 @@ export type AdminRole =
   | "agency_team_leader"
   | "agency_project_manager"
   | "abhilekh_prabhari"
-  | "agency_operator";
+  | "agency_operator"
+  | "map_section_nodal_clerk";
 
 export const ADMIN_ROLE_LABELS: Record<AdminRole, string> = {
   tax_daroga: "Tax Daroga",
@@ -40,6 +41,7 @@ export const ADMIN_ROLE_LABELS: Record<AdminRole, string> = {
   agency_project_manager: "Agency Project Manager",
   abhilekh_prabhari: "Abhilekh Prabhari",
   agency_operator: "Agency Operator",
+  map_section_nodal_clerk: "Map Section Nodal Clerk",
 };
 
 export const ADMIN_ROLE_ORDER: AdminRole[] = [
@@ -59,6 +61,7 @@ export const ADMIN_ROLE_ORDER: AdminRole[] = [
   "agency_project_manager",
   "abhilekh_prabhari",
   "agency_operator",
+  "map_section_nodal_clerk",
   "deputy_commissioner",
   "commissioner",
 ];

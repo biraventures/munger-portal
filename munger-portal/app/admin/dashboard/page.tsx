@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Users, FileClock, FileWarning, LayoutGrid, ShoppingBag, Store, BarChart3, Award, Archive, Download, XCircle, ShieldCheck, Trash2, RefreshCw, Upload, MapPin, Map as MapIcon, ClipboardCheck, UserCheck, ClipboardList, Receipt, RotateCcw, AlertTriangle, List, Flag, Home, FileText, Printer, Landmark, FileSpreadsheet } from "lucide-react";
 import { AdminHeader } from "@/components/admin-header";
+import { MapSectionDashboard } from "@/components/building-permit/map-section-dashboard";
 import { AgencyOperatorDashboard } from "@/components/agency/agency-operator-dashboard";
 import { Pre2011ArvCard } from "@/components/admin/pre2011-arv-card";
 import { DashboardSummaryWidget } from "@/components/dashboard-summary-widget";
@@ -65,6 +66,8 @@ export default function AdminDashboardPage() {
 
   // The private agency's counter login: only its own cards (see components/agency/agency-operator-dashboard.tsx).
   if (admin.role === "agency_operator") return <AgencyOperatorDashboard admin={admin} />;
+  // Map Section Nodal Clerk: building plan permits only.
+  if (admin.role === "map_section_nodal_clerk") return <MapSectionDashboard admin={admin} />;
 
   // Stall Prabhari is scoped to the shop/rental workflow only; Trade
   // License Nodal is scoped to trade licenses only - each should see
@@ -194,7 +197,8 @@ export default function AdminDashboardPage() {
   const showAttendanceReport = isCommissioner;
   const showAssignCoordinates = isAtps || isCommissioner;
   const showGisMap = isAtps || isAssistantArchitect || isCommissioner;
-  const showBuildingMapApproval = isAssistantArchitect;
+  // Building plan permits: the Map Section Nodal Clerk works them (own dashboard); these roles can view them.
+  const showBuildingMapApproval = isAssistantArchitect || isAtps || isCommissioner || admin.role === "deputy_commissioner" || admin.role === "city_manager";
   // Who's Who: City Manager verifies, Deputy Commissioner (DMC) publishes, Commissioner views.
   const showWhosWho = admin.role === "city_manager" || admin.role === "deputy_commissioner" || isCommissioner;
   const miscGroupVisible = showOperators || showManageLogins || showDocumentArchive || showAttendanceReport || showAssignCoordinates || showGisMap || showBuildingMapApproval || showWhosWho;
@@ -1013,12 +1017,12 @@ export default function AdminDashboardPage() {
               )}
 
               {showBuildingMapApproval && (
-                <Link href="/admin/building-map-approval" className={cardClass}>
+                <Link href="/admin/building-permits" className={cardClass}>
                   <span className={iconWrapClass}>
                     <ClipboardCheck className="h-6 w-6" strokeWidth={1.8} />
                   </span>
-                  <h3 className="mb-1.5 text-base font-semibold text-slate-900">Building Map Approval</h3>
-                  <p className="text-sm text-slate-500">Review and approve submitted building maps.</p>
+                  <h3 className="mb-1.5 text-base font-semibold text-slate-900">Building Plan Permits</h3>
+                  <p className="text-sm text-slate-500">Online building plan applications - site reports, scrutiny, fee, approval and permits issued (view).</p>
                 </Link>
               )}
             </div>

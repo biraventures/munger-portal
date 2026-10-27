@@ -44,7 +44,11 @@ export interface Payer {
 }
 
 /** Bank's order reference must be short alphanumeric - the pg_request order_id is generated to fit. */
-export async function initiateSale(orderId: string, payer: Payer): Promise<{ redirectUrl: string; tranCtx: string }> {
+export async function initiateSale(
+  orderId: string,
+  payer: Payer,
+  opts: { returnUrl?: string; purpose?: string; mobileMissingMessage?: string } = {},
+): Promise<{ redirectUrl: string; tranCtx: string }> {
   const { merchantId, aggregatorId, secretKey } = keys();
   if (!env.ICICI_RETURN_URL) {
     console.error("[icici] ICICI_RETURN_URL is not set in .env");
@@ -53,7 +57,8 @@ export async function initiateSale(orderId: string, payer: Payer): Promise<{ red
   const mobile = /^\d{10}$/.test(payer.mobile ?? "") ? payer.mobile : "";
   if (!mobile) {
     throw ApiError.badRequest(
-      "This holding has no valid 10-digit mobile number on record, which the bank needs for online payment. Please get the mobile number updated or pay at the counter.",
+      opts.mobileMissingMessage ??
+        "This holding has no valid 10-digit mobile number on record, which the bank needs for online payment. Please get the mobile number updated or pay at the counter.",
     );
   }
   const body: Record<string, string> = {
@@ -65,12 +70,12 @@ export async function initiateSale(orderId: string, payer: Payer): Promise<{ red
     payType: "0",
     customerEmailID: "pay@property.tax",
     transactionType: "SALE",
-    returnURL: env.ICICI_RETURN_URL,
+    returnURL: opts.returnUrl ?? env.ICICI_RETURN_URL,
     txnDate: istTxnDate(),
     customerMobileNo: mobile,
     customerName: (payer.name || "Taxpayer").replace(/[^A-Za-z0-9 .]/g, " ").replace(/\s+/g, " ").trim().slice(0, 50) || "Taxpayer",
     addlParam1: "NNM",
-    addlParam2: "PropertyTax",
+    addlParam2: opts.purpose ?? "PropertyTax",
   };
   body.secureHash = secureHash(body, secretKey);
 

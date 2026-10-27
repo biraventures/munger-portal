@@ -22,6 +22,7 @@ import { publicDocumentRouter } from "./publicDocument.routes";
 import { documentManagerRouter } from "./documentManager.routes";
 import { whosWhoManagerRouter, whosWhoPublicRouter } from "./whosWho.routes";
 import { publicMutationRouter } from "./publicMutation.routes";
+import { publicBuildingPermitRouter } from "./publicBuildingPermit.routes";
 import { publicNewHoldingRouter } from "./publicNewHolding.routes";
 import { publicReportVerificationRouter } from "./publicReportVerification.routes";
 import { publicSubmersibleRouter } from "./publicSubmersible.routes";
@@ -78,6 +79,7 @@ apiRouter.use("/whos-who", whosWhoPublicRouter);
 apiRouter.use("/whos-who-manager", whosWhoManagerRouter);
 // Online mutation applications from the public (migration 131).
 apiRouter.use("/public/mutation", publicMutationRouter);
+apiRouter.use("/public/building-permit", publicBuildingPermitRouter);
 apiRouter.use("/public/new-holding", publicNewHoldingRouter);
 apiRouter.use("/public/streetlights", publicStreetlightRouter);
 apiRouter.use("/public/submersibles", publicSubmersibleRouter);
