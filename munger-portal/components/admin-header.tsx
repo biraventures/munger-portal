@@ -3,7 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { LogOut, Eye } from "lucide-react";
+import { LogOut, Eye, KeyRound } from "lucide-react";
 import { adminLogout, ADMIN_ROLE_LABELS, type AdminInfo } from "@/lib/admin-auth";
 import logoImg from '@/public/logo.png'
 
@@ -32,6 +32,16 @@ export function AdminHeader({ admin }: { admin: AdminInfo }) {
             {admin.displayName}
             <span className="block text-xs text-slate-400">{ADMIN_ROLE_LABELS[admin.role]}</span>
           </span>
+          {admin.role === "tax_collector" && (
+            <Link
+              href="/admin/change-password"
+              title="Change password"
+              className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50"
+            >
+              <KeyRound className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Change password</span>
+            </Link>
+          )}
           <button
             onClick={handleLogout}
             className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50"

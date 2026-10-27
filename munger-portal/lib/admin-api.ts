@@ -2291,3 +2291,16 @@ export async function actOnInstrument(receiptNo: string, action: "pm-verify" | "
   const body = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(body.error || "Could not save this.");
 }
+
+/** Signed-in Tax Collector changes their own password. */
+export async function changeOwnPassword(currentPassword: string, newPassword: string, confirmPassword: string): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/admin/auth/change-password`, {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify({ currentPassword, newPassword, confirmPassword }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || "Could not change the password.");
+  }
+}
