@@ -12,7 +12,7 @@ import {
   rejectDiscrepancyRequest,
   revertDiscrepancyRequest,
 } from "@/lib/admin-api";
-import type { PropertyDiscrepancyRequest, PropertyDiscrepancyApproval } from "@/lib/admin-api";
+import type { PropertyDiscrepancyRequest } from "@/lib/admin-api";
 import { ADMIN_ROLE_LABELS } from "@/lib/admin-auth";
 import {
   AdminPropertyDetailsForm,
@@ -20,22 +20,10 @@ import {
   propertyFormToPayload,
   type AdminPropertyFormState,
 } from "@/components/admin/property-details-form";
+import { PropertyChangeReview } from "@/components/admin/property-change-review";
 import { fetchFormOptions, type FormOptions } from "@/lib/operator-api";
 
-const FIELD_DIFF_ROWS: { label: string; currentKey: string; proposedKey: string }[] = [
-  { label: "Owner Name", currentKey: "owner_name", proposedKey: "ownerName" },
-  { label: "Mobile Number", currentKey: "mobile_no", proposedKey: "mobileNo" },
-  { label: "Aadhaar Number", currentKey: "aadhaar_number", proposedKey: "aadhaarNumber" },
-  { label: "Address", currentKey: "address", proposedKey: "address" },
-  { label: "Ward", currentKey: "ward", proposedKey: "ward" },
-  { label: "Assessment Year", currentKey: "assessment_year", proposedKey: "assessmentYear" },
-  { label: "Road Type", currentKey: "road_type", proposedKey: "roadType" },
-  { label: "Plot Area (sqft)", currentKey: "area_sqft", proposedKey: "areaSqft" },
-  { label: "Holding Creation Year", currentKey: "holding_creation_year", proposedKey: "holdingCreationYear" },
-  { label: "Solid Waste Charge Type", currentKey: "solid_waste_charge_type", proposedKey: "solidWasteChargeType" },
-  { label: "Bulk Waste Generator (no solid waste charge)", currentKey: "is_bwg", proposedKey: "isBwg" },
-  { label: "Slum area holding", currentKey: "is_slum", proposedKey: "isSlum" },
-];
+
 
 const DECISION_LABELS: Record<string, string> = {
   submitted: "submitted",
@@ -45,11 +33,6 @@ const DECISION_LABELS: Record<string, string> = {
   reverted: "reverted",
 };
 
-function displayVal(v: unknown): string {
-  if (v === null || v === undefined || v === "") return "-";
-  if (typeof v === "boolean") return v ? "Yes" : "No";
-  return String(v);
-}
 
 function StatusBadge({ request }: { request: PropertyDiscrepancyRequest }) {
   if (request.status === "approved") {
@@ -78,12 +61,7 @@ export default function PropertyDiscrepancyRequestDetailPage() {
   const router = useRouter();
   const id = Number(params.id);
 
-  const [detail, setDetail] = useState<{
-    request: PropertyDiscrepancyRequest;
-    currentProperty: Record<string, unknown> | null;
-    currentFloors: Record<string, unknown>[];
-    approvalHistory: PropertyDiscrepancyApproval[];
-  } | null>(null);
+  const [detail, setDetail] = useState<Awaited<ReturnType<typeof fetchDiscrepancyRequestDetail>> | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notes, setNotes] = useState("");
   const [acting, setActing] = useState<"approve" | "reject" | "revert" | null>(null);
@@ -246,58 +224,15 @@ export default function PropertyDiscrepancyRequestDetailPage() {
               {editing && editForm ? (
                 <AdminPropertyDetailsForm form={editForm} onChange={setEditForm} usageTypes={formOptions?.usageTypes ?? []} solidWasteChargeTypes={formOptions?.solidWasteChargeTypes ?? []} />
               ) : (
-                <>
-                  <div className="overflow-hidden rounded-lg border border-slate-200">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b border-slate-200 bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
-                          <th className="px-4 py-2.5 font-medium">Field</th>
-                          <th className="px-4 py-2.5 font-medium">Current</th>
-                          <th className="px-4 py-2.5 font-medium">Proposed</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {FIELD_DIFF_ROWS.map((row) => {
-                          const currentVal = detail.currentProperty ? detail.currentProperty[row.currentKey] : undefined;
-                          const proposedVal = detail.request.proposed_data[row.proposedKey];
-                          const changed = displayVal(currentVal) !== displayVal(proposedVal);
-                          return (
-                            <tr key={row.label} className={`border-b border-slate-100 last:border-0 ${changed ? "bg-amber-50" : ""}`}>
-                              <td className="px-4 py-2.5 text-slate-500">{row.label}</td>
-                              <td className="px-4 py-2.5">{displayVal(currentVal)}</td>
-                              <td className={`px-4 py-2.5 ${changed ? "font-semibold text-amber-800" : ""}`}>{displayVal(proposedVal)}</td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-
-                  <h3 className="mb-2 mt-5 text-sm font-semibold text-slate-800">Proposed floors</h3>
-                  <div className="overflow-hidden rounded-lg border border-slate-200">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b border-slate-200 bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
-                          <th className="px-4 py-2.5 font-medium">Floor</th>
-                          <th className="px-4 py-2.5 font-medium">Area (sqft)</th>
-                          <th className="px-4 py-2.5 font-medium">Usage</th>
-                          <th className="px-4 py-2.5 font-medium">Occupancy</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {(detail.request.proposed_data.floors as Record<string, unknown>[] | undefined)?.map((f, i) => (
-                          <tr key={i} className="border-b border-slate-100 last:border-0">
-                            <td className="px-4 py-2.5">{displayVal(f.floorLabel)}</td>
-                            <td className="px-4 py-2.5">{displayVal(f.buildupSqft)}</td>
-                            <td className="px-4 py-2.5">{displayVal(f.usageType)}</td>
-                            <td className="px-4 py-2.5">{displayVal(f.occupancy)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                  <p className="mt-2 text-xs text-slate-400">Currently on record: {detail.currentFloors.length} floor(s).</p>
-                </>
+                <PropertyChangeReview
+                  title="Full holding details - proposed corrections highlighted"
+                  status={detail.request.status}
+                  current={detail.currentProperty}
+                  currentFloors={detail.currentFloors}
+                  baseline={detail.baseline}
+                  proposed={detail.request.proposed_data}
+                  taxEffect={detail.taxEffect}
+                />
               )}
             </section>
 

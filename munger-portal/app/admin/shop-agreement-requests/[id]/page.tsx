@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { AlertCircle, CheckCircle2, Loader2, XCircle, RotateCcw } from "lucide-react";
+import { ShopAgreementChangeReview } from "@/components/admin/shop-change-review";
 import { AdminHeader } from "@/components/admin-header";
 import { StageBadge } from "@/components/admin/stage-badge";
 import { useAdminGuard } from "@/lib/use-admin-guard";
@@ -14,43 +15,6 @@ import {
   type ShopAgreementChangeRequestDetail,
 } from "@/lib/admin-shop-api";
 import { ADMIN_ROLE_LABELS } from "@/lib/admin-auth";
-
-const FIELD_DIFF_ROWS: { label: string; currentKey: string; proposedKey: string }[] = [
-  { label: "Agreement Number", currentKey: "agreement_number", proposedKey: "agreementNumber" },
-  { label: "Name (as per agreement)", currentKey: "agreement_holder_name", proposedKey: "agreementHolderName" },
-  { label: "Name (as per demand register)", currentKey: "demand_register_holder_name", proposedKey: "demandRegisterHolderName" },
-  { label: "Applicable Holder Name", currentKey: "holder_name", proposedKey: "holderName" },
-  { label: "Relation Name", currentKey: "holder_relation_name", proposedKey: "holderRelationName" },
-  { label: "Mobile No", currentKey: "holder_mobile", proposedKey: "holderMobile" },
-  { label: "Address", currentKey: "holder_address", proposedKey: "holderAddress" },
-  { label: "ID Proof Number", currentKey: "id_proof_number", proposedKey: "idProofNumber" },
-  { label: "Business Name", currentKey: "business_name", proposedKey: "businessName" },
-  { label: "Rent (as per agreement)", currentKey: "agreement_rent", proposedKey: "agreementRent" },
-  { label: "Rent (as per demand register)", currentKey: "demand_register_rent", proposedKey: "demandRegisterRent" },
-  { label: "Applicable Monthly Rent", currentKey: "base_monthly_rent", proposedKey: "baseMonthlyRent" },
-  { label: "Rent (pre-2019-20)", currentKey: "rent_pre_2019", proposedKey: "rentPre2019" },
-  { label: "Rent (2019-20)", currentKey: "rent_2019_20", proposedKey: "rent201920" },
-  { label: "Rent (2020-21 onwards)", currentKey: "rent_2020_21_onwards", proposedKey: "rent202021Onwards" },
-  { label: "Agreement Start", currentKey: "agreement_start_date", proposedKey: "agreementStartDate" },
-  { label: "Agreement End", currentKey: "agreement_end_date", proposedKey: "agreementEndDate" },
-  { label: "Security Deposit", currentKey: "security_deposit", proposedKey: "securityDeposit" },
-  { label: "Misc Cost", currentKey: "misc_cost", proposedKey: "miscCost" },
-  { label: "Misc Cost Reason", currentKey: "misc_cost_reason", proposedKey: "miscCostReason" },
-  { label: "Rebate", currentKey: "misc_rebate", proposedKey: "miscRebate" },
-  { label: "Rebate Reason", currentKey: "misc_rebate_reason", proposedKey: "miscRebateReason" },
-  { label: "Joint Holder Name", currentKey: "joint_holder_name", proposedKey: "jointHolderName" },
-  { label: "Joint Holder Relation", currentKey: "joint_holder_relation", proposedKey: "jointHolderRelation" },
-  { label: "Present Occupant Name", currentKey: "present_occupant_name", proposedKey: "presentOccupantName" },
-  { label: "Present Occupant Aadhaar", currentKey: "present_occupant_aadhaar", proposedKey: "presentOccupantAadhaar" },
-  { label: "Present Occupant - Approx Years", currentKey: "present_occupant_years_approx", proposedKey: "presentOccupantYearsApprox" },
-  { label: "Notes", currentKey: "notes", proposedKey: "notes" },
-];
-
-function displayVal(v: unknown): string {
-  if (v === null || v === undefined || v === "") return "—";
-  if (typeof v === "boolean") return v ? "Yes" : "No";
-  return String(v);
-}
 
 export default function ShopAgreementRequestDetailPage() {
   const admin = useAdminGuard();
@@ -182,36 +146,13 @@ export default function ShopAgreementRequestDetailPage() {
               </div>
             )}
 
-            <section className="rounded-xl border border-slate-200 bg-white p-6">
-              <h2 className="mb-4 text-base font-semibold text-slate-900">What&apos;s changing</h2>
-              <div className="overflow-hidden rounded-lg border border-slate-200">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-slate-200 bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
-                      <th className="px-4 py-2.5 font-medium">Field</th>
-                      <th className="px-4 py-2.5 font-medium">Current</th>
-                      <th className="px-4 py-2.5 font-medium">Proposed</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {FIELD_DIFF_ROWS.map((row) => {
-                      const currentVal = detail.currentAgreement ? detail.currentAgreement[row.currentKey] : undefined;
-                      const proposedVal = detail.request.proposed_data[row.proposedKey];
-                      const changed = displayVal(currentVal) !== displayVal(proposedVal);
-                      return (
-                        <tr key={row.label} className={`border-b border-slate-100 last:border-0 ${changed ? "bg-amber-50" : ""}`}>
-                          <td className="px-4 py-2.5 text-slate-500">{row.label}</td>
-                          <td className="px-4 py-2.5">{displayVal(currentVal)}</td>
-                          <td className={`px-4 py-2.5 ${changed ? "font-semibold text-amber-800" : ""}`}>
-                            {displayVal(proposedVal)}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </section>
+            <ShopAgreementChangeReview
+              status={detail.request.status}
+              shop={detail.shop}
+              currentAgreement={detail.currentAgreement}
+              baseline={detail.baseline}
+              proposed={detail.request.proposed_data}
+            />
 
             <section className="rounded-xl border border-slate-200 bg-white p-6">
               <h2 className="mb-4 text-base font-semibold text-slate-900">Approval history</h2>

@@ -376,6 +376,11 @@ export interface LightChangeRequest {
   reviewed_by_user_id: number | null;
   reviewed_at: string | null;
   review_notes: string | null;
+  /** The light now, and as it stood when the request was made (migration 151). */
+  light?: Record<string, unknown> | null;
+  baseline_data?: { taken_at: string; light: Record<string, unknown> } | null;
+  requestedByName?: string | null;
+  proposedView?: Record<string, unknown> | null;
 }
 
 export async function requestLightChange(input: {

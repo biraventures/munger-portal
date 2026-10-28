@@ -14,36 +14,12 @@ import {
   type ChangeRequestDetail,
 } from "@/lib/admin-api";
 import { ADMIN_ROLE_LABELS } from "@/lib/admin-auth";
+import { PropertyChangeReview } from "@/components/admin/property-change-review";
 import { TaxExemptionReview } from "@/components/admin/tax-exemption-review";
 import { MutationApplicationPanel } from "@/components/admin/mutation-application-panel";
 import { MutationTimeline } from "@/components/admin/mutation-timeline";
 import { AreaVerificationForm, AreaVerificationView, floorName, isPartial, toBody, verificationProblem, type VerificationDraft } from "@/components/admin/mutation-area-verification";
 import { blankFieldReport, FieldReportForm, FieldReportList, fieldReportBody, SurveyorSelect, type FieldReportDraft } from "@/components/admin/field-report";
-
-const FIELD_DIFF_ROWS: { label: string; currentKey: string; proposedKey: string }[] = [
-  { label: "Owner Name", currentKey: "owner_name", proposedKey: "ownerName" },
-  { label: "Relation Name", currentKey: "relation_name", proposedKey: "relationName" },
-  { label: "Mobile No", currentKey: "mobile_no", proposedKey: "mobileNo" },
-  { label: "Address", currentKey: "address", proposedKey: "address" },
-  { label: "Ward", currentKey: "ward", proposedKey: "ward" },
-  { label: "Zone", currentKey: "zone", proposedKey: "zone" },
-  { label: "Pincode", currentKey: "pincode", proposedKey: "pincode" },
-  { label: "Assessment Year", currentKey: "assessment_year", proposedKey: "assessmentYear" },
-  { label: "Road Type", currentKey: "road_type", proposedKey: "roadType" },
-  { label: "Plot Area (sqft)", currentKey: "area_sqft", proposedKey: "areaSqft" },
-  { label: "Vacant Area (sqft)", currentKey: "vacant_area_sqft", proposedKey: "vacantAreaSqft" },
-  { label: "Holding Creation Year", currentKey: "holding_creation_year", proposedKey: "holdingCreationYear" },
-  { label: "Tax Paid Till Year", currentKey: "tax_paid_till_year", proposedKey: "taxPaidTillYear" },
-  { label: "Solid Waste Charge Type", currentKey: "solid_waste_charge_type", proposedKey: "solidWasteChargeType" },
-  { label: "Bulk Waste Generator (no solid waste charge)", currentKey: "is_bwg", proposedKey: "isBwg" },
-  { label: "Slum area holding", currentKey: "is_slum", proposedKey: "isSlum" },
-];
-
-function displayVal(v: unknown): string {
-  if (v === null || v === undefined || v === "") return "—";
-  if (typeof v === "boolean") return v ? "Yes" : "No";
-  return String(v);
-}
 
 export default function ChangeRequestDetailPage() {
   const admin = useAdminGuard();
@@ -215,36 +191,14 @@ export default function ChangeRequestDetailPage() {
               <StageBadge status={detail.request.status} currentStage={detail.request.current_stage} />
             </div>
 
-            <section className="rounded-xl border border-slate-200 bg-white p-6">
-              <h2 className="mb-4 text-base font-semibold text-slate-900">What&apos;s changing</h2>
-              <div className="overflow-hidden rounded-lg border border-slate-200">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-slate-200 bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
-                      <th className="px-4 py-2.5 font-medium">Field</th>
-                      <th className="px-4 py-2.5 font-medium">Current</th>
-                      <th className="px-4 py-2.5 font-medium">Proposed</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {FIELD_DIFF_ROWS.map((row) => {
-                      const currentVal = detail.currentProperty ? detail.currentProperty[row.currentKey] : undefined;
-                      const proposedVal = detail.request.proposed_data[row.proposedKey];
-                      const changed = displayVal(currentVal) !== displayVal(proposedVal);
-                      return (
-                        <tr key={row.label} className={`border-b border-slate-100 last:border-0 ${changed ? "bg-amber-50" : ""}`}>
-                          <td className="px-4 py-2.5 text-slate-500">{row.label}</td>
-                          <td className="px-4 py-2.5">{displayVal(currentVal)}</td>
-                          <td className={`px-4 py-2.5 ${changed ? "font-semibold text-amber-800" : ""}`}>
-                            {displayVal(proposedVal)}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </section>
+            <PropertyChangeReview
+              status={detail.request.status}
+              current={detail.currentProperty}
+              currentFloors={detail.currentFloors}
+              baseline={detail.baseline}
+              proposed={detail.request.proposed_data}
+              taxEffect={detail.taxEffect}
+            />
 
             <TaxExemptionReview current={detail.currentProperty ?? null} proposed={detail.request.proposed_data.taxExemption} />
 

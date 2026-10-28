@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { AlertCircle, CheckCircle2, Loader2, XCircle } from "lucide-react";
+import { ShopEditChangeReview } from "@/components/admin/shop-change-review";
 import { AdminHeader } from "@/components/admin-header";
 import { useAdminGuard } from "@/lib/use-admin-guard";
 import {
@@ -12,20 +13,6 @@ import {
   type ShopEditRequestDetail,
 } from "@/lib/admin-shop-api";
 import { ADMIN_ROLE_LABELS, type AdminRole } from "@/lib/admin-auth";
-
-const FIELD_DIFF_ROWS: { label: string; currentKey: string; proposedKey: string }[] = [
-  { label: "Market Name", currentKey: "market_name", proposedKey: "marketName" },
-  { label: "Location", currentKey: "location", proposedKey: "location" },
-  { label: "Ward", currentKey: "ward", proposedKey: "ward" },
-  { label: "Area (sqft)", currentKey: "area_sqft", proposedKey: "areaSqft" },
-  { label: "Total Area (sqft)", currentKey: "total_area_sqft", proposedKey: "totalAreaSqft" },
-  { label: "Built-up Area (sqft)", currentKey: "built_up_area_sqft", proposedKey: "builtUpAreaSqft" },
-];
-
-function displayVal(v: unknown): string {
-  if (v === null || v === undefined || v === "") return "-";
-  return String(v);
-}
 
 export default function ShopEditRequestDetailPage() {
   const admin = useAdminGuard();
@@ -129,27 +116,13 @@ export default function ShopEditRequestDetailPage() {
               </p>
             </div>
 
-            <div className="rounded-xl border border-slate-200 bg-white p-6">
-              <h2 className="mb-3 text-sm font-semibold text-slate-700">Proposed Changes</h2>
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-slate-100 text-left text-xs uppercase tracking-wide text-slate-400">
-                    <th className="pb-2 font-medium">Field</th>
-                    <th className="pb-2 font-medium">Current</th>
-                    <th className="pb-2 font-medium">Proposed</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {FIELD_DIFF_ROWS.filter((row) => Object.prototype.hasOwnProperty.call(detail.request.proposed_data, row.proposedKey)).map((row) => (
-                    <tr key={row.proposedKey} className="border-b border-slate-50">
-                      <td className="py-2 text-slate-500">{row.label}</td>
-                      <td className="py-2 text-slate-600">{displayVal(detail.currentShop?.[row.currentKey])}</td>
-                      <td className="py-2 font-semibold text-nnm-blue">{displayVal(detail.request.proposed_data[row.proposedKey])}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <ShopEditChangeReview
+              status={detail.request.status}
+              shop={detail.currentShop}
+              currentAgreement={detail.currentAgreement}
+              baseline={detail.baseline}
+              proposed={detail.request.proposed_data as Record<string, unknown>}
+            />
 
             {detail.approvalHistory.length > 0 && (
               <div className="rounded-xl border border-slate-200 bg-white p-6">

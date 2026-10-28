@@ -300,5 +300,6 @@ export async function getShopAgreementChangeRequestDetail(id: number) {
     approvalHistory,
     proposedRentPeriodsInconsistent: proposedResolved ? !proposedResolved.isConsistent : false,
     proposedRentPeriodsNote: proposedResolved?.inconsistencyNote ?? null,
+    baseline: (request as unknown as { baseline_data?: unknown }).baseline_data ?? null,
   };
 }

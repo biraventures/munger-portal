@@ -1,3 +1,4 @@
+import { pool } from "../config/db";
 import type { Request, Response } from "express";
 import { z } from "zod";
 import { requestLightChange, approveLightChangeAtStage, rejectLightChangeAtStage } from "../services/lightChangeRequest.service";
@@ -34,7 +35,7 @@ export const listLightChangeRequestsHandler = asyncHandler(async (req: Request, 
 
   if (parsed.data.status && parsed.data.status !== "pending") {
     const requests = await lightChangeRequestRepository.listAll(parsed.data.status);
-    res.status(200).json({ requests });
+    res.status(200).json({ requests: await withLightDetails(requests) });
     return;
   }
 
@@ -42,8 +43,45 @@ export const listLightChangeRequestsHandler = asyncHandler(async (req: Request, 
   const requests = APPROVAL_STAGE_ROLES.includes(role)
     ? await lightChangeRequestRepository.listPending(role as never)
     : await lightChangeRequestRepository.listPending();
-  res.status(200).json({ requests });
+  res.status(200).json({ requests: await withLightDetails(requests) });
 });
+
+/**
+ * Every desk sees the light itself (serial, type, ward, locality, agency, status) and what the request changes - the
+ * snapshot from when it was made (migration 151), or the light as it is now - plus the requester's name.
+ */
+async function withLightDetails<T extends { light_id: number | string | null; proposed_data: unknown; requested_by_user_id: number | string }>(requests: T[]) {
+  if (requests.length === 0) return requests;
+  const ids = [...new Set(requests.map((r) => r.light_id).filter((x) => x != null).map(Number))];
+  const { rows: lights } = await pool.query(
+    `SELECT l.id, l.serial_number, l.light_type, l.locality_name, l.switch_status, l.active, l.latitude, l.longitude, w.ward_name, a.agency_name
+       FROM lights l LEFT JOIN attendance_wards w ON w.id = l.ward_id LEFT JOIN installation_agencies a ON a.id = l.installation_agency_id
+      WHERE l.id = ANY($1::bigint[])`,
+    [ids],
+  );
+  const { rows: wards } = await pool.query<{ id: string; ward_name: string }>(`SELECT id, ward_name FROM attendance_wards`);
+  const { rows: agencies } = await pool.query<{ id: string; agency_name: string }>(`SELECT id, agency_name FROM installation_agencies`);
+  const { rows: users } = await pool.query<{ id: string; display_name: string }>(`SELECT id, display_name FROM attendance_users WHERE id = ANY($1::bigint[])`, [
+    [...new Set(requests.map((r) => Number(r.requested_by_user_id)))],
+  ]);
+  const byId = new Map(lights.map((l) => [Number(l.id), l]));
+  const wardName = new Map(wards.map((w) => [Number(w.id), w.ward_name]));
+  const agencyName = new Map(agencies.map((a) => [Number(a.id), a.agency_name]));
+  const userName = new Map(users.map((u) => [Number(u.id), u.display_name]));
+  return requests.map((r) => {
+    const p = (r.proposed_data ?? {}) as Record<string, unknown>;
+    return {
+      ...r,
+      light: r.light_id != null ? byId.get(Number(r.light_id)) ?? null : null,
+      requestedByName: userName.get(Number(r.requested_by_user_id)) ?? null,
+      proposedView: {
+        ...p,
+        wardName: p.wardId != null ? wardName.get(Number(p.wardId)) ?? null : null,
+        agencyName: p.installationAgencyId != null ? agencyName.get(Number(p.installationAgencyId)) ?? null : null,
+      },
+    };
+  });
+}
 
 const idParamSchema = z.object({ id: z.coerce.number().int().positive() });
 const notesSchema = z.object({ notes: z.string().trim().nullish() });

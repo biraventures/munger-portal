@@ -1,3 +1,4 @@
+import { shopAgreementRepository } from "../repositories/shop.repository";
 import { shopEditRequestRepository } from "../repositories/shopEditRequest.repository";
 import { shopRepository } from "../repositories/shop.repository";
 import { SHOP_PUBLICATION_STAGE_ORDER, nextShopPublicationStage } from "../types/admin.types";
@@ -27,7 +28,9 @@ export async function getShopEditRequestDetail(id: number) {
   if (!request) throw ApiError.notFound("Edit request not found");
   const currentShop = await shopRepository.findByShopNo(request.shop_no);
   const approvalHistory = await shopEditRequestRepository.listApprovalsFor(id);
-  return { request, currentShop, approvalHistory };
+  // The shop's agreement in force, so the desk sees who holds it and the rent while judging a measurement change.
+  const currentAgreement = await shopAgreementRepository.findActiveByShopNo(request.shop_no);
+  return { request, currentShop, currentAgreement, approvalHistory, baseline: (request as unknown as { baseline_data?: unknown }).baseline_data ?? null };
 }
 
 /**

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { AlertCircle, CheckCircle2, Trash2 } from "lucide-react";
+import { ReviewSections } from "@/components/admin/change-review";
 import { AdminHeader } from "@/components/admin-header";
 import { useAdminGuard } from "@/lib/use-admin-guard";
 import { decideSolidWasteRequest, fetchSolidWasteRequestsToApprove, type SolidWasteRequestForApproval } from "@/lib/admin-api";
@@ -95,10 +96,38 @@ export default function SolidWasteApprovalsPage() {
                   {r.owner_name} · {r.address}
                   {r.ward ? ` · Ward ${r.ward}` : ""}
                 </p>
-                <p className="mt-2">
-                  Proposed type: <b>{r.requested_type}</b>
-                  <span className="ml-2 text-xs text-slate-500">entered by {r.requested_by_display_name}</span>
-                </p>
+                <p className="mt-1 text-xs text-slate-500">entered by {r.requested_by_display_name}</p>
+                <div className="mt-2">
+                  <ReviewSections
+                    onlyChanged={false}
+                    sections={[
+                      {
+                        title: "Holding",
+                        rows: [
+                          { label: "Plot area", before: r.area_sqft ?? null, after: r.area_sqft ?? null, format: (v) => (v ? `${Number(v).toLocaleString("en-IN")} sq ft` : "—") },
+                          { label: "Type of road", before: r.road_type ?? null, after: r.road_type ?? null },
+                          {
+                            label: "Floors (usage)",
+                            before: (r.floors ?? []).map((f) => `${f.floor}: ${f.sqft.toLocaleString("en-IN")} sq ft ${f.usage} (${f.occupancy})`).join("; ") || null,
+                            after: (r.floors ?? []).map((f) => `${f.floor}: ${f.sqft.toLocaleString("en-IN")} sq ft ${f.usage} (${f.occupancy})`).join("; ") || null,
+                          },
+                        ],
+                      },
+                      {
+                        title: "Solid waste user charge",
+                        rows: [
+                          { label: "User type", before: r.is_bwg ? "Bulk waste generator (no charge)" : r.current_type, after: r.requested_type },
+                          {
+                            label: "Yearly charge",
+                            before: r.current_charge ?? null,
+                            after: r.proposed_charge ?? null,
+                            format: (v) => (v === null || v === undefined ? "—" : `₹${Number(v).toLocaleString("en-IN")}`),
+                          },
+                        ],
+                      },
+                    ]}
+                  />
+                </div>
                 {r.daroga_by && <p className="text-xs text-slate-500">Verified by Tax Daroga: {r.daroga_by}</p>}
                 {rejectingId === r.id ? (
                   <div className="mt-3 flex flex-col gap-2 sm:flex-row">

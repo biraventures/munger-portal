@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { AlertCircle, CheckCircle2, PlusCircle, XCircle } from "lucide-react";
+import { LightChangeReview } from "@/components/admin/light-change-review";
 import { AttendanceHeader } from "@/components/attendance/attendance-header";
 import { useAttendanceGuard } from "@/lib/use-attendance-guard";
 import { fetchAttendanceWards, type AttendanceWard } from "@/lib/attendance-api";
@@ -297,8 +298,9 @@ export default function LightChangeRequestsPage() {
               <div key={r.id} className="p-4">
                 <p className="text-sm font-semibold text-slate-800">{ACTION_LABELS[r.action_type]}</p>
                 <p className="text-xs text-slate-500">
-                  Stage: {r.current_stage.replace(/_/g, " ")} · {r.reason}
+                  Stage: {r.current_stage.replace(/_/g, " ")} · Requested by {r.requestedByName ?? "-"} on {new Date(r.requested_at).toLocaleDateString("en-IN")} · Reason: {r.reason}
                 </p>
+                <LightChangeReview r={r} />
                 {canApprove && r.current_stage === attendance.role && (
                   <div className="mt-2">
                     <textarea

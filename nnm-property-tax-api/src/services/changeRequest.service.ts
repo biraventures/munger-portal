@@ -1,3 +1,4 @@
+import { taxEffect } from "./taxPreview.service";
 import { changeRequestRepository } from "../repositories/changeRequest.repository";
 import { propertyRepository } from "../repositories/property.repository";
 import { entryRevertEventRepository } from "../repositories/entryRevertEvent.repository";
@@ -71,7 +72,18 @@ export async function getChangeRequestDetail(id: number, viewer?: AdminTokenPayl
   );
 
   const fieldReports = request.approval_tier === "mutation" ? await listFieldReports("mutation", id) : [];
-  return { request, currentProperty, currentFloors, approvalHistory, verification, landRecord, lineage, fieldReports };
+  return {
+    request,
+    currentProperty,
+    currentFloors,
+    approvalHistory,
+    verification,
+    landRecord,
+    lineage,
+    fieldReports,
+    baseline: (request as unknown as { baseline_data?: unknown }).baseline_data ?? null,
+    taxEffect: taxEffect(currentProperty, currentFloors, request.proposed_data),
+  };
 }
 
 export interface AreaVerificationInput {

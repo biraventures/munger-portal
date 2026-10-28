@@ -71,7 +71,32 @@ export async function listSolidWasteRequestsFor(admin: Actor) {
       WHERE ${where} ORDER BY r.requested_at`,
     admin.role === "city_manager" ? [admin.username] : [],
   );
-  return rows;
+  // The holding facts the user type depends on, and the yearly charge now vs. with the proposed type.
+  return Promise.all(
+    rows.map(async (r: Record<string, unknown>) => {
+      const p = await propertyRepository.findByHoldingNo(String(r.holding_no));
+      const floors = p ? await propertyRepository.findFloorsByHoldingNo(p.holding_no) : [];
+      let currentCharge: number | null = null;
+      let proposedCharge: number | null = null;
+      try {
+        if (p) {
+          currentCharge = Number(annualSolidWasteCharge(p));
+          proposedCharge = Number(annualSolidWasteCharge({ ...p, solid_waste_charge_type: String(r.requested_type), is_bwg: false }));
+        }
+      } catch {
+        /* type not in the rate table */
+      }
+      return {
+        ...r,
+        area_sqft: p?.area_sqft ?? null,
+        road_type: p?.road_type ?? null,
+        is_bwg: p?.is_bwg ?? false,
+        floors: floors.map((f) => ({ floor: f.floor_label, sqft: Number(f.buildup_sqft), usage: f.usage_type, occupancy: f.occupancy })),
+        current_charge: currentCharge,
+        proposed_charge: proposedCharge,
+      };
+    }),
+  );
 }
 
 export async function approveSolidWasteRequest(id: number, admin: Actor): Promise<SolidWasteRequestRow> {

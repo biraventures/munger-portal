@@ -53,6 +53,8 @@ export interface ShopAgreementChangeRequestDetail {
   request: ShopAgreementChangeRequestSummary & { proposed_data: Record<string, unknown> };
   shop: Record<string, unknown> | null;
   currentAgreement: Record<string, unknown> | null;
+  /** Shop + agreement as they stood when the request was made (migration 151). */
+  baseline?: { taken_at: string; shop: Record<string, unknown> | null; agreement: Record<string, unknown> | null } | null;
   approvalHistory: {
     id: number;
     change_request_id: number;
@@ -565,6 +567,8 @@ export interface ShopEditRequestApproval {
 export interface ShopEditRequestDetail {
   request: ShopEditRequestSummary;
   currentShop: Record<string, unknown> | null;
+  currentAgreement?: Record<string, unknown> | null;
+  baseline?: { taken_at: string; shop: Record<string, unknown> | null; agreement: Record<string, unknown> | null } | null;
   approvalHistory: ShopEditRequestApproval[];
 }
 

@@ -143,6 +143,9 @@ export interface ChangeRequestDetail {
   };
   currentProperty: Record<string, unknown> | null;
   currentFloors: Record<string, unknown>[];
+  /** The holding as it stood when the request was made (migration 151). */
+  baseline?: import("@/components/admin/property-change-review").HoldingBaseline | null;
+  taxEffect?: import("@/components/admin/property-change-review").TaxEffect | null;
   approvalHistory: ChangeRequestApproval[];
   verification?: AreaVerification | null;
   landRecord?: {
@@ -1159,6 +1162,12 @@ export interface SolidWasteRequestForApproval extends SolidWasteRequest {
   address: string;
   ward: string | null;
   current_type: string | null;
+  area_sqft?: string | null;
+  road_type?: string | null;
+  is_bwg?: boolean;
+  floors?: { floor: string; sqft: number; usage: string; occupancy: string }[];
+  current_charge?: number | null;
+  proposed_charge?: number | null;
 }
 
 export async function fetchLatestSolidWasteRequest(holdingNo: string): Promise<SolidWasteRequest | null> {
@@ -1885,6 +1894,8 @@ export async function fetchDiscrepancyRequestDetail(id: number): Promise<{
   request: PropertyDiscrepancyRequest;
   currentProperty: Record<string, unknown> | null;
   currentFloors: Record<string, unknown>[];
+  baseline?: import("@/components/admin/property-change-review").HoldingBaseline | null;
+  taxEffect?: import("@/components/admin/property-change-review").TaxEffect | null;
   approvalHistory: PropertyDiscrepancyApproval[];
 }> {
   const res = await fetch(`${API_BASE_URL}/admin/property-discrepancy-requests/${id}`, { headers: authHeaders() });

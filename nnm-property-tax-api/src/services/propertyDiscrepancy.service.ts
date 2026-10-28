@@ -1,3 +1,5 @@
+import { taxEffect } from "./taxPreview.service";
+import type { PropertySaveInput as TaxEffectInput } from "../types/propertySave.types";
 import fs from "node:fs";
 import path from "node:path";
 import { propertyDiscrepancyRepository } from "../repositories/propertyDiscrepancy.repository";
@@ -114,7 +116,14 @@ export async function getDiscrepancyRequestDetail(id: number) {
   const currentFloors = await propertyRepository.findFloorsByHoldingNo(request.holding_no);
   const approvalHistory = await propertyDiscrepancyRepository.listApprovalsFor(id);
 
-  return { request, currentProperty, currentFloors, approvalHistory };
+  return {
+    request,
+    currentProperty,
+    currentFloors,
+    approvalHistory,
+    baseline: (request as unknown as { baseline_data?: unknown }).baseline_data ?? null,
+    taxEffect: taxEffect(currentProperty, currentFloors, request.proposed_data as unknown as TaxEffectInput),
+  };
 }
 
 function assertActionable(request: PropertyDiscrepancyRequestRow, admin: AdminTokenPayload) {
