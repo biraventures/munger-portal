@@ -2,7 +2,9 @@
 @tailwind components;
 @tailwind utilities;
 
-@theme inline {
+/* Theme variables used by the custom CSS below. Tailwind 3.4 reads
+   utility theme values from tailwind.config.ts, not from @theme. */
+:root {
   --color-paper: #f6f3ea;
   --color-paper-dim: #ece7d8;
   --color-card: #ffffff;
