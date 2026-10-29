@@ -28,6 +28,8 @@ export interface DemandNoticeRow {
   cancelled: boolean;
   cancelled_reason: string | null;
   cancelled_at: Date | null;
+  /** Raised for a year the holding had already paid (migration 153) - always also cancelled. */
+  wrongly_generated?: boolean;
   // Frozen at generation time (migration 086) - see that migration's
   // comment. Null for notices generated before this column existed.
   floor_breakdown: FrozenFloorBreakdown | null;

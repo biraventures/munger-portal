@@ -145,6 +145,7 @@ export interface ReportDemandNotice {
   cancelled: boolean;
   cancelled_reason: string | null;
   on_hold: boolean;
+  wrongly_generated?: boolean;
 }
 
 export interface ReportPayment {

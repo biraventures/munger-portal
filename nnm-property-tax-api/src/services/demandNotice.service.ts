@@ -407,6 +407,8 @@ export interface DemandNoticeHistoryEntry {
   reminderLabel: string | null;
   superseded: boolean;
   cancelled: boolean;
+  /** Raised for a year already paid - cancelled automatically. */
+  wronglyGenerated: boolean;
   /** A cancellation request for this notice is awaiting approval. */
   cancellationPending: boolean;
 }
@@ -418,6 +420,7 @@ export async function listDemandNoticeHistory(holdingNo: string): Promise<Demand
   const pendingNotices = new Set(pending.filter((p) => p.request_type === "demand_notice").map((p) => p.target_id));
   return notices.map((n) => ({
     cancelled: n.cancelled,
+    wronglyGenerated: !!n.wrongly_generated,
     cancellationPending: !n.cancelled && pendingNotices.has(n.demand_no),
     demandNo: n.demand_no,
     formattedDemandNo: formatDocNumber(n.demand_no, "Demand", n.notice_date),

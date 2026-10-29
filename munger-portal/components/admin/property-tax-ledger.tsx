@@ -29,6 +29,7 @@ function Badge({ tone, children }: { tone: "green" | "red" | "amber" | "slate" |
 }
 
 function noticeStatus(n: ReportDemandNotice) {
+  if (n.wrongly_generated) return <Badge tone="red">Wrongly generated - not payable</Badge>;
   if (n.cancelled) return <Badge tone="red">Cancelled</Badge>;
   if (n.on_hold) return <Badge tone="amber">Paid - cheque/DD on hold</Badge>;
   if (n.settled) return <Badge tone="green">Paid</Badge>;

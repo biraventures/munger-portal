@@ -86,7 +86,7 @@ export const getPropertyReportHandler = asyncHandler(async (req: Request, res: R
       .query(
         `SELECT n.demand_no, n.notice_date, n.generated_by, n.assessment_year, n.demand_from_year, n.demand_upto_year,
                 n.part_payment, n.paid_through_year, n.reminder_number, n.total_amount_demanded,
-                n.settled, n.settled_receipt_no, n.settled_at, n.superseded, n.cancelled, n.cancelled_reason, n.on_hold
+                n.settled, n.settled_receipt_no, n.settled_at, n.superseded, n.cancelled, n.cancelled_reason, n.on_hold, n.wrongly_generated
            FROM demand_notices n WHERE n.holding_no = $1
           ORDER BY n.notice_date DESC, n.demand_no DESC`,
         [holdingNo],

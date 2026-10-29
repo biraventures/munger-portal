@@ -250,6 +250,8 @@ export interface DemandNoticeHistoryEntry {
   reminderLabel: string | null;
   superseded: boolean;
   cancelled: boolean;
+  /** Raised for a year already paid - cancelled automatically. */
+  wronglyGenerated?: boolean;
   cancellationPending: boolean;
 }
 
