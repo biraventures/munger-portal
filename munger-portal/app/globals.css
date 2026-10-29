@@ -1,4 +1,6 @@
-@import "tailwindcss";
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
 @theme inline {
   --color-paper: #f6f3ea;
@@ -8,7 +10,7 @@
   --color-ink-soft: #4a5164;
   --color-line: #d9d3c1;
 
-/* Rebranded to Munger Nagar Nigam's official emblem colors (Aug 2026)
+  /* Rebranded to Munger Nagar Nigam's official emblem colors (Aug 2026)
    - a lighter shade derived from the emblem's crimson red (#b03f3c
    extracted directly from the logo file) and its charcoal ring
    (#373636). Variable names kept as "nnm-blue"/"nnm-blue-dark" even
@@ -22,9 +24,9 @@
   --color-nnm-gold: #c9a227;
   --color-ganga-teal: #2f7a6b;
 
- --font-display: "Fraunces", Georgia, serif;
---font-body: "Public Sans", ui-sans-serif, system-ui, sans-serif;
---font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", monospace;
+  --font-display: "Fraunces", Georgia, serif;
+  --font-body: "Public Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", monospace;
 }
 
 body {
@@ -37,6 +39,7 @@ body {
   position: relative;
   border-top: 1.5px dashed var(--color-line);
 }
+
 .perforation::before,
 .perforation::after {
   content: "";
@@ -47,9 +50,11 @@ body {
   border-radius: 9999px;
   background: var(--color-paper-dim);
 }
+
 .perforation::before {
   left: -9px;
 }
+
 .perforation::after {
   right: -9px;
 }
@@ -89,6 +94,7 @@ body {
  * wrapped in .printable-area.
  */
 @media print {
+
   /* Collapses the hidden content's contribution to total page height.
      visibility:hidden (below) keeps elements invisible but NOT out of
      layout flow, so without this, all the hidden surrounding page
@@ -102,14 +108,17 @@ body {
   body {
     height: 0;
   }
+
   body * {
     visibility: hidden;
     min-height: 0 !important;
   }
+
   .printable-area,
   .printable-area * {
     visibility: visible;
   }
+
   .printable-area {
     /* position: fixed (not absolute) ties this to the viewport/page
        directly, independent of any ancestor's now-collapsed height. */
@@ -121,6 +130,7 @@ body {
     padding: 0;
     min-height: 0;
   }
+
   .no-print {
     display: none !important;
   }

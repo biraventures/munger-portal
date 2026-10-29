@@ -139,6 +139,18 @@ export default function TaxCollectorPage() {
   const [swRequest, setSwRequest] = useState<SolidWasteRequest | null>(null);
   const [detailsMsg, setDetailsMsg] = useState<string | null>(null);
 
+  const updateUrl = (data: Record<string, string | number>) => {
+    const url = new URL(window.location.href);
+
+    Object.entries(data).forEach(([key, value]) => {
+      if (value !== undefined && value !== null) {
+        url.searchParams.set(key, String(value));
+      }
+    });
+
+    window.history.replaceState(null, '', url);
+  };
+
   useEffect(() => {
     fetchFormOptions().then(setFormOptions).catch(() => undefined);
   }, []);
@@ -266,16 +278,26 @@ export default function TaxCollectorPage() {
     setCollecting(true);
     setError(null);
     try {
-      const res = await submitPaymentAdmin(result.property.holding_no, {
-        amount: Number(selected.totalAmountDemanded),
-        paymentMode: paymentMode ?? "",
-        demandNo: selectedDemandNo,
-        ...instrumentPayload(paymentMode ?? "", instrument),
-      });
-      setShowConfirmModal(false);
-      setReceipt(res);
-      setInstrument(EMPTY_INSTRUMENT);
-      setShowFullReceipt(false);
+      if (paymentMode === 'Card' || paymentMode === 'UPI') {
+        updateUrl({
+          amount: Number(selected.totalAmountDemanded),
+          paymentMode: paymentMode ?? "",
+          demandNo: selectedDemandNo,
+          ...instrumentPayload(paymentMode ?? "", instrument),
+        })
+        setShowConfirmModal(false)
+      } else {
+        const res = await submitPaymentAdmin(result.property.holding_no, {
+          amount: Number(selected.totalAmountDemanded),
+          paymentMode: paymentMode ?? "",
+          demandNo: selectedDemandNo,
+          ...instrumentPayload(paymentMode ?? "", instrument),
+        });
+        setShowConfirmModal(false);
+        setReceipt(res);
+        setInstrument(EMPTY_INSTRUMENT);
+        setShowFullReceipt(false);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not record this payment.");
     } finally {
@@ -438,9 +460,9 @@ export default function TaxCollectorPage() {
                 )}
                 {detailsMsg && <p className="mb-2 text-xs text-green-700">{detailsMsg}</p>}
                 {((!!property.solidWasteTypeMissing && !swOpen) || !property.water_connection_status) && (
-                <button onClick={handleSaveDetails} disabled={savingDetails} className="rounded-md bg-nnm-blue px-4 py-2 text-sm font-semibold text-white hover:bg-nnm-blue-dark disabled:opacity-60">
-                  {savingDetails ? "Saving…" : "Save details"}
-                </button>
+                  <button onClick={handleSaveDetails} disabled={savingDetails} className="rounded-md bg-nnm-blue px-4 py-2 text-sm font-semibold text-white hover:bg-nnm-blue-dark disabled:opacity-60">
+                    {savingDetails ? "Saving…" : "Save details"}
+                  </button>
                 )}
               </div>
             )}
