@@ -1,4 +1,6 @@
 import { pool } from "../config/db";
+import type { TransactionRow } from "../repositories/payment.repository";
+import type { DemandNoticeRow } from "../repositories/demandNotice.repository";
 import { assertNoticeYearNotPaid, supersedeOtherOpenNotices } from "./paidYearGuard.service";
 import { propertyRepository } from "../repositories/property.repository";
 import { paymentRepository } from "../repositories/payment.repository";
@@ -96,6 +98,13 @@ export interface PrintableReceiptHistory {
   // 086) - null only for a receipt whose demand notice predates that
   // column.
   floorBreakdown: FrozenFloorBreakdown | null;
+  /**
+   * The receipt exactly as originally printed - the same data the original receipt view rendered - so a reprint is
+   * identical to the original. Frozen at payment (migration 154), or rebuilt for an older receipt from its settled
+   * demand notice's frozen snapshot. Null only for receipts with neither (imported / very old): those print in the
+   * summary layout above.
+   */
+  original: Omit<PaymentResult, "followUpNotice" | "followUpNoticeError"> | null;
 }
 
 /**
@@ -176,6 +185,109 @@ export async function getReceiptForReprint(receiptNo: string): Promise<Printable
     cancelled: txn.cancelled,
     cancelledReason: txn.cancelled_reason,
     floorBreakdown: txn.floor_breakdown,
+    original: await originalReceipt(txn),
+  };
+}
+
+/** Only the holding fields the receipt prints - the reprint (also served on the public QR verification page) carries nothing more. */
+const PRINTED_PROPERTY_FIELDS = [
+  "holding_no", "old_holding_no", "owner_name", "relation_type", "relation_name", "mobile_no", "area_sqft", "address",
+  "ward", "road_type", "rain_water_harvesting", "assessment_year", "solid_waste_charge",
+] as const;
+function printedProperty(p: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(PRINTED_PROPERTY_FIELDS.map((k) => [k, p[k] ?? null]));
+}
+
+const dmy = (d: Date) => `${String(d.getDate()).padStart(2, "0")}-${String(d.getMonth() + 1).padStart(2, "0")}-${d.getFullYear()}`;
+
+/** The receipt as originally printed: its frozen snapshot, else rebuilt from the settled notice's frozen snapshot. */
+async function originalReceipt(txn: TransactionRow): Promise<PrintableReceiptHistory["original"]> {
+  // What can change after printing is the payment's status - shown as it is now (watermarks are added by the view).
+  const provisional =
+    !txn.cancelled && reconciliationRule(txn.payment_mode) === "hold" && (txn.reconcile_status === "pending" || txn.reconcile_status === "pm_verified");
+  const declared = txn.online_declaration_accepted_at
+    ? new Date(txn.online_declaration_accepted_at)
+        .toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: false })
+        .replace(/\//g, "-")
+        .replace(",", "")
+    : null;
+  const live = { provisional, reconcileStatus: txn.reconcile_status, onlineDeclarationAcceptedAt: declared };
+
+  if (txn.receipt_snapshot) {
+    return { ...(txn.receipt_snapshot as unknown as NonNullable<PrintableReceiptHistory["original"]>), ...live };
+  }
+
+  const { rows } = await pool.query<DemandNoticeRow>(
+    `SELECT * FROM demand_notices WHERE settled_receipt_no = $1 OR (demand_no = $2 AND settled_receipt_no IS NULL) ORDER BY (settled_receipt_no = $1) DESC NULLS LAST LIMIT 1`,
+    [txn.receipt_no, txn.demand_no ?? ""],
+  );
+  const notice = rows[0];
+  const snap = notice?.snapshot;
+  if (!notice || !snap?.property || !snap.taxCalc || !snap.totals) return null;
+  const t = snap.totals;
+  const calc = snap.taxCalc as { currentTax: string; rebate: string };
+  const isPart = !!notice.part_payment && !!notice.paid_through_year;
+  const amount = num(txn.amount_received);
+  const txnDate = txn.txn_date instanceof Date ? txn.txn_date : new Date(txn.txn_date);
+  const currentTotal = num(t.currentTaxBase) - num(t.currentTaxRebate) + num(t.totalFineAmount);
+  return {
+    receiptNo: txn.receipt_no,
+    formattedReceiptNo: formatDocNumber(txn.receipt_no, "Payment", txnDate),
+    date: dmy(txnDate),
+    paymentMode: txn.payment_mode,
+    amountReceived: amount.toFixed(2),
+    amountInWords: amountInWords(amount),
+    collectedBy: txn.collected_by,
+    demandNo: txn.demand_no ?? notice.demand_no,
+    verificationUrl: buildVerificationUrl("receipt", txn.receipt_no),
+    taxCollectorCode: txn.tax_collector_code,
+    taxCollectorName: txn.tax_collector_name,
+    tvNumber: txn.tv_number,
+    tvDate: txn.tv_date ? dmy(txn.tv_date) : null,
+    instrument:
+      txn.instrument_no || txn.bank_name || txn.card_last4 || txn.card_holder_name
+        ? {
+            no: txn.instrument_no,
+            date: txn.instrument_date ? dmy(txn.instrument_date) : null,
+            bank: txn.bank_name,
+            branch: txn.branch_name,
+            cardType: txn.card_type,
+            cardHolderName: txn.card_holder_name,
+            cardLast4: txn.card_last4,
+          }
+        : null,
+    amountDemanded: num(txn.amount_demanded ?? notice.total_amount_demanded).toFixed(2),
+    amountReceivedActual: num(txn.amount_received_actual ?? txn.amount_received).toFixed(2),
+    fieldCollection: txn.collected_by_role === "tax_collector",
+    arrearStagesPaid: txn.arrear_stages_paid ?? [],
+    isPartPayment: isPart,
+    property: printedProperty(snap.property),
+    floors: [],
+    taxCalc: snap.taxCalc,
+    totals: isPart
+      ? {
+          yearWiseArrears: num(notice.previous_years_tax_base).toFixed(2),
+          currentTax: "0.00",
+          rebate: "0.00",
+          penalty: num(notice.total_fine_amount).toFixed(2),
+          outstandingDemand: num(notice.previous_years_tax_base).toFixed(2),
+          currentTaxLateFee: "0.00",
+          currentTaxRebate: "0.00",
+          currentTotal: "0.00",
+          grandTotal: amount.toFixed(2),
+        }
+      : {
+          yearWiseArrears: num(t.yearWiseArrears).toFixed(2),
+          currentTax: calc.currentTax,
+          rebate: calc.rebate,
+          penalty: num(t.penalty).toFixed(2),
+          outstandingDemand: num(t.yearWiseArrears).toFixed(2),
+          currentTaxLateFee: num(t.totalFineAmount).toFixed(2),
+          currentTaxRebate: num(t.currentTaxRebate).toFixed(2),
+          currentTotal: currentTotal.toFixed(2),
+          grandTotal: amount.toFixed(2),
+        },
+    ...live,
   };
 }
 
@@ -625,7 +737,7 @@ export async function submitPayment(
       ? calculateRebateOrLateFee(netCurrentBeforeTiming, currentYearStartNum, now)
       : { rebate: 0, lateFee: 0, net: netCurrentBeforeTiming };
 
-  return {
+  const result: PaymentResult = {
     receiptNo,
     formattedReceiptNo,
     date: dateStr,
@@ -695,4 +807,14 @@ export async function submitPayment(
       grandTotal: amountReceived.toFixed(2),
     },
   };
+
+  // Frozen exactly as printed, so every reprint is identical to this original. Best-effort: the payment is committed.
+  try {
+    const { followUpNotice: _f, followUpNoticeError: _e, ...printed } = result;
+    const frozen = { ...printed, property: printedProperty(result.property), floors: [] };
+    await pool.query(`UPDATE transactions SET receipt_snapshot = $2 WHERE receipt_no = $1`, [receiptNo, JSON.stringify(frozen)]);
+  } catch (err) {
+    console.error(`[payment] could not store the receipt snapshot of ${receiptNo}:`, err);
+  }
+  return result;
 }

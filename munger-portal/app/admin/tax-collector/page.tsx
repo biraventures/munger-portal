@@ -6,6 +6,8 @@ import { AlertCircle, AlertTriangle, CheckCircle2, FileWarning, Loader2, Receipt
 import { fetchFormOptions, type FormOptions } from "@/lib/operator-api";
 import { sanitizeHoldingNoInput } from "@/lib/holding-no";
 import { MobileHoldingLookup } from "@/components/mobile-holding-lookup";
+import { fetchNoticePrintPositions, type NoticePrintPosition } from "@/lib/agency-api";
+import { PrintedNoticeLocation } from "@/components/admin/printed-notice-location";
 import { AdminHeader } from "@/components/admin-header";
 import { useAdminGuard } from "@/lib/use-admin-guard";
 import { FieldVerificationCapture } from "@/components/admin/field-verification-capture";
@@ -103,6 +105,7 @@ export default function TaxCollectorPage() {
   const [result, setResult] = useState<TaxCollectorPropertySearchResult | null>(null);
 
   const [notices, setNotices] = useState<UnsettledDemandNoticeAdmin[] | null>(null);
+  const [printPositions, setPrintPositions] = useState<NoticePrintPosition[] | null>(null);
   const [selectedDemandNo, setSelectedDemandNo] = useState("");
   const [paymentMode, setPaymentMode] = useState(PAYMENT_MODES[0]);
   const [instrument, setInstrument] = useState<InstrumentValue>(EMPTY_INSTRUMENT);
@@ -190,6 +193,7 @@ export default function TaxCollectorPage() {
     setHoldingIssues(null);
     setResult(null);
     setNotices(null);
+    setPrintPositions(null);
     setReceipt(null);
     setRequestingCancel(false);
     setCancelReason("");
@@ -235,6 +239,9 @@ export default function TaxCollectorPage() {
         fetchCollectionIssuesForHolding(res.property!.holding_no)
           .then(setHoldingIssues)
           .catch(() => setHoldingIssues([]));
+        fetchNoticePrintPositions(res.property!.holding_no)
+          .then(setPrintPositions)
+          .catch(() => setPrintPositions([]));
         const list = await fetchUnsettledDemandNoticesAdmin(holdingNo);
         setNotices(list);
         if (list.length > 0) setSelectedDemandNo(list[0]!.demandNo);
@@ -485,6 +492,7 @@ export default function TaxCollectorPage() {
             {!receipt && (
               <div className="rounded-xl border border-slate-200 bg-white p-5">
                 <h3 className="mb-3 text-sm font-semibold text-slate-700">Demand &amp; Payment</h3>
+                <PrintedNoticeLocation positions={printPositions} />
                 {!notices ? (
                   <p className="text-sm text-slate-400">Loading…</p>
                 ) : notices.length === 0 ? (

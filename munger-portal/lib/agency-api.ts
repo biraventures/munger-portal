@@ -164,3 +164,33 @@ export async function downloadDuesReport(q: { ward?: string; minAmount?: number;
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 2000);
 }
+
+// ---------------------------------------------------------------------------
+// Where each notice sits in a printed ward bundle (Sl. No.) - shown to the Tax Collector to find it in the stack
+// ---------------------------------------------------------------------------
+
+export interface NoticePrintPosition {
+  demandNo: string;
+  ward: string | null;
+  partNo: number;
+  partCount: number;
+  serialNo: number;
+  partSize: number;
+  printedBy: string | null;
+  printedAt: string;
+  noticeStatus: "open" | "paid" | "superseded" | "cancelled";
+}
+
+export async function recordNoticePrintPositions(
+  body: { ward: string | null; partNo: number; partCount: number; demandNos: string[] },
+  base: AgencyNoticeBase = "agency",
+): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/admin/${base}/notice-print-positions`, { method: "POST", headers: authHeaders(), body: JSON.stringify(body) });
+  if (!res.ok) throw new Error(await failure(res, "Could not record the print positions"));
+}
+
+export async function fetchNoticePrintPositions(holdingNo: string): Promise<NoticePrintPosition[]> {
+  const res = await fetch(`${API_BASE_URL}/admin/properties/${encodeURIComponent(holdingNo)}/notice-print-positions`, { headers: authHeaders() });
+  if (!res.ok) throw new Error(await failure(res, "Could not load where the notice was printed"));
+  return res.json();
+}

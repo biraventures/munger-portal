@@ -1,4 +1,5 @@
 import { normalizeWard } from "../utils/ward";
+import { printPositionsForHolding, recordPrintPositions } from "../services/noticePrintPosition.service";
 import { collectorReportWardScope, wardAllowed } from "../middleware/collectorWardGuard";
 import type { Request, Response } from "express";
 import { z } from "zod";
@@ -142,6 +143,27 @@ export const printExistingAgencyNoticesHandler = asyncHandler(async (req: Reques
   const parsed = prepareSchema.safeParse(req.body);
   if (!parsed.success) throw ApiError.badRequest("Send between 1 and 25 holding numbers.", parsed.error.flatten().fieldErrors);
   res.status(200).json(await printExistingNotices(parsed.data.holdingNos));
+});
+
+const printPositionSchema = z.object({
+  ward: z.string().trim().max(16).nullish(),
+  partNo: z.coerce.number().int().min(1).max(100),
+  partCount: z.coerce.number().int().min(1).max(100),
+  demandNos: z.array(z.string().trim().min(1).max(32)).max(2000),
+});
+
+/** POST /api/v1/admin/{agency|agency-operator}/notice-print-positions - logs the Sl. No. of each notice in a printed part. */
+export const recordPrintPositionsHandler = asyncHandler(async (req: Request, res: Response) => {
+  const parsed = printPositionSchema.safeParse(req.body);
+  if (!parsed.success) throw ApiError.badRequest("Invalid print details", parsed.error.flatten().fieldErrors);
+  res.status(200).json(await recordPrintPositions({ ...parsed.data, ward: parsed.data.ward ?? null }, req.admin!));
+});
+
+/** GET /api/v1/admin/properties/:holdingNo/notice-print-positions - where this holding's notice is in the printed ward bundle. */
+export const getPrintPositionsHandler = asyncHandler(async (req: Request, res: Response) => {
+  const holdingNo = String(req.params.holdingNo ?? "").trim();
+  if (!holdingNo || holdingNo.length > 32) throw ApiError.badRequest("Invalid holding number");
+  res.status(200).json(await printPositionsForHolding(holdingNo));
 });
 
 // ---------------------------------------------------------------------------

@@ -187,6 +187,8 @@ import {
   listAgencyWardHoldingsHandler,
   prepareAgencyNoticesHandler,
   printExistingAgencyNoticesHandler,
+  recordPrintPositionsHandler,
+  getPrintPositionsHandler,
   exportDuesReportHandler,
   listDuesReportWardsHandler,
 } from "../controllers/agency.controller";
@@ -490,6 +492,13 @@ adminRouter.post("/agency/notices", requireAdminRole("agency_team_leader"), prep
 adminRouter.get("/agency-operator/wards", requireAdminRole("agency_operator"), listAgencyWardsHandler);
 adminRouter.get("/agency-operator/wards/:ward/holdings", requireAdminRole("agency_operator"), listAgencyWardHoldingsHandler);
 adminRouter.post("/agency-operator/notices", requireAdminRole("agency_operator"), printExistingAgencyNoticesHandler);
+adminRouter.post("/agency/notice-print-positions", requireAdminRole("agency_team_leader"), recordPrintPositionsHandler);
+adminRouter.post("/agency-operator/notice-print-positions", requireAdminRole("agency_operator"), recordPrintPositionsHandler);
+adminRouter.get(
+  "/properties/:holdingNo/notice-print-positions",
+  requireAdminRole("tax_collector", "tax_daroga", "agency_operator", "agency_team_leader", "city_manager", "deputy_commissioner", "commissioner"),
+  getPrintPositionsHandler,
+);
 const requireDuesReportRole = requireAdminRole("agency_operator", "agency_team_leader", "agency_project_manager", "tax_daroga", "city_manager", "deputy_commissioner", "commissioner");
 adminRouter.get("/agency-operator/dues-report/wards", requireDuesReportRole, listDuesReportWardsHandler);
 adminRouter.get("/agency-operator/dues-report.xlsx", requireDuesReportRole, exportDuesReportHandler);

@@ -6,7 +6,7 @@ import { AdminHeader } from "@/components/admin-header";
 import { NoticeView } from "@/components/operator/notice-view";
 import { useAdminGuard } from "@/lib/use-admin-guard";
 import { printElementInNewWindow } from "@/lib/print-in-new-window";
-import { fetchAgencyWardHoldings, fetchAgencyWards, prepareAgencyNotices } from "@/lib/agency-api";
+import { fetchAgencyWardHoldings, fetchAgencyWards, prepareAgencyNotices, recordNoticePrintPositions } from "@/lib/agency-api";
 import type { DemandNoticeReprintData } from "@/lib/demand-notice-api";
 
 const BATCH = 20;
@@ -93,6 +93,27 @@ export default function AgencyNoticesPage() {
     }
   }
 
+  // Every notice gets a Sl. No. within its part (printed in its corner) and the position is saved, so the Tax Collector's
+  // holding page can say exactly where in the bundle the notice is.
+  async function printPart(index: number) {
+    setError(null);
+    const part = notices.slice(index * perPart, (index + 1) * perPart);
+    try {
+      await recordNoticePrintPositions(
+        { ward: preparedWard === "(no ward)" ? null : preparedWard, partNo: index + 1, partCount: parts.length, demandNos: part.map((n) => n.demandNo) },
+        base,
+      );
+    } catch (err) {
+      setError(
+        `The notices will print with their Sl. No., but the positions could not be saved, so the Tax Collector's page will not show them (${
+          err instanceof Error ? err.message : "error"
+        }). Print this part again later to save them.`,
+      );
+    }
+    setPrintingPart(index);
+  }
+
+  const printedOn = new Date().toLocaleDateString("en-IN", { day: "2-digit", month: "2-digit", year: "numeric" }).replace(/\//g, "-");
   const perPart = Math.ceil(notices.length / Math.max(1, partCount));
   const parts = Array.from({ length: partCount }, (_, i) => ({ index: i, from: i * perPart + 1, to: Math.min((i + 1) * perPart, notices.length) })).filter((p) => p.from <= notices.length);
   const printing = printingPart !== null ? notices.slice(printingPart * perPart, (printingPart + 1) * perPart) : [];
@@ -188,7 +209,7 @@ export default function AgencyNoticesPage() {
               {parts.map((p) => (
                 <button
                   key={p.index}
-                  onClick={() => setPrintingPart(p.index)}
+                  onClick={() => printPart(p.index)}
                   disabled={printingPart !== null}
                   className="inline-flex items-center gap-2 rounded-md bg-nnm-blue px-4 py-2.5 text-sm font-semibold text-white hover:bg-nnm-blue-dark disabled:opacity-60"
                 >
@@ -219,8 +240,13 @@ export default function AgencyNoticesPage() {
       <div className="hidden">
         <div ref={printRef} className="agency-batch">
           <style>{`.agency-batch .no-print{display:none !important}.agency-batch > div{break-after:page;page-break-after:always}.agency-batch > div:last-child{break-after:auto;page-break-after:auto}`}</style>
-          {printing.map((n) => (
-            <div key={n.demandNo}>
+          {printing.map((n, i) => (
+            <div key={n.demandNo} style={{ position: "relative" }}>
+              <div
+                style={{ position: "absolute", top: 6, right: 12, zIndex: 30, fontFamily: "Arial, sans-serif", fontSize: 10, fontWeight: 700, color: "#334155", border: "1px solid #94a3b8", borderRadius: 4, padding: "1px 6px", background: "#fff" }}
+              >
+                Ward {preparedWard} · Part {(printingPart ?? 0) + 1}/{parts.length} · Sl. No. {i + 1}/{printing.length} · {printedOn}
+              </div>
               <NoticeView notice={n} onClose={() => undefined} />
             </div>
           ))}
