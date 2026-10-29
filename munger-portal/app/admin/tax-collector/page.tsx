@@ -530,16 +530,16 @@ export default function TaxCollectorPage() {
                         amountDemanded={notices.find((n) => n.demandNo === selectedDemandNo) ? Number(notices.find((n) => n.demandNo === selectedDemandNo)!.totalAmountDemanded) : null}
                         value={instrument} onChange={setInstrument} inputClassName={inputClass} />
                     </div>
-                    {docStatus && !docStatus.complete && (
+                    {docStatus && !docStatus.collectionComplete && (
                       <p role="alert" className="mb-3 rounded-md border border-red-200 bg-red-50 p-3 text-xs text-red-800">
-                        Collect the holding documents first (Holding Documents section above): {docStatus.missing.join(", ")}.
+                        Collect the holding documents first (Holding Documents section above): {docStatus.missingForCollection.join(", ")}.
                       </p>
                     )}
                     <button
                       onClick={handleCollectPayment}
-                      disabled={collecting || !!property.solidWasteTypeMissing || !property.water_connection_status || !docStatus?.complete}
+                      disabled={collecting || !!property.solidWasteTypeMissing || !property.water_connection_status || !docStatus?.collectionComplete}
                       title={
-                        property.solidWasteTypeMissing || !property.water_connection_status || !docStatus?.complete ? "Enter the mandatory details above first" : undefined
+                        property.solidWasteTypeMissing || !property.water_connection_status || !docStatus?.collectionComplete ? "Enter the mandatory details above first" : undefined
                       }
                       className="rounded-md bg-nnm-blue px-4 py-2 text-sm font-semibold text-white hover:bg-nnm-blue-dark disabled:opacity-60"
                     >

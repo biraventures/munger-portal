@@ -104,6 +104,7 @@ export interface PropertyFieldVerificationSummary {
   aadhaar_photo_path?: string | null;
   previous_receipt_photo_path?: string | null;
   land_document_photo_path?: string | null;
+  register_photo_path?: string | null;
 }
 
 export interface PropertyReport {

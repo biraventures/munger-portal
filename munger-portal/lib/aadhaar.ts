@@ -32,9 +32,13 @@ export function isValidAadhaar(n: string): boolean {
   return c === 0;
 }
 
-export type HoldingDocumentKey = "gps" | "aadhaar" | "holdingPhoto" | "previousReceipt" | "landDocument";
+export type HoldingDocumentKey = "gps" | "aadhaar" | "holdingPhoto" | "previousReceipt" | "landDocument" | "register";
 export interface HoldingDocumentStatus {
+  /** All that online payment needs is on file. */
   complete: boolean;
   onFile: Record<HoldingDocumentKey, boolean>;
   missing: string[];
+  /** All that the Tax Collector needs before collecting (adds the offline demand register photo). */
+  collectionComplete: boolean;
+  missingForCollection: string[];
 }

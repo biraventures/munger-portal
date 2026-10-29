@@ -43,6 +43,8 @@ export interface FieldVerificationInput {
   previousReceiptPhotoMimeType: string | undefined;
   landDocumentPhotoBase64Data: string | undefined;
   landDocumentPhotoMimeType: string | undefined;
+  registerPhotoBase64Data?: string | undefined;
+  registerPhotoMimeType?: string | undefined;
 }
 
 /**
@@ -59,11 +61,12 @@ export async function recordFieldVerification(holdingNo: string, admin: AdminTok
   const property = await propertyRepository.findByHoldingNo(holdingNo);
   if (!property) throw ApiError.notFound("Holding not found.");
 
-  const [holdingPhotoPath, aadhaarPhotoPath, previousReceiptPhotoPath, landDocumentPhotoPath] = await Promise.all([
+  const [holdingPhotoPath, aadhaarPhotoPath, previousReceiptPhotoPath, landDocumentPhotoPath, registerPhotoPath] = await Promise.all([
     savePhoto(holdingNo, "holding", input.holdingPhotoBase64Data, input.holdingPhotoMimeType),
     savePhoto(holdingNo, "aadhaar", input.aadhaarPhotoBase64Data, input.aadhaarPhotoMimeType),
     savePhoto(holdingNo, "receipt", input.previousReceiptPhotoBase64Data, input.previousReceiptPhotoMimeType),
     savePhoto(holdingNo, "landdoc", input.landDocumentPhotoBase64Data, input.landDocumentPhotoMimeType),
+    savePhoto(holdingNo, "register", input.registerPhotoBase64Data, input.registerPhotoMimeType),
   ]);
 
   return propertyFieldVerificationRepository.create({
@@ -75,6 +78,7 @@ export async function recordFieldVerification(holdingNo: string, admin: AdminTok
     aadhaarPhotoPath,
     previousReceiptPhotoPath,
     landDocumentPhotoPath,
+    registerPhotoPath,
     capturedByUsername: admin.username,
     capturedByDisplayName: admin.displayName,
     capturedByRole: admin.role,

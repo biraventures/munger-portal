@@ -1,4 +1,7 @@
 import type { Request, Response } from "express";
+import ExcelJS from "exceljs";
+import { listCollectedHoldings } from "../services/collectedHoldings.service";
+import { normalizeWard } from "../utils/ward";
 import { getHoldingDocumentStatus } from "../services/holdingDocuments.service";
 import { z } from "zod";
 import { pool } from "../config/db";
@@ -147,4 +150,58 @@ export const getPropertyReportHandler = asyncHandler(async (req: Request, res: R
     receivingCopies,
     documentStatus,
   });
+});
+
+const collectedQuerySchema = z.object({
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Date must be YYYY-MM-DD"),
+  ward: z.string().trim().max(16).optional(),
+});
+
+/** GET /api/v1/admin/reports/collected-holdings?date=YYYY-MM-DD&ward= - holdings whose tax was collected that day. */
+export const getCollectedHoldingsHandler = asyncHandler(async (req: Request, res: Response) => {
+  const q = collectedQuerySchema.safeParse(req.query);
+  if (!q.success) throw ApiError.badRequest("Choose a valid date");
+  res.status(200).json(await listCollectedHoldings(q.data.date, q.data.ward ? normalizeWard(q.data.ward) : undefined));
+});
+
+/** GET /api/v1/admin/reports/collected-holdings.xlsx?date=&ward= - the same list as an Excel file. */
+export const exportCollectedHoldingsHandler = asyncHandler(async (req: Request, res: Response) => {
+  const q = collectedQuerySchema.safeParse(req.query);
+  if (!q.success) throw ApiError.badRequest("Choose a valid date");
+  const data = await listCollectedHoldings(q.data.date, q.data.ward ? normalizeWard(q.data.ward) : undefined);
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet("Collected holdings", { views: [{ state: "frozen", ySplit: 1 }] });
+  ws.columns = [
+    { header: "Time", key: "time", width: 9 },
+    { header: "Receipt No", key: "receipt_no", width: 12 },
+    { header: "Holding No", key: "holding_no", width: 16 },
+    { header: "Old Holding No", key: "old_holding_no", width: 16 },
+    { header: "Owner", key: "owner_name", width: 26 },
+    { header: "Mobile", key: "mobile_no", width: 14 },
+    { header: "Ward", key: "ward", width: 7 },
+    { header: "Amount (Rs)", key: "amount", width: 13 },
+    { header: "Mode", key: "payment_mode", width: 16 },
+    { header: "Collected By", key: "collected_by", width: 22 },
+    { header: "Role", key: "collected_by_role", width: 16 },
+    { header: "Tax Collector", key: "tax_collector_name", width: 20 },
+    { header: "Demand No", key: "demand_no", width: 11 },
+    { header: "Paid Till", key: "paid_till", width: 11 },
+    { header: "Status", key: "status", width: 12 },
+  ];
+  ws.getRow(1).font = { bold: true };
+  for (const r of data.rows) {
+    ws.addRow({
+      ...r,
+      time: new Date(r.txn_time).toLocaleTimeString("en-IN", { timeZone: "Asia/Kolkata", hour: "2-digit", minute: "2-digit", hour12: false }),
+      amount: Number(r.amount),
+      status: r.cancelled ? "Cancelled" : r.reconcile_status === "pending" ? "Recon. pending" : "Valid",
+    });
+  }
+  ws.getColumn("amount").numFmt = "#,##0.00";
+  const total = ws.addRow({ owner_name: `Total - ${data.holdings} holdings, ${data.receipts} receipts`, amount: data.total });
+  total.font = { bold: true };
+  res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+  res.setHeader("Content-Disposition", `attachment; filename="collected-holdings-${data.date}${q.data.ward ? `-ward-${q.data.ward}` : ""}.xlsx"`);
+  await wb.xlsx.write(res);
+  res.end();
 });

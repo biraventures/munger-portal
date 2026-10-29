@@ -82,7 +82,7 @@ import {
   previewResidentialSolidWasteHandler,
   applyResidentialSolidWasteHandler,
 } from "../controllers/propertyBulkImport.controller";
-import { searchPropertiesHandler, getPropertyReportHandler } from "../controllers/propertyReport.controller";
+import { searchPropertiesHandler, getPropertyReportHandler, getCollectedHoldingsHandler, exportCollectedHoldingsHandler } from "../controllers/propertyReport.controller";
 import { getShopsPendingPublication, postApproveShopPublication } from "../controllers/shopPublicationApproval.controller";
 import {
   getShopEditRequests,
@@ -310,7 +310,7 @@ adminRouter.post("/property-discrepancy-requests/:id/resubmit", requireAdminRole
 // Field verification photo retrieval - viewable by the two roles who capture them plus the oversight chain.
 adminRouter.get(
   "/field-verifications/:id/photo/:kind",
-  requireAdminRole("tax_collector", "tax_surveyor", "tax_daroga", "city_manager", "deputy_commissioner", "commissioner"),
+  requireAdminRole("tax_collector", "tax_surveyor", "tax_daroga", "city_manager", "deputy_commissioner", "commissioner", "agency_team_leader", "agency_project_manager"),
   getFieldVerificationPhoto,
 );
 
@@ -426,7 +426,12 @@ adminRouter.post("/property-imports/:id/residential-solid-waste", requireAdminRo
 // holding no/owner/address, then full detail + tax pending + change
 // log + discrepancy flags + resurvey flags + surveyor field
 // verifications for one holding. See propertyReport.controller.ts.
-const requirePropertyReportRole = requireAdminRole("commissioner", "deputy_commissioner", "city_manager");
+const requirePropertyReportRole = requireAdminRole(
+  "commissioner", "deputy_commissioner", "city_manager", "tax_daroga", "agency_team_leader", "agency_project_manager",
+);
+// Holdings whose tax was collected on a given day (list + Excel).
+adminRouter.get("/reports/collected-holdings", requirePropertyReportRole, getCollectedHoldingsHandler);
+adminRouter.get("/reports/collected-holdings.xlsx", requirePropertyReportRole, exportCollectedHoldingsHandler);
 adminRouter.get("/properties/search", requirePropertyReportRole, searchPropertiesHandler);
 adminRouter.get("/properties/:holdingNo/report", requirePropertyReportRole, getPropertyReportHandler);
 
@@ -516,7 +521,11 @@ adminRouter.param("demandNo", collectorDemandNoticeParam);
 adminRouter.get("/receiving-copies/notices/:holdingNo", requireAdminRole("tax_collector"), listNoticesForReceivingHandler);
 adminRouter.post("/receiving-copies/notices/:demandNo", requireAdminRole("tax_collector"), uploadReceivingCopyHandler);
 adminRouter.get("/receiving-copies", requireFieldViewRole, listReceivingCopiesHandler);
-adminRouter.get("/receiving-copies/:id/photo", requireFieldViewRole, getReceivingCopyPhotoHandler);
+adminRouter.get(
+  "/receiving-copies/:id/photo",
+  requireAdminRole("tax_collector", "tax_daroga", "city_manager", "deputy_commissioner", "commissioner", "agency_team_leader", "agency_project_manager"),
+  getReceivingCopyPhotoHandler,
+);
 adminRouter.post("/migrated-holdings/:holdingNo/assign", assignToSurveyorHandler);
 adminRouter.get("/migrated-holdings/my-assignments", listMyAssignmentsHandler);
 adminRouter.post("/migrated-holdings/:holdingNo/assign-surveyor", assignToTaxSurveyorHandler);

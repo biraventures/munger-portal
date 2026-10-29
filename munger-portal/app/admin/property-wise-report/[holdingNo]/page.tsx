@@ -17,7 +17,7 @@ import { CollectionIssueNoticeView } from "@/components/admin/collection-issue-n
 import { PropertyTaxLedger } from "@/components/admin/property-tax-ledger";
 import { ReceivingCopyVisitEntry } from "@/components/admin/receiving-copy-visit";
 
-const ALLOWED_ROLES = ["commissioner", "deputy_commissioner", "city_manager"];
+const ALLOWED_ROLES = ["commissioner", "deputy_commissioner", "city_manager", "tax_daroga", "agency_team_leader", "agency_project_manager"];
 
 function money(v: unknown): string {
   const n = Number(v ?? 0);
@@ -80,7 +80,7 @@ export default function PropertyWiseReportDetailPage() {
         <main className="mx-auto max-w-2xl px-6 py-10">
           <div role="alert" className="flex items-center gap-2 rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-700">
             <AlertCircle className="h-4 w-4 shrink-0" />
-            The property-wise report is restricted to the Municipal Commissioner, Deputy Municipal Commissioner, and City Manager.
+            The property-wise report is restricted to the senior officers, the Tax Daroga and the agency Team Leader / Project Manager.
           </div>
         </main>
       </div>
@@ -462,11 +462,13 @@ export default function PropertyWiseReportDetailPage() {
               </h2>
               {report.documentStatus && (
                 <p
-                  className={`mb-3 rounded-md p-2.5 text-xs ${report.documentStatus.complete ? "bg-green-50 text-green-800" : "bg-red-50 text-red-800"}`}
+                  className={`mb-3 rounded-md p-2.5 text-xs ${report.documentStatus.collectionComplete ? "bg-green-50 text-green-800" : "bg-red-50 text-red-800"}`}
                 >
-                  {report.documentStatus.complete
-                    ? "All required documents are on file (GPS, Aadhaar, holding photo, previous receipt, land document)."
-                    : `Required documents missing: ${report.documentStatus.missing.join(", ")}. Online payment and Tax Collector collection are blocked until these are uploaded.`}
+                  {report.documentStatus.collectionComplete
+                    ? "All required documents are on file (GPS, Aadhaar, holding photo, previous receipt, land document, demand register photo)."
+                    : `Required documents missing: ${report.documentStatus.missingForCollection.join(", ")}. Tax Collector collection is blocked${
+                        report.documentStatus.complete ? "" : " and online payment is not available"
+                      } until these are uploaded.`}
                 </p>
               )}
               {report.fieldVerifications.length === 0 && (report.receivingCopies?.length ?? 0) === 0 ? (

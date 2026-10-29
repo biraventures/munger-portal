@@ -15,14 +15,23 @@ export const HOLDING_DOCUMENT_LABELS = {
   holdingPhoto: "Photo of the holding",
   previousReceipt: "Previous year's holding tax receipt",
   landDocument: "Land ownership document",
+  register: "Photo of the offline holding demand register",
 } as const;
 export type HoldingDocumentKey = keyof typeof HOLDING_DOCUMENT_LABELS;
+/** Needed for online payment (the citizen's own documents). */
+export const ONLINE_DOCUMENT_KEYS: HoldingDocumentKey[] = ["gps", "aadhaar", "holdingPhoto", "previousReceipt", "landDocument"];
+/** Needed before the Tax Collector collects: the above plus the offline demand register photo. */
+export const COLLECTION_DOCUMENT_KEYS: HoldingDocumentKey[] = [...ONLINE_DOCUMENT_KEYS, "register"];
 
 export interface HoldingDocumentStatus {
+  /** Everything online payment needs is on file. */
   complete: boolean;
   onFile: Record<HoldingDocumentKey, boolean>;
-  /** Labels of what is still missing, in display order. */
+  /** Labels of what online payment still needs, in display order. */
   missing: string[];
+  /** Everything the Tax Collector needs before collecting is on file (includes the demand register photo). */
+  collectionComplete: boolean;
+  missingForCollection: string[];
 }
 
 export async function getHoldingDocumentStatus(holdingNo: string): Promise<HoldingDocumentStatus> {
@@ -31,14 +40,16 @@ export async function getHoldingDocumentStatus(holdingNo: string): Promise<Holdi
             bool_or(aadhaar_number IS NOT NULL) AS "aadhaar",
             bool_or(holding_photo_path IS NOT NULL) AS "holdingPhoto",
             bool_or(previous_receipt_photo_path IS NOT NULL) AS "previousReceipt",
-            bool_or(land_document_photo_path IS NOT NULL) AS "landDocument"
+            bool_or(land_document_photo_path IS NOT NULL) AS "landDocument",
+            bool_or(register_photo_path IS NOT NULL) AS "register"
        FROM property_field_verifications WHERE holding_no = $1`,
     [holdingNo],
   );
   const r = rows[0] ?? ({} as Record<HoldingDocumentKey, boolean | null>);
   const onFile = Object.fromEntries((Object.keys(HOLDING_DOCUMENT_LABELS) as HoldingDocumentKey[]).map((k) => [k, !!r[k]])) as Record<HoldingDocumentKey, boolean>;
-  const missing = (Object.keys(HOLDING_DOCUMENT_LABELS) as HoldingDocumentKey[]).filter((k) => !onFile[k]).map((k) => HOLDING_DOCUMENT_LABELS[k]);
-  return { complete: missing.length === 0, onFile, missing };
+  const missing = ONLINE_DOCUMENT_KEYS.filter((k) => !onFile[k]).map((k) => HOLDING_DOCUMENT_LABELS[k]);
+  const missingForCollection = COLLECTION_DOCUMENT_KEYS.filter((k) => !onFile[k]).map((k) => HOLDING_DOCUMENT_LABELS[k]);
+  return { complete: missing.length === 0, onFile, missing, collectionComplete: missingForCollection.length === 0, missingForCollection };
 }
 
 /** The message shown to a citizen whose holding cannot be paid online yet. */
@@ -58,9 +69,9 @@ export async function assertDocumentsForOnlinePayment(holdingNo: string): Promis
 /** Tax Collector collection: refused until every document is on file. */
 export async function assertDocumentsForCollection(holdingNo: string): Promise<void> {
   const status = await getHoldingDocumentStatus(holdingNo);
-  if (!status.complete) {
+  if (!status.collectionComplete) {
     throw ApiError.badRequest(
-      `Collect the holding's documents first (Field Verification on this page): ${status.missing.join(", ")}. Payment can be collected once all are uploaded.`,
+      `Collect the holding's documents first (Holding Documents on this page): ${status.missingForCollection.join(", ")}. Payment can be collected once all are uploaded.`,
     );
   }
 }

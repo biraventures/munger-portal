@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Camera, CheckCircle2, ChevronDown, ChevronUp, CreditCard, FileText, Loader2, MapPin, MapPinOff, ScrollText } from "lucide-react";
+import { BookOpen, Camera, CheckCircle2, ChevronDown, ChevronUp, CreditCard, FileText, Loader2, MapPin, MapPinOff, ScrollText } from "lucide-react";
 import { getCurrentGpsPosition } from "@/lib/geolocation";
 import { fileToBase64 } from "@/components/admin/discrepancy-capture-section";
 import { recordFieldVerification } from "@/lib/admin-api";
@@ -16,6 +16,7 @@ interface FieldVerificationState {
   aadhaarFile: File | null;
   previousReceiptFile: File | null;
   landDocumentFile: File | null;
+  registerFile: File | null;
 }
 
 function blankState(): FieldVerificationState {
@@ -27,6 +28,7 @@ function blankState(): FieldVerificationState {
     aadhaarFile: null,
     previousReceiptFile: null,
     landDocumentFile: null,
+    registerFile: null,
   };
 }
 
@@ -103,6 +105,7 @@ const REQUIRED: { key: HoldingDocumentKey; label: string }[] = [
   { key: "holdingPhoto", label: "Holding photo" },
   { key: "previousReceipt", label: "Previous year's receipt" },
   { key: "landDocument", label: "Land ownership document" },
+  { key: "register", label: "Offline demand register photo" },
 ];
 
 /**
@@ -119,11 +122,11 @@ export function FieldVerificationCapture({
   onSaved?: () => void;
 }) {
   const mandatory = documentStatus !== undefined;
-  const [open, setOpen] = useState(mandatory && documentStatus !== null && !documentStatus.complete);
+  const [open, setOpen] = useState(mandatory && documentStatus !== null && !documentStatus.collectionComplete);
   const [state, setState] = useState<FieldVerificationState>(blankState());
   // Opened by itself while something required is still missing.
   useEffect(() => {
-    if (mandatory && documentStatus && !documentStatus.complete) setOpen(true);
+    if (mandatory && documentStatus && !documentStatus.collectionComplete) setOpen(true);
   }, [mandatory, documentStatus]);
   const [capturingGps, setCapturingGps] = useState(false);
   const [gpsError, setGpsError] = useState<string | null>(null);
@@ -152,6 +155,7 @@ export function FieldVerificationCapture({
     holdingPhoto: !!state.holdingFile,
     previousReceipt: !!state.previousReceiptFile,
     landDocument: !!state.landDocumentFile,
+    register: !!state.registerFile,
   };
   const stillMissing = mandatory ? REQUIRED.filter((r) => !documentStatus?.onFile[r.key] && !given[r.key]) : [];
 
@@ -168,11 +172,12 @@ export function FieldVerificationCapture({
     setError(null);
     setSaved(false);
     try {
-      const [holdingPhoto, aadhaarPhoto, previousReceiptPhoto, landDocumentPhoto] = await Promise.all([
+      const [holdingPhoto, aadhaarPhoto, previousReceiptPhoto, landDocumentPhoto, registerPhoto] = await Promise.all([
         state.holdingFile ? fileToBase64(state.holdingFile) : Promise.resolve(undefined),
         state.aadhaarFile ? fileToBase64(state.aadhaarFile) : Promise.resolve(undefined),
         state.previousReceiptFile ? fileToBase64(state.previousReceiptFile) : Promise.resolve(undefined),
         state.landDocumentFile ? fileToBase64(state.landDocumentFile) : Promise.resolve(undefined),
+        state.registerFile ? fileToBase64(state.registerFile) : Promise.resolve(undefined),
       ]);
       await recordFieldVerification(holdingNo, {
         gpsLat: state.gpsLat,
@@ -186,6 +191,8 @@ export function FieldVerificationCapture({
         previousReceiptPhotoMimeType: state.previousReceiptFile?.type,
         landDocumentPhotoBase64Data: landDocumentPhoto,
         landDocumentPhotoMimeType: state.landDocumentFile?.type,
+        registerPhotoBase64Data: registerPhoto,
+        registerPhotoMimeType: state.registerFile?.type,
       });
       setSaved(true);
       setState(blankState());
@@ -203,7 +210,7 @@ export function FieldVerificationCapture({
     state.holdingFile ||
     state.aadhaarFile ||
     state.previousReceiptFile ||
-    state.landDocumentFile;
+    state.landDocumentFile || state.registerFile;
 
   return (
     <div className="rounded-xl border border-slate-200 bg-white">
@@ -212,9 +219,9 @@ export function FieldVerificationCapture({
           {mandatory ? "Holding Documents (GPS, Aadhaar, Photos) - required" : "Field Verification (GPS, Photos & Aadhaar) - optional"}
           {mandatory && documentStatus && (
             <span
-              className={`ml-2 rounded-full px-2 py-0.5 text-[11px] font-semibold ${documentStatus.complete ? "bg-green-100 text-green-800" : "bg-red-100 text-red-700"}`}
+              className={`ml-2 rounded-full px-2 py-0.5 text-[11px] font-semibold ${documentStatus.collectionComplete ? "bg-green-100 text-green-800" : "bg-red-100 text-red-700"}`}
             >
-              {documentStatus.complete ? "All on file" : `${documentStatus.missing.length} missing`}
+              {documentStatus.collectionComplete ? "All on file" : `${documentStatus.missingForCollection.length} missing`}
             </span>
           )}
         </span>
@@ -226,8 +233,8 @@ export function FieldVerificationCapture({
           {mandatory ? (
             <div className="mb-4">
               <p className="mb-2 text-xs text-slate-600">
-                All five are required for every holding. Until they are on file, payment cannot be collected here and the owner cannot pay
-                online.
+                All of these are required for every holding. Until they are on file, payment cannot be collected here; without the first
+                five the owner cannot pay online either.
               </p>
               <ul className="grid grid-cols-1 gap-1 text-xs sm:grid-cols-2">
                 {REQUIRED.map((r) => {
@@ -331,6 +338,14 @@ export function FieldVerificationCapture({
               file={state.landDocumentFile}
               onChange={(f) => setState((s) => ({ ...s, landDocumentFile: f }))}
             />
+            {mandatory && (
+              <PhotoSlot
+                label="Offline Demand Register (this holding's page)"
+                icon={<BookOpen className="h-5 w-5" />}
+                file={state.registerFile}
+                onChange={(f) => setState((s) => ({ ...s, registerFile: f }))}
+              />
+            )}
           </div>
 
           {error && (

@@ -13,7 +13,7 @@ import {
   type SortDirection,
 } from "@/lib/admin-api";
 
-const ALLOWED_ROLES = ["commissioner", "deputy_commissioner", "city_manager"];
+const ALLOWED_ROLES = ["commissioner", "deputy_commissioner", "city_manager", "tax_daroga", "agency_team_leader", "agency_project_manager"];
 
 const PAGE_SIZE_OPTIONS = [25, 50, 100];
 
@@ -116,7 +116,7 @@ export default function PropertyWiseReportPage() {
         <main className="mx-auto max-w-2xl px-6 py-10">
           <div role="alert" className="flex items-center gap-2 rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-700">
             <AlertCircle className="h-4 w-4 shrink-0" />
-            The property-wise report is restricted to the Municipal Commissioner, Deputy Municipal Commissioner, and City Manager.
+            The property-wise report is restricted to the senior officers, the Tax Daroga and the agency Team Leader / Project Manager.
           </div>
         </main>
       </div>

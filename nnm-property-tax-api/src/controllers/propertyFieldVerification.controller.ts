@@ -7,7 +7,7 @@ import { holdingNoSchema } from "../utils/holdingNoSchema";
 import { recordFieldVerification, listFieldVerificationsForHolding } from "../services/propertyFieldVerification.service";
 import { propertyFieldVerificationRepository } from "../repositories/propertyFieldVerification.repository";
 import { asyncHandler } from "../middleware/asyncHandler";
-import { getHoldingDocumentStatus, HOLDING_DOCUMENT_LABELS, isValidAadhaar, type HoldingDocumentKey } from "../services/holdingDocuments.service";
+import { COLLECTION_DOCUMENT_KEYS, getHoldingDocumentStatus, HOLDING_DOCUMENT_LABELS, isValidAadhaar, type HoldingDocumentKey } from "../services/holdingDocuments.service";
 import { ApiError } from "../utils/ApiError";
 
 const holdingNoParamSchema = z.object({ holdingNo: holdingNoSchema });
@@ -30,6 +30,8 @@ const fieldVerificationSchema = z.object({
   previousReceiptPhotoMimeType: z.string().min(1).optional(),
   landDocumentPhotoBase64Data: z.string().min(1).optional(),
   landDocumentPhotoMimeType: z.string().min(1).optional(),
+  registerPhotoBase64Data: z.string().min(1).optional(),
+  registerPhotoMimeType: z.string().min(1).optional(),
 });
 
 /**
@@ -58,8 +60,9 @@ export const postRecordFieldVerification = asyncHandler(async (req: Request, res
       holdingPhoto: !!b.holdingPhotoBase64Data,
       previousReceipt: !!b.previousReceiptPhotoBase64Data,
       landDocument: !!b.landDocumentPhotoBase64Data,
+      register: !!b.registerPhotoBase64Data,
     };
-    const missing = (Object.keys(HOLDING_DOCUMENT_LABELS) as HoldingDocumentKey[]).filter((k) => !given[k] && !status.onFile[k]);
+    const missing = COLLECTION_DOCUMENT_KEYS.filter((k) => !given[k] && !status.onFile[k]);
     if (missing.length) {
       throw ApiError.badRequest(`All of these are required: ${missing.map((k) => HOLDING_DOCUMENT_LABELS[k]).join(", ")}.`);
     }
@@ -77,6 +80,8 @@ export const postRecordFieldVerification = asyncHandler(async (req: Request, res
     previousReceiptPhotoMimeType: bodyParsed.data.previousReceiptPhotoMimeType,
     landDocumentPhotoBase64Data: bodyParsed.data.landDocumentPhotoBase64Data,
     landDocumentPhotoMimeType: bodyParsed.data.landDocumentPhotoMimeType,
+    registerPhotoBase64Data: bodyParsed.data.registerPhotoBase64Data,
+    registerPhotoMimeType: bodyParsed.data.registerPhotoMimeType,
   });
   res.status(200).json({ record });
 });
@@ -96,12 +101,16 @@ export const listFieldVerifications = asyncHandler(async (req: Request, res: Res
   res.status(200).json({ records });
 });
 
-const photoKindParamSchema = z.object({ id: z.coerce.number().int().positive(), kind: z.enum(["holding", "aadhaar", "receipt", "landdoc"]) });
-const PHOTO_KIND_FIELD: Record<"holding" | "aadhaar" | "receipt" | "landdoc", "holding_photo_path" | "aadhaar_photo_path" | "previous_receipt_photo_path" | "land_document_photo_path"> = {
+const photoKindParamSchema = z.object({ id: z.coerce.number().int().positive(), kind: z.enum(["holding", "aadhaar", "receipt", "landdoc", "register"]) });
+const PHOTO_KIND_FIELD: Record<
+  "holding" | "aadhaar" | "receipt" | "landdoc" | "register",
+  "holding_photo_path" | "aadhaar_photo_path" | "previous_receipt_photo_path" | "land_document_photo_path" | "register_photo_path"
+> = {
   holding: "holding_photo_path",
   aadhaar: "aadhaar_photo_path",
   receipt: "previous_receipt_photo_path",
   landdoc: "land_document_photo_path",
+  register: "register_photo_path",
 };
 
 /** GET /api/v1/admin/field-verifications/:id/photo/:kind - kind is holding, aadhaar, receipt, or landdoc. */

@@ -2066,6 +2066,8 @@ export interface RecordFieldVerificationInput {
   previousReceiptPhotoMimeType?: string;
   landDocumentPhotoBase64Data?: string;
   landDocumentPhotoMimeType?: string;
+  registerPhotoBase64Data?: string;
+  registerPhotoMimeType?: string;
 }
 
 export async function recordFieldVerification(holdingNo: string, input: RecordFieldVerificationInput): Promise<PropertyFieldVerification> {
