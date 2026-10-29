@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import { assertSolidWasteReady } from "./solidWasteGuard.service";
 import { assertDocumentsForOnlinePayment } from "./holdingDocuments.service";
 import { assertNoticeYearNotPaid } from "./paidYearGuard.service";
 import { propertyRepository } from "../repositories/property.repository";
@@ -186,6 +187,8 @@ export async function createGatewayOrder(
   if (forGuard) await assertNoticeYearNotPaid(forGuard, notice, true);
   // Not online until the holding's documents are on file (collected by the Tax Collector).
   await assertDocumentsForOnlinePayment(holdingNo);
+  // Not online while the solid waste user type is unknown or the notice lacks the user charge.
+  if (forGuard) await assertSolidWasteReady(forGuard, notice);
   await assertNoOnlinePaymentInFlight(holdingNo);
 
   await onlinePaymentRepository.createPendingOrder({

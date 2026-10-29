@@ -406,7 +406,7 @@ export default function TaxCollectorPage() {
                 <p className="mb-3 text-xs text-amber-800">These are missing for this holding. Please enter them from the field.</p>
                 {!!property.solidWasteTypeMissing && swOpen && swRequest && (
                   <p className="mb-3 rounded-md border border-amber-200 bg-white p-3 text-xs text-amber-900">
-                    Solid waste user type <b>{swRequest.requested_type}</b> submitted - {swRequest.stage === "tax_daroga" ? "waiting for Tax Daroga verification" : "verified by Tax Daroga, waiting for City Manager approval"}. Payment can be collected once it is approved.
+                    Solid waste user type <b>{swRequest.requested_type}</b> submitted - waiting for the Tax Daroga&apos;s approval. Payment can be collected once it is approved.
                   </p>
                 )}
                 {!!property.solidWasteTypeMissing && !swOpen && swRequest?.stage === "rejected" && (
@@ -416,7 +416,7 @@ export default function TaxCollectorPage() {
                 )}
                 {!!property.solidWasteTypeMissing && !swOpen && (
                   <div className="mb-3">
-                    <label className="mb-1 block text-xs font-medium text-slate-700">Solid waste user type (needs Tax Daroga + City Manager approval; amount is set automatically)</label>
+                    <label className="mb-1 block text-xs font-medium text-slate-700">Solid waste user type (needs the Tax Daroga&apos;s approval; amount is set automatically)</label>
                     <select value={swType} onChange={(e) => setSwType(e.target.value)} className={inputClass}>
                       <option value="">Select user type…</option>
                       {(formOptions?.solidWasteChargeTypes ?? []).map((t) => (

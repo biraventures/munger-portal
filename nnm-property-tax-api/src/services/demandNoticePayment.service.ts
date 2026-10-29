@@ -1,4 +1,5 @@
 import { pool } from "../config/db";
+import { noticeMissingSolidWasteCharge, solidWasteTypeBlock } from "./solidWasteGuard.service";
 import { getHoldingDocumentStatus, onlinePaymentDocumentsMessage } from "./holdingDocuments.service";
 import { env } from "../config/env";
 import { ApiError } from "../utils/ApiError";
@@ -80,6 +81,11 @@ export async function getDemandNoticePaymentInfo(demandNo: string): Promise<Dema
     return { ...base, available: false, reason: "Please contact the Holding Tax Section, Municipal Corporation Office, Munger." };
   }
 
+  const swProperty = await propertyRepository.findByHoldingNo(holdingNo);
+  if (swProperty) {
+    const swMsg = (await solidWasteTypeBlock(swProperty)) ?? noticeMissingSolidWasteCharge(swProperty, notice);
+    if (swMsg) return { ...base, available: false, reason: `${swMsg} Please contact the Holding Tax Section, Municipal Corporation Office, Munger.` };
+  }
   const docs = await getHoldingDocumentStatus(holdingNo);
   if (!docs.complete) return { ...base, available: false, reason: onlinePaymentDocumentsMessage(docs.missing) };
 

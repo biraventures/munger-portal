@@ -1,4 +1,5 @@
 import { pool } from "../config/db";
+import { assertSolidWasteReady } from "./solidWasteGuard.service";
 import { assertDocumentsForCollection } from "./holdingDocuments.service";
 import type { TransactionRow } from "../repositories/payment.repository";
 import type { DemandNoticeRow } from "../repositories/demandNotice.repository";
@@ -561,6 +562,9 @@ export async function submitPayment(
   if (actor) await assertNoOnlinePaymentInFlight(holdingNo);
   // A Tax Collector collects the holding's documents (GPS, Aadhaar, photo, previous receipt, land document) first.
   if (actor?.role === "tax_collector") await assertDocumentsForCollection(holdingNo);
+  // Counter, Tax Collector and agency: not while the solid waste user type is unknown, nor against a notice printed
+  // without the user charge the holding owes. (The online callback - money already taken - is checked at initiation.)
+  if (actor) await assertSolidWasteReady(property, notice);
   if (isPart) {
     const already = parseYearStartOrNull(property.tax_paid_till_year);
     if (already !== null && already >= throughYearNum) {

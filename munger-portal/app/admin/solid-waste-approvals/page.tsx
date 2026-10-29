@@ -69,7 +69,7 @@ export default function SolidWasteApprovalsPage() {
         </h1>
         <p className="mb-6 text-sm text-slate-500">
           {isDaroga
-            ? "Verify the solid waste user type entered by a Tax Collector. Verified entries go to the City Manager for final approval."
+            ? "Approve the solid waste user type entered by a Tax Collector. Your approval is final: the type and its user charge are applied to the holding, and open demand notices printed without the user charge are replaced. Until then, holding tax cannot be collected for the holding."
             : "Final approval of solid waste user types verified by the Tax Daroga. Approval applies the type and charge to the holding."}
         </p>
         {error && (
@@ -147,7 +147,7 @@ export default function SolidWasteApprovalsPage() {
                 ) : (
                   <div className="mt-3 flex gap-2">
                     <button onClick={() => decide(r.id, "approve")} disabled={busyId === r.id} className="rounded-md bg-nnm-blue px-4 py-2 text-xs font-semibold text-white hover:bg-nnm-blue-dark disabled:opacity-60">
-                      {isDaroga ? "Verify & forward" : "Approve"}
+                      Approve
                     </button>
                     <button onClick={() => { setRejectingId(r.id); setReason(""); }} className="rounded-md border border-red-300 px-4 py-2 text-xs font-semibold text-red-700 hover:bg-red-50">
                       Reject

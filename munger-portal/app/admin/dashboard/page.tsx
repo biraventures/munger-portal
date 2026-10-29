@@ -625,7 +625,7 @@ export default function AdminDashboardPage() {
                   </span>
                   <h3 className="mb-1.5 text-base font-semibold text-slate-900">Solid Waste User Type Approvals</h3>
                   <p className="text-sm text-slate-500">
-                    {admin.role === "tax_daroga" ? "Verify solid waste user types entered by Tax Collectors." : "Give final approval to verified solid waste user types."}
+                    {admin.role === "tax_daroga" ? "Approve solid waste user types entered by Tax Collectors (final)." : "Approve solid waste user types still waiting at your stage."}
                   </p>
                 </Link>
               )}
