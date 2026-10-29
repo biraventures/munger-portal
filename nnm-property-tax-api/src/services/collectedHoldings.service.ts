@@ -24,7 +24,27 @@ export interface CollectedHoldingRow {
   reconcile_status: string | null;
 }
 
-export async function listCollectedHoldings(date: string, ward?: string): Promise<{ date: string; rows: CollectedHoldingRow[]; holdings: number; receipts: number; total: number }> {
+/** A Tax Collector's field visit of a holding: who, when, GPS, which photos are on file, Aadhaar (masked). */
+export interface FieldVisitSummary {
+  id: number;
+  holding_no: string;
+  captured_by_display_name: string;
+  captured_by_role: string;
+  captured_at: string;
+  gps_lat: string | null;
+  gps_lng: string | null;
+  aadhaar_number: string | null;
+  holding_photo_path: string | null;
+  aadhaar_photo_path: string | null;
+  previous_receipt_photo_path: string | null;
+  land_document_photo_path: string | null;
+  register_photo_path: string | null;
+}
+
+export async function listCollectedHoldings(
+  date: string,
+  ward?: string,
+): Promise<{ date: string; rows: CollectedHoldingRow[]; holdings: number; receipts: number; total: number; fieldVisits: Record<string, FieldVisitSummary[]> }> {
   const params: unknown[] = [date];
   let wardClause = "";
   if (ward) {
@@ -46,6 +66,24 @@ export async function listCollectedHoldings(date: string, ward?: string): Promis
       ORDER BY t.txn_date, t.receipt_no`,
     params,
   );
+  // Field visits (photos, Aadhaar) of these holdings, newest first. Photo columns only say whether a photo is on file.
+  const holdingNos = [...new Set(rows.map((r) => r.holding_no))];
+  const fieldVisits: Record<string, FieldVisitSummary[]> = {};
+  if (holdingNos.length) {
+    const { rows: visits } = await pool.query<FieldVisitSummary>(
+      `SELECT id, holding_no, captured_by_display_name, captured_by_role, captured_at, gps_lat, gps_lng,
+              CASE WHEN aadhaar_number IS NULL THEN NULL ELSE 'XXXX XXXX ' || RIGHT(aadhaar_number, 4) END AS aadhaar_number,
+              CASE WHEN holding_photo_path IS NULL THEN NULL ELSE 'on-file' END AS holding_photo_path,
+              CASE WHEN aadhaar_photo_path IS NULL THEN NULL ELSE 'on-file' END AS aadhaar_photo_path,
+              CASE WHEN previous_receipt_photo_path IS NULL THEN NULL ELSE 'on-file' END AS previous_receipt_photo_path,
+              CASE WHEN land_document_photo_path IS NULL THEN NULL ELSE 'on-file' END AS land_document_photo_path,
+              CASE WHEN register_photo_path IS NULL THEN NULL ELSE 'on-file' END AS register_photo_path
+         FROM property_field_verifications WHERE holding_no = ANY($1::varchar[])
+        ORDER BY captured_at DESC`,
+      [holdingNos],
+    );
+    for (const v of visits) (fieldVisits[v.holding_no] ??= []).push(v);
+  }
   const valid = rows.filter((r) => !r.cancelled);
   return {
     date,
@@ -53,5 +91,6 @@ export async function listCollectedHoldings(date: string, ward?: string): Promis
     holdings: new Set(valid.map((r) => r.holding_no)).size,
     receipts: valid.length,
     total: valid.reduce((s, r) => s + Number(r.amount), 0),
+    fieldVisits,
   };
 }

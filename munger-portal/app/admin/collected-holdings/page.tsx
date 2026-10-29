@@ -2,13 +2,16 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { AlertCircle, CalendarDays, Download, Loader2 } from "lucide-react";
+import { Fragment } from "react";
+import { AlertCircle, CalendarDays, ChevronDown, ChevronUp, Download, Loader2 } from "lucide-react";
+import { FieldVisitCard } from "@/components/admin/field-visit-card";
 import { AdminHeader } from "@/components/admin-header";
 import { useAdminGuard } from "@/lib/use-admin-guard";
 import { downloadCollectedHoldings, fetchCollectedHoldings, type CollectedHoldingsReport } from "@/lib/agency-api";
 
 const ROLES = ["agency_team_leader", "agency_project_manager", "tax_daroga", "city_manager", "deputy_commissioner", "commissioner"];
-const inputClass = "w-full rounded-md border border-slate-300 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-nnm-blue focus:ring-offset-1";
+const inputClass =
+  "w-full rounded-md border border-slate-300 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-nnm-blue focus:ring-offset-1";
 const todayIst = () => new Date(Date.now() + 330 * 60000).toISOString().slice(0, 10);
 const money = (v: number | string) => `₹${Number(v).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const time = (v: string) => new Date(v).toLocaleTimeString("en-IN", { timeZone: "Asia/Kolkata", hour: "2-digit", minute: "2-digit" });
@@ -22,6 +25,7 @@ export default function CollectedHoldingsPage() {
   const [loading, setLoading] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [openHolding, setOpenHolding] = useState<string | null>(null);
 
   async function load(d = date, w = ward) {
     setLoading(true);
@@ -73,7 +77,9 @@ export default function CollectedHoldingsPage() {
         <h1 className="flex items-center gap-2 text-2xl font-semibold text-slate-900">
           <CalendarDays className="h-6 w-6" /> Holdings Collected on a Day
         </h1>
-        <p className="mt-1 text-sm text-slate-500">Every holding whose tax was collected on the chosen day - open any holding for its full property-wise report.</p>
+        <p className="mt-1 text-sm text-slate-500">
+          Every holding whose tax was collected on the chosen day - open any holding for its full property-wise report.
+        </p>
 
         <div className="mt-5 grid grid-cols-1 gap-3 rounded-xl border border-slate-200 bg-white p-4 sm:grid-cols-[1fr_1fr_auto_auto] sm:items-end">
           <label className="text-xs font-medium text-slate-600">
@@ -125,7 +131,7 @@ export default function CollectedHoldingsPage() {
               {report.rows.length === 0 ? (
                 <p className="p-6 text-sm text-slate-400">No holding tax was collected on this day{ward ? ` in ward ${ward}` : ""}.</p>
               ) : (
-                <table className="w-full min-w-[760px] text-left text-xs">
+                <table className="w-full min-w-[900px] text-left text-xs">
                   <thead className="bg-slate-50 text-slate-500">
                     <tr>
                       <th className="px-3 py-2">Time</th>
@@ -137,37 +143,75 @@ export default function CollectedHoldingsPage() {
                       <th className="px-3 py-2">Collected by</th>
                       <th className="px-3 py-2">Paid till</th>
                       <th className="px-3 py-2">Receipt</th>
+                      <th className="px-3 py-2">Field visit &amp; documents</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {report.rows.map((r) => (
-                      <tr key={r.receipt_no} className={`border-t border-slate-100 align-top ${r.cancelled ? "text-slate-400" : ""}`}>
-                        <td className="whitespace-nowrap px-3 py-2">{time(r.txn_time)}</td>
-                        <td className="px-3 py-2">
-                          <Link href={`/admin/property-wise-report/${encodeURIComponent(r.holding_no)}`} className="font-mono font-semibold text-nnm-blue hover:underline">
-                            {r.holding_no}
-                          </Link>
-                          {r.old_holding_no && <div className="text-[11px] text-slate-500">Old: {r.old_holding_no}</div>}
-                        </td>
-                        <td className="px-3 py-2">
-                          {r.owner_name ?? "-"}
-                          {r.mobile_no && <div className="text-[11px] text-slate-500">{r.mobile_no}</div>}
-                        </td>
-                        <td className="px-3 py-2">{r.ward ?? "-"}</td>
-                        <td className={`px-3 py-2 text-right font-semibold ${r.cancelled ? "line-through" : ""}`}>{money(r.amount)}</td>
-                        <td className="px-3 py-2">{r.payment_mode}</td>
-                        <td className="px-3 py-2">
-                          {r.collected_by ?? "-"}
-                          {r.tax_collector_name && <div className="text-[11px] text-slate-500">TC: {r.tax_collector_name}</div>}
-                        </td>
-                        <td className="px-3 py-2">{r.paid_till ?? "-"}</td>
-                        <td className="px-3 py-2 font-mono">
-                          {r.receipt_no}
-                          {r.cancelled && <div className="font-sans text-[11px] font-semibold text-red-600">Cancelled</div>}
-                          {!r.cancelled && r.reconcile_status === "pending" && <div className="font-sans text-[11px] text-amber-700">Recon. pending</div>}
-                        </td>
-                      </tr>
-                    ))}
+                    {report.rows.map((r) => {
+                      const visits = report.fieldVisits?.[r.holding_no] ?? [];
+                      const rowKey = `${r.receipt_no}`;
+                      const isOpen = openHolding === rowKey;
+                      return (
+                        <Fragment key={r.receipt_no}>
+                          <tr className={`border-t border-slate-100 align-top ${r.cancelled ? "text-slate-400" : ""}`}>
+                            <td className="whitespace-nowrap px-3 py-2">{time(r.txn_time)}</td>
+                            <td className="px-3 py-2">
+                              <Link
+                                href={`/admin/property-wise-report/${encodeURIComponent(r.holding_no)}`}
+                                className="font-mono font-semibold text-nnm-blue hover:underline"
+                              >
+                                {r.holding_no}
+                              </Link>
+                              {r.old_holding_no && <div className="text-[11px] text-slate-500">Old: {r.old_holding_no}</div>}
+                            </td>
+                            <td className="px-3 py-2">
+                              {r.owner_name ?? "-"}
+                              {r.mobile_no && <div className="text-[11px] text-slate-500">{r.mobile_no}</div>}
+                            </td>
+                            <td className="px-3 py-2">{r.ward ?? "-"}</td>
+                            <td className={`px-3 py-2 text-right font-semibold ${r.cancelled ? "line-through" : ""}`}>{money(r.amount)}</td>
+                            <td className="px-3 py-2">{r.payment_mode}</td>
+                            <td className="px-3 py-2">
+                              {r.collected_by ?? "-"}
+                              {r.tax_collector_name && <div className="text-[11px] text-slate-500">TC: {r.tax_collector_name}</div>}
+                            </td>
+                            <td className="px-3 py-2">{r.paid_till ?? "-"}</td>
+                            <td className="px-3 py-2 font-mono">
+                              {r.receipt_no}
+                              {r.cancelled && <div className="font-sans text-[11px] font-semibold text-red-600">Cancelled</div>}
+                              {!r.cancelled && r.reconcile_status === "pending" && (
+                                <div className="font-sans text-[11px] text-amber-700">Recon. pending</div>
+                              )}
+                            </td>
+                            <td className="px-3 py-2">
+                              {visits.length === 0 ? (
+                                <span className="text-red-600">No field visit</span>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => setOpenHolding(isOpen ? null : rowKey)}
+                                  aria-expanded={isOpen}
+                                  className="inline-flex items-center gap-1 text-left font-semibold text-nnm-blue hover:underline"
+                                >
+                                  {visits[0]!.captured_by_display_name}
+                                  {visits[0]!.aadhaar_number ? ` · ${visits[0]!.aadhaar_number}` : ""}
+                                  {isOpen ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                          {isOpen && (
+                            <tr className="bg-slate-50">
+                              <td colSpan={10} className="space-y-2 px-3 py-3">
+                                {visits.map((v) => (
+                                  <FieldVisitCard key={v.id} visit={v} viewerRole={admin.role} />
+                                ))}
+                              </td>
+                            </tr>
+                          )}
+                        </Fragment>
+                      );
+                    })}
                   </tbody>
                 </table>
               )}

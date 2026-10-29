@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { z } from "zod";
 import { env } from "../config/env";
+import { pool } from "../config/db";
 import { holdingNoSchema } from "../utils/holdingNoSchema";
 import { recordFieldVerification, listFieldVerificationsForHolding } from "../services/propertyFieldVerification.service";
 import { propertyFieldVerificationRepository } from "../repositories/propertyFieldVerification.repository";
@@ -98,7 +99,7 @@ export const listFieldVerifications = asyncHandler(async (req: Request, res: Res
   const paramsParsed = holdingNoParamSchema.safeParse(req.params);
   if (!paramsParsed.success) throw ApiError.badRequest("Invalid holding number");
   const records = await listFieldVerificationsForHolding(paramsParsed.data.holdingNo);
-  res.status(200).json({ records });
+  res.status(200).json({ records: records.map((r) => ({ ...r, aadhaar_number: maskAadhaar(r.aadhaar_number) })) });
 });
 
 const photoKindParamSchema = z.object({ id: z.coerce.number().int().positive(), kind: z.enum(["holding", "aadhaar", "receipt", "landdoc", "register"]) });
@@ -128,4 +129,22 @@ export const getFieldVerificationPhoto = asyncHandler(async (req: Request, res: 
   if (!fs.existsSync(fullPath)) throw ApiError.notFound("Photo file is missing from storage.");
 
   res.sendFile(path.resolve(fullPath));
+});
+
+/** Aadhaar as shown everywhere: only the last 4 digits. */
+export function maskAadhaar(n: string | null | undefined): string | null {
+  return n ? `XXXX XXXX ${String(n).slice(-4)}` : null;
+}
+
+/** GET /api/v1/admin/field-verifications/:id/aadhaar - the full Aadhaar number for an authorised officer; logged. */
+export const getFieldVerificationAadhaar = asyncHandler(async (req: Request, res: Response) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) throw ApiError.badRequest("Invalid field verification id");
+  const record = await propertyFieldVerificationRepository.findById(id);
+  if (!record || !record.aadhaar_number) throw ApiError.notFound("No Aadhaar number on this field visit.");
+  await pool.query(
+    `INSERT INTO aadhaar_view_log (field_verification_id, holding_no, viewed_by_username, viewed_by_role) VALUES ($1, $2, $3, $4)`,
+    [id, record.holding_no, req.admin!.username, req.admin!.role],
+  );
+  res.status(200).json({ aadhaarNumber: record.aadhaar_number });
 });

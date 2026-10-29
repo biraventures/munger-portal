@@ -1,6 +1,7 @@
 import type { Request, Response } from "express";
+import { maskAadhaar } from "./propertyFieldVerification.controller";
 import ExcelJS from "exceljs";
-import { listCollectedHoldings } from "../services/collectedHoldings.service";
+import { listCollectedHoldings, type FieldVisitSummary } from "../services/collectedHoldings.service";
 import { normalizeWard } from "../utils/ward";
 import { getHoldingDocumentStatus } from "../services/holdingDocuments.service";
 import { z } from "zod";
@@ -142,7 +143,7 @@ export const getPropertyReportHandler = asyncHandler(async (req: Request, res: R
     // Aadhaar is shown masked (last 4 digits) in the report.
     fieldVerifications: fieldVerifications.map((v) => ({
       ...v,
-      aadhaar_number: v.aadhaar_number ? `XXXX XXXX ${String(v.aadhaar_number).slice(-4)}` : null,
+      aadhaar_number: maskAadhaar(v.aadhaar_number),
     })),
     demandNotices,
     payments,
@@ -187,6 +188,10 @@ export const exportCollectedHoldingsHandler = asyncHandler(async (req: Request, 
     { header: "Demand No", key: "demand_no", width: 11 },
     { header: "Paid Till", key: "paid_till", width: 11 },
     { header: "Status", key: "status", width: 12 },
+    { header: "Field Visit By (latest)", key: "visit_by", width: 22 },
+    { header: "Visit Date", key: "visit_on", width: 12 },
+    { header: "Aadhaar (masked)", key: "aadhaar", width: 18 },
+    { header: "Photos on File", key: "photos", width: 40 },
   ];
   ws.getRow(1).font = { bold: true };
   for (const r of data.rows) {
@@ -195,6 +200,7 @@ export const exportCollectedHoldingsHandler = asyncHandler(async (req: Request, 
       time: new Date(r.txn_time).toLocaleTimeString("en-IN", { timeZone: "Asia/Kolkata", hour: "2-digit", minute: "2-digit", hour12: false }),
       amount: Number(r.amount),
       status: r.cancelled ? "Cancelled" : r.reconcile_status === "pending" ? "Recon. pending" : "Valid",
+      ...visitColumns(data.fieldVisits[r.holding_no] ?? []),
     });
   }
   ws.getColumn("amount").numFmt = "#,##0.00";
@@ -205,3 +211,22 @@ export const exportCollectedHoldingsHandler = asyncHandler(async (req: Request, 
   await wb.xlsx.write(res);
   res.end();
 });
+
+function visitColumns(visits: FieldVisitSummary[]) {
+  if (!visits.length) return { visit_by: "No field visit", visit_on: "", aadhaar: "", photos: "" };
+  const latest = visits[0]!;
+  const has = (k: keyof FieldVisitSummary) => visits.some((v) => v[k] !== null);
+  const photos = [
+    has("holding_photo_path") && "Holding",
+    has("previous_receipt_photo_path") && "Previous receipt",
+    has("land_document_photo_path") && "Land document",
+    has("register_photo_path") && "Demand register",
+    has("aadhaar_photo_path") && "Aadhaar card",
+  ].filter(Boolean);
+  return {
+    visit_by: latest.captured_by_display_name,
+    visit_on: new Date(latest.captured_at).toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata" }),
+    aadhaar: visits.find((v) => v.aadhaar_number)?.aadhaar_number ?? "",
+    photos: photos.join(", "),
+  };
+}

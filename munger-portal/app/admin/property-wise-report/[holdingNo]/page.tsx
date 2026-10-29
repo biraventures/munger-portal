@@ -12,10 +12,10 @@ import {
   NOTICE_LANGUAGE_LABELS,
   type GeneratedCollectionIssueNotice,
 } from "@/lib/admin-api";
-import { FieldVerificationPhotos } from "@/components/admin/field-verification-photos";
 import { CollectionIssueNoticeView } from "@/components/admin/collection-issue-notice-view";
 import { PropertyTaxLedger } from "@/components/admin/property-tax-ledger";
 import { ReceivingCopyVisitEntry } from "@/components/admin/receiving-copy-visit";
+import { FieldVisitCard } from "@/components/admin/field-visit-card";
 
 const ALLOWED_ROLES = ["commissioner", "deputy_commissioner", "city_manager", "tax_daroga", "agency_team_leader", "agency_project_manager"];
 
@@ -478,20 +478,7 @@ export default function PropertyWiseReportDetailPage() {
                   {[
                     ...report.fieldVerifications.map((v) => ({
                       at: v.captured_at,
-                      node: (
-                        <div key={`fv-${v.id}`} className="rounded-md border border-slate-200 p-3 text-xs">
-                          <p className="font-semibold text-slate-700">
-                            {fmtDateTime(v.captured_at)} - {v.captured_by_display_name} ({v.captured_by_role})
-                          </p>
-                          {v.gps_lat && v.gps_lng && (
-                            <p className="mt-1 text-slate-500">
-                              GPS: {v.gps_lat}, {v.gps_lng}
-                            </p>
-                          )}
-                          {v.aadhaar_number && <p className="mt-1 text-slate-500">Aadhaar: {v.aadhaar_number}</p>}
-                          <FieldVerificationPhotos visit={v} />
-                        </div>
-                      ),
+                      node: <FieldVisitCard key={`fv-${v.id}`} visit={v} viewerRole={admin.role} />,
                     })),
                     ...(report.receivingCopies ?? []).map((c) => ({
                       at: c.uploaded_at,

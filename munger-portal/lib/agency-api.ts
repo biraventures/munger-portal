@@ -221,6 +221,8 @@ export interface CollectedHoldingRow {
 export interface CollectedHoldingsReport {
   date: string;
   rows: CollectedHoldingRow[];
+  /** Field visits of each holding (Tax Collector, photos on file, Aadhaar masked), newest first. */
+  fieldVisits: Record<string, import("@/components/admin/field-visit-card").FieldVisit[]>;
   holdings: number;
   receipts: number;
   total: number;

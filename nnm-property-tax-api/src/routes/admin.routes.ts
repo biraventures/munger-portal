@@ -30,7 +30,7 @@ import {
   postResubmitDiscrepancyRequest,
   getDiscrepancyPhoto,
 } from "../controllers/propertyDiscrepancy.controller";
-import { getFieldVerificationPhoto } from "../controllers/propertyFieldVerification.controller";
+import { getFieldVerificationPhoto, getFieldVerificationAadhaar } from "../controllers/propertyFieldVerification.controller";
 import {
   getCancellationRequests,
   postApproveCancellation,
@@ -312,6 +312,11 @@ adminRouter.get(
   "/field-verifications/:id/photo/:kind",
   requireAdminRole("tax_collector", "tax_surveyor", "tax_daroga", "city_manager", "deputy_commissioner", "commissioner", "agency_team_leader", "agency_project_manager"),
   getFieldVerificationPhoto,
+);
+adminRouter.get(
+  "/field-verifications/:id/aadhaar",
+  requireAdminRole("tax_daroga", "agency_team_leader", "agency_project_manager", "city_manager", "deputy_commissioner", "commissioner"),
+  getFieldVerificationAadhaar,
 );
 
 // Demand notice / receipt cancellation approval queue - viewable by
