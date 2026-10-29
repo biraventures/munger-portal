@@ -55,6 +55,10 @@ async function main() {
         JSON.stringify(errors),
       ]);
     try {
+      const rolled = await demandNoticeRepository.rollForwardFinancialYear();
+      if (rolled.holdings || rolled.notices) {
+        console.log(`[demand-refresh] financial year roll-forward: ${rolled.holdings} holding(s), ${rolled.notices} old-year notice(s) superseded`);
+      }
       const holdingNos = await demandNoticeRepository.findHoldingNosNeedingDemandNotice();
       await pool.query(`UPDATE demand_refresh_runs SET total = $2 WHERE id = $1`, [runId, holdingNos.length]);
       for (const [i, holdingNo] of holdingNos.entries()) {

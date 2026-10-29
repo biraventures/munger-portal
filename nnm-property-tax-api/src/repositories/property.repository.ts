@@ -1,3 +1,4 @@
+import { withCurrentAssessmentYear } from "../utils/assessmentYear";
 import { pool } from "../config/db";
 import type { FloorRow, PropertyRow, TaxHistoryStageRow } from "../types/property.types";
 
@@ -50,7 +51,8 @@ export const propertyRepository = {
       `SELECT * FROM properties WHERE holding_no = $1 LIMIT 1`,
       [holdingNo],
     );
-    return rows[0] ?? null;
+    // Billing, payment and dues all read the holding through here - the current year is never an old one.
+    return rows[0] ? withCurrentAssessmentYear(rows[0]) : null;
   },
 
   /**

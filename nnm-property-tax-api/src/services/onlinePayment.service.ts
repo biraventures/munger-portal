@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import { assertNoticeYearNotPaid } from "./paidYearGuard.service";
 import { propertyRepository } from "../repositories/property.repository";
 import { onlinePaymentRepository } from "../repositories/onlinePayment.repository";
 import { adminRepository } from "../repositories/admin.repository";
@@ -7,7 +8,7 @@ import { env } from "../config/env";
 import { ApiError } from "../utils/ApiError";
 import { Request } from "express";
 import { assertNotDisputed } from "./propertyDispute.service";
-import { assertNoNoticeOnHold } from "./noticeHold.service";
+import { assertNoNoticeOnHold, assertNoOnlinePaymentInFlight } from "./noticeHold.service";
 import { assertNoResurveyPending } from "./propertyResurvey.service";
 import { submitPayment, getReceiptForReprint, getReceiptData, type PrintableReceiptHistory } from "./payment.service";
 import { PaymentInput, PaymentResult } from "../types/payment.types";
@@ -174,6 +175,11 @@ export async function createGatewayOrder(
   if (Number(notice.total_amount_demanded) !== Number(amount)) {
     throw ApiError.badRequest(`Amount mismatch - please generate new demand. `);
   }
+  // Never send a citizen to the bank for a year this holding has already paid, or while another online payment of it
+  // is still being confirmed.
+  const forGuard = property ?? (await propertyRepository.findByHoldingNo(holdingNo));
+  if (forGuard) await assertNoticeYearNotPaid(forGuard, notice, true);
+  await assertNoOnlinePaymentInFlight(holdingNo);
 
   await onlinePaymentRepository.createPendingOrder({
     orderId,

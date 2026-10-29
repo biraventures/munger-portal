@@ -1,4 +1,5 @@
 import { pool } from "../config/db";
+import { assertNoticeYearNotPaid, supersedeOtherOpenNotices } from "./paidYearGuard.service";
 import { propertyRepository } from "../repositories/property.repository";
 import { paymentRepository } from "../repositories/payment.repository";
 import { adminRepository } from "../repositories/admin.repository";
@@ -19,7 +20,7 @@ import { formatYmdToDmy } from "../utils/formatYmdToDmy";
 import type { InstrumentView, PaymentActor, PaymentInput, PaymentResult } from "../types/payment.types";
 import { writeLedgerEntry } from "./transactionLedger.service";
 import { assertActualMatchesDemand, reconciliationRule, validatePaymentDetails } from "./paymentDetails.service";
-import { assertNoNoticeOnHold } from "./noticeHold.service";
+import { assertNoNoticeOnHold, assertNoOnlinePaymentInFlight } from "./noticeHold.service";
 import type { DemandNoticeResult } from "../types/demandNotice.types";
 import type { FrozenFloorBreakdown } from "../types/property.types";
 
@@ -437,6 +438,10 @@ export async function submitPayment(
   const isPart = notice.part_payment && !!notice.paid_through_year;
   const paidThroughYear = isPart ? notice.paid_through_year! : notice.assessment_year;
   const throughYearNum = isPart ? parseYearStartOrNull(notice.paid_through_year)! : noticeYearNum - 1;
+  // A year already paid is never collected again - not by this notice, not by an older one still lying around.
+  await assertNoticeYearNotPaid(property, notice, !!actor);
+  // Counter / Tax Collector / agency: not while an online payment for this holding is still being confirmed by the bank.
+  if (actor) await assertNoOnlinePaymentInFlight(holdingNo);
   if (isPart) {
     const already = parseYearStartOrNull(property.tax_paid_till_year);
     if (already !== null && already >= throughYearNum) {
@@ -567,6 +572,8 @@ export async function submitPayment(
     // The core fix: unconditionally advance paid-through status to what
     // this notice covered — this is what was missing before.
     await paymentRepository.updateTaxPaidTillYear(holdingNo, paidThroughYear, client);
+    // Every other open notice of this holding is now out of date - it must not be payable any more.
+    await supersedeOtherOpenNotices(holdingNo, input.demandNo, client);
 
     // A full payment also collects the solid waste user charge for every unpaid year up to the assessment year (a
     // part payment is holding tax only), so the user-charge paid-till year moves up to that year. The previous value

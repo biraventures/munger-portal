@@ -80,5 +80,52 @@ export const getPropertyReportHandler = asyncHandler(async (req: Request, res: R
       .then((r) => r.rows),
   ]);
 
-  res.status(200).json({ ...propertyResult, changeRequests, discrepancies, resurveyFlags, fieldVerifications, collectionIssues, dispute, propertyHistory });
+  // Every demand notice and every payment of the holding (and online payments not yet completed), newest first.
+  const [demandNotices, payments, onlineOrders] = await Promise.all([
+    pool
+      .query(
+        `SELECT n.demand_no, n.notice_date, n.generated_by, n.assessment_year, n.demand_from_year, n.demand_upto_year,
+                n.part_payment, n.paid_through_year, n.reminder_number, n.total_amount_demanded,
+                n.settled, n.settled_receipt_no, n.settled_at, n.superseded, n.cancelled, n.cancelled_reason, n.on_hold
+           FROM demand_notices n WHERE n.holding_no = $1
+          ORDER BY n.notice_date DESC, n.demand_no DESC`,
+        [holdingNo],
+      )
+      .then((r) => r.rows),
+    pool
+      .query(
+        `SELECT t.receipt_no, t.txn_date, t.payment_mode, t.amount_received, t.collected_by, t.collected_by_role,
+                t.tax_collector_name, t.counter, t.demand_no, t.arrear_periods_paid, t.status, t.reconcile_status,
+                t.cancelled, t.cancelled_reason, t.previous_tax_paid_till_year, t.order_id,
+                n.assessment_year AS notice_year, n.part_payment, n.paid_through_year
+           FROM transactions t
+           LEFT JOIN demand_notices n ON n.settled_receipt_no = t.receipt_no
+          WHERE t.holding_no = $1
+          ORDER BY t.txn_date DESC, t.receipt_no DESC`,
+        [holdingNo],
+      )
+      .then((r) => r.rows),
+    pool
+      .query(
+        `SELECT order_id, amount, status, failure_reason, created_at, demand
+           FROM pg_request WHERE holding_no = $1 AND status IN ('pending', 'needs_review')
+          ORDER BY created_at DESC`,
+        [holdingNo],
+      )
+      .then((r) => r.rows),
+  ]);
+
+  res.status(200).json({
+    ...propertyResult,
+    changeRequests,
+    discrepancies,
+    resurveyFlags,
+    fieldVerifications,
+    collectionIssues,
+    dispute,
+    propertyHistory,
+    demandNotices,
+    payments,
+    onlineOrders,
+  });
 });

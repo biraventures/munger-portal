@@ -14,6 +14,7 @@ import {
 } from "@/lib/admin-api";
 import { FieldVerificationPhotos } from "@/components/admin/field-verification-photos";
 import { CollectionIssueNoticeView } from "@/components/admin/collection-issue-notice-view";
+import { PropertyTaxLedger } from "@/components/admin/property-tax-ledger";
 
 const ALLOWED_ROLES = ["commissioner", "deputy_commissioner", "city_manager"];
 
@@ -195,6 +196,9 @@ export default function PropertyWiseReportDetailPage() {
             <section className="mb-6 rounded-xl border border-slate-200 bg-white p-6">
               <h2 className="mb-4 text-sm font-semibold text-slate-700">Tax Pending</h2>
               <dl className="grid grid-cols-1 gap-x-6 gap-y-3 text-sm sm:grid-cols-3">
+                <div><dt className="text-xs text-slate-400">Tax Paid Till</dt><dd className="font-semibold">{str(p.tax_paid_till_year)}</dd></div>
+                <div><dt className="text-xs text-slate-400">Current Year</dt><dd>{str(p.assessment_year)}</dd></div>
+                <div><dt className="text-xs text-slate-400">Solid Waste Paid Till</dt><dd>{str(p.solid_waste_paid_till_year)}</dd></div>
                 <div><dt className="text-xs text-slate-400">Current Year Tax</dt><dd>₹{money(p.currentTax)}</dd></div>
                 <div><dt className="text-xs text-slate-400">Pending Arrears</dt><dd>₹{money(p.pendingArrearsTotal)}</dd></div>
                 <div><dt className="text-xs text-slate-400">Penalty</dt><dd>₹{money(p.autoPenalty)}</dd></div>
@@ -203,6 +207,9 @@ export default function PropertyWiseReportDetailPage() {
                 Total Payable: ₹{money(p.totalPayable)}
               </div>
             </section>
+
+            {/* Payments and demand notices */}
+            <PropertyTaxLedger report={report} />
 
             {/* Audit trail - creation + edits */}
             <section className="mb-6 rounded-xl border border-slate-200 bg-white p-6">

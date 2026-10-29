@@ -1,4 +1,5 @@
 import { propertyRepository } from "../repositories/property.repository";
+import { withEffectivePaidTill } from "./paidYearGuard.service";
 import { demandNoticeRepository } from "../repositories/demandNotice.repository";
 import { cancellationRequestRepository } from "../repositories/cancellationRequest.repository";
 import { calculateTax } from "./taxCalculation.service";
@@ -9,7 +10,7 @@ import { num } from "../utils/num";
 import { ApiError } from "../utils/ApiError";
 import { assertNotDisputed } from "./propertyDispute.service";
 import { assertNoResurveyPending } from "./propertyResurvey.service";
-import { assertNoNoticeOnHold } from "./noticeHold.service";
+import { assertNoNoticeOnHold, assertNoOnlinePaymentInFlight } from "./noticeHold.service";
 import { buildVerificationUrl } from "../utils/verificationSignature";
 import type { DemandNoticeResult, DemandNoticeReprintResult, DemandNoticeTotals } from "../types/demandNotice.types";
 import type { FrozenFloorBreakdown, TaxCalculationResult } from "../types/property.types";
@@ -87,15 +88,20 @@ export async function generateDemandNotice(
   /** Formatted receipt no. of the part payment this notice follows - makes it the balance notice for the remaining years. */
   followsPartPaymentReceipt?: string,
 ): Promise<DemandNoticeResult> {
-  const property = await propertyRepository.findByHoldingNo(holdingNo);
-  if (!property) {
+  const stored = await propertyRepository.findByHoldingNo(holdingNo);
+  if (!stored) {
     throw ApiError.notFound(`Property not found for Holding No: ${holdingNo}`);
   }
+  // Billed from the last year actually paid - even if tax_paid_till_year was left behind by a settled payment.
+  const property = await withEffectivePaidTill(stored);
   assertNotDisputed(property);
   assertNoResurveyPending(property);
   // A cheque/DD payment awaiting reconciliation freezes the holding - except for the balance notice raised right after a
   // part payment (that one is cancelled automatically if the cheque bounces).
-  if (!followsPartPaymentReceipt) await assertNoNoticeOnHold(holdingNo);
+  if (!followsPartPaymentReceipt) {
+    await assertNoNoticeOnHold(holdingNo);
+    await assertNoOnlinePaymentInFlight(holdingNo);
+  }
   const floors = await propertyRepository.findFloorsByHoldingNo(holdingNo);
   const stages = await propertyRepository.findTaxHistoryByHoldingNo(holdingNo);
   // Never bill short: every pending year must have an assessment on file (pre-2011 years need the register ARV).
