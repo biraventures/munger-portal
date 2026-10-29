@@ -15,6 +15,7 @@ import {
 import { FieldVerificationPhotos } from "@/components/admin/field-verification-photos";
 import { CollectionIssueNoticeView } from "@/components/admin/collection-issue-notice-view";
 import { PropertyTaxLedger } from "@/components/admin/property-tax-ledger";
+import { ReceivingCopyVisitEntry } from "@/components/admin/receiving-copy-visit";
 
 const ALLOWED_ROLES = ["commissioner", "deputy_commissioner", "city_manager"];
 
@@ -140,19 +141,62 @@ export default function PropertyWiseReportDetailPage() {
             <section className="mb-6 rounded-xl border border-slate-200 bg-white p-6">
               <h2 className="mb-4 text-sm font-semibold text-slate-700">Property Details</h2>
               <dl className="grid grid-cols-1 gap-x-6 gap-y-3 text-sm sm:grid-cols-2">
-                <div><dt className="text-xs text-slate-400">Holding No</dt><dd className="font-mono">{str(p.holding_no)}</dd></div>
-                <div><dt className="text-xs text-slate-400">Old Holding No</dt><dd>{str(p.old_holding_no)}</dd></div>
-                <div><dt className="text-xs text-slate-400">Owner</dt><dd>{str(p.owner_name)}</dd></div>
-                <div><dt className="text-xs text-slate-400">Relation</dt><dd>{str(p.relation_type)} {str(p.relation_name) !== "-" ? str(p.relation_name) : ""}</dd></div>
-                <div><dt className="text-xs text-slate-400">Mobile</dt><dd>{str(p.mobile_no)}</dd></div>
-                <div><dt className="text-xs text-slate-400">Ward / Zone</dt><dd>{str(p.ward)} / {str(p.zone)}</dd></div>
-                <div><dt className="text-xs text-slate-400">Area (sqft)</dt><dd>{str(p.area_sqft)}</dd></div>
-                <div><dt className="text-xs text-slate-400">Vacant Area (sqft)</dt><dd>{str(p.vacant_area_sqft)}</dd></div>
-                <div><dt className="text-xs text-slate-400">Road Type</dt><dd>{str(p.road_type)}</dd></div>
-                <div><dt className="text-xs text-slate-400">Assessment Year</dt><dd>{str(p.assessment_year)}</dd></div>
-                <div><dt className="text-xs text-slate-400">Rain Water Harvesting</dt><dd>{p.rain_water_harvesting ? "Yes" : "No"}</dd></div>
-                <div><dt className="text-xs text-slate-400">Solar Rooftop</dt><dd>{p.solar_rooftop ? "Yes" : "No"}</dd></div>
-                <div><dt className="text-xs text-slate-400">Slum Area</dt><dd>{p.is_slum ? "Yes" : "No"}</dd></div>
+                <div>
+                  <dt className="text-xs text-slate-400">Holding No</dt>
+                  <dd className="font-mono">{str(p.holding_no)}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-slate-400">Old Holding No</dt>
+                  <dd>{str(p.old_holding_no)}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-slate-400">Owner</dt>
+                  <dd>{str(p.owner_name)}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-slate-400">Relation</dt>
+                  <dd>
+                    {str(p.relation_type)} {str(p.relation_name) !== "-" ? str(p.relation_name) : ""}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-slate-400">Mobile</dt>
+                  <dd>{str(p.mobile_no)}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-slate-400">Ward / Zone</dt>
+                  <dd>
+                    {str(p.ward)} / {str(p.zone)}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-slate-400">Area (sqft)</dt>
+                  <dd>{str(p.area_sqft)}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-slate-400">Vacant Area (sqft)</dt>
+                  <dd>{str(p.vacant_area_sqft)}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-slate-400">Road Type</dt>
+                  <dd>{str(p.road_type)}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-slate-400">Assessment Year</dt>
+                  <dd>{str(p.assessment_year)}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-slate-400">Rain Water Harvesting</dt>
+                  <dd>{p.rain_water_harvesting ? "Yes" : "No"}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-slate-400">Solar Rooftop</dt>
+                  <dd>{p.solar_rooftop ? "Yes" : "No"}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-slate-400">Slum Area</dt>
+                  <dd>{p.is_slum ? "Yes" : "No"}</dd>
+                </div>
                 <div className="sm:col-span-2">
                   <dt className="text-xs text-slate-400">Holding Tax Exemption</dt>
                   <dd>
@@ -196,14 +240,34 @@ export default function PropertyWiseReportDetailPage() {
             <section className="mb-6 rounded-xl border border-slate-200 bg-white p-6">
               <h2 className="mb-4 text-sm font-semibold text-slate-700">Tax Pending</h2>
               <dl className="grid grid-cols-1 gap-x-6 gap-y-3 text-sm sm:grid-cols-3">
-                <div><dt className="text-xs text-slate-400">Tax Paid Till</dt><dd className="font-semibold">{str(p.tax_paid_till_year)}</dd></div>
-                <div><dt className="text-xs text-slate-400">Current Year</dt><dd>{str(p.assessment_year)}</dd></div>
-                <div><dt className="text-xs text-slate-400">Solid Waste Paid Till</dt><dd>{str(p.solid_waste_paid_till_year)}</dd></div>
-                <div><dt className="text-xs text-slate-400">Current Year Tax</dt><dd>₹{money(p.currentTax)}</dd></div>
-                <div><dt className="text-xs text-slate-400">Pending Arrears</dt><dd>₹{money(p.pendingArrearsTotal)}</dd></div>
-                <div><dt className="text-xs text-slate-400">Penalty</dt><dd>₹{money(p.autoPenalty)}</dd></div>
+                <div>
+                  <dt className="text-xs text-slate-400">Tax Paid Till</dt>
+                  <dd className="font-semibold">{str(p.tax_paid_till_year)}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-slate-400">Current Year</dt>
+                  <dd>{str(p.assessment_year)}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-slate-400">Solid Waste Paid Till</dt>
+                  <dd>{str(p.solid_waste_paid_till_year)}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-slate-400">Current Year Tax</dt>
+                  <dd>₹{money(p.currentTax)}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-slate-400">Pending Arrears</dt>
+                  <dd>₹{money(p.pendingArrearsTotal)}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-slate-400">Penalty</dt>
+                  <dd>₹{money(p.autoPenalty)}</dd>
+                </div>
               </dl>
-              <div className={`mt-4 rounded-md p-3 text-sm font-semibold ${Number(p.totalPayable ?? 0) > 0 ? "bg-red-50 text-red-700" : "bg-green-50 text-green-700"}`}>
+              <div
+                className={`mt-4 rounded-md p-3 text-sm font-semibold ${Number(p.totalPayable ?? 0) > 0 ? "bg-red-50 text-red-700" : "bg-green-50 text-green-700"}`}
+              >
                 Total Payable: ₹{money(p.totalPayable)}
               </div>
             </section>
@@ -213,7 +277,9 @@ export default function PropertyWiseReportDetailPage() {
 
             {/* Audit trail - creation + edits */}
             <section className="mb-6 rounded-xl border border-slate-200 bg-white p-6">
-              <h2 className="mb-1 text-sm font-semibold text-slate-700">Audit Trail - Creation &amp; Edits ({report.propertyHistory?.length ?? 0})</h2>
+              <h2 className="mb-1 text-sm font-semibold text-slate-700">
+                Audit Trail - Creation &amp; Edits ({report.propertyHistory?.length ?? 0})
+              </h2>
               {p.data_source ? (
                 <p className="mb-3 text-xs text-slate-500">
                   Created from data: <b className="text-slate-700">{str(p.data_source)}</b>
@@ -238,9 +304,7 @@ export default function PropertyWiseReportDetailPage() {
                           <td className="py-2 pr-4 whitespace-nowrap">{fmtDateTime(h.ts)}</td>
                           <td className="py-2 pr-4">{h.action}</td>
                           <td className="py-2 pr-4">{h.operator_name}</td>
-                          <td className="py-2">
-                            {[h.change_basis, h.change_reference].filter(Boolean).join(" - ") || "-"}
-                          </td>
+                          <td className="py-2">{[h.change_basis, h.change_reference].filter(Boolean).join(" - ") || "-"}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -256,7 +320,9 @@ export default function PropertyWiseReportDetailPage() {
                 {report.dispute?.isDisputed ? (
                   <span className="rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-semibold uppercase text-red-700">Disputed</span>
                 ) : (
-                  <span className="rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-semibold uppercase text-green-700">Not disputed</span>
+                  <span className="rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-semibold uppercase text-green-700">
+                    Not disputed
+                  </span>
                 )}
               </h2>
               {!report.dispute || report.dispute.history.length === 0 ? (
@@ -277,7 +343,9 @@ export default function PropertyWiseReportDetailPage() {
                         <tr key={i} className="border-t border-slate-100 align-top">
                           <td className="py-2 pr-4 whitespace-nowrap">{fmtDateTime(h.actedAt)}</td>
                           <td className="py-2 pr-4">
-                            <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase ${h.action === "flagged" ? "bg-red-100 text-red-700" : "bg-green-100 text-green-700"}`}>
+                            <span
+                              className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase ${h.action === "flagged" ? "bg-red-100 text-red-700" : "bg-green-100 text-green-700"}`}
+                            >
                               {h.action === "flagged" ? "Flagged disputed" : "Dispute cleared"}
                             </span>
                           </td>
@@ -303,10 +371,14 @@ export default function PropertyWiseReportDetailPage() {
                   {report.changeRequests.map((r) => (
                     <div key={r.id} className="rounded-md border border-slate-200 p-3 text-xs">
                       <div className="mb-1 flex items-center justify-between">
-                        <span className="font-semibold text-slate-700">{fmtDateTime(r.requested_at)} - {r.requested_by}</span>
+                        <span className="font-semibold text-slate-700">
+                          {fmtDateTime(r.requested_at)} - {r.requested_by}
+                        </span>
                         {statusBadge(r.status)}
                       </div>
-                      <p className="text-slate-600">Basis: {r.change_basis} - {r.change_reference}</p>
+                      <p className="text-slate-600">
+                        Basis: {r.change_basis} - {r.change_reference}
+                      </p>
                       {r.status === "pending" && <p className="mt-1 text-amber-700">Currently pending at {r.current_stage}</p>}
                       {r.reviewed_by && (
                         <p className="mt-1 text-slate-400">
@@ -336,7 +408,9 @@ export default function PropertyWiseReportDetailPage() {
                   {report.discrepancies.map((d) => (
                     <div key={d.id} className="rounded-md border border-slate-200 p-3 text-xs">
                       <div className="mb-1 flex items-center justify-between">
-                        <span className="font-semibold text-slate-700">{fmtDateTime(d.reported_at)} - {d.reported_by_display_name}</span>
+                        <span className="font-semibold text-slate-700">
+                          {fmtDateTime(d.reported_at)} - {d.reported_by_display_name}
+                        </span>
                         {statusBadge(d.status)}
                       </div>
                       <p className="text-slate-600">{d.discrepancy_notes}</p>
@@ -362,7 +436,9 @@ export default function PropertyWiseReportDetailPage() {
                   {report.resurveyFlags.map((f) => (
                     <div key={f.id} className="rounded-md border border-slate-200 p-3 text-xs">
                       <div className="mb-1 flex items-center justify-between">
-                        <span className="font-semibold text-slate-700">{fmtDateTime(f.flagged_at)} - {f.flagged_by_display_name}</span>
+                        <span className="font-semibold text-slate-700">
+                          {fmtDateTime(f.flagged_at)} - {f.flagged_by_display_name}
+                        </span>
                         {statusBadge(f.status)}
                       </div>
                       <p className="text-slate-600">{f.remarks}</p>
@@ -378,25 +454,50 @@ export default function PropertyWiseReportDetailPage() {
               )}
             </section>
 
-            {/* Surveyor field verifications */}
+            {/* Field visits: field verifications (GPS, photos, documents) and demand notice deliveries (receiving copies) */}
             <section className="mb-6 rounded-xl border border-slate-200 bg-white p-6">
               <h2 className="mb-4 flex items-center gap-2 text-sm font-semibold text-slate-700">
                 <MapPin className="h-4 w-4" />
-                Field Visits, Photos & Documents ({report.fieldVerifications.length})
+                Field Visits, Photos & Documents ({report.fieldVerifications.length + (report.receivingCopies?.length ?? 0)})
               </h2>
-              {report.fieldVerifications.length === 0 ? (
+              {report.documentStatus && (
+                <p
+                  className={`mb-3 rounded-md p-2.5 text-xs ${report.documentStatus.complete ? "bg-green-50 text-green-800" : "bg-red-50 text-red-800"}`}
+                >
+                  {report.documentStatus.complete
+                    ? "All required documents are on file (GPS, Aadhaar, holding photo, previous receipt, land document)."
+                    : `Required documents missing: ${report.documentStatus.missing.join(", ")}. Online payment and Tax Collector collection are blocked until these are uploaded.`}
+                </p>
+              )}
+              {report.fieldVerifications.length === 0 && (report.receivingCopies?.length ?? 0) === 0 ? (
                 <p className="text-sm text-slate-400">No field visit has been logged for this holding.</p>
               ) : (
                 <div className="space-y-2">
-                  {report.fieldVerifications.map((v) => (
-                    <div key={v.id} className="rounded-md border border-slate-200 p-3 text-xs">
-                      <p className="font-semibold text-slate-700">{fmtDateTime(v.captured_at)} - {v.captured_by_display_name} ({v.captured_by_role})</p>
-                      {v.gps_lat && v.gps_lng && (
-                        <p className="mt-1 text-slate-500">GPS: {v.gps_lat}, {v.gps_lng}</p>
-                      )}
-                      <FieldVerificationPhotos visit={v} />
-                    </div>
-                  ))}
+                  {[
+                    ...report.fieldVerifications.map((v) => ({
+                      at: v.captured_at,
+                      node: (
+                        <div key={`fv-${v.id}`} className="rounded-md border border-slate-200 p-3 text-xs">
+                          <p className="font-semibold text-slate-700">
+                            {fmtDateTime(v.captured_at)} - {v.captured_by_display_name} ({v.captured_by_role})
+                          </p>
+                          {v.gps_lat && v.gps_lng && (
+                            <p className="mt-1 text-slate-500">
+                              GPS: {v.gps_lat}, {v.gps_lng}
+                            </p>
+                          )}
+                          {v.aadhaar_number && <p className="mt-1 text-slate-500">Aadhaar: {v.aadhaar_number}</p>}
+                          <FieldVerificationPhotos visit={v} />
+                        </div>
+                      ),
+                    })),
+                    ...(report.receivingCopies ?? []).map((c) => ({
+                      at: c.uploaded_at,
+                      node: <ReceivingCopyVisitEntry key={`rc-${c.id}`} visit={c} when={fmtDateTime} />,
+                    })),
+                  ]
+                    .sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime())
+                    .map((e) => e.node)}
                 </div>
               )}
             </section>
@@ -408,7 +509,9 @@ export default function PropertyWiseReportDetailPage() {
                 Collection Issues &amp; Notices Issued ({report.collectionIssues.reduce((n, i) => n + i.notices.length, 0)} notice
                 {report.collectionIssues.reduce((n, i) => n + i.notices.length, 0) === 1 ? "" : "s"})
               </h2>
-              <p className="mb-4 text-xs text-slate-400">Every problem a Tax Collector reported while collecting from this holder, and each notice the City Manager issued for it.</p>
+              <p className="mb-4 text-xs text-slate-400">
+                Every problem a Tax Collector reported while collecting from this holder, and each notice the City Manager issued for it.
+              </p>
               {report.collectionIssues.length === 0 ? (
                 <p className="text-sm text-slate-400">No collection issue has been raised against this holding.</p>
               ) : (
@@ -418,9 +521,13 @@ export default function PropertyWiseReportDetailPage() {
                       <div className="mb-1 flex items-center justify-between gap-2">
                         <span className="font-semibold text-slate-700">{COLLECTION_ISSUE_TYPE_LABELS[i.issue_type]}</span>
                         {i.notices.length === 0 ? (
-                          <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold uppercase text-amber-700">Awaiting notice</span>
+                          <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold uppercase text-amber-700">
+                            Awaiting notice
+                          </span>
                         ) : (
-                          <span className="rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-semibold uppercase text-green-700">Notice issued</span>
+                          <span className="rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-semibold uppercase text-green-700">
+                            Notice issued
+                          </span>
                         )}
                       </div>
                       <p className="text-slate-500">
@@ -432,8 +539,8 @@ export default function PropertyWiseReportDetailPage() {
                           {i.notices.map((n) => (
                             <li key={n.id} className="flex items-center justify-between gap-3 py-2">
                               <span className="text-slate-600">
-                                <span className="font-mono font-semibold text-slate-800">{n.notice_no}</span> · {NOTICE_LANGUAGE_LABELS[n.language]} · {fmtDateTime(n.generated_at)} by{" "}
-                                {n.generated_by_display_name}
+                                <span className="font-mono font-semibold text-slate-800">{n.notice_no}</span> ·{" "}
+                                {NOTICE_LANGUAGE_LABELS[n.language]} · {fmtDateTime(n.generated_at)} by {n.generated_by_display_name}
                                 {n.demand_no && <span className="text-slate-400"> · Demand {n.demand_no}</span>}
                               </span>
                               <button

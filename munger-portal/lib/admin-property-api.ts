@@ -98,6 +98,8 @@ export interface PropertyFieldVerificationSummary {
   captured_by_display_name: string;
   captured_by_role: string;
   captured_at: string;
+  /** Masked by the API (XXXX XXXX 1234). */
+  aadhaar_number?: string | null;
   holding_photo_path?: string | null;
   aadhaar_photo_path?: string | null;
   previous_receipt_photo_path?: string | null;
@@ -123,6 +125,10 @@ export interface PropertyReport {
   demandNotices?: ReportDemandNotice[];
   /** Every payment (receipt) of the holding, newest first - cancelled ones included and marked. */
   payments?: ReportPayment[];
+  /** Signed receiving copies of demand notices uploaded by Tax Collectors on their field visits. */
+  receivingCopies?: { id: string; demand_no: string; latitude: string | null; longitude: string | null; uploaded_by_display_name: string; uploaded_at: string }[];
+  /** The five documents required for TC collection / online payment. */
+  documentStatus?: import("./aadhaar").HoldingDocumentStatus;
   /** Online payments the bank has not finished confirming. */
   onlineOrders?: { order_id: string; amount: string; status: string; failure_reason: string | null; created_at: string; demand: number[] }[];
 }

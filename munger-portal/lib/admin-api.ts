@@ -2315,3 +2315,13 @@ export async function changeOwnPassword(currentPassword: string, newPassword: st
     throw new Error(body.error || "Could not change the password.");
   }
 }
+
+/** Which of the five required holding documents (GPS, Aadhaar, holding photo, previous receipt, land document) are on file. */
+export async function fetchHoldingDocumentStatus(holdingNo: string): Promise<import("./aadhaar").HoldingDocumentStatus> {
+  const res = await fetch(`${API_BASE_URL}/properties/${encodeURIComponent(holdingNo)}/document-status`, { headers: authHeaders() });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || "Could not load the holding's document status.");
+  }
+  return res.json();
+}

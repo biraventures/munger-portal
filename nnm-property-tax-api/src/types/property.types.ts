@@ -207,6 +207,8 @@ export interface PropertySearchResult {
     /** True when the holding is not a Bulk Waste Generator and has no recognised solid waste user type on record. */
     solidWasteTypeMissing: boolean;
     pendingDemandNotices: { demandNo: string; noticeDate: Date; assessmentYear: string | null; totalAmountDemanded: string }[];
+    /** Public search only: why online payment is not available (documents not yet uploaded); null when it is. */
+    onlinePaymentBlockedReason?: string | null;
   };
   floors?: FloorRow[];
   taxCalc?: TaxCalculationResult;

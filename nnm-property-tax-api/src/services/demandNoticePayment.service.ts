@@ -1,4 +1,5 @@
 import { pool } from "../config/db";
+import { getHoldingDocumentStatus, onlinePaymentDocumentsMessage } from "./holdingDocuments.service";
 import { env } from "../config/env";
 import { ApiError } from "../utils/ApiError";
 import { demandNoticeRepository } from "../repositories/demandNotice.repository";
@@ -78,6 +79,9 @@ export async function getDemandNoticePaymentInfo(demandNo: string): Promise<Dema
   } catch {
     return { ...base, available: false, reason: "Please contact the Holding Tax Section, Municipal Corporation Office, Munger." };
   }
+
+  const docs = await getHoldingDocumentStatus(holdingNo);
+  if (!docs.complete) return { ...base, available: false, reason: onlinePaymentDocumentsMessage(docs.missing) };
 
   const result = await searchPropertyByHoldingNo(holdingNo);
   if (!(Number(result.property?.totalPayable ?? 0) > 0)) return { ...base, available: false, reason: "No dues are pending against this holding." };

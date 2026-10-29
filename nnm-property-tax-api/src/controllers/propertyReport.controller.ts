@@ -1,4 +1,5 @@
 import type { Request, Response } from "express";
+import { getHoldingDocumentStatus } from "../services/holdingDocuments.service";
 import { z } from "zod";
 import { pool } from "../config/db";
 import { holdingNoSchema } from "../utils/holdingNoSchema";
@@ -81,7 +82,7 @@ export const getPropertyReportHandler = asyncHandler(async (req: Request, res: R
   ]);
 
   // Every demand notice and every payment of the holding (and online payments not yet completed), newest first.
-  const [demandNotices, payments, onlineOrders] = await Promise.all([
+  const [demandNotices, payments, onlineOrders, receivingCopies, documentStatus] = await Promise.all([
     pool
       .query(
         `SELECT n.demand_no, n.notice_date, n.generated_by, n.assessment_year, n.demand_from_year, n.demand_upto_year,
@@ -113,6 +114,18 @@ export const getPropertyReportHandler = asyncHandler(async (req: Request, res: R
         [holdingNo],
       )
       .then((r) => r.rows),
+    // Tax Collector field visits that delivered a demand notice: the signed receiving copy, with GPS.
+    pool
+      .query(
+        `SELECT rc.id, rc.demand_no, rc.latitude, rc.longitude, rc.uploaded_by_display_name, rc.uploaded_at
+           FROM demand_notice_receiving_copies rc
+           JOIN demand_notices n ON n.demand_no = rc.demand_no
+          WHERE n.holding_no = $1
+          ORDER BY rc.uploaded_at DESC`,
+        [holdingNo],
+      )
+      .then((r) => r.rows),
+    getHoldingDocumentStatus(holdingNo),
   ]);
 
   res.status(200).json({
@@ -120,12 +133,18 @@ export const getPropertyReportHandler = asyncHandler(async (req: Request, res: R
     changeRequests,
     discrepancies,
     resurveyFlags,
-    fieldVerifications,
     collectionIssues,
     dispute,
     propertyHistory,
+    // Aadhaar is shown masked (last 4 digits) in the report.
+    fieldVerifications: fieldVerifications.map((v) => ({
+      ...v,
+      aadhaar_number: v.aadhaar_number ? `XXXX XXXX ${String(v.aadhaar_number).slice(-4)}` : null,
+    })),
     demandNotices,
     payments,
     onlineOrders,
+    receivingCopies,
+    documentStatus,
   });
 });

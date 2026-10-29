@@ -1,4 +1,5 @@
 import { propertyRepository } from "../repositories/property.repository";
+import { getHoldingDocumentStatus, onlinePaymentDocumentsMessage } from "./holdingDocuments.service";
 import { withEffectivePaidTill } from "./paidYearGuard.service";
 import { demandNoticeRepository } from "../repositories/demandNotice.repository";
 import { calculateTax } from "./taxCalculation.service";
@@ -185,5 +186,10 @@ export async function searchPropertyForCitizen(
     };
   }
 
-  return result;
+  // Online payment needs the holding's documents on file - the citizen is told what to get uploaded.
+  const docs = await getHoldingDocumentStatus(result.property.holding_no);
+  return {
+    ...result,
+    property: { ...result.property, onlinePaymentBlockedReason: docs.complete ? null : onlinePaymentDocumentsMessage(docs.missing) },
+  };
 }

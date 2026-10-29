@@ -1,4 +1,5 @@
 import { pool } from "../config/db";
+import { assertDocumentsForCollection } from "./holdingDocuments.service";
 import type { TransactionRow } from "../repositories/payment.repository";
 import type { DemandNoticeRow } from "../repositories/demandNotice.repository";
 import { assertNoticeYearNotPaid, supersedeOtherOpenNotices } from "./paidYearGuard.service";
@@ -558,6 +559,8 @@ export async function submitPayment(
   await assertNoticeYearNotPaid(property, notice, !!actor);
   // Counter / Tax Collector / agency: not while an online payment for this holding is still being confirmed by the bank.
   if (actor) await assertNoOnlinePaymentInFlight(holdingNo);
+  // A Tax Collector collects the holding's documents (GPS, Aadhaar, photo, previous receipt, land document) first.
+  if (actor?.role === "tax_collector") await assertDocumentsForCollection(holdingNo);
   if (isPart) {
     const already = parseYearStartOrNull(property.tax_paid_till_year);
     if (already !== null && already >= throughYearNum) {

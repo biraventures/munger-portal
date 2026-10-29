@@ -7,6 +7,7 @@ import { holdingNoSchema } from "../utils/holdingNoSchema";
 import { recordFieldVerification, listFieldVerificationsForHolding } from "../services/propertyFieldVerification.service";
 import { propertyFieldVerificationRepository } from "../repositories/propertyFieldVerification.repository";
 import { asyncHandler } from "../middleware/asyncHandler";
+import { getHoldingDocumentStatus, HOLDING_DOCUMENT_LABELS, isValidAadhaar, type HoldingDocumentKey } from "../services/holdingDocuments.service";
 import { ApiError } from "../utils/ApiError";
 
 const holdingNoParamSchema = z.object({ holdingNo: holdingNoSchema });
@@ -46,6 +47,24 @@ export const postRecordFieldVerification = asyncHandler(async (req: Request, res
     throw new ApiError(403, "Only a Tax Collector or Tax Surveyor can record a field verification.");
   }
 
+  const b = bodyParsed.data;
+  if (b.aadhaarNumber && !isValidAadhaar(b.aadhaarNumber)) throw ApiError.badRequest("This is not a valid Aadhaar number - please check it.");
+  // A Tax Collector must collect all five documents: together with what is already on file, nothing may be missing.
+  if (req.admin.role === "tax_collector") {
+    const status = await getHoldingDocumentStatus(paramsParsed.data.holdingNo);
+    const given: Record<HoldingDocumentKey, boolean> = {
+      gps: b.gpsLat != null && b.gpsLng != null,
+      aadhaar: !!b.aadhaarNumber,
+      holdingPhoto: !!b.holdingPhotoBase64Data,
+      previousReceipt: !!b.previousReceiptPhotoBase64Data,
+      landDocument: !!b.landDocumentPhotoBase64Data,
+    };
+    const missing = (Object.keys(HOLDING_DOCUMENT_LABELS) as HoldingDocumentKey[]).filter((k) => !given[k] && !status.onFile[k]);
+    if (missing.length) {
+      throw ApiError.badRequest(`All of these are required: ${missing.map((k) => HOLDING_DOCUMENT_LABELS[k]).join(", ")}.`);
+    }
+  }
+
   const record = await recordFieldVerification(paramsParsed.data.holdingNo, req.admin, {
     gpsLat: bodyParsed.data.gpsLat ?? null,
     gpsLng: bodyParsed.data.gpsLng ?? null,
@@ -60,6 +79,13 @@ export const postRecordFieldVerification = asyncHandler(async (req: Request, res
     landDocumentPhotoMimeType: bodyParsed.data.landDocumentPhotoMimeType,
   });
   res.status(200).json({ record });
+});
+
+/** GET /api/v1/properties/:holdingNo/document-status - which of the five required documents are on file. */
+export const getHoldingDocumentStatusHandler = asyncHandler(async (req: Request, res: Response) => {
+  const paramsParsed = holdingNoParamSchema.safeParse(req.params);
+  if (!paramsParsed.success) throw ApiError.badRequest("Invalid holding number");
+  res.status(200).json(await getHoldingDocumentStatus(paramsParsed.data.holdingNo));
 });
 
 /** GET /api/v1/properties/:holdingNo/field-verifications */

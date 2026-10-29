@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import { assertDocumentsForOnlinePayment } from "./holdingDocuments.service";
 import { assertNoticeYearNotPaid } from "./paidYearGuard.service";
 import { propertyRepository } from "../repositories/property.repository";
 import { onlinePaymentRepository } from "../repositories/onlinePayment.repository";
@@ -183,6 +184,8 @@ export async function createGatewayOrder(
   // is still being confirmed.
   const forGuard = property ?? (await propertyRepository.findByHoldingNo(holdingNo));
   if (forGuard) await assertNoticeYearNotPaid(forGuard, notice, true);
+  // Not online until the holding's documents are on file (collected by the Tax Collector).
+  await assertDocumentsForOnlinePayment(holdingNo);
   await assertNoOnlinePaymentInFlight(holdingNo);
 
   await onlinePaymentRepository.createPendingOrder({

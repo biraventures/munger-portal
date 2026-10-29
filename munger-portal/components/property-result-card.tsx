@@ -246,6 +246,10 @@ export function PropertyResultCard({ record }: PropertyResultCardProps) {
               Online payment is temporarily unavailable. Please pay at the Nagar
               Nigam office counter.
             </span>
+          ) : record.onlinePaymentBlockedReason ? (
+            <span role="alert" className="max-w-xs rounded-md border border-amber-300 bg-amber-50 px-4 py-2.5 text-right text-sm text-amber-900">
+              {record.onlinePaymentBlockedReason}
+            </span>
           ) : !choosingPayer ? (
             <button
               onClick={() => {

@@ -6,6 +6,7 @@ import { AlertCircle, AlertTriangle, CheckCircle2, FileWarning, Loader2, Receipt
 import { fetchFormOptions, type FormOptions } from "@/lib/operator-api";
 import { sanitizeHoldingNoInput } from "@/lib/holding-no";
 import { MobileHoldingLookup } from "@/components/mobile-holding-lookup";
+import type { HoldingDocumentStatus } from "@/lib/aadhaar";
 import { fetchNoticePrintPositions, type NoticePrintPosition } from "@/lib/agency-api";
 import { PrintedNoticeLocation } from "@/components/admin/printed-notice-location";
 import { AdminHeader } from "@/components/admin-header";
@@ -19,6 +20,7 @@ import { FIELD_PAYMENT_MODES } from "@/lib/payment-modes";
 import type { ReceiptData } from "@/lib/payment-api";
 import {
   fetchPropertyForCollector,
+  fetchHoldingDocumentStatus,
   fetchUnsettledDemandNoticesAdmin,
   submitPaymentAdmin,
   requestCancellationAdmin,
@@ -106,6 +108,7 @@ export default function TaxCollectorPage() {
 
   const [notices, setNotices] = useState<UnsettledDemandNoticeAdmin[] | null>(null);
   const [printPositions, setPrintPositions] = useState<NoticePrintPosition[] | null>(null);
+  const [docStatus, setDocStatus] = useState<HoldingDocumentStatus | null>(null);
   const [selectedDemandNo, setSelectedDemandNo] = useState("");
   const [paymentMode, setPaymentMode] = useState(PAYMENT_MODES[0]);
   const [instrument, setInstrument] = useState<InstrumentValue>(EMPTY_INSTRUMENT);
@@ -194,6 +197,7 @@ export default function TaxCollectorPage() {
     setResult(null);
     setNotices(null);
     setPrintPositions(null);
+    setDocStatus(null);
     setReceipt(null);
     setRequestingCancel(false);
     setCancelReason("");
@@ -239,6 +243,9 @@ export default function TaxCollectorPage() {
         fetchCollectionIssuesForHolding(res.property!.holding_no)
           .then(setHoldingIssues)
           .catch(() => setHoldingIssues([]));
+        fetchHoldingDocumentStatus(res.property!.holding_no)
+          .then(setDocStatus)
+          .catch(() => setDocStatus(null));
         fetchNoticePrintPositions(res.property!.holding_no)
           .then(setPrintPositions)
           .catch(() => setPrintPositions([]));
@@ -457,7 +464,11 @@ export default function TaxCollectorPage() {
               <CollectionIssueList issues={holdingIssues} emptyText="No collection issue has been reported for this holding." />
             </div>
 
-            <FieldVerificationCapture holdingNo={property.holding_no} />
+            <FieldVerificationCapture
+              holdingNo={property.holding_no}
+              documentStatus={docStatus}
+              onSaved={() => fetchHoldingDocumentStatus(property.holding_no).then(setDocStatus).catch(() => undefined)}
+            />
 
             <div className="rounded-xl border border-slate-200 bg-white p-5">
               <h3 className="mb-3 text-sm font-semibold text-slate-700">Floors on record</h3>
@@ -519,10 +530,17 @@ export default function TaxCollectorPage() {
                         amountDemanded={notices.find((n) => n.demandNo === selectedDemandNo) ? Number(notices.find((n) => n.demandNo === selectedDemandNo)!.totalAmountDemanded) : null}
                         value={instrument} onChange={setInstrument} inputClassName={inputClass} />
                     </div>
+                    {docStatus && !docStatus.complete && (
+                      <p role="alert" className="mb-3 rounded-md border border-red-200 bg-red-50 p-3 text-xs text-red-800">
+                        Collect the holding documents first (Holding Documents section above): {docStatus.missing.join(", ")}.
+                      </p>
+                    )}
                     <button
                       onClick={handleCollectPayment}
-                      disabled={collecting || !!property.solidWasteTypeMissing || !property.water_connection_status}
-                      title={property.solidWasteTypeMissing || !property.water_connection_status ? "Enter the mandatory details above first" : undefined}
+                      disabled={collecting || !!property.solidWasteTypeMissing || !property.water_connection_status || !docStatus?.complete}
+                      title={
+                        property.solidWasteTypeMissing || !property.water_connection_status || !docStatus?.complete ? "Enter the mandatory details above first" : undefined
+                      }
                       className="rounded-md bg-nnm-blue px-4 py-2 text-sm font-semibold text-white hover:bg-nnm-blue-dark disabled:opacity-60"
                     >
                       {collecting ? "Recording…" : "Collect Payment & Issue Slip"}
