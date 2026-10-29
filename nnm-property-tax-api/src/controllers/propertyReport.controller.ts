@@ -121,7 +121,8 @@ export const getPropertyReportHandler = asyncHandler(async (req: Request, res: R
     // Tax Collector field visits that delivered a demand notice: the signed receiving copy, with GPS.
     pool
       .query(
-        `SELECT rc.id, rc.demand_no, rc.latitude, rc.longitude, rc.uploaded_by_display_name, rc.uploaded_at
+        `SELECT rc.id, rc.demand_no, rc.latitude, rc.longitude, rc.uploaded_by_display_name, rc.uploaded_at,
+                rc.water_connection_status, rc.water_connection_count
            FROM demand_notice_receiving_copies rc
            JOIN demand_notices n ON n.demand_no = rc.demand_no
           WHERE n.holding_no = $1

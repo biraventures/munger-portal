@@ -467,6 +467,7 @@ export default function TaxCollectorPage() {
             <FieldVerificationCapture
               holdingNo={property.holding_no}
               documentStatus={docStatus}
+              lastWaterStatus={(property.water_connection_status as string | null | undefined) ?? null}
               onSaved={() => fetchHoldingDocumentStatus(property.holding_no).then(setDocStatus).catch(() => undefined)}
             />
 

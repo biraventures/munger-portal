@@ -39,6 +39,8 @@ export interface FieldVisitSummary {
   previous_receipt_photo_path: string | null;
   land_document_photo_path: string | null;
   register_photo_path: string | null;
+  water_connection_status: string | null;
+  water_connection_count: number | null;
 }
 
 export async function listCollectedHoldings(
@@ -77,7 +79,8 @@ export async function listCollectedHoldings(
               CASE WHEN aadhaar_photo_path IS NULL THEN NULL ELSE 'on-file' END AS aadhaar_photo_path,
               CASE WHEN previous_receipt_photo_path IS NULL THEN NULL ELSE 'on-file' END AS previous_receipt_photo_path,
               CASE WHEN land_document_photo_path IS NULL THEN NULL ELSE 'on-file' END AS land_document_photo_path,
-              CASE WHEN register_photo_path IS NULL THEN NULL ELSE 'on-file' END AS register_photo_path
+              CASE WHEN register_photo_path IS NULL THEN NULL ELSE 'on-file' END AS register_photo_path,
+              water_connection_status, water_connection_count
          FROM property_field_verifications WHERE holding_no = ANY($1::varchar[])
         ORDER BY captured_at DESC`,
       [holdingNos],

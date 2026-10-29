@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Image as ImageIcon, Loader2 } from "lucide-react";
 import { fetchReceivingCopyPhoto } from "@/lib/collector-field-api";
+import { waterStatusLabel } from "./water-status-field";
 
 export interface ReceivingCopyVisit {
   id: string;
@@ -11,6 +12,8 @@ export interface ReceivingCopyVisit {
   longitude: string | null;
   uploaded_by_display_name: string;
   uploaded_at: string;
+  water_connection_status?: string | null;
+  water_connection_count?: number | null;
 }
 
 /** A Tax Collector's field visit that delivered a demand notice: the signed receiving copy (photo on request) and GPS. */
@@ -41,6 +44,9 @@ export function ReceivingCopyVisitEntry({ visit, when }: { visit: ReceivingCopyV
         Signed receiving copy of demand notice {visit.demand_no}
         {visit.latitude && visit.longitude ? ` · GPS: ${visit.latitude}, ${visit.longitude}` : " · no GPS"}
       </p>
+      {visit.water_connection_status && (
+        <p className="mt-1 text-slate-600">Water supply: {waterStatusLabel(visit.water_connection_status, visit.water_connection_count)}</p>
+      )}
       {url ? (
         // eslint-disable-next-line @next/next/no-img-element -- authenticated blob URL
         <img src={url} alt={`Receiving copy of notice ${visit.demand_no}`} className="mt-2 max-h-72 rounded border border-slate-200" />

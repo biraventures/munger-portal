@@ -45,6 +45,8 @@ export interface FieldVerificationInput {
   landDocumentPhotoMimeType: string | undefined;
   registerPhotoBase64Data?: string | undefined;
   registerPhotoMimeType?: string | undefined;
+  waterConnectionStatus?: string | null;
+  waterConnectionCount?: number | null;
 }
 
 /**
@@ -69,6 +71,17 @@ export async function recordFieldVerification(holdingNo: string, admin: AdminTok
     savePhoto(holdingNo, "register", input.registerPhotoBase64Data, input.registerPhotoMimeType),
   ]);
 
+  // The holding's water supply status follows what was reported on this visit.
+  if (input.waterConnectionStatus) {
+    await propertyRepository.updateCollectorDetails(holdingNo, {
+      waterConnectionStatus: input.waterConnectionStatus,
+      waterConnectionCount: input.waterConnectionCount ?? null,
+      solidWasteChargeType: null,
+      solidWasteCharge: null,
+      updatedBy: admin.displayName,
+    });
+  }
+
   return propertyFieldVerificationRepository.create({
     holdingNo,
     gpsLat: input.gpsLat,
@@ -79,6 +92,8 @@ export async function recordFieldVerification(holdingNo: string, admin: AdminTok
     previousReceiptPhotoPath,
     landDocumentPhotoPath,
     registerPhotoPath,
+    waterConnectionStatus: input.waterConnectionStatus ?? null,
+    waterConnectionCount: input.waterConnectionCount ?? null,
     capturedByUsername: admin.username,
     capturedByDisplayName: admin.displayName,
     capturedByRole: admin.role,

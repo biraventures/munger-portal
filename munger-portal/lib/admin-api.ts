@@ -2068,6 +2068,8 @@ export interface RecordFieldVerificationInput {
   landDocumentPhotoMimeType?: string;
   registerPhotoBase64Data?: string;
   registerPhotoMimeType?: string;
+  waterConnectionStatus?: WaterConnectionStatus;
+  waterConnectionCount?: number;
 }
 
 export async function recordFieldVerification(holdingNo: string, input: RecordFieldVerificationInput): Promise<PropertyFieldVerification> {

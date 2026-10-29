@@ -1,12 +1,31 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { BookOpen, Camera, CheckCircle2, ChevronDown, ChevronUp, CreditCard, FileText, Loader2, MapPin, MapPinOff, ScrollText } from "lucide-react";
+import {
+  BookOpen,
+  Camera,
+  CheckCircle2,
+  ChevronDown,
+  ChevronUp,
+  CreditCard,
+  FileText,
+  Loader2,
+  MapPin,
+  MapPinOff,
+  ScrollText,
+} from "lucide-react";
 import { getCurrentGpsPosition } from "@/lib/geolocation";
 import { fileToBase64 } from "@/components/admin/discrepancy-capture-section";
 import { recordFieldVerification } from "@/lib/admin-api";
 import { shrinkPhotoFile } from "@/lib/upload-limits";
 import { isValidAadhaar, type HoldingDocumentKey, type HoldingDocumentStatus } from "@/lib/aadhaar";
+import {
+  EMPTY_WATER,
+  WaterStatusField,
+  waterStatusError,
+  waterStatusPayload,
+  type WaterStatusValue,
+} from "@/components/admin/water-status-field";
 
 interface FieldVerificationState {
   gpsLat: number | null;
@@ -116,11 +135,15 @@ export function FieldVerificationCapture({
   holdingNo,
   documentStatus,
   onSaved,
+  lastWaterStatus,
 }: {
   holdingNo: string;
   documentStatus?: HoldingDocumentStatus | null;
   onSaved?: () => void;
+  /** The holding's water supply status on record - shown for reference; the collector selects it afresh. */
+  lastWaterStatus?: string | null;
 }) {
+  const [water, setWater] = useState<WaterStatusValue>(EMPTY_WATER);
   const mandatory = documentStatus !== undefined;
   const [open, setOpen] = useState(mandatory && documentStatus !== null && !documentStatus.collectionComplete);
   const [state, setState] = useState<FieldVerificationState>(blankState());
@@ -168,6 +191,10 @@ export function FieldVerificationCapture({
       setError(`Required: ${stillMissing.map((r) => r.label).join(", ")}.`);
       return;
     }
+    if (mandatory && waterStatusError(water)) {
+      setError(waterStatusError(water));
+      return;
+    }
     setSaving(true);
     setError(null);
     setSaved(false);
@@ -193,9 +220,11 @@ export function FieldVerificationCapture({
         landDocumentPhotoMimeType: state.landDocumentFile?.type,
         registerPhotoBase64Data: registerPhoto,
         registerPhotoMimeType: state.registerFile?.type,
+        ...(mandatory ? waterStatusPayload(water) : {}),
       });
       setSaved(true);
       setState(blankState());
+      setWater(EMPTY_WATER);
       onSaved?.();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not save this field verification.");
@@ -206,11 +235,13 @@ export function FieldVerificationCapture({
 
   const hasAnything =
     state.gpsLat !== null ||
+    !!water.status ||
     state.aadhaarNumber.trim() ||
     state.holdingFile ||
     state.aadhaarFile ||
     state.previousReceiptFile ||
-    state.landDocumentFile || state.registerFile;
+    state.landDocumentFile ||
+    state.registerFile;
 
   return (
     <div className="rounded-xl border border-slate-200 bg-white">
@@ -265,6 +296,12 @@ export function FieldVerificationCapture({
             >
               <CheckCircle2 className="h-4 w-4 shrink-0" />
               Field verification saved.
+            </div>
+          )}
+
+          {mandatory && (
+            <div className="mb-4">
+              <WaterStatusField value={water} onChange={setWater} lastRecorded={lastWaterStatus ?? null} />
             </div>
           )}
 

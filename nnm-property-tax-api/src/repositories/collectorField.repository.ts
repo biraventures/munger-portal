@@ -135,6 +135,8 @@ export const collectorFieldRepository = {
     longitude: number | null;
     uploadedByUsername: string;
     uploadedByDisplayName: string;
+    waterConnectionStatus: string | null;
+    waterConnectionCount: number | null;
   }): Promise<ReceivingCopyRow | null> {
     const client = await pool.connect();
     try {
@@ -150,9 +152,20 @@ export const collectorFieldRepository = {
         return null;
       }
       const { rows } = await client.query<ReceivingCopyRow>(
-        `INSERT INTO demand_notice_receiving_copies (demand_no, copy_no, photo_path, latitude, longitude, uploaded_by_username, uploaded_by_display_name)
-         VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
-        [input.demandNo, next, input.photoPath, input.latitude, input.longitude, input.uploadedByUsername, input.uploadedByDisplayName],
+        `INSERT INTO demand_notice_receiving_copies (demand_no, copy_no, photo_path, latitude, longitude, uploaded_by_username, uploaded_by_display_name,
+           water_connection_status, water_connection_count)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
+        [
+          input.demandNo,
+          next,
+          input.photoPath,
+          input.latitude,
+          input.longitude,
+          input.uploadedByUsername,
+          input.uploadedByDisplayName,
+          input.waterConnectionStatus,
+          input.waterConnectionCount,
+        ],
       );
       await client.query("COMMIT");
       return rows[0]!;

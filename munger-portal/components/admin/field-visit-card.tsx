@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Eye, Loader2 } from "lucide-react";
 import { ADMIN_ROLE_LABELS, getAdminToken, type AdminRole } from "@/lib/admin-auth";
+import { waterStatusLabel } from "./water-status-field";
 import { FieldVerificationPhotos, type FieldVerificationPhotoFlags } from "./field-verification-photos";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_PROPERTY_TAX_API_URL || "http://localhost:4000/api/v1";
@@ -25,6 +26,8 @@ export interface FieldVisit extends FieldVerificationPhotoFlags {
   gps_lng: string | null;
   /** Masked by the API (XXXX XXXX 1234). */
   aadhaar_number?: string | null;
+  water_connection_status?: string | null;
+  water_connection_count?: number | null;
 }
 
 const when = (v: string) =>
@@ -71,6 +74,9 @@ export function FieldVisitCard({ visit, viewerRole }: { visit: FieldVisit; viewe
         <p className="mt-1 text-slate-500">
           GPS: {visit.gps_lat}, {visit.gps_lng}
         </p>
+      )}
+      {visit.water_connection_status && (
+        <p className="mt-1 text-slate-600">Water supply: {waterStatusLabel(visit.water_connection_status, visit.water_connection_count)}</p>
       )}
       {visit.aadhaar_number && (
         <p className="mt-1 flex flex-wrap items-center gap-2 text-slate-600">

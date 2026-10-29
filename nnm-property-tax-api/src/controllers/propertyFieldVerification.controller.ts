@@ -1,4 +1,5 @@
 import type { Request, Response } from "express";
+import { checkWaterCount, waterStatusFields } from "../utils/waterStatus";
 import fs from "node:fs";
 import path from "node:path";
 import { z } from "zod";
@@ -33,6 +34,9 @@ const fieldVerificationSchema = z.object({
   landDocumentPhotoMimeType: z.string().min(1).optional(),
   registerPhotoBase64Data: z.string().min(1).optional(),
   registerPhotoMimeType: z.string().min(1).optional(),
+  // Required from a Tax Collector (checked below); optional for the Tax Surveyor.
+  waterConnectionStatus: waterStatusFields.waterConnectionStatus.optional(),
+  waterConnectionCount: waterStatusFields.waterConnectionCount,
 });
 
 /**
@@ -52,6 +56,9 @@ export const postRecordFieldVerification = asyncHandler(async (req: Request, res
 
   const b = bodyParsed.data;
   if (b.aadhaarNumber && !isValidAadhaar(b.aadhaarNumber)) throw ApiError.badRequest("This is not a valid Aadhaar number - please check it.");
+  if (req.admin.role === "tax_collector" && !b.waterConnectionStatus) throw ApiError.badRequest("Select the holding's water supply status.");
+  const countError = checkWaterCount(b);
+  if (countError) throw ApiError.badRequest(countError);
   // A Tax Collector must collect all five documents: together with what is already on file, nothing may be missing.
   if (req.admin.role === "tax_collector") {
     const status = await getHoldingDocumentStatus(paramsParsed.data.holdingNo);
@@ -83,6 +90,8 @@ export const postRecordFieldVerification = asyncHandler(async (req: Request, res
     landDocumentPhotoMimeType: bodyParsed.data.landDocumentPhotoMimeType,
     registerPhotoBase64Data: bodyParsed.data.registerPhotoBase64Data,
     registerPhotoMimeType: bodyParsed.data.registerPhotoMimeType,
+    waterConnectionStatus: b.waterConnectionStatus ?? null,
+    waterConnectionCount: b.waterConnectionStatus === "multiple" ? (b.waterConnectionCount ?? null) : null,
   });
   res.status(200).json({ record });
 });

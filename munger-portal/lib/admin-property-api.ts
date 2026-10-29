@@ -105,6 +105,8 @@ export interface PropertyFieldVerificationSummary {
   previous_receipt_photo_path?: string | null;
   land_document_photo_path?: string | null;
   register_photo_path?: string | null;
+  water_connection_status?: string | null;
+  water_connection_count?: number | null;
 }
 
 export interface PropertyReport {
@@ -127,7 +129,16 @@ export interface PropertyReport {
   /** Every payment (receipt) of the holding, newest first - cancelled ones included and marked. */
   payments?: ReportPayment[];
   /** Signed receiving copies of demand notices uploaded by Tax Collectors on their field visits. */
-  receivingCopies?: { id: string; demand_no: string; latitude: string | null; longitude: string | null; uploaded_by_display_name: string; uploaded_at: string }[];
+  receivingCopies?: {
+    id: string;
+    demand_no: string;
+    latitude: string | null;
+    longitude: string | null;
+    uploaded_by_display_name: string;
+    uploaded_at: string;
+    water_connection_status?: string | null;
+    water_connection_count?: number | null;
+  }[];
   /** The five documents required for TC collection / online payment. */
   documentStatus?: import("./aadhaar").HoldingDocumentStatus;
   /** Online payments the bank has not finished confirming. */
