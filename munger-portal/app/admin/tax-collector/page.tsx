@@ -39,6 +39,7 @@ import {
   type CollectionIssueType,
 } from "@/lib/admin-api";
 import { PaymentResponsibilityWarning } from "@/components/payment-responsibility-warning";
+import IntentHandler from "./paymentIntentHandler";
 
 const inputClass = "w-full rounded-md border border-slate-300 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-nnm-blue focus:ring-offset-1";
 const PAYMENT_MODES: readonly string[] = FIELD_PAYMENT_MODES;
@@ -360,6 +361,8 @@ export default function TaxCollectorPage() {
   return (
     <div className="min-h-screen bg-slate-50">
       <AdminHeader admin={admin} />
+
+      <IntentHandler />
 
       <main className="mx-auto max-w-2xl px-6 py-10">
         <h1 className="mb-1 flex items-center gap-2 text-2xl font-semibold text-slate-900">

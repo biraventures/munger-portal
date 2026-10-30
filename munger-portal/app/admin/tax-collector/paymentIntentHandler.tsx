@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 
-const MyComponent = () => {
+const IntentHandler = () => {
     const intentFieldRef = useRef<HTMLInputElement>(null);
 
     const [intentResult, setIntentResult] = useState<string>("Waiting for intent data...");
@@ -72,4 +72,4 @@ const MyComponent = () => {
     );
 };
 
-export default MyComponent;
+export default IntentHandler;
