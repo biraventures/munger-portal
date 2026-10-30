@@ -98,10 +98,15 @@ export interface PropertyFieldVerificationSummary {
   captured_by_display_name: string;
   captured_by_role: string;
   captured_at: string;
+  /** Masked by the API (XXXX XXXX 1234). */
+  aadhaar_number?: string | null;
   holding_photo_path?: string | null;
   aadhaar_photo_path?: string | null;
   previous_receipt_photo_path?: string | null;
   land_document_photo_path?: string | null;
+  register_photo_path?: string | null;
+  water_connection_status?: string | null;
+  water_connection_count?: number | null;
 }
 
 export interface PropertyReport {
@@ -119,6 +124,68 @@ export interface PropertyReport {
   dispute?: DisputeStatus;
   /** Audit trail: creation (with its data source) and every later edit. */
   propertyHistory?: { version: number; action: string; change_basis: string | null; change_reference: string | null; operator_name: string; ts: string }[];
+  /** Every demand notice of the holding, newest first. */
+  demandNotices?: ReportDemandNotice[];
+  /** Every payment (receipt) of the holding, newest first - cancelled ones included and marked. */
+  payments?: ReportPayment[];
+  /** Signed receiving copies of demand notices uploaded by Tax Collectors on their field visits. */
+  receivingCopies?: {
+    id: string;
+    demand_no: string;
+    latitude: string | null;
+    longitude: string | null;
+    uploaded_by_display_name: string;
+    uploaded_at: string;
+    water_connection_status?: string | null;
+    water_connection_count?: number | null;
+  }[];
+  /** The five documents required for TC collection / online payment. */
+  documentStatus?: import("./aadhaar").HoldingDocumentStatus;
+  /** Online payments the bank has not finished confirming. */
+  onlineOrders?: { order_id: string; amount: string; status: string; failure_reason: string | null; created_at: string; demand: number[] }[];
+}
+
+export interface ReportDemandNotice {
+  demand_no: string;
+  notice_date: string;
+  generated_by: string;
+  assessment_year: string | null;
+  demand_from_year: string | null;
+  demand_upto_year: string | null;
+  part_payment: boolean;
+  paid_through_year: string | null;
+  reminder_number: number;
+  total_amount_demanded: string;
+  settled: boolean;
+  settled_receipt_no: string | null;
+  settled_at: string | null;
+  superseded: boolean;
+  cancelled: boolean;
+  cancelled_reason: string | null;
+  on_hold: boolean;
+  wrongly_generated?: boolean;
+}
+
+export interface ReportPayment {
+  receipt_no: string;
+  txn_date: string;
+  payment_mode: string;
+  amount_received: string;
+  collected_by: string | null;
+  collected_by_role: string | null;
+  tax_collector_name: string | null;
+  counter: string | null;
+  demand_no: string | null;
+  arrear_periods_paid: string | null;
+  status: string;
+  reconcile_status: string | null;
+  cancelled: boolean;
+  cancelled_reason: string | null;
+  previous_tax_paid_till_year: string | null;
+  order_id: string | null;
+  notice_year: string | null;
+  part_payment: boolean | null;
+  paid_through_year: string | null;
 }
 
 export async function fetchPropertyReport(holdingNo: string): Promise<PropertyReport> {

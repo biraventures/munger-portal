@@ -30,7 +30,7 @@ import {
   postResubmitDiscrepancyRequest,
   getDiscrepancyPhoto,
 } from "../controllers/propertyDiscrepancy.controller";
-import { getFieldVerificationPhoto } from "../controllers/propertyFieldVerification.controller";
+import { getFieldVerificationPhoto, getFieldVerificationAadhaar } from "../controllers/propertyFieldVerification.controller";
 import {
   getCancellationRequests,
   postApproveCancellation,
@@ -82,7 +82,7 @@ import {
   previewResidentialSolidWasteHandler,
   applyResidentialSolidWasteHandler,
 } from "../controllers/propertyBulkImport.controller";
-import { searchPropertiesHandler, getPropertyReportHandler } from "../controllers/propertyReport.controller";
+import { searchPropertiesHandler, getPropertyReportHandler, getCollectedHoldingsHandler, exportCollectedHoldingsHandler } from "../controllers/propertyReport.controller";
 import { getShopsPendingPublication, postApproveShopPublication } from "../controllers/shopPublicationApproval.controller";
 import {
   getShopEditRequests,
@@ -187,6 +187,8 @@ import {
   listAgencyWardHoldingsHandler,
   prepareAgencyNoticesHandler,
   printExistingAgencyNoticesHandler,
+  recordPrintPositionsHandler,
+  getPrintPositionsHandler,
   exportDuesReportHandler,
   listDuesReportWardsHandler,
 } from "../controllers/agency.controller";
@@ -308,8 +310,13 @@ adminRouter.post("/property-discrepancy-requests/:id/resubmit", requireAdminRole
 // Field verification photo retrieval - viewable by the two roles who capture them plus the oversight chain.
 adminRouter.get(
   "/field-verifications/:id/photo/:kind",
-  requireAdminRole("tax_collector", "tax_surveyor", "tax_daroga", "city_manager", "deputy_commissioner", "commissioner"),
+  requireAdminRole("tax_collector", "tax_surveyor", "tax_daroga", "city_manager", "deputy_commissioner", "commissioner", "agency_team_leader", "agency_project_manager"),
   getFieldVerificationPhoto,
+);
+adminRouter.get(
+  "/field-verifications/:id/aadhaar",
+  requireAdminRole("tax_daroga", "agency_team_leader", "agency_project_manager", "city_manager", "deputy_commissioner", "commissioner"),
+  getFieldVerificationAadhaar,
 );
 
 // Demand notice / receipt cancellation approval queue - viewable by
@@ -424,7 +431,12 @@ adminRouter.post("/property-imports/:id/residential-solid-waste", requireAdminRo
 // holding no/owner/address, then full detail + tax pending + change
 // log + discrepancy flags + resurvey flags + surveyor field
 // verifications for one holding. See propertyReport.controller.ts.
-const requirePropertyReportRole = requireAdminRole("commissioner", "deputy_commissioner", "city_manager");
+const requirePropertyReportRole = requireAdminRole(
+  "commissioner", "deputy_commissioner", "city_manager", "tax_daroga", "agency_team_leader", "agency_project_manager",
+);
+// Holdings whose tax was collected on a given day (list + Excel).
+adminRouter.get("/reports/collected-holdings", requirePropertyReportRole, getCollectedHoldingsHandler);
+adminRouter.get("/reports/collected-holdings.xlsx", requirePropertyReportRole, exportCollectedHoldingsHandler);
 adminRouter.get("/properties/search", requirePropertyReportRole, searchPropertiesHandler);
 adminRouter.get("/properties/:holdingNo/report", requirePropertyReportRole, getPropertyReportHandler);
 
@@ -490,6 +502,13 @@ adminRouter.post("/agency/notices", requireAdminRole("agency_team_leader"), prep
 adminRouter.get("/agency-operator/wards", requireAdminRole("agency_operator"), listAgencyWardsHandler);
 adminRouter.get("/agency-operator/wards/:ward/holdings", requireAdminRole("agency_operator"), listAgencyWardHoldingsHandler);
 adminRouter.post("/agency-operator/notices", requireAdminRole("agency_operator"), printExistingAgencyNoticesHandler);
+adminRouter.post("/agency/notice-print-positions", requireAdminRole("agency_team_leader"), recordPrintPositionsHandler);
+adminRouter.post("/agency-operator/notice-print-positions", requireAdminRole("agency_operator"), recordPrintPositionsHandler);
+adminRouter.get(
+  "/properties/:holdingNo/notice-print-positions",
+  requireAdminRole("tax_collector", "tax_daroga", "agency_operator", "agency_team_leader", "city_manager", "deputy_commissioner", "commissioner"),
+  getPrintPositionsHandler,
+);
 const requireDuesReportRole = requireAdminRole("agency_operator", "agency_team_leader", "agency_project_manager", "tax_daroga", "city_manager", "deputy_commissioner", "commissioner");
 adminRouter.get("/agency-operator/dues-report/wards", requireDuesReportRole, listDuesReportWardsHandler);
 adminRouter.get("/agency-operator/dues-report.xlsx", requireDuesReportRole, exportDuesReportHandler);
@@ -507,7 +526,11 @@ adminRouter.param("demandNo", collectorDemandNoticeParam);
 adminRouter.get("/receiving-copies/notices/:holdingNo", requireAdminRole("tax_collector"), listNoticesForReceivingHandler);
 adminRouter.post("/receiving-copies/notices/:demandNo", requireAdminRole("tax_collector"), uploadReceivingCopyHandler);
 adminRouter.get("/receiving-copies", requireFieldViewRole, listReceivingCopiesHandler);
-adminRouter.get("/receiving-copies/:id/photo", requireFieldViewRole, getReceivingCopyPhotoHandler);
+adminRouter.get(
+  "/receiving-copies/:id/photo",
+  requireAdminRole("tax_collector", "tax_daroga", "city_manager", "deputy_commissioner", "commissioner", "agency_team_leader", "agency_project_manager"),
+  getReceivingCopyPhotoHandler,
+);
 adminRouter.post("/migrated-holdings/:holdingNo/assign", assignToSurveyorHandler);
 adminRouter.get("/migrated-holdings/my-assignments", listMyAssignmentsHandler);
 adminRouter.post("/migrated-holdings/:holdingNo/assign-surveyor", assignToTaxSurveyorHandler);

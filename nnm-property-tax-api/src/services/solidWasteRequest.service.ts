@@ -1,4 +1,7 @@
 import { pool } from "../config/db";
+import type { PoolClient } from "pg";
+import { supersedeNoticesWithoutSolidWaste } from "./solidWasteGuard.service";
+import { generateDemandNotice } from "./demandNotice.service";
 import { propertyRepository } from "../repositories/property.repository";
 import { adminRepository } from "../repositories/admin.repository";
 import { annualSolidWasteCharge } from "./charges.service";
@@ -29,7 +32,7 @@ interface Actor {
   role: string;
 }
 
-/** A Tax Collector proposes a solid waste user type; it waits for Tax Daroga, then the City Manager. */
+/** A Tax Collector proposes a solid waste user type; the Tax Daroga approves (final) or rejects it. */
 export async function submitSolidWasteRequest(holdingNo: string, type: string, collector: Actor): Promise<SolidWasteRequestRow> {
   if (SOLID_WASTE_RATE[type] === undefined) throw ApiError.badRequest("Unknown solid waste user type.");
   const me = await adminRepository.findByUsername(collector.username);
@@ -56,11 +59,11 @@ export async function latestSolidWasteRequest(holdingNo: string): Promise<SolidW
   return rows[0] ?? null;
 }
 
-/** What this approver can act on right now: Tax Daroga sees stage 1; a City Manager sees stage 2 of requests assigned to them (or unassigned). */
+/** What this approver can act on: the Tax Daroga sees every pending request (incl. any forwarded to a City Manager under the old two-step chain); a City Manager sees those still at their stage. */
 export async function listSolidWasteRequestsFor(admin: Actor) {
   const where =
     admin.role === "tax_daroga"
-      ? `r.stage = 'tax_daroga'`
+      ? `r.stage IN ('tax_daroga', 'city_manager')`
       : admin.role === "city_manager"
         ? `r.stage = 'city_manager' AND (r.assigned_city_manager_username = $1 OR r.assigned_city_manager_username IS NULL)`
         : null;
@@ -99,6 +102,20 @@ export async function listSolidWasteRequestsFor(admin: Actor) {
   );
 }
 
+/** Writes the approved type and its charge on the holding; open notices printed without the user charge are superseded. */
+async function applyApprovedType(client: PoolClient, r: SolidWasteRequestRow, by: string): Promise<number> {
+  const property = await propertyRepository.findByHoldingNo(r.holding_no);
+  if (!property) throw ApiError.notFound("Holding not found.");
+  const charge = annualSolidWasteCharge({ ...property, solid_waste_charge_type: r.requested_type });
+  await client.query(
+    `UPDATE properties SET solid_waste_charge_type = $2, solid_waste_charge = $3,
+       solid_waste_months = COALESCE(NULLIF(solid_waste_months, 0), 12),
+       last_modified_by = LEFT($4, 64), last_modified_date = now() WHERE holding_no = $1`,
+    [r.holding_no, r.requested_type, charge, by],
+  );
+  return charge > 0 ? supersedeNoticesWithoutSolidWaste(r.holding_no, client) : 0;
+}
+
 export async function approveSolidWasteRequest(id: number, admin: Actor): Promise<SolidWasteRequestRow> {
   const client = await pool.connect();
   try {
@@ -107,38 +124,40 @@ export async function approveSolidWasteRequest(id: number, admin: Actor): Promis
     const r = rows[0];
     if (!r) throw ApiError.notFound("Request not found.");
     let updated: SolidWasteRequestRow;
+    let replaced = 0;
     if (r.stage === "tax_daroga") {
+      // Tax Collector -> Tax Daroga: the Tax Daroga's approval is final and applies the type to the holding.
       if (admin.role !== "tax_daroga") throw new ApiError(403, "This request is waiting for the Tax Daroga.");
       updated = (
         await client.query<SolidWasteRequestRow>(
-          `UPDATE solid_waste_type_requests SET stage = 'city_manager', daroga_by = $2, daroga_at = now() WHERE id = $1 RETURNING *`,
+          `UPDATE solid_waste_type_requests SET stage = 'approved', daroga_by = $2, daroga_at = now() WHERE id = $1 RETURNING *`,
           [id, admin.displayName],
         )
       ).rows[0]!;
+      replaced = await applyApprovedType(client, r, admin.displayName);
     } else if (r.stage === "city_manager") {
-      if (admin.role !== "city_manager") throw new ApiError(403, "This request is waiting for the City Manager.");
-      if (r.assigned_city_manager_username && r.assigned_city_manager_username !== admin.username) {
-        throw new ApiError(403, "This request is assigned to another City Manager.");
-      }
+      // Only requests forwarded before the chain became Tax Collector -> Tax Daroga can still be here.
+      if (admin.role !== "city_manager" && admin.role !== "tax_daroga") throw new ApiError(403, "This request is waiting for approval.");
       updated = (
         await client.query<SolidWasteRequestRow>(
           `UPDATE solid_waste_type_requests SET stage = 'approved', city_manager_by = $2, city_manager_at = now() WHERE id = $1 RETURNING *`,
           [id, admin.displayName],
         )
       ).rows[0]!;
-      const property = await propertyRepository.findByHoldingNo(r.holding_no);
-      if (!property) throw ApiError.notFound("Holding not found.");
-      const charge = annualSolidWasteCharge({ ...property, solid_waste_charge_type: r.requested_type });
-      await client.query(
-        `UPDATE properties SET solid_waste_charge_type = $2, solid_waste_charge = $3,
-           solid_waste_months = COALESCE(NULLIF(solid_waste_months, 0), 12),
-           last_modified_by = LEFT($4, 64), last_modified_date = now() WHERE holding_no = $1`,
-        [r.holding_no, r.requested_type, charge, admin.displayName],
-      );
+      replaced = await applyApprovedType(client, r, admin.displayName);
     } else {
       throw ApiError.badRequest("This request has already been decided.");
     }
     await client.query("COMMIT");
+    // The notice(s) replaced above were printed without the user charge: raise the correct one straight away, so the
+    // holding can be collected from without waiting for the monthly refresh. Best effort - the approval stands.
+    if (replaced > 0) {
+      try {
+        await generateDemandNotice(r.holding_no, `${admin.displayName} (solid waste user type approved)`);
+      } catch (err) {
+        console.error(`[solid-waste] could not raise a fresh notice for ${r.holding_no}:`, err instanceof Error ? err.message : err);
+      }
+    }
     return updated;
   } catch (err) {
     await client.query("ROLLBACK");
@@ -153,6 +172,7 @@ export async function rejectSolidWasteRequest(id: number, admin: Actor, reason: 
   if (!r) throw ApiError.notFound("Request not found.");
   const allowed =
     (r.stage === "tax_daroga" && admin.role === "tax_daroga") ||
+    (r.stage === "city_manager" && admin.role === "tax_daroga") ||
     (r.stage === "city_manager" && admin.role === "city_manager" && (!r.assigned_city_manager_username || r.assigned_city_manager_username === admin.username));
   if (!allowed) throw new ApiError(403, "You cannot reject this request at its current stage.");
   const res = await pool.query(

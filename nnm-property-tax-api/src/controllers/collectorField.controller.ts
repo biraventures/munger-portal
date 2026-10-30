@@ -1,4 +1,5 @@
 import { normalizeWard } from "../utils/ward";
+import { checkWaterCount, waterStatusFields } from "../utils/waterStatus";
 import type { Request, Response } from "express";
 import { z } from "zod";
 import { pool } from "../config/db";
@@ -118,7 +119,10 @@ export const getUnsurveyedHousePhotoHandler = asyncHandler(async (req: Request, 
 export const listNoticesForReceivingHandler = asyncHandler(async (req: Request, res: Response) => {
   const parsed = z.object({ holdingNo: holdingNoSchema }).safeParse(req.params);
   if (!parsed.success) throw ApiError.badRequest("Invalid holding number");
-  const { rows } = await pool.query(`SELECT owner_name, address, ward FROM properties WHERE holding_no = $1`, [parsed.data.holdingNo]);
+  const { rows } = await pool.query(
+    `SELECT owner_name, address, ward, water_connection_status, water_connection_count FROM properties WHERE holding_no = $1`,
+    [parsed.data.holdingNo],
+  );
   if (rows.length === 0) throw ApiError.notFound("No holding found with that number.");
   const notices = await collectorFieldRepository.listNoticesForReceiving(parsed.data.holdingNo);
   res.status(200).json({ property: rows[0], notices });
@@ -129,6 +133,7 @@ const receivingCopySchema = z.object({
   photoMimeType: z.string().min(1),
   gpsLat: z.number().min(-90).max(90).optional(),
   gpsLng: z.number().min(-180).max(180).optional(),
+  ...waterStatusFields,
 });
 
 /** POST /api/v1/admin/receiving-copies/notices/:demandNo - Tax Collector only. Max 2 per notice; cannot be changed or removed afterwards. */
@@ -137,6 +142,8 @@ export const uploadReceivingCopyHandler = asyncHandler(async (req: Request, res:
   if (!demandNo.success) throw ApiError.badRequest("Invalid demand notice number");
   const body = receivingCopySchema.safeParse(req.body);
   if (!body.success) throw ApiError.badRequest(body.error.issues[0]?.message ?? "Invalid input", body.error.flatten().fieldErrors);
+  const countError = checkWaterCount(body.data);
+  if (countError) throw ApiError.badRequest(countError);
   const row = await addReceivingCopy(demandNo.data, body.data, req.admin!);
   res.status(201).json({ copy: row });
 });

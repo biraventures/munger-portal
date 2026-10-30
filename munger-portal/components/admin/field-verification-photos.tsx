@@ -6,7 +6,7 @@ import { getAdminToken } from "@/lib/admin-auth";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_PROPERTY_TAX_API_URL || "http://localhost:4000/api/v1";
 
-export type PhotoKind = "holding" | "aadhaar" | "receipt" | "landdoc";
+export type PhotoKind = "holding" | "aadhaar" | "receipt" | "landdoc" | "register";
 
 export interface FieldVerificationPhotoFlags {
   id: number;
@@ -14,6 +14,7 @@ export interface FieldVerificationPhotoFlags {
   aadhaar_photo_path?: string | null;
   previous_receipt_photo_path?: string | null;
   land_document_photo_path?: string | null;
+  register_photo_path?: string | null;
 }
 
 const SLOTS: { kind: PhotoKind; field: keyof FieldVerificationPhotoFlags; label: string }[] = [
@@ -21,6 +22,7 @@ const SLOTS: { kind: PhotoKind; field: keyof FieldVerificationPhotoFlags; label:
   { kind: "receipt", field: "previous_receipt_photo_path", label: "Previous receipt" },
   { kind: "landdoc", field: "land_document_photo_path", label: "Ownership proof" },
   { kind: "aadhaar", field: "aadhaar_photo_path", label: "Aadhaar photo" },
+  { kind: "register", field: "register_photo_path", label: "Demand register" },
 ];
 
 /** Photos are behind the admin login, so they are fetched with the token and shown from a blob URL. */

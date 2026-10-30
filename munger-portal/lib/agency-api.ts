@@ -164,3 +164,89 @@ export async function downloadDuesReport(q: { ward?: string; minAmount?: number;
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 2000);
 }
+
+// ---------------------------------------------------------------------------
+// Where each notice sits in a printed ward bundle (Sl. No.) - shown to the Tax Collector to find it in the stack
+// ---------------------------------------------------------------------------
+
+export interface NoticePrintPosition {
+  demandNo: string;
+  ward: string | null;
+  partNo: number;
+  partCount: number;
+  serialNo: number;
+  partSize: number;
+  printedBy: string | null;
+  printedAt: string;
+  noticeStatus: "open" | "paid" | "superseded" | "cancelled";
+}
+
+export async function recordNoticePrintPositions(
+  body: { ward: string | null; partNo: number; partCount: number; demandNos: string[] },
+  base: AgencyNoticeBase = "agency",
+): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/admin/${base}/notice-print-positions`, { method: "POST", headers: authHeaders(), body: JSON.stringify(body) });
+  if (!res.ok) throw new Error(await failure(res, "Could not record the print positions"));
+}
+
+export async function fetchNoticePrintPositions(holdingNo: string): Promise<NoticePrintPosition[]> {
+  const res = await fetch(`${API_BASE_URL}/admin/properties/${encodeURIComponent(holdingNo)}/notice-print-positions`, { headers: authHeaders() });
+  if (!res.ok) throw new Error(await failure(res, "Could not load where the notice was printed"));
+  return res.json();
+}
+
+// ---------------------------------------------------------------------------
+// Holdings whose tax was collected on a given day (Team Leader / Project Manager / Tax Daroga / officers)
+// ---------------------------------------------------------------------------
+
+export interface CollectedHoldingRow {
+  receipt_no: string;
+  txn_time: string;
+  holding_no: string;
+  old_holding_no: string | null;
+  owner_name: string | null;
+  mobile_no: string | null;
+  ward: string | null;
+  amount: string;
+  payment_mode: string;
+  collected_by: string | null;
+  collected_by_role: string | null;
+  tax_collector_name: string | null;
+  demand_no: string | null;
+  paid_till: string | null;
+  cancelled: boolean;
+  reconcile_status: string | null;
+}
+
+export interface CollectedHoldingsReport {
+  date: string;
+  rows: CollectedHoldingRow[];
+  /** Field visits of each holding (Tax Collector, photos on file, Aadhaar masked), newest first. */
+  fieldVisits: Record<string, import("@/components/admin/field-visit-card").FieldVisit[]>;
+  holdings: number;
+  receipts: number;
+  total: number;
+}
+
+function collectedQuery(date: string, ward?: string): string {
+  const p = new URLSearchParams({ date });
+  if (ward) p.set("ward", ward);
+  return p.toString();
+}
+
+export async function fetchCollectedHoldings(date: string, ward?: string): Promise<CollectedHoldingsReport> {
+  const res = await fetch(`${API_BASE_URL}/admin/reports/collected-holdings?${collectedQuery(date, ward)}`, { headers: authHeaders() });
+  if (!res.ok) throw new Error(await failure(res, "Could not load the report"));
+  return res.json();
+}
+
+export async function downloadCollectedHoldings(date: string, ward?: string): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/admin/reports/collected-holdings.xlsx?${collectedQuery(date, ward)}`, { headers: authHeaders() });
+  if (!res.ok) throw new Error(await failure(res, "Could not download the report"));
+  const url = URL.createObjectURL(await res.blob());
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `collected-holdings-${date}${ward ? `-ward-${ward.replace(/[^A-Za-z0-9-]/g, "")}` : ""}.xlsx`;
+  a.click();
+  URL.revokeObjectURL(url);
+}

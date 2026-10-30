@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import { propertyRepository } from "../repositories/property.repository";
 import path from "node:path";
 import { collectorFieldRepository } from "../repositories/collectorField.repository";
 import { demandNoticeRepository } from "../repositories/demandNotice.repository";
@@ -78,6 +79,8 @@ export interface ReceivingCopyInput {
   photoMimeType: string;
   gpsLat?: number;
   gpsLng?: number;
+  waterConnectionStatus: string;
+  waterConnectionCount?: number;
 }
 
 /**
@@ -102,10 +105,20 @@ export async function addReceivingCopy(demandNo: string, input: ReceivingCopyInp
     longitude: input.gpsLng ?? null,
     uploadedByUsername: admin.username,
     uploadedByDisplayName: admin.displayName,
+    waterConnectionStatus: input.waterConnectionStatus,
+    waterConnectionCount: input.waterConnectionStatus === "multiple" ? (input.waterConnectionCount ?? null) : null,
   });
   if (!row) {
     await fs.promises.rm(path.join(env.PHOTO_UPLOAD_DIR, photoPath), { force: true });
     throw ApiError.badRequest("The receiving copy of this notice is already uploaded - only one is allowed, and it cannot be replaced.");
   }
+  // The holding's water supply status is kept up to date with what the collector reported on this visit.
+  await propertyRepository.updateCollectorDetails(notice.holding_no, {
+    waterConnectionStatus: input.waterConnectionStatus,
+    waterConnectionCount: input.waterConnectionStatus === "multiple" ? (input.waterConnectionCount ?? null) : null,
+    solidWasteChargeType: null,
+    solidWasteCharge: null,
+    updatedBy: admin.displayName,
+  });
   return row;
 }

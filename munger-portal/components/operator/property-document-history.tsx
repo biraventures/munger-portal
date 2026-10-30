@@ -193,7 +193,7 @@ export function PropertyDocumentHistory({ holdingNo, api = OPERATOR_HISTORY_API 
                   <div>
                     <span className="block font-mono font-semibold text-slate-800">{n.date}</span>
                     <span className="text-slate-500">
-                      ₹{Number(n.totalAmountDemanded).toLocaleString("en-IN")} — {n.cancelled ? <span className="font-semibold text-red-600">cancelled</span> : n.settled ? "settled" : n.superseded ? "superseded" : "unsettled"}
+                      ₹{Number(n.totalAmountDemanded).toLocaleString("en-IN")} — {n.wronglyGenerated ? <span className="font-semibold text-red-600">wrongly generated - not payable</span> : n.cancelled ? <span className="font-semibold text-red-600">cancelled</span> : n.settled ? "settled" : n.superseded ? "superseded" : "unsettled"}
                       {n.cancellationPending && <span className="ml-1 font-semibold text-amber-600">(cancellation pending approval)</span>}
                     </span>
                   </div>

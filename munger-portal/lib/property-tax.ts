@@ -23,6 +23,8 @@ export interface PropertyRecord {
   solidWasteTypeMissing: boolean;
   /** Live unsettled demand notices issued against this holding. */
   pendingDemandNotices: { demandNo: string; noticeDate: string; assessmentYear: string | null; totalAmountDemanded: string }[];
+  /** Set when the holding's documents are not uploaded yet - online payment is not offered, this message is shown. */
+  onlinePaymentBlockedReason: string | null;
 }
 
 export function totalPayable(record: PropertyRecord): number {
@@ -80,6 +82,7 @@ interface ApiPropertyResponse {
     paidThroughYear: string | null;
     solidWasteTypeMissing?: boolean;
     pendingDemandNotices?: { demandNo: string; noticeDate: string; assessmentYear: string | null; totalAmountDemanded: string }[];
+    onlinePaymentBlockedReason?: string | null;
   };
 }
 
@@ -140,6 +143,7 @@ export async function searchPropertyByHoldingNumber(
         paidThroughYear: p.paidThroughYear ?? null,
         solidWasteTypeMissing: p.solidWasteTypeMissing ?? false,
         pendingDemandNotices: p.pendingDemandNotices ?? [],
+        onlinePaymentBlockedReason: p.onlinePaymentBlockedReason ?? null,
       },
     ],
   };

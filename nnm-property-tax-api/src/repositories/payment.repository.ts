@@ -4,6 +4,8 @@ import { RECEIPT_START_NO } from "../constants/taxRates";
 import type { FrozenFloorBreakdown } from "../types/property.types";
 
 export interface TransactionRow {
+  /** The receipt as originally printed (migration 154); null for older receipts. */
+  receipt_snapshot?: Record<string, unknown> | null;
   receipt_no: string;
   holding_no: string;
   txn_date: Date;

@@ -1,4 +1,7 @@
 import { propertyRepository } from "../repositories/property.repository";
+import { solidWasteTypeBlock } from "./solidWasteGuard.service";
+import { getHoldingDocumentStatus, onlinePaymentDocumentsMessage } from "./holdingDocuments.service";
+import { withEffectivePaidTill } from "./paidYearGuard.service";
 import { demandNoticeRepository } from "../repositories/demandNotice.repository";
 import { calculateTax } from "./taxCalculation.service";
 import { calculateRebateOrLateFee, calculateSolidWasteCharge } from "./charges.service";
@@ -43,10 +46,12 @@ export function isSolidWasteTypeMissing(property: Pick<PropertyRow, "is_bwg" | "
 export async function searchPropertyByHoldingNo(holdingNoRaw: string): Promise<PropertySearchResult> {
   const holdingNo = holdingNoRaw.trim();
 
-  const property = await propertyRepository.findByHoldingNo(holdingNo);
-  if (!property) {
+  const stored = await propertyRepository.findByHoldingNo(holdingNo);
+  if (!stored) {
     return { found: false, message: `No property found for Holding No: ${holdingNo}` };
   }
+  // Dues are counted from the last year actually paid (see paidYearGuard.service.ts).
+  const property = await withEffectivePaidTill(stored);
 
   const floors = await propertyRepository.findFloorsByHoldingNo(holdingNo);
   const taxHistory = await propertyRepository.findTaxHistoryByHoldingNo(holdingNo);
@@ -182,5 +187,13 @@ export async function searchPropertyForCitizen(
     };
   }
 
-  return result;
+  // Online payment needs the holding's documents on file - the citizen is told what to get uploaded.
+  const docs = await getHoldingDocumentStatus(result.property.holding_no);
+  const swMsg = await solidWasteTypeBlock(result.property);
+  const blocked = swMsg
+    ? `${swMsg.replace("holding tax cannot be collected yet", "online payment is not available yet")} Please contact your ward's Tax Collector or the Holding Tax Section, Municipal Corporation Office, Munger.`
+    : docs.complete
+      ? null
+      : onlinePaymentDocumentsMessage(docs.missing);
+  return { ...result, property: { ...result.property, onlinePaymentBlockedReason: blocked } };
 }

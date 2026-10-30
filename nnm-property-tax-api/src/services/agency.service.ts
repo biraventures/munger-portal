@@ -414,7 +414,7 @@ const PENDING_HOLDING_SQL = `
     AND NOT p.resurvey_required
     AND NOT EXISTS (SELECT 1 FROM demand_notices h WHERE h.holding_no = p.holding_no AND h.on_hold)
     AND EXISTS (SELECT 1 FROM floors f WHERE f.holding_no = p.holding_no)
-    AND (p.tax_paid_till_year IS NULL OR p.tax_paid_till_year < p.assessment_year)`;
+    AND (p.tax_paid_till_year IS NULL OR p.tax_paid_till_year < GREATEST(p.assessment_year, current_fy_label()))`;
 
 /** A full-dues notice for the current Indian calendar month that is still live. */
 const CURRENT_MONTH_LIVE_NOTICE_SQL = `
@@ -584,7 +584,7 @@ export async function buildDuesReport(filter: { ward?: string; minAmount?: numbe
           WHERE d.holding_no = p.holding_no AND d.superseded = FALSE AND d.cancelled = FALSE AND d.settled = FALSE
           ORDER BY COALESCE(d.part_payment, FALSE), d.notice_date DESC, d.demand_no DESC LIMIT 1
        ) n ON TRUE
-      WHERE ((p.tax_paid_till_year IS NULL OR p.tax_paid_till_year < p.assessment_year) OR n.demand_no IS NOT NULL)
+      WHERE ((p.tax_paid_till_year IS NULL OR p.tax_paid_till_year < GREATEST(p.assessment_year, current_fy_label())) OR n.demand_no IS NOT NULL)
         ${wardClause}`,
     params,
   );
@@ -624,7 +624,7 @@ export async function buildDuesReport(filter: { ward?: string; minAmount?: numbe
 export async function listDuesReportWards(): Promise<{ ward: string; pending: number }[]> {
   const { rows } = await pool.query<{ ward: string | null; pending: number }>(
     `SELECT btrim(p.ward) AS ward, COUNT(*)::int AS pending FROM properties p
-      WHERE (p.tax_paid_till_year IS NULL OR p.tax_paid_till_year < p.assessment_year)
+      WHERE (p.tax_paid_till_year IS NULL OR p.tax_paid_till_year < GREATEST(p.assessment_year, current_fy_label()))
          OR EXISTS (SELECT 1 FROM demand_notices d WHERE d.holding_no = p.holding_no AND NOT d.superseded AND NOT d.cancelled AND NOT d.settled)
       GROUP BY 1`,
   );

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Users, FileClock, FileWarning, LayoutGrid, ShoppingBag, Store, BarChart3, Award, Archive, Download, XCircle, ShieldCheck, Trash2, RefreshCw, Upload, MapPin, Map as MapIcon, ClipboardCheck, UserCheck, ClipboardList, Receipt, RotateCcw, AlertTriangle, List, Flag, Home, FileText, Printer, Landmark, FileSpreadsheet } from "lucide-react";
+import { Users, FileClock, FileWarning, LayoutGrid, ShoppingBag, Store, BarChart3, Award, Archive, Download, XCircle, ShieldCheck, Trash2, RefreshCw, Upload, MapPin, Map as MapIcon, ClipboardCheck, UserCheck, ClipboardList, Receipt, RotateCcw, AlertTriangle, List, Flag, Home, FileText, Printer, Landmark, FileSpreadsheet, CalendarDays } from "lucide-react";
 import { AdminHeader } from "@/components/admin-header";
 import { MapSectionDashboard } from "@/components/building-permit/map-section-dashboard";
 import { AgencyOperatorDashboard } from "@/components/agency/agency-operator-dashboard";
@@ -153,12 +153,16 @@ export default function AdminDashboardPage() {
     admin.role === "commissioner" || admin.role === "deputy_commissioner" || admin.role === "city_manager";
   const showStreetlightReports =
     admin.role === "commissioner" || admin.role === "deputy_commissioner" || admin.role === "city_manager" || admin.role === "je_mechanical" || admin.role === "ae_mechanical";
-  const showPropertyWiseReport = admin.role === "commissioner" || admin.role === "deputy_commissioner" || admin.role === "city_manager";
+  const showPropertyWiseReport = ["commissioner", "deputy_commissioner", "city_manager", "tax_daroga"].includes(admin.role);
+  // The agency Team Leader / Project Manager see these two in their own card group.
+  const showAgencyPropertyReports = isAgencyRole;
+  const showCollectedHoldings = ["agency_team_leader", "agency_project_manager", "tax_daroga", "city_manager", "deputy_commissioner", "commissioner"].includes(admin.role);
   const propertyGroupVisible =
     showMutationApprovals || showCancellationRequests || showBulkDemandNotices || showAllPropertyChanges || showRenumberHolding || showBulkUploadProperties ||
     showMigratedHoldingsBulkUpload || showMigratedHoldingsAssign || showMigratedHoldingsSurveyor || showMigratedHoldingsMySurveys || showInitiateSurvey || showTaxCollectorPage ||
     showAgencyReports || showAgencyNotices || showReportPropertyDiscrepancy || showMyDiscrepancyReports || showUnsurveyedHouseEntry || showNoticeReceivingUpload || showUnsurveyedHouses || showNoticeReceivingCopies || showPropertyDiscrepancyRequests || showResurveyFlags || showCollectionIssues || showSolidWasteApprovals || showTaxCollectorAssignments || showRevertAuditTrail ||
-    showPropertyWiseReport || showDisputedHoldings || showHoldingImportReview || showBulkReceipts || showInstrumentReconciliation;
+    showPropertyWiseReport || showDisputedHoldings || showHoldingImportReview || showBulkReceipts || showInstrumentReconciliation ||
+    showAgencyPropertyReports || showCollectedHoldings || showDuesReport;
 
   const showShopAgreementApprovals = !isTradeLicenseNodal && !isGisOnlyRole && !isNarrowlyScopedRole;
   const showShopRentalApplications = !isTradeLicenseNodal && !isGisOnlyRole && !isNarrowlyScopedRole;
@@ -550,6 +554,26 @@ export default function AdminDashboardPage() {
                 </Link>
               )}
 
+              {showAgencyPropertyReports && (
+                <Link href="/admin/property-wise-report" className={cardClass}>
+                  <span className={iconWrapClass}>
+                    <Home className="h-6 w-6" strokeWidth={1.8} />
+                  </span>
+                  <h3 className="mb-1.5 text-base font-semibold text-slate-900">Property-wise Report</h3>
+                  <p className="text-sm text-slate-500">Search a holding for full details, dues, demand notices, payments and field visits.</p>
+                </Link>
+              )}
+
+              {showCollectedHoldings && (
+                <Link href="/admin/collected-holdings" className={cardClass}>
+                  <span className={iconWrapClass}>
+                    <CalendarDays className="h-6 w-6" strokeWidth={1.8} />
+                  </span>
+                  <h3 className="mb-1.5 text-base font-semibold text-slate-900">Holdings Collected on a Day</h3>
+                  <p className="text-sm text-slate-500">Every holding whose tax was collected on a chosen day, with amount, mode and collector - each opens its property-wise report.</p>
+                </Link>
+              )}
+
               {showAgencyNotices && (
                 <Link href="/admin/agency-notices" className={cardClass}>
                   <span className={iconWrapClass}>
@@ -601,7 +625,7 @@ export default function AdminDashboardPage() {
                   </span>
                   <h3 className="mb-1.5 text-base font-semibold text-slate-900">Solid Waste User Type Approvals</h3>
                   <p className="text-sm text-slate-500">
-                    {admin.role === "tax_daroga" ? "Verify solid waste user types entered by Tax Collectors." : "Give final approval to verified solid waste user types."}
+                    {admin.role === "tax_daroga" ? "Approve solid waste user types entered by Tax Collectors (final)." : "Approve solid waste user types still waiting at your stage."}
                   </p>
                 </Link>
               )}

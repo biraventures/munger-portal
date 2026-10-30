@@ -43,6 +43,10 @@ export interface FieldVerificationInput {
   previousReceiptPhotoMimeType: string | undefined;
   landDocumentPhotoBase64Data: string | undefined;
   landDocumentPhotoMimeType: string | undefined;
+  registerPhotoBase64Data?: string | undefined;
+  registerPhotoMimeType?: string | undefined;
+  waterConnectionStatus?: string | null;
+  waterConnectionCount?: number | null;
 }
 
 /**
@@ -59,12 +63,24 @@ export async function recordFieldVerification(holdingNo: string, admin: AdminTok
   const property = await propertyRepository.findByHoldingNo(holdingNo);
   if (!property) throw ApiError.notFound("Holding not found.");
 
-  const [holdingPhotoPath, aadhaarPhotoPath, previousReceiptPhotoPath, landDocumentPhotoPath] = await Promise.all([
+  const [holdingPhotoPath, aadhaarPhotoPath, previousReceiptPhotoPath, landDocumentPhotoPath, registerPhotoPath] = await Promise.all([
     savePhoto(holdingNo, "holding", input.holdingPhotoBase64Data, input.holdingPhotoMimeType),
     savePhoto(holdingNo, "aadhaar", input.aadhaarPhotoBase64Data, input.aadhaarPhotoMimeType),
     savePhoto(holdingNo, "receipt", input.previousReceiptPhotoBase64Data, input.previousReceiptPhotoMimeType),
     savePhoto(holdingNo, "landdoc", input.landDocumentPhotoBase64Data, input.landDocumentPhotoMimeType),
+    savePhoto(holdingNo, "register", input.registerPhotoBase64Data, input.registerPhotoMimeType),
   ]);
+
+  // The holding's water supply status follows what was reported on this visit.
+  if (input.waterConnectionStatus) {
+    await propertyRepository.updateCollectorDetails(holdingNo, {
+      waterConnectionStatus: input.waterConnectionStatus,
+      waterConnectionCount: input.waterConnectionCount ?? null,
+      solidWasteChargeType: null,
+      solidWasteCharge: null,
+      updatedBy: admin.displayName,
+    });
+  }
 
   return propertyFieldVerificationRepository.create({
     holdingNo,
@@ -75,6 +91,9 @@ export async function recordFieldVerification(holdingNo: string, admin: AdminTok
     aadhaarPhotoPath,
     previousReceiptPhotoPath,
     landDocumentPhotoPath,
+    registerPhotoPath,
+    waterConnectionStatus: input.waterConnectionStatus ?? null,
+    waterConnectionCount: input.waterConnectionCount ?? null,
     capturedByUsername: admin.username,
     capturedByDisplayName: admin.displayName,
     capturedByRole: admin.role,

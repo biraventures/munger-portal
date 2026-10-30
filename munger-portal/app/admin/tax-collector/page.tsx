@@ -6,6 +6,9 @@ import { AlertCircle, AlertTriangle, CheckCircle2, FileWarning, Loader2, Receipt
 import { fetchFormOptions, type FormOptions } from "@/lib/operator-api";
 import { sanitizeHoldingNoInput } from "@/lib/holding-no";
 import { MobileHoldingLookup } from "@/components/mobile-holding-lookup";
+import type { HoldingDocumentStatus } from "@/lib/aadhaar";
+import { fetchNoticePrintPositions, type NoticePrintPosition } from "@/lib/agency-api";
+import { PrintedNoticeLocation } from "@/components/admin/printed-notice-location";
 import { AdminHeader } from "@/components/admin-header";
 import { useAdminGuard } from "@/lib/use-admin-guard";
 import { FieldVerificationCapture } from "@/components/admin/field-verification-capture";
@@ -17,6 +20,7 @@ import { FIELD_PAYMENT_MODES } from "@/lib/payment-modes";
 import type { ReceiptData } from "@/lib/payment-api";
 import {
   fetchPropertyForCollector,
+  fetchHoldingDocumentStatus,
   fetchUnsettledDemandNoticesAdmin,
   submitPaymentAdmin,
   requestCancellationAdmin,
@@ -103,6 +107,8 @@ export default function TaxCollectorPage() {
   const [result, setResult] = useState<TaxCollectorPropertySearchResult | null>(null);
 
   const [notices, setNotices] = useState<UnsettledDemandNoticeAdmin[] | null>(null);
+  const [printPositions, setPrintPositions] = useState<NoticePrintPosition[] | null>(null);
+  const [docStatus, setDocStatus] = useState<HoldingDocumentStatus | null>(null);
   const [selectedDemandNo, setSelectedDemandNo] = useState("");
   const [paymentMode, setPaymentMode] = useState(PAYMENT_MODES[0]);
   const [instrument, setInstrument] = useState<InstrumentValue>(EMPTY_INSTRUMENT);
@@ -202,6 +208,8 @@ export default function TaxCollectorPage() {
     setHoldingIssues(null);
     setResult(null);
     setNotices(null);
+    setPrintPositions(null);
+    setDocStatus(null);
     setReceipt(null);
     setRequestingCancel(false);
     setCancelReason("");
@@ -247,6 +255,12 @@ export default function TaxCollectorPage() {
         fetchCollectionIssuesForHolding(res.property!.holding_no)
           .then(setHoldingIssues)
           .catch(() => setHoldingIssues([]));
+        fetchHoldingDocumentStatus(res.property!.holding_no)
+          .then(setDocStatus)
+          .catch(() => setDocStatus(null));
+        fetchNoticePrintPositions(res.property!.holding_no)
+          .then(setPrintPositions)
+          .catch(() => setPrintPositions([]));
         const list = await fetchUnsettledDemandNoticesAdmin(holdingNo);
         setNotices(list);
         if (list.length > 0) setSelectedDemandNo(list[0]!.demandNo);
@@ -414,7 +428,7 @@ export default function TaxCollectorPage() {
                 <p className="mb-3 text-xs text-amber-800">These are missing for this holding. Please enter them from the field.</p>
                 {!!property.solidWasteTypeMissing && swOpen && swRequest && (
                   <p className="mb-3 rounded-md border border-amber-200 bg-white p-3 text-xs text-amber-900">
-                    Solid waste user type <b>{swRequest.requested_type}</b> submitted - {swRequest.stage === "tax_daroga" ? "waiting for Tax Daroga verification" : "verified by Tax Daroga, waiting for City Manager approval"}. Payment can be collected once it is approved.
+                    Solid waste user type <b>{swRequest.requested_type}</b> submitted - waiting for the Tax Daroga&apos;s approval. Payment can be collected once it is approved.
                   </p>
                 )}
                 {!!property.solidWasteTypeMissing && !swOpen && swRequest?.stage === "rejected" && (
@@ -424,7 +438,7 @@ export default function TaxCollectorPage() {
                 )}
                 {!!property.solidWasteTypeMissing && !swOpen && (
                   <div className="mb-3">
-                    <label className="mb-1 block text-xs font-medium text-slate-700">Solid waste user type (needs Tax Daroga + City Manager approval; amount is set automatically)</label>
+                    <label className="mb-1 block text-xs font-medium text-slate-700">Solid waste user type (needs the Tax Daroga&apos;s approval; amount is set automatically)</label>
                     <select value={swType} onChange={(e) => setSwType(e.target.value)} className={inputClass}>
                       <option value="">Select user type…</option>
                       {(formOptions?.solidWasteChargeTypes ?? []).map((t) => (
@@ -472,7 +486,12 @@ export default function TaxCollectorPage() {
               <CollectionIssueList issues={holdingIssues} emptyText="No collection issue has been reported for this holding." />
             </div>
 
-            <FieldVerificationCapture holdingNo={property.holding_no} />
+            <FieldVerificationCapture
+              holdingNo={property.holding_no}
+              documentStatus={docStatus}
+              lastWaterStatus={(property.water_connection_status as string | null | undefined) ?? null}
+              onSaved={() => fetchHoldingDocumentStatus(property.holding_no).then(setDocStatus).catch(() => undefined)}
+            />
 
             <div className="rounded-xl border border-slate-200 bg-white p-5">
               <h3 className="mb-3 text-sm font-semibold text-slate-700">Floors on record</h3>
@@ -507,6 +526,7 @@ export default function TaxCollectorPage() {
             {!receipt && (
               <div className="rounded-xl border border-slate-200 bg-white p-5">
                 <h3 className="mb-3 text-sm font-semibold text-slate-700">Demand &amp; Payment</h3>
+                <PrintedNoticeLocation positions={printPositions} />
                 {!notices ? (
                   <p className="text-sm text-slate-400">Loading…</p>
                 ) : notices.length === 0 ? (
@@ -533,10 +553,17 @@ export default function TaxCollectorPage() {
                         amountDemanded={notices.find((n) => n.demandNo === selectedDemandNo) ? Number(notices.find((n) => n.demandNo === selectedDemandNo)!.totalAmountDemanded) : null}
                         value={instrument} onChange={setInstrument} inputClassName={inputClass} />
                     </div>
+                    {docStatus && !docStatus.collectionComplete && (
+                      <p role="alert" className="mb-3 rounded-md border border-red-200 bg-red-50 p-3 text-xs text-red-800">
+                        Collect the holding documents first (Holding Documents section above): {docStatus.missingForCollection.join(", ")}.
+                      </p>
+                    )}
                     <button
                       onClick={handleCollectPayment}
-                      disabled={collecting || !!property.solidWasteTypeMissing || !property.water_connection_status}
-                      title={property.solidWasteTypeMissing || !property.water_connection_status ? "Enter the mandatory details above first" : undefined}
+                      disabled={collecting || !!property.solidWasteTypeMissing || !property.water_connection_status || !docStatus?.collectionComplete}
+                      title={
+                        property.solidWasteTypeMissing || !property.water_connection_status || !docStatus?.collectionComplete ? "Enter the mandatory details above first" : undefined
+                      }
                       className="rounded-md bg-nnm-blue px-4 py-2 text-sm font-semibold text-white hover:bg-nnm-blue-dark disabled:opacity-60"
                     >
                       {collecting ? "Recording…" : "Collect Payment & Issue Slip"}

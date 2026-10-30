@@ -1,3 +1,4 @@
+import type { ReceiptData } from "./payment-api";
 import { getOperatorToken } from "./auth";
 import type { DemandNoticeReprintData } from "./demand-notice-api";
 
@@ -250,6 +251,8 @@ export interface DemandNoticeHistoryEntry {
   reminderLabel: string | null;
   superseded: boolean;
   cancelled: boolean;
+  /** Raised for a year already paid - cancelled automatically. */
+  wronglyGenerated?: boolean;
   cancellationPending: boolean;
 }
 
@@ -370,6 +373,8 @@ export interface PrintableReceiptHistory {
   cancelled: boolean;
   cancelledReason: string | null;
   floorBreakdown: FrozenFloorBreakdown | null;
+  /** The receipt exactly as originally printed (null for imported / very old receipts) - see ReceiptDocument. */
+  original?: ReceiptData | null;
 }
 
 export async function fetchReceiptReprint(receiptNo: string): Promise<PrintableReceiptHistory> {

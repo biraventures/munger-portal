@@ -28,6 +28,8 @@ export interface DemandNoticeRow {
   cancelled: boolean;
   cancelled_reason: string | null;
   cancelled_at: Date | null;
+  /** Raised for a year the holding had already paid (migration 153) - always also cancelled. */
+  wrongly_generated?: boolean;
   // Frozen at generation time (migration 086) - see that migration's
   // comment. Null for notices generated before this column existed.
   floor_breakdown: FrozenFloorBreakdown | null;
@@ -63,6 +65,21 @@ export const demandNoticeRepository = {
    * earlier month is stale - a fresh one is raised (it supersedes the old unsettled one as a reminder). A holding that
    * never had a notice qualifies too. Month boundaries are in Indian time.
    */
+  /**
+   * New financial year (run at the start of every monthly refresh): every holding's current year moves up to it, and
+   * an open notice raised for an earlier year (it charges that year as "current") is superseded - the refresh then
+   * raises the correct one. Same rule as migration 152.
+   */
+  async rollForwardFinancialYear(): Promise<{ holdings: number; notices: number }> {
+    const h = await pool.query(`UPDATE properties SET assessment_year = current_fy_label() WHERE assessment_year < current_fy_label()`);
+    const n = await pool.query(
+      `UPDATE demand_notices SET superseded = TRUE
+        WHERE NOT settled AND NOT cancelled AND NOT superseded AND NOT on_hold
+          AND assessment_year IS NOT NULL AND assessment_year < current_fy_label()`,
+    );
+    return { holdings: h.rowCount ?? 0, notices: n.rowCount ?? 0 };
+  },
+
   async findHoldingNosNeedingDemandNotice(): Promise<string[]> {
     const { rows } = await pool.query<{ holding_no: string }>(
       `SELECT DISTINCT p.holding_no
@@ -71,7 +88,7 @@ export const demandNoticeRepository = {
        WHERE NOT COALESCE(p.is_disputed, FALSE)
          AND NOT p.resurvey_required
          AND NOT EXISTS (SELECT 1 FROM demand_notices h WHERE h.holding_no = p.holding_no AND h.on_hold)
-         AND (p.tax_paid_till_year IS NULL OR p.tax_paid_till_year < p.assessment_year)
+         AND (p.tax_paid_till_year IS NULL OR p.tax_paid_till_year < GREATEST(p.assessment_year, current_fy_label()))
          AND NOT EXISTS (
            SELECT 1 FROM demand_notices d
             WHERE d.holding_no = p.holding_no

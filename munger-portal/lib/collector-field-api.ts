@@ -118,14 +118,17 @@ export interface NoticeForReceiving {
   copies_uploaded: number;
 }
 
-export async function fetchNoticesForReceiving(holdingNo: string): Promise<{ property: { owner_name: string; address: string | null; ward: string | null }; notices: NoticeForReceiving[] } | null> {
+export async function fetchNoticesForReceiving(holdingNo: string): Promise<{ property: { owner_name: string; address: string | null; ward: string | null; water_connection_status?: string | null }; notices: NoticeForReceiving[] } | null> {
   const res = await fetch(`${API_BASE_URL}/admin/receiving-copies/notices/${encodeURIComponent(holdingNo)}`, { headers: authHeaders() });
   if (res.status === 404) return null;
   if (!res.ok) throw new Error(await failureMessage(res, "Search failed"));
   return res.json();
 }
 
-export async function uploadReceivingCopy(demandNo: string, input: { photoBase64Data: string; photoMimeType: string; gpsLat?: number; gpsLng?: number }): Promise<void> {
+export async function uploadReceivingCopy(
+  demandNo: string,
+  input: { photoBase64Data: string; photoMimeType: string; gpsLat?: number; gpsLng?: number; waterConnectionStatus?: string; waterConnectionCount?: number },
+): Promise<void> {
   const res = await fetch(`${API_BASE_URL}/admin/receiving-copies/notices/${encodeURIComponent(demandNo)}`, { method: "POST", headers: authHeaders(), body: JSON.stringify(input) });
   if (!res.ok) throw new Error(await failureMessage(res, "Could not upload this copy"));
 }

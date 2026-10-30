@@ -8,6 +8,7 @@ import { DocumentVerificationQR } from "./document-verification-qr";
 import { CancelledWatermark, CancelledBanner, isProvisional, ProvisionalBanner, ProvisionalWatermark } from "./cancelled-document-notice";
 import { printElementInNewWindow } from "@/lib/print-in-new-window";
 import { describePaymentDetails } from "@/lib/payment-modes";
+import { ReceiptDocument } from "./receipt-view";
 
 function money(v: string | number | undefined | null): string {
   const n = Number(v ?? 0);
@@ -38,264 +39,276 @@ export function ReceiptReprintView({
             <Printer className="h-4 w-4" />
             Print / Save as PDF
           </button>
-          <button onClick={() => onClose?.()} className="inline-flex items-center gap-1.5 text-sm font-medium text-nnm-blue hover:underline">
+          <button
+            onClick={() => onClose?.()}
+            className="inline-flex items-center gap-1.5 text-sm font-medium text-nnm-blue hover:underline"
+          >
             <X className="h-4 w-4" />
             Close
           </button>
         </div>
       )}
 
-      <div
-        ref={printRef}
-        className="printable-area rounded-xl border border-slate-200 bg-white p-8 text-[12px] text-[#222]"
-        style={{ fontFamily: "Arial, sans-serif", position: "relative" }}
-      >
-        {receipt.cancelled && <CancelledWatermark />}
-        {!receipt.cancelled && isProvisional(receipt) && <ProvisionalWatermark />}
-        <div className="flex items-start justify-between gap-3 border-b-2 border-nnm-blue pb-2">
-          <DocumentVerificationQR url={receipt.verificationUrl} />
-          <div className="flex-1 text-center">
-            <h1 className="m-0 text-xl font-bold text-nnm-blue">MUNGER NAGAR NIGAM</h1>
-            <div className="text-[13px] text-slate-500">{heading}</div>
-          </div>
-          <div className="w-[170px] shrink-0 text-right text-[11px]">
-            <div>
-              <b className="text-nnm-blue">Receipt No -</b> {receipt.formattedReceiptNo}
+      {receipt.original ? (
+        // Identical to the receipt printed at payment - only its current status (cancelled / provisional) is added.
+        <ReceiptDocument
+          ref={printRef}
+          receipt={receipt.original}
+          cancelled={receipt.cancelled}
+          cancelledReason={receipt.cancelledReason}
+        />
+      ) : (
+        <div
+          ref={printRef}
+          className="printable-area rounded-xl border border-slate-200 bg-white p-8 text-[12px] text-[#222]"
+          style={{ fontFamily: "Arial, sans-serif", position: "relative" }}
+        >
+          {receipt.cancelled && <CancelledWatermark />}
+          {!receipt.cancelled && isProvisional(receipt) && <ProvisionalWatermark />}
+          <div className="flex items-start justify-between gap-3 border-b-2 border-nnm-blue pb-2">
+            <DocumentVerificationQR url={receipt.verificationUrl} />
+            <div className="flex-1 text-center">
+              <h1 className="m-0 text-xl font-bold text-nnm-blue">MUNGER NAGAR NIGAM</h1>
+              <div className="text-[13px] text-slate-500">{heading}</div>
             </div>
-            <div>
-              <b className="text-nnm-blue">Receipt Date -</b> {receipt.date}
-            </div>
-            {receipt.demandNo && (
+            <div className="w-[170px] shrink-0 text-right text-[11px]">
               <div>
-                <b className="text-nnm-blue">Against Demand No -</b> {receipt.demandNo}
+                <b className="text-nnm-blue">Receipt No -</b> {receipt.formattedReceiptNo}
               </div>
-            )}
-          </div>
-        </div>
-
-        {receipt.cancelled && <CancelledBanner reason={receipt.cancelledReason} />}
-        {!receipt.cancelled && isProvisional(receipt) && <ProvisionalBanner paymentMode={receipt.paymentMode} />}
-
-        <div className="mt-3.5 flex gap-5">
-          <div className="flex-1 space-y-0.5">
-            <div>
-              <b className="inline-block w-[140px]">Holding No</b> {receipt.holdingNo}
-            </div>
-            {receipt.oldHoldingNo ? (
               <div>
-                <b className="inline-block w-[140px]">Old Holding No</b> {receipt.oldHoldingNo}
+                <b className="text-nnm-blue">Receipt Date -</b> {receipt.date}
               </div>
-            ) : null}
-            <div>
-              <b className="inline-block w-[140px]">Owner Name</b> {receipt.ownerName}
-            </div>
-            <div>
-              <b className="inline-block w-[140px]">Address</b> {receipt.address}
+              {receipt.demandNo && (
+                <div>
+                  <b className="text-nnm-blue">Against Demand No -</b> {receipt.demandNo}
+                </div>
+              )}
             </div>
           </div>
-          <div className="flex-1 space-y-0.5">
-            <div>
-              <b className="inline-block w-[140px]">Payment Mode</b> {receipt.paymentMode}
-            </div>
-            <div>
-              <b className="inline-block w-[140px]">Counter</b> {receipt.counter ?? "—"}
-            </div>
-            {describePaymentDetails(receipt.paymentMode, receipt.instrument).map(([label, value]) => (
-              <div key={label}>
-                <b className="inline-block w-[140px]">{label}</b> {value}
-              </div>
-            ))}
-            {receipt.tvNumber && (
+
+          {receipt.cancelled && <CancelledBanner reason={receipt.cancelledReason} />}
+          {!receipt.cancelled && isProvisional(receipt) && <ProvisionalBanner paymentMode={receipt.paymentMode} />}
+
+          <div className="mt-3.5 flex gap-5">
+            <div className="flex-1 space-y-0.5">
               <div>
-                <b className="inline-block w-[140px]">T.V. No.</b> {receipt.tvNumber}
+                <b className="inline-block w-[140px]">Holding No</b> {receipt.holdingNo}
               </div>
-            )}
-            {receipt.tvDate && (
+              {receipt.oldHoldingNo ? (
+                <div>
+                  <b className="inline-block w-[140px]">Old Holding No</b> {receipt.oldHoldingNo}
+                </div>
+              ) : null}
               <div>
-                <b className="inline-block w-[140px]">T.V. Date</b> {receipt.tvDate}
+                <b className="inline-block w-[140px]">Owner Name</b> {receipt.ownerName}
               </div>
-            )}
+              <div>
+                <b className="inline-block w-[140px]">Address</b> {receipt.address}
+              </div>
+            </div>
+            <div className="flex-1 space-y-0.5">
+              <div>
+                <b className="inline-block w-[140px]">Payment Mode</b> {receipt.paymentMode}
+              </div>
+              <div>
+                <b className="inline-block w-[140px]">Counter</b> {receipt.counter ?? "—"}
+              </div>
+              {describePaymentDetails(receipt.paymentMode, receipt.instrument).map(([label, value]) => (
+                <div key={label}>
+                  <b className="inline-block w-[140px]">{label}</b> {value}
+                </div>
+              ))}
+              {receipt.tvNumber && (
+                <div>
+                  <b className="inline-block w-[140px]">T.V. No.</b> {receipt.tvNumber}
+                </div>
+              )}
+              {receipt.tvDate && (
+                <div>
+                  <b className="inline-block w-[140px]">T.V. Date</b> {receipt.tvDate}
+                </div>
+              )}
+            </div>
           </div>
-        </div>
 
-        {receipt.floorBreakdown && (
-          <table className="mt-3.5 w-full border-collapse text-[11px]">
-            <thead>
-              <tr className="bg-slate-100">
-                <th className="border border-slate-400 px-1.5 py-0.5 text-left">Floor</th>
-                <th className="border border-slate-400 px-1.5 py-0.5 text-left">Area</th>
-                <th className="border border-slate-400 px-1.5 py-0.5 text-left">Const.</th>
-                <th className="border border-slate-400 px-1.5 py-0.5 text-left">Usage</th>
-                <th className="border border-slate-400 px-1.5 py-0.5 text-left">Occ.</th>
-                <th className="border border-slate-400 px-1.5 py-0.5 text-right">Rate</th>
-                <th className="border border-slate-400 px-1.5 py-0.5 text-right">ARV</th>
-                <th className="border border-slate-400 px-1.5 py-0.5 text-right">Tax @ 9%</th>
-              </tr>
-            </thead>
-            <tbody>
-              {receipt.floorBreakdown.collapsed ? (
-                // Reverse-solved floor area came out larger than the plot
-                // itself at generation time - same fallback the original
-                // (non-reprint) view uses, frozen here so a reprint shows
-                // exactly what the original document showed.
-                <tr>
-                  <td className="border border-slate-400 px-1.5 py-0.5" colSpan={2}>
-                    <b>Total Built-up Area</b>
-                  </td>
-                  <td className="border border-slate-400 px-1.5 py-0.5" colSpan={6}>
-                    {receipt.floorBreakdown.groundFloorBuiltArea} sqft
-                  </td>
-                </tr>
-              ) : (
-                receipt.floorBreakdown.rows.map((row, i) =>
-                  row.error ? (
-                    <tr key={i}>
-                      <td colSpan={8} className="border border-slate-400 px-1.5 py-0.5 text-red-700">
-                        {row.floor}: {row.error}
-                      </td>
-                    </tr>
-                  ) : row.demolished ? (
-                    <tr key={i} className="italic text-slate-400">
-                      <td className="border border-slate-400 px-1.5 py-0.5">{row.floor} (Demolished)</td>
-                      <td colSpan={4} className="border border-slate-400 px-1.5 py-0.5">
-                        Not part of current total
-                      </td>
-                      <td className="border border-slate-400 px-1.5 py-0.5 text-right">—</td>
-                      <td className="border border-slate-400 px-1.5 py-0.5 text-right">N/A</td>
-                      <td className="border border-slate-400 px-1.5 py-0.5 text-right">N/A</td>
-                    </tr>
-                  ) : (
-                    <tr key={i}>
-                      <td className="border border-slate-400 px-1.5 py-0.5">{row.floor}</td>
-                      <td className="border border-slate-400 px-1.5 py-0.5">{row.area}</td>
-                      <td className="border border-slate-400 px-1.5 py-0.5">{row.constType}</td>
-                      <td className="border border-slate-400 px-1.5 py-0.5">{row.usage}</td>
-                      <td className="border border-slate-400 px-1.5 py-0.5">{row.occupancy}</td>
-                      <td className="border border-slate-400 px-1.5 py-0.5 text-right">{row.rate}</td>
-                      <td className="border border-slate-400 px-1.5 py-0.5 text-right">{row.floorArv}</td>
-                      <td className="border border-slate-400 px-1.5 py-0.5 text-right">{row.floorTax}</td>
-                    </tr>
-                  ),
-                )
-              )}
-            </tbody>
-          </table>
-        )}
-
-        {receipt.breakdown && (
-          <table className="mt-3.5 w-full border-collapse text-[11px]">
-            <thead>
-              <tr className="bg-slate-100">
-                <th className="border border-slate-400 px-1.5 py-0.5 text-left">Particulars</th>
-                <th className="border border-slate-400 px-1.5 py-0.5 text-right">Amount (₹)</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td className="border border-slate-400 px-1.5 py-0.5">Annual Rental Value (ARV)</td>
-                <td className="border border-slate-400 px-1.5 py-0.5 text-right">{money(receipt.breakdown.arv)}</td>
-              </tr>
-              <tr>
-                <td className="border border-slate-400 px-1.5 py-0.5">Current Year Tax (net)</td>
-                <td className="border border-slate-400 px-1.5 py-0.5 text-right">{money(receipt.breakdown.currentYearTaxNet)}</td>
-              </tr>
-              {Number(receipt.breakdown.areaRebate) > 0 && (
-                <tr>
-                  <td className="border border-slate-400 px-1.5 py-0.5 pl-6 italic text-slate-500">
-                    {String(receipt.breakdown.areaRebateReason ?? "").startsWith("Exempt from holding tax") ? (
-                      <>— {receipt.breakdown.areaRebateReason}</>
-                    ) : (
-                      <>
-                        — of which, Plinth Area / Rain Water Harvesting Rebate already applied
-                        {receipt.breakdown.areaRebateReason ? ` (${receipt.breakdown.areaRebateReason})` : ""}
-                      </>
-                    )}
-                  </td>
-                  <td className="border border-slate-400 px-1.5 py-0.5 text-right italic text-slate-500">
-                    −{money(receipt.breakdown.areaRebate)}
-                  </td>
-                </tr>
-              )}
-              {Number(receipt.breakdown.previousYearsTaxBase) > 0 && (
-                <tr>
-                  <td className="border border-slate-400 px-1.5 py-0.5">Previous Years&apos; Outstanding Demand</td>
-                  <td className="border border-slate-400 px-1.5 py-0.5 text-right">{money(receipt.breakdown.previousYearsTaxBase)}</td>
-                </tr>
-              )}
-              {Number(receipt.breakdown.totalFineAmount) > 0 && (
-                <tr>
-                  <td className="border border-slate-400 px-1.5 py-0.5">Fine / Penalty</td>
-                  <td className="border border-slate-400 px-1.5 py-0.5 text-right">{money(receipt.breakdown.totalFineAmount)}</td>
-                </tr>
-              )}
-              {Number(receipt.breakdown.otherCharges) > 0 && (
-                <tr>
-                  <td className="border border-slate-400 px-1.5 py-0.5">Other Charges</td>
-                  <td className="border border-slate-400 px-1.5 py-0.5 text-right">{money(receipt.breakdown.otherCharges)}</td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        )}
-
-        {receipt.arrearStagesPaid.length > 0 ? (
-          <>
-            <div className="mt-3 text-[11px] font-bold">Arrear Period(s) Cleared by This Payment</div>
-            <table className="mt-1 w-full border-collapse text-[11px]">
+          {receipt.floorBreakdown && (
+            <table className="mt-3.5 w-full border-collapse text-[11px]">
               <thead>
                 <tr className="bg-slate-100">
-                  <th className="border border-slate-400 px-1.5 py-0.5 text-left">Period</th>
-                  <th className="border border-slate-400 px-1.5 py-0.5 text-left">Years</th>
-                  <th className="border border-slate-400 px-1.5 py-0.5 text-right">Annual (avg)</th>
-                  <th className="border border-slate-400 px-1.5 py-0.5 text-right">Amount</th>
+                  <th className="border border-slate-400 px-1.5 py-0.5 text-left">Floor</th>
+                  <th className="border border-slate-400 px-1.5 py-0.5 text-left">Area</th>
+                  <th className="border border-slate-400 px-1.5 py-0.5 text-left">Const.</th>
+                  <th className="border border-slate-400 px-1.5 py-0.5 text-left">Usage</th>
+                  <th className="border border-slate-400 px-1.5 py-0.5 text-left">Occ.</th>
+                  <th className="border border-slate-400 px-1.5 py-0.5 text-right">Rate</th>
+                  <th className="border border-slate-400 px-1.5 py-0.5 text-right">ARV</th>
+                  <th className="border border-slate-400 px-1.5 py-0.5 text-right">Tax @ 9%</th>
                 </tr>
               </thead>
               <tbody>
-                {receipt.arrearStagesPaid.map((s, i) => (
-                  <tr key={i}>
-                    <td className="border border-slate-400 px-1.5 py-0.5">{s.period}</td>
-                    <td className="border border-slate-400 px-1.5 py-0.5">{s.years}</td>
-                    <td className="border border-slate-400 px-1.5 py-0.5 text-right">{s.annualCharge}</td>
-                    <td className="border border-slate-400 px-1.5 py-0.5 text-right">{s.amount}</td>
+                {receipt.floorBreakdown.collapsed ? (
+                  // Reverse-solved floor area came out larger than the plot
+                  // itself at generation time - same fallback the original
+                  // (non-reprint) view uses, frozen here so a reprint shows
+                  // exactly what the original document showed.
+                  <tr>
+                    <td className="border border-slate-400 px-1.5 py-0.5" colSpan={2}>
+                      <b>Total Built-up Area</b>
+                    </td>
+                    <td className="border border-slate-400 px-1.5 py-0.5" colSpan={6}>
+                      {receipt.floorBreakdown.groundFloorBuiltArea} sqft
+                    </td>
                   </tr>
-                ))}
+                ) : (
+                  receipt.floorBreakdown.rows.map((row, i) =>
+                    row.error ? (
+                      <tr key={i}>
+                        <td colSpan={8} className="border border-slate-400 px-1.5 py-0.5 text-red-700">
+                          {row.floor}: {row.error}
+                        </td>
+                      </tr>
+                    ) : row.demolished ? (
+                      <tr key={i} className="italic text-slate-400">
+                        <td className="border border-slate-400 px-1.5 py-0.5">{row.floor} (Demolished)</td>
+                        <td colSpan={4} className="border border-slate-400 px-1.5 py-0.5">
+                          Not part of current total
+                        </td>
+                        <td className="border border-slate-400 px-1.5 py-0.5 text-right">—</td>
+                        <td className="border border-slate-400 px-1.5 py-0.5 text-right">N/A</td>
+                        <td className="border border-slate-400 px-1.5 py-0.5 text-right">N/A</td>
+                      </tr>
+                    ) : (
+                      <tr key={i}>
+                        <td className="border border-slate-400 px-1.5 py-0.5">{row.floor}</td>
+                        <td className="border border-slate-400 px-1.5 py-0.5">{row.area}</td>
+                        <td className="border border-slate-400 px-1.5 py-0.5">{row.constType}</td>
+                        <td className="border border-slate-400 px-1.5 py-0.5">{row.usage}</td>
+                        <td className="border border-slate-400 px-1.5 py-0.5">{row.occupancy}</td>
+                        <td className="border border-slate-400 px-1.5 py-0.5 text-right">{row.rate}</td>
+                        <td className="border border-slate-400 px-1.5 py-0.5 text-right">{row.floorArv}</td>
+                        <td className="border border-slate-400 px-1.5 py-0.5 text-right">{row.floorTax}</td>
+                      </tr>
+                    ),
+                  )
+                )}
               </tbody>
             </table>
-          </>
-        ) : (
-          // Older receipts, from before the structured per-period
-          // breakdown existed, only ever had this free-text summary of
-          // what was cleared - shown here rather than nothing.
-          receipt.legacyArrearPeriodsPaid && (
-            <div className="mt-3 text-[11px]">
-              <b>Arrear Period(s) Cleared by This Payment</b> {receipt.legacyArrearPeriodsPaid}
-            </div>
-          )
-        )}
+          )}
 
-        <div
-          className={`relative z-20 mt-3.5 flex items-center justify-between rounded-md p-3 ${
-            receipt.cancelled ? "border-2 border-red-600 bg-red-50" : "bg-slate-50"
-          }`}
-        >
-          <span className="text-[11px] font-semibold">
-            Total Received {receipt.cancelled && <span className="font-extrabold text-red-700">(CANCELLED - NOT VALID)</span>}
-          </span>
-          <span className={`font-mono text-lg font-semibold ${receipt.cancelled ? "text-red-700 line-through" : "text-nnm-blue"}`}>
-            ₹{money(receipt.amountReceived)}
-          </span>
+          {receipt.breakdown && (
+            <table className="mt-3.5 w-full border-collapse text-[11px]">
+              <thead>
+                <tr className="bg-slate-100">
+                  <th className="border border-slate-400 px-1.5 py-0.5 text-left">Particulars</th>
+                  <th className="border border-slate-400 px-1.5 py-0.5 text-right">Amount (₹)</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td className="border border-slate-400 px-1.5 py-0.5">Annual Rental Value (ARV)</td>
+                  <td className="border border-slate-400 px-1.5 py-0.5 text-right">{money(receipt.breakdown.arv)}</td>
+                </tr>
+                <tr>
+                  <td className="border border-slate-400 px-1.5 py-0.5">Current Year Tax (net)</td>
+                  <td className="border border-slate-400 px-1.5 py-0.5 text-right">{money(receipt.breakdown.currentYearTaxNet)}</td>
+                </tr>
+                {Number(receipt.breakdown.areaRebate) > 0 && (
+                  <tr>
+                    <td className="border border-slate-400 px-1.5 py-0.5 pl-6 italic text-slate-500">
+                      {String(receipt.breakdown.areaRebateReason ?? "").startsWith("Exempt from holding tax") ? (
+                        <>— {receipt.breakdown.areaRebateReason}</>
+                      ) : (
+                        <>
+                          — of which, Plinth Area / Rain Water Harvesting Rebate already applied
+                          {receipt.breakdown.areaRebateReason ? ` (${receipt.breakdown.areaRebateReason})` : ""}
+                        </>
+                      )}
+                    </td>
+                    <td className="border border-slate-400 px-1.5 py-0.5 text-right italic text-slate-500">
+                      −{money(receipt.breakdown.areaRebate)}
+                    </td>
+                  </tr>
+                )}
+                {Number(receipt.breakdown.previousYearsTaxBase) > 0 && (
+                  <tr>
+                    <td className="border border-slate-400 px-1.5 py-0.5">Previous Years&apos; Outstanding Demand</td>
+                    <td className="border border-slate-400 px-1.5 py-0.5 text-right">{money(receipt.breakdown.previousYearsTaxBase)}</td>
+                  </tr>
+                )}
+                {Number(receipt.breakdown.totalFineAmount) > 0 && (
+                  <tr>
+                    <td className="border border-slate-400 px-1.5 py-0.5">Fine / Penalty</td>
+                    <td className="border border-slate-400 px-1.5 py-0.5 text-right">{money(receipt.breakdown.totalFineAmount)}</td>
+                  </tr>
+                )}
+                {Number(receipt.breakdown.otherCharges) > 0 && (
+                  <tr>
+                    <td className="border border-slate-400 px-1.5 py-0.5">Other Charges</td>
+                    <td className="border border-slate-400 px-1.5 py-0.5 text-right">{money(receipt.breakdown.otherCharges)}</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          )}
+
+          {receipt.arrearStagesPaid.length > 0 ? (
+            <>
+              <div className="mt-3 text-[11px] font-bold">Arrear Period(s) Cleared by This Payment</div>
+              <table className="mt-1 w-full border-collapse text-[11px]">
+                <thead>
+                  <tr className="bg-slate-100">
+                    <th className="border border-slate-400 px-1.5 py-0.5 text-left">Period</th>
+                    <th className="border border-slate-400 px-1.5 py-0.5 text-left">Years</th>
+                    <th className="border border-slate-400 px-1.5 py-0.5 text-right">Annual (avg)</th>
+                    <th className="border border-slate-400 px-1.5 py-0.5 text-right">Amount</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {receipt.arrearStagesPaid.map((s, i) => (
+                    <tr key={i}>
+                      <td className="border border-slate-400 px-1.5 py-0.5">{s.period}</td>
+                      <td className="border border-slate-400 px-1.5 py-0.5">{s.years}</td>
+                      <td className="border border-slate-400 px-1.5 py-0.5 text-right">{s.annualCharge}</td>
+                      <td className="border border-slate-400 px-1.5 py-0.5 text-right">{s.amount}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </>
+          ) : (
+            // Older receipts, from before the structured per-period
+            // breakdown existed, only ever had this free-text summary of
+            // what was cleared - shown here rather than nothing.
+            receipt.legacyArrearPeriodsPaid && (
+              <div className="mt-3 text-[11px]">
+                <b>Arrear Period(s) Cleared by This Payment</b> {receipt.legacyArrearPeriodsPaid}
+              </div>
+            )
+          )}
+
+          <div
+            className={`relative z-20 mt-3.5 flex items-center justify-between rounded-md p-3 ${
+              receipt.cancelled ? "border-2 border-red-600 bg-red-50" : "bg-slate-50"
+            }`}
+          >
+            <span className="text-[11px] font-semibold">
+              Total Received {receipt.cancelled && <span className="font-extrabold text-red-700">(CANCELLED - NOT VALID)</span>}
+            </span>
+            <span className={`font-mono text-lg font-semibold ${receipt.cancelled ? "text-red-700 line-through" : "text-nnm-blue"}`}>
+              ₹{money(receipt.amountReceived)}
+            </span>
+          </div>
+          <p className="mt-1.5 text-[10.5px] italic text-slate-600">{receipt.amountInWords}</p>
+
+          {receipt.onlineDeclarationAcceptedAt && <DeclarationAcceptedOnReceipt acceptedAt={receipt.onlineDeclarationAcceptedAt} />}
+
+          <p className="mt-6 text-[10px] text-slate-500">
+            This is a reprint of a computer generated receipt, exactly as originally issued. Collected by {receipt.collectedBy}
+            {receipt.taxCollectorName ? ` via tax collector ${receipt.taxCollectorName} (${receipt.taxCollectorCode})` : ""}. No figure on
+            this reprint has been recalculated or altered.
+          </p>
         </div>
-        <p className="mt-1.5 text-[10.5px] italic text-slate-600">{receipt.amountInWords}</p>
-
-        {receipt.onlineDeclarationAcceptedAt && <DeclarationAcceptedOnReceipt acceptedAt={receipt.onlineDeclarationAcceptedAt} />}
-
-        <p className="mt-6 text-[10px] text-slate-500">
-          This is a reprint of a computer generated receipt, exactly as originally issued. Collected by{" "}
-          {receipt.collectedBy}
-          {receipt.taxCollectorName ? ` via tax collector ${receipt.taxCollectorName} (${receipt.taxCollectorCode})` : ""}.
-          No figure on this reprint has been recalculated or altered.
-        </p>
-      </div>
+      )}
     </div>
   );
 }
