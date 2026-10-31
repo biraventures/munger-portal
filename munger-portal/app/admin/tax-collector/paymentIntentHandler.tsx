@@ -94,7 +94,7 @@ export interface IntentResponse {
     pm: 'CARD' | (string & {}); // payment mode; other values unknown
 }
 
-const IntentHandler = ({ handler }: any) => {
+const IntentHandler = ({ handler }: { handler: (data: IntentResponse) => void }) => {
     const intentFieldRef = useRef<HTMLInputElement>(null);
 
     const [intentResult, setIntentResult] = useState<string>("Waiting for intent data...");
