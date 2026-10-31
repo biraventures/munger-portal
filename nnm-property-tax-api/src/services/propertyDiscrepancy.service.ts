@@ -133,6 +133,11 @@ function assertActionable(request: PropertyDiscrepancyRequestRow, admin: AdminTo
   if (admin.role !== request.current_stage) {
     throw new ApiError(403, `This request is currently with ${request.current_stage.replace(/_/g, " ")} - it isn't at your stage.`);
   }
+  // Once the Tax Daroga has given it to a surveyor, only that surveyor can act on it.
+  const assigned = request.assigned_surveyor_username;
+  if (request.current_stage === "tax_surveyor" && assigned && assigned !== admin.username) {
+    throw new ApiError(403, "This remeasurement request is assigned to another Tax Surveyor.");
+  }
 }
 
 /**

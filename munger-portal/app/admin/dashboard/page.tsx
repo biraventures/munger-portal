@@ -130,6 +130,7 @@ export default function AdminDashboardPage() {
   const showPropertyDiscrepancyRequests = DISCREPANCY_CHAIN_ROLES.includes(admin.role);
   const showResurveyFlags = admin.role === "tax_daroga" || admin.role === "commissioner";
   const showSolidWasteApprovals = admin.role === "tax_daroga" || admin.role === "city_manager";
+  const showSurveyorAssignments = ["tax_daroga", "city_manager", "deputy_commissioner", "commissioner"].includes(admin.role);
   const showCollectionIssues = admin.role === "tax_daroga" || admin.role === "commissioner" || admin.role === "city_manager";
   const showTaxCollectorAssignments = isCommissioner;
   const showDisputedHoldings = admin.role === "tax_daroga" || admin.role === "city_manager" || admin.role === "commissioner";
@@ -162,7 +163,7 @@ export default function AdminDashboardPage() {
     showMigratedHoldingsBulkUpload || showMigratedHoldingsAssign || showMigratedHoldingsSurveyor || showMigratedHoldingsMySurveys || showInitiateSurvey || showTaxCollectorPage ||
     showAgencyReports || showAgencyNotices || showReportPropertyDiscrepancy || showMyDiscrepancyReports || showUnsurveyedHouseEntry || showNoticeReceivingUpload || showUnsurveyedHouses || showNoticeReceivingCopies || showPropertyDiscrepancyRequests || showResurveyFlags || showCollectionIssues || showSolidWasteApprovals || showTaxCollectorAssignments || showRevertAuditTrail ||
     showPropertyWiseReport || showDisputedHoldings || showHoldingImportReview || showBulkReceipts || showInstrumentReconciliation ||
-    showAgencyPropertyReports || showCollectedHoldings || showDuesReport;
+    showAgencyPropertyReports || showCollectedHoldings || showDuesReport || showSurveyorAssignments;
 
   const showShopAgreementApprovals = !isTradeLicenseNodal && !isGisOnlyRole && !isNarrowlyScopedRole;
   const showShopRentalApplications = !isTradeLicenseNodal && !isGisOnlyRole && !isNarrowlyScopedRole;
@@ -615,6 +616,20 @@ export default function AdminDashboardPage() {
                   </span>
                   <h3 className="mb-1.5 text-base font-semibold text-slate-900">Re-Survey Flags</h3>
                   <p className="text-sm text-slate-500">Holdings flagged by Tax Collectors as looking different on the ground.</p>
+                </Link>
+              )}
+
+              {showSurveyorAssignments && (
+                <Link href="/admin/surveyor-assignments" className={cardClass}>
+                  <span className={iconWrapClass}>
+                    <UserCheck className="h-6 w-6" strokeWidth={1.8} />
+                  </span>
+                  <h3 className="mb-1.5 text-base font-semibold text-slate-900">Surveyor Assignments</h3>
+                  <p className="text-sm text-slate-500">
+                    {admin.role === "tax_daroga"
+                      ? "Give new holding, mutation and remeasurement requests to a specific Tax Surveyor."
+                      : "See which Tax Surveyor has each new holding, mutation and remeasurement request."}
+                  </p>
                 </Link>
               )}
 

@@ -9,6 +9,9 @@ export interface PropertyDiscrepancyRequestRow {
   reported_by_username: string;
   reported_by_display_name: string;
   reported_at: Date;
+  /** Set by the Tax Daroga (migration 159): only this surveyor sees / acts on it at the surveyor stage. */
+  assigned_surveyor_username?: string | null;
+  assigned_surveyor_name?: string | null;
   discrepancy_notes: string;
   proposed_data: PropertySaveInput;
   status: PropertyDiscrepancyStatus;
