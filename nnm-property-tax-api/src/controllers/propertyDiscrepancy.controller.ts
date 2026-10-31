@@ -81,7 +81,15 @@ export const getDiscrepancyRequests = asyncHandler(async (req: Request, res: Res
   if (!parsed.success) throw ApiError.badRequest("Invalid query", parsed.error.flatten().fieldErrors);
 
   const admin = req.admin!;
-  const requests = await listDiscrepancyRequests(parsed.data.status, parsed.data.myStage ? admin.role : undefined);
+  const all = await listDiscrepancyRequests(parsed.data.status, parsed.data.myStage ? admin.role : undefined);
+  // A Tax Surveyor sees requests assigned to him, and those not yet assigned to anyone.
+  const requests =
+    admin.role === "tax_surveyor"
+      ? all.filter((r) => {
+          const a = r.assigned_surveyor_username;
+          return r.current_stage !== "tax_surveyor" || !a || a === admin.username;
+        })
+      : all;
   res.status(200).json({ requests, myRole: admin.role });
 });
 

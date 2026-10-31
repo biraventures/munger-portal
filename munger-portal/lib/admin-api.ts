@@ -2329,3 +2329,40 @@ export async function fetchHoldingDocumentStatus(holdingNo: string): Promise<imp
   }
   return res.json();
 }
+
+// ---------------------------------------------------------------------------
+// Tax Daroga: which Tax Surveyor handles each new holding request / mutation / remeasurement request
+// ---------------------------------------------------------------------------
+
+export type SurveyorWorkType = "new_holding" | "mutation" | "remeasurement";
+export interface SurveyorWorkItem {
+  type: SurveyorWorkType;
+  id: string;
+  reference: string;
+  holding_no: string | null;
+  owner: string | null;
+  ward: string | null;
+  waiting_since: string;
+  surveyor_username: string | null;
+  surveyor_name: string | null;
+  assignable_here: boolean;
+  stage_label: string;
+}
+
+export async function fetchSurveyorWork(): Promise<SurveyorWorkItem[]> {
+  const res = await fetch(`${API_BASE_URL}/admin/surveyor-work`, { headers: authHeaders() });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body.error || "Could not load the surveyor work list.");
+  return body.items;
+}
+
+export async function assignSurveyorToWork(type: SurveyorWorkType, id: string, surveyorUsername: string, remarks?: string): Promise<{ surveyor: string }> {
+  const res = await fetch(`${API_BASE_URL}/admin/surveyor-work/${type}/${encodeURIComponent(id)}/assign`, {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify({ surveyorUsername, remarks: remarks || undefined }),
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body.error || "Could not assign the surveyor.");
+  return body;
+}
