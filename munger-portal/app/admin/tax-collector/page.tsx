@@ -39,7 +39,7 @@ import {
   type CollectionIssueType,
 } from "@/lib/admin-api";
 import { PaymentResponsibilityWarning } from "@/components/payment-responsibility-warning";
-import IntentHandler, { IntentResponse } from "./paymentIntentHandler";
+import IntentHandler, { ReceiptData as IntentReceiptData, IntentResponse } from "./paymentIntentHandler";
 
 const inputClass = "w-full rounded-md border border-slate-300 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-nnm-blue focus:ring-offset-1";
 const PAYMENT_MODES: readonly string[] = FIELD_PAYMENT_MODES;
@@ -100,6 +100,18 @@ function displayVal(v: unknown): string {
   return String(v);
 }
 
+export const updateUrl = (data: Record<string, string | number>) => {
+  const url = new URL(window.location.href);
+
+  Object.entries(data).forEach(([key, value]) => {
+    if (value !== undefined && value !== null) {
+      url.searchParams.set(key, String(value));
+    }
+  });
+
+  window.history.replaceState(null, '', url);
+};
+
 export default function TaxCollectorPage() {
   const admin = useAdminGuard();
   const [holdingNoInput, setHoldingNoInput] = useState("");
@@ -145,18 +157,7 @@ export default function TaxCollectorPage() {
   const [savingDetails, setSavingDetails] = useState(false);
   const [swRequest, setSwRequest] = useState<SolidWasteRequest | null>(null);
   const [detailsMsg, setDetailsMsg] = useState<string | null>(null);
-
-  const updateUrl = (data: Record<string, string | number>) => {
-    const url = new URL(window.location.href);
-
-    Object.entries(data).forEach(([key, value]) => {
-      if (value !== undefined && value !== null) {
-        url.searchParams.set(key, String(value));
-      }
-    });
-
-    window.history.replaceState(null, '', url);
-  };
+  const [intentReceipt, setIntentReceipt] = useState<IntentReceiptData | undefined>(undefined);
 
   useEffect(() => {
     fetchFormOptions().then(setFormOptions).catch(() => undefined);
@@ -364,7 +365,7 @@ export default function TaxCollectorPage() {
   const handleIntentResponse = async (data: IntentResponse) => {
     if (data.ok && data.statusCode === '00') {
       const { receiptData } = data;
-      console.log(receiptData.RRN, receiptData.AuthCode, receiptData.SaleAmt);
+      setIntentReceipt(receiptData);
       await executeCollectPayment(true)
     } else {
       console.warn(data.statusMsg);
@@ -591,7 +592,7 @@ export default function TaxCollectorPage() {
 
             {receipt && (
               <div className="space-y-4">
-                <CollectionSlip receipt={receipt} />
+                <CollectionSlip receipt={receipt} intentReceipt={intentReceipt} />
                 <div className="flex flex-wrap gap-2">
                   <button
                     onClick={() => setShowFullReceipt((v) => !v)}

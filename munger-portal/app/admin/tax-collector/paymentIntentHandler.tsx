@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 
-interface ReceiptData {
+export interface ReceiptData {
     // UPI / QR related (empty strings on card sales)
     Address: string;
     City: string;
@@ -83,7 +83,7 @@ interface IntentResult {
 export interface IntentResponse {
     extras: {
         RESULT: IntentResult;
-        CODE_RESULT?: string;    
+        CODE_RESULT?: string;
     };
     statusMsg: string;
     receiptData: ReceiptData;   // same as extras.RESULT.RECEIPT_DATA

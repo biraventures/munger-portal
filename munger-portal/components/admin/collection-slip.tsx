@@ -3,10 +3,12 @@
 import { useRef } from "react";
 import { Printer } from "lucide-react";
 import type { ReceiptData } from "@/lib/payment-api";
+import { ReceiptData as IntentReceiptData } from "@/app/admin/tax-collector/paymentIntentHandler";
 import { DocumentVerificationQR } from "@/components/operator/document-verification-qr";
 import { isProvisional } from "@/components/operator/cancelled-document-notice";
 import { printElementInNewWindow } from "@/lib/print-in-new-window";
 import { describePaymentDetails } from "@/lib/payment-modes";
+import { updateUrl } from "@/app/admin/tax-collector/page";
 
 function money(v: string | number): string {
   return Number(v).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -16,7 +18,7 @@ function money(v: string | number): string {
  * What a Tax Collector hands over in the field. The receipt itself is already generated (same number as here); the
  * office prints the day's receipts in bulk, stamps them and delivers them.
  */
-export function CollectionSlip({ receipt }: { receipt: ReceiptData }) {
+export function CollectionSlip({ receipt, intentReceipt }: { receipt: ReceiptData, intentReceipt?: IntentReceiptData }) {
   const ref = useRef<HTMLDivElement>(null);
   const p = receipt.property;
   const provisional = isProvisional(receipt);
@@ -26,10 +28,17 @@ export function CollectionSlip({ receipt }: { receipt: ReceiptData }) {
       <span className="font-medium text-slate-900">{value}</span>
     </div>
   );
+
+  const intentPrintHandler = () => {
+    if (intentReceipt) {
+      updateUrl(intentReceipt as unknown as Record<string, number>);
+    }
+  }
+
   return (
     <div className="space-y-3">
       <button
-        onClick={() => ref.current && printElementInNewWindow(ref.current)}
+        onClick={() => { ref.current && printElementInNewWindow(ref.current); intentPrintHandler() }}
         className="inline-flex items-center gap-2 rounded-md bg-nnm-blue px-4 py-2 text-sm font-semibold text-white hover:bg-nnm-blue-dark"
       >
         <Printer className="h-4 w-4" />
@@ -73,6 +82,6 @@ export function CollectionSlip({ receipt }: { receipt: ReceiptData }) {
           Nagar Nigam. Scan the QR code to verify the receipt online.
         </p>
       </div>
-    </div>
+    </div >
   );
 }
