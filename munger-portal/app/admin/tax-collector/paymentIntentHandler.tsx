@@ -83,7 +83,7 @@ interface IntentResult {
 export interface IntentResponse {
     extras: {
         RESULT: IntentResult;
-        CODE_RESULT?: string;     // in the docs, but absent from your sample
+        CODE_RESULT?: string;    
     };
     statusMsg: string;
     receiptData: ReceiptData;   // same as extras.RESULT.RECEIPT_DATA

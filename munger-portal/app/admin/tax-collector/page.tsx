@@ -286,14 +286,17 @@ export default function TaxCollectorPage() {
     setShowConfirmModal(true);
   }
 
-  async function executeCollectPayment() {
+  async function executeCollectPayment(intentSuccessOrEvent?: boolean | React.MouseEvent<HTMLButtonElement>) {
+
+    const intentSuccess = typeof intentSuccessOrEvent === "boolean" ? intentSuccessOrEvent : false;
+
     if (!result?.property || !selectedDemandNo) return;
     const selected = notices?.find((n) => n.demandNo === selectedDemandNo);
     if (!selected) return;
     setCollecting(true);
     setError(null);
     try {
-      if (paymentMode === 'Card' || paymentMode === 'UPI') {
+      if ((paymentMode === 'Card' || paymentMode === 'UPI') && !intentSuccess) {
         updateUrl({
           amount: Number(selected.totalAmountDemanded),
           paymentMode: paymentMode ?? "",
