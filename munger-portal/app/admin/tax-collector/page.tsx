@@ -365,7 +365,7 @@ export default function TaxCollectorPage() {
     if (data.ok && data.statusCode === '00') {
       const { receiptData } = data;
       console.log(receiptData.RRN, receiptData.AuthCode, receiptData.SaleAmt);
-      await executeCollectPayment()
+      await executeCollectPayment(true)
     } else {
       console.warn(data.statusMsg);
     }
