@@ -100,6 +100,14 @@ function displayVal(v: unknown): string {
   return String(v);
 }
 
+function cleanQueryParams() {
+  window.history.replaceState(
+    null,
+    '',
+    window.location.pathname
+  );
+}
+
 export const updateUrl = (data: Record<string, string | number>) => {
   const url = new URL(window.location.href);
 
@@ -367,6 +375,7 @@ export default function TaxCollectorPage() {
       const { receiptData } = data;
       setIntentReceipt(receiptData);
       await executeCollectPayment(true)
+      cleanQueryParams()
     } else {
       console.warn(data.statusMsg);
     }
