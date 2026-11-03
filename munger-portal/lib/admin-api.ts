@@ -2388,3 +2388,11 @@ export async function assignSurveyorToWork(type: SurveyorWorkType, id: string, s
   if (!res.ok) throw new Error(body.error || "Could not assign the surveyor.");
   return body;
 }
+
+/** Commissioner / Tax Daroga: every request waiting at a surveyor moves to the surveyor of its ward. */
+export async function reassignAllByWard(): Promise<{ moved: number }> {
+  const res = await fetch(`${API_BASE_URL}/admin/surveyor-work/reassign-by-ward`, { method: "POST", headers: authHeaders() });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body.error || "Could not reassign the requests.");
+  return body;
+}

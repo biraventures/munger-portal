@@ -5,6 +5,7 @@ import { AlertCircle, CheckCircle2, Loader2, Map as MapIcon } from "lucide-react
 import { AdminHeader } from "@/components/admin-header";
 import { useAdminGuard } from "@/lib/use-admin-guard";
 import { fetchTaxSurveyors, setSurveyorWards, type TaxSurveyorOption } from "@/lib/admin-api";
+import { ReassignByWardButton } from "@/components/admin/reassign-by-ward-button";
 
 /** Municipal Commissioner: which wards each Tax Surveyor covers. Field work in a ward goes to its surveyor automatically. */
 export default function SurveyorWardsPage() {
@@ -51,7 +52,7 @@ export default function SurveyorWardsPage() {
       const r = await setSurveyorWards(s.username, wards);
       const parts = [`${s.displayName}: ${r.wards.length ? `Ward ${r.wards.join(", ")}` : "no wards"} saved.`];
       if (r.movedFrom.length) parts.push(`Moved from: ${r.movedFrom.map((m) => `Ward ${m.ward} (${m.from})`).join(", ")}.`);
-      if (r.autoAssigned) parts.push(`${r.autoAssigned} waiting remeasurement request(s) in these wards given to ${s.displayName}.`);
+      if (r.autoAssigned) parts.push(`${r.autoAssigned} waiting request(s) in these wards moved to ${s.displayName}.`);
       setDone(parts.join(" "));
       await load();
     } catch (e) {
@@ -96,7 +97,10 @@ export default function SurveyorWardsPage() {
           </p>
         ) : (
           <>
-            <p className="mt-4 text-xs text-slate-500">{covered.size} ward(s) covered.</p>
+            <div className="mt-4">
+              <ReassignByWardButton />
+            </div>
+            <p className="mt-3 text-xs text-slate-500">{covered.size} ward(s) covered.</p>
             <div className="mt-2 space-y-3">
               {list.map((s) => (
                 <div key={s.username} className="rounded-xl border border-slate-200 bg-white p-4">

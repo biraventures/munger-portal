@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { AlertCircle, CheckCircle2, Loader2, UserCheck } from "lucide-react";
 import { AdminHeader } from "@/components/admin-header";
+import { ReassignByWardButton } from "@/components/admin/reassign-by-ward-button";
 import { useAdminGuard } from "@/lib/use-admin-guard";
 import {
   assignSurveyorToWork,
@@ -140,6 +141,12 @@ export default function SurveyorAssignmentsPage() {
           <p role="status" className="mt-4 flex items-center gap-2 rounded-md border border-green-200 bg-green-50 p-3 text-sm text-green-800">
             <CheckCircle2 className="h-4 w-4" /> {done}
           </p>
+        )}
+
+        {(canAssign || admin.role === "commissioner") && (
+          <div className="mt-4">
+            <ReassignByWardButton onDone={() => load()} />
+          </div>
         )}
 
         <div className="mt-5 inline-flex rounded-md border border-slate-300 bg-white p-0.5 text-xs font-semibold" role="group" aria-label="Show">
