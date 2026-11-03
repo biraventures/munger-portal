@@ -18,7 +18,28 @@ const label = "mb-1 block text-xs font-medium text-slate-600";
 type Status = "pending" | "imported" | "discarded";
 
 type Draft = Record<keyof MigratedRowData, string>;
-const toDraft = (d: MigratedRowData): Draft => Object.fromEntries(Object.entries(d).map(([k, v]) => [k, v === null || v === undefined ? "" : String(v)])) as Draft;
+const ALL_KEYS: (keyof MigratedRowData)[] = [
+  "ward",
+  "oldHoldingNo",
+  "oldPid",
+  "ownerName",
+  "relation",
+  "relativeName",
+  "arvPre96",
+  "arv97to2010",
+  "arv2011to2020",
+  "arv97to2000",
+  "arv2000to2011",
+  "arv2011to2017",
+  "arv2017to2021",
+  "arv2021on",
+  "holdingCreationYear",
+  "lastPaymentYear",
+  "taxStatus",
+  "remarks",
+];
+const toDraft = (d: MigratedRowData): Draft =>
+  Object.fromEntries(ALL_KEYS.map((k) => [k, d[k] === null || d[k] === undefined ? "" : String(d[k])])) as Draft;
 const fromDraft = (d: Draft): MigratedRowData => {
   const t = (v: string) => (v.trim() ? v.trim() : null);
   const n = (v: string) => (v.trim() ? Number(v) : null);
@@ -32,6 +53,12 @@ const fromDraft = (d: Draft): MigratedRowData => {
     arvPre96: n(d.arvPre96),
     arv97to2010: n(d.arv97to2010),
     arv2011to2020: n(d.arv2011to2020),
+    arv97to2000: n(d.arv97to2000),
+    arv2000to2011: n(d.arv2000to2011),
+    arv2011to2017: n(d.arv2011to2017),
+    arv2017to2021: n(d.arv2017to2021),
+    arv2021on: n(d.arv2021on),
+    holdingCreationYear: t(d.holdingCreationYear),
     lastPaymentYear: t(d.lastPaymentYear),
     taxStatus: t(d.taxStatus),
     remarks: t(d.remarks),
@@ -45,8 +72,12 @@ const FIELDS: { k: keyof MigratedRowData; l: string; type?: string }[] = [
   { k: "relation", l: "Relation (S/O, D/O, W/O, C/O)" },
   { k: "relativeName", l: "Relative Name" },
   { k: "arvPre96", l: "ARV before 1996-97", type: "number" },
-  { k: "arv97to2010", l: "ARV 1997-98 to 2010-11", type: "number" },
-  { k: "arv2011to2020", l: "ARV 2011-12 to 2020-21", type: "number" },
+  { k: "arv97to2000", l: "ARV 1997-98 to 1999-2000", type: "number" },
+  { k: "arv2000to2011", l: "ARV 2000-01 to 2010-11", type: "number" },
+  { k: "arv2011to2017", l: "ARV 2011-12 to 2016-17", type: "number" },
+  { k: "arv2017to2021", l: "ARV 2017-18 to 2020-21", type: "number" },
+  { k: "arv2021on", l: "ARV 2021-22 to last year", type: "number" },
+  { k: "holdingCreationYear", l: "Holding creation year (e.g. 2005-2006)" },
   { k: "lastPaymentYear", l: "Last Payment Year" },
   { k: "taxStatus", l: "Tax Status" },
   { k: "remarks", l: "Remarks" },
@@ -134,13 +165,22 @@ export default function MigratedHoldingsReviewPage() {
           <ClipboardCheck className="h-6 w-6" /> Old Holdings - Rows to Review
         </h1>
         <p className="mt-1 text-sm text-slate-500">
-          Rows of the old-holding upload that were not imported - a &quot;Needs Review&quot; note in the sheet or a problem in the row. Open a row, correct
-          it and import it as a MUNG-MIG holding, or discard it with a reason.
+          Rows of the old-holding upload that were not imported - a &quot;Needs Review&quot; note in the sheet or a problem in the row. Open
+          a row, correct it and import it as a MUNG-MIG holding, or discard it with a reason.
         </p>
 
-        <div className="mt-5 inline-flex rounded-md border border-slate-300 bg-white p-0.5 text-xs font-semibold" role="group" aria-label="Show">
+        <div
+          className="mt-5 inline-flex rounded-md border border-slate-300 bg-white p-0.5 text-xs font-semibold"
+          role="group"
+          aria-label="Show"
+        >
           {(["pending", "imported", "discarded"] as Status[]).map((s) => (
-            <button key={s} onClick={() => setStatus(s)} aria-pressed={status === s} className={`rounded px-3 py-1.5 capitalize ${status === s ? "bg-nnm-blue text-white" : "text-slate-600"}`}>
+            <button
+              key={s}
+              onClick={() => setStatus(s)}
+              aria-pressed={status === s}
+              className={`rounded px-3 py-1.5 capitalize ${status === s ? "bg-nnm-blue text-white" : "text-slate-600"}`}
+            >
               {s === "pending" ? "To review" : s}
             </button>
           ))}
@@ -152,7 +192,10 @@ export default function MigratedHoldingsReviewPage() {
           </p>
         )}
         {done && (
-          <p role="status" className="mt-4 flex items-center gap-2 rounded-md border border-green-200 bg-green-50 p-3 text-sm text-green-800">
+          <p
+            role="status"
+            className="mt-4 flex items-center gap-2 rounded-md border border-green-200 bg-green-50 p-3 text-sm text-green-800"
+          >
             <CheckCircle2 className="h-4 w-4" /> {done}
           </p>
         )}
@@ -169,7 +212,11 @@ export default function MigratedHoldingsReviewPage() {
           <div className="mt-4 space-y-2">
             {rows.map((r) => (
               <div key={r.id} className="rounded-xl border border-slate-200 bg-white text-sm">
-                <button onClick={() => openRow(r)} className="flex w-full flex-wrap items-start gap-x-3 gap-y-1 p-3 text-left" aria-expanded={open === r.id}>
+                <button
+                  onClick={() => openRow(r)}
+                  className="flex w-full flex-wrap items-start gap-x-3 gap-y-1 p-3 text-left"
+                  aria-expanded={open === r.id}
+                >
                   <span className="font-mono text-xs text-slate-500">
                     Row {r.source_row}
                     {r.file_name ? ` · ${r.file_name}` : ""}
@@ -178,7 +225,9 @@ export default function MigratedHoldingsReviewPage() {
                   <span className="text-slate-600">
                     Ward {r.data.ward || "-"} · Old holding {r.data.oldHoldingNo ?? "-"}
                   </span>
-                  <span className={`ml-auto rounded-full px-2 py-0.5 text-[11px] font-semibold ${r.kind === "needs_review" ? "bg-amber-100 text-amber-800" : "bg-red-100 text-red-800"}`}>
+                  <span
+                    className={`ml-auto rounded-full px-2 py-0.5 text-[11px] font-semibold ${r.kind === "needs_review" ? "bg-amber-100 text-amber-800" : "bg-red-100 text-red-800"}`}
+                  >
                     {r.kind === "needs_review" ? "Marked for review" : "Problem in row"}
                   </span>
                   <span className="w-full text-xs text-red-700">Issue: {r.reason}</span>

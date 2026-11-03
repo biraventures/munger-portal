@@ -2415,6 +2415,12 @@ export interface MigratedRowData {
   arvPre96: number | null;
   arv97to2010: number | null;
   arv2011to2020: number | null;
+  arv97to2000?: number | null;
+  arv2000to2011?: number | null;
+  arv2011to2017?: number | null;
+  arv2017to2021?: number | null;
+  arv2021on?: number | null;
+  holdingCreationYear?: string | null;
   lastPaymentYear: string | null;
   taxStatus: string | null;
   remarks: string | null;
