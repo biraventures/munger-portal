@@ -66,6 +66,8 @@ export interface ReceiptData {
     Stan: string;
     TranType: string;           // "Sale"
     type: string;
+
+    demandNo?: string;
 }
 
 interface IntentResult {

@@ -373,6 +373,7 @@ export default function TaxCollectorPage() {
   const handleIntentResponse = async (data: IntentResponse) => {
     if (data.ok && data.statusCode === '00') {
       const { receiptData } = data;
+      receiptData.demandNo = String(selectedDemandNo)
       setIntentReceipt(receiptData);
       await executeCollectPayment(true)
       cleanQueryParams()
