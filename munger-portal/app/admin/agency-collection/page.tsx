@@ -203,7 +203,12 @@ export default function AgencyCollectionPage() {
               </div>
             )}
 
-            {blocked ? (
+            {typeof p.paymentHold === "string" && p.paymentHold ? (
+              <div role="alert" className="rounded-md border-2 border-red-300 bg-red-50 p-3 text-sm text-red-800">
+                <p className="font-semibold">Payment on hold for this holding</p>
+                <p className="mt-0.5">{p.paymentHold}</p>
+              </div>
+            ) : blocked ? (
               <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
                 {p.is_disputed
                   ? "This holding is marked as DISPUTED - no payment can be collected until the Nagar Nigam resolves it."

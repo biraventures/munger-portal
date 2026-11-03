@@ -105,7 +105,10 @@ export interface UnsettledDemandNotice {
 }
 
 /** GET /api/v1/properties/:holdingNo/demand-notices/unsettled — feeds the payment counter's demand-notice picker. */
-export async function fetchUnsettledDemandNotices(holdingNo: string): Promise<UnsettledDemandNotice[]> {
+/** The notices, plus why no payment can be taken now (`paymentHold`, null when payment is allowed). */
+export type UnsettledWithHold<T> = T[] & { paymentHold?: string | null };
+
+export async function fetchUnsettledDemandNotices(holdingNo: string): Promise<UnsettledWithHold<UnsettledDemandNotice>> {
   const token = getOperatorToken();
   if (!token) throw new Error("Not logged in — please log in again.");
 
@@ -114,8 +117,8 @@ export async function fetchUnsettledDemandNotices(holdingNo: string): Promise<Un
   });
 
   if (!res.ok) throw new Error("Could not load demand notices for this property.");
-  const data: { notices: UnsettledDemandNotice[] } = await res.json();
-  return data.notices;
+  const data: { notices: UnsettledDemandNotice[]; paymentHold?: string | null } = await res.json();
+  return Object.assign(data.notices, { paymentHold: data.paymentHold ?? null });
 }
 export interface PartPaymentOption {
   years: number;

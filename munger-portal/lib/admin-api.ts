@@ -863,13 +863,17 @@ export interface MigratedHoldingImportResult {
   holdingsCreated: number;
   rowsSkipped: number;
   errors: { row: number; message: string }[];
+  /** Rows already in the system - not created again. */
+  alreadyImported?: number;
+  /** Rows held back in the review list, with the reason. */
+  review?: { row: number; reason: string; kind: "needs_review" | "error" }[];
 }
 
-export async function uploadMigratedHoldingsXlsx(fileDataBase64: string): Promise<MigratedHoldingImportResult> {
+export async function uploadMigratedHoldingsXlsx(fileDataBase64: string, fileName?: string): Promise<MigratedHoldingImportResult> {
   const res = await fetch(`${API_BASE_URL}/admin/migrated-holdings/bulk-upload`, {
     method: "POST",
     headers: authHeaders(),
-    body: JSON.stringify({ fileDataBase64 }),
+    body: JSON.stringify({ fileDataBase64, fileName }),
   });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
@@ -1224,11 +1228,11 @@ export interface UnsettledDemandNoticeAdmin {
   totalAmountDemanded: string;
 }
 
-export async function fetchUnsettledDemandNoticesAdmin(holdingNo: string): Promise<UnsettledDemandNoticeAdmin[]> {
+export async function fetchUnsettledDemandNoticesAdmin(holdingNo: string): Promise<UnsettledDemandNoticeAdmin[] & { paymentHold?: string | null }> {
   const res = await fetch(`${API_BASE_URL}/properties/${encodeURIComponent(holdingNo)}/demand-notices/unsettled`, { headers: authHeaders() });
   if (!res.ok) throw new Error("Could not load demand notices.");
-  const data: { notices: UnsettledDemandNoticeAdmin[] } = await res.json();
-  return data.notices;
+  const data: { notices: UnsettledDemandNoticeAdmin[]; paymentHold?: string | null } = await res.json();
+  return Object.assign(data.notices, { paymentHold: data.paymentHold ?? null });
 }
 
 export async function generateDemandNoticeAdmin(holdingNo: string): Promise<Record<string, unknown>> {
@@ -2395,4 +2399,67 @@ export async function reassignAllByWard(): Promise<{ moved: number }> {
   const body = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(body.error || "Could not reassign the requests.");
   return body;
+}
+
+// ---------------------------------------------------------------------------
+// Old-holding upload: rows held back for review
+// ---------------------------------------------------------------------------
+
+export interface MigratedRowData {
+  ward: string;
+  oldHoldingNo: string | null;
+  oldPid: string | null;
+  ownerName: string;
+  relation: string | null;
+  relativeName: string | null;
+  arvPre96: number | null;
+  arv97to2010: number | null;
+  arv2011to2020: number | null;
+  lastPaymentYear: string | null;
+  taxStatus: string | null;
+  remarks: string | null;
+}
+
+export interface MigratedReviewRow {
+  id: string;
+  uploaded_by: string;
+  uploaded_at: string;
+  file_name: string | null;
+  source_row: number;
+  kind: "needs_review" | "error";
+  reason: string;
+  data: MigratedRowData;
+  status: "pending" | "imported" | "discarded";
+  resolved_by: string | null;
+  resolved_at: string | null;
+  resolution_note: string | null;
+  holding_no: string | null;
+}
+
+export async function fetchMigratedReviewRows(status: "pending" | "imported" | "discarded" = "pending"): Promise<MigratedReviewRow[]> {
+  const res = await fetch(`${API_BASE_URL}/admin/migrated-holdings/review-rows?status=${status}`, { headers: authHeaders() });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body.error || "Could not load the rows for review.");
+  return body.rows;
+}
+
+export async function importMigratedReviewRow(id: string, data: MigratedRowData, note?: string): Promise<{ holdingNo: string }> {
+  const res = await fetch(`${API_BASE_URL}/admin/migrated-holdings/review-rows/${id}/import`, {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify({ data, note: note || undefined }),
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body.error || "Could not import this row.");
+  return body;
+}
+
+export async function discardMigratedReviewRow(id: string, note: string): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/admin/migrated-holdings/review-rows/${id}/discard`, {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify({ note }),
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body.error || "Could not discard this row.");
 }

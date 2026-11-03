@@ -99,7 +99,7 @@ import {
 } from "../controllers/shopAgreementDocument.controller";
 import { postCreateShopInspection, listShopInspectionsForShop, listAllShopInspections } from "../controllers/shopInspection.controller";
 import {
-  uploadMigratedHoldingsHandler,
+  uploadMigratedHoldingsHandler, listReviewRowsHandler, importReviewRowHandler, discardReviewRowHandler,
   listPendingAssignmentHandler,
   listTaxDarogasHandler,
   listTaxSurveyorsHandler,
@@ -479,6 +479,11 @@ adminRouter.post("/shops/:shopNo/inspections", requireInspectionRole, postCreate
 // handles even wards, and each verifies only what they themselves
 // assigned. See migratedHoldingSurvey.controller.ts.
 adminRouter.post("/migrated-holdings/bulk-upload", requireAdminRole("commissioner"), uploadMigratedHoldingsHandler);
+// Rows of the old-holding upload held back for review: correct and import, or discard, one by one.
+const requireMigratedReviewRole = requireAdminRole("commissioner", "tax_daroga");
+adminRouter.get("/migrated-holdings/review-rows", requireMigratedReviewRole, listReviewRowsHandler);
+adminRouter.post("/migrated-holdings/review-rows/:id/import", requireMigratedReviewRole, importReviewRowHandler);
+adminRouter.post("/migrated-holdings/review-rows/:id/discard", requireMigratedReviewRole, discardReviewRowHandler);
 adminRouter.get("/migrated-holdings/export", requireAdminRole("commissioner"), exportMigratedHoldingsHandler);
 adminRouter.get("/migrated-holdings/pending-assignment", listPendingAssignmentHandler);
 adminRouter.get("/tax-darogas", listTaxDarogasHandler);

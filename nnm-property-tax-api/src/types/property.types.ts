@@ -209,6 +209,8 @@ export interface PropertySearchResult {
     pendingDemandNotices: { demandNo: string; noticeDate: Date; assessmentYear: string | null; totalAmountDemanded: string }[];
     /** Public search only: why online payment is not available (documents not yet uploaded); null when it is. */
     onlinePaymentBlockedReason?: string | null;
+    /** Why no demand notice / payment can be taken now (a pending year has no assessment - e.g. pre-2011 ARV); null when fine. */
+    paymentHold?: string | null;
   };
   floors?: FloorRow[];
   taxCalc?: TaxCalculationResult;

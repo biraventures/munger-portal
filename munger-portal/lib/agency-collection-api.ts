@@ -46,11 +46,11 @@ export async function fetchHolding(holdingNo: string): Promise<AgencyHolding | n
   return body as AgencyHolding;
 }
 
-async function fetchUnsettled(holdingNo: string): Promise<UnsettledDemandNotice[]> {
+async function fetchUnsettled(holdingNo: string): Promise<UnsettledDemandNotice[] & { paymentHold?: string | null }> {
   const res = await fetch(`${API_BASE_URL}/properties/${encodeURIComponent(holdingNo)}/demand-notices/unsettled`, { headers: headers() });
   if (!res.ok) throw new Error("Could not load the demand notices for this holding.");
-  const data: { notices: UnsettledDemandNotice[] } = await res.json();
-  return data.notices;
+  const data: { notices: UnsettledDemandNotice[]; paymentHold?: string | null } = await res.json();
+  return Object.assign(data.notices, { paymentHold: data.paymentHold ?? null });
 }
 
 async function submit(holdingNo: string, input: PaymentInput): Promise<ReceiptData> {

@@ -435,6 +435,16 @@ export default function AdminDashboardPage() {
                 </Link>
               )}
 
+              {(isCommissioner || admin.role === "tax_daroga") && (
+                <Link href="/admin/migrated-holdings-review" className={cardClass}>
+                  <span className={iconWrapClass}>
+                    <ClipboardCheck className="h-6 w-6" strokeWidth={1.8} />
+                  </span>
+                  <h3 className="mb-1.5 text-base font-semibold text-slate-900">Old Holdings - Rows to Review</h3>
+                  <p className="text-sm text-slate-500">Rows of the old-holding upload that were held back: see the issue, correct and import, or discard - one by one.</p>
+                </Link>
+              )}
+
               {showMigratedHoldingsAssign && (
                 <Link href="/admin/migrated-holdings-assign" className={cardClass}>
                   <span className={iconWrapClass}>

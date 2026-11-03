@@ -109,6 +109,7 @@ export default function TaxCollectorPage() {
   const [notices, setNotices] = useState<UnsettledDemandNoticeAdmin[] | null>(null);
   const [printPositions, setPrintPositions] = useState<NoticePrintPosition[] | null>(null);
   const [docStatus, setDocStatus] = useState<HoldingDocumentStatus | null>(null);
+  const [paymentHold, setPaymentHold] = useState<string | null>(null);
   const [selectedDemandNo, setSelectedDemandNo] = useState("");
   const [paymentMode, setPaymentMode] = useState(PAYMENT_MODES[0]);
   const [instrument, setInstrument] = useState<InstrumentValue>(EMPTY_INSTRUMENT);
@@ -198,6 +199,7 @@ export default function TaxCollectorPage() {
     setNotices(null);
     setPrintPositions(null);
     setDocStatus(null);
+    setPaymentHold(null);
     setReceipt(null);
     setRequestingCancel(false);
     setCancelReason("");
@@ -250,6 +252,7 @@ export default function TaxCollectorPage() {
           .then(setPrintPositions)
           .catch(() => setPrintPositions([]));
         const list = await fetchUnsettledDemandNoticesAdmin(holdingNo);
+        setPaymentHold(list.paymentHold ?? null);
         setNotices(list);
         if (list.length > 0) setSelectedDemandNo(list[0]!.demandNo);
       }
@@ -505,6 +508,12 @@ export default function TaxCollectorPage() {
               <div className="rounded-xl border border-slate-200 bg-white p-5">
                 <h3 className="mb-3 text-sm font-semibold text-slate-700">Demand &amp; Payment</h3>
                 <PrintedNoticeLocation positions={printPositions} />
+                {paymentHold && (
+                  <div role="alert" className="mb-3 rounded-md border-2 border-red-300 bg-red-50 p-3 text-sm text-red-800">
+                    <p className="font-semibold">Payment on hold for this holding</p>
+                    <p className="mt-0.5">{paymentHold}</p>
+                  </div>
+                )}
                 {!notices ? (
                   <p className="text-sm text-slate-400">Loading…</p>
                 ) : notices.length === 0 ? (
@@ -538,7 +547,7 @@ export default function TaxCollectorPage() {
                     )}
                     <button
                       onClick={handleCollectPayment}
-                      disabled={collecting || !!property.solidWasteTypeMissing || !property.water_connection_status || !docStatus?.collectionComplete}
+                      disabled={collecting || !!property.solidWasteTypeMissing || !property.water_connection_status || !docStatus?.collectionComplete || !!paymentHold}
                       title={
                         property.solidWasteTypeMissing || !property.water_connection_status || !docStatus?.collectionComplete ? "Enter the mandatory details above first" : undefined
                       }

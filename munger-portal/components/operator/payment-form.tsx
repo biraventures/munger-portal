@@ -34,7 +34,8 @@ const TV_NUMBER_MAX = 40;
 
 /** Where the form loads notices from and records the payment - the counter operator's session by default. */
 export interface PaymentFormApi {
-  fetchUnsettled: (holdingNo: string) => Promise<UnsettledDemandNotice[]>;
+  /** The notices; `paymentHold` (when set) says why no payment can be taken now - the form shows it and stays closed. */
+  fetchUnsettled: (holdingNo: string) => Promise<UnsettledDemandNotice[] & { paymentHold?: string | null }>;
   submit: (holdingNo: string, input: PaymentInput) => Promise<ReceiptData>;
 }
 const OPERATOR_API: PaymentFormApi = { fetchUnsettled: fetchUnsettledDemandNotices, submit: submitPayment };
@@ -69,11 +70,13 @@ export function PaymentForm({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<PaymentError | null>(null);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [hold, setHold] = useState<string | null>(null);
 
   useEffect(() => {
     api
       .fetchUnsettled(holdingNo)
       .then((list) => {
+        setHold(list.paymentHold ?? null);
         setNotices(list);
         if (list.length > 0) setSelectedDemandNo(list[0]!.demandNo);
       })
@@ -208,7 +211,17 @@ export function PaymentForm({
           </div>
         )}
 
-        {notices && notices.length === 0 && (
+        {hold && (
+          <div role="alert" className="flex items-start gap-2.5 rounded-md border-2 border-red-300 bg-red-50 p-4 text-sm text-red-800">
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+            <div>
+              <p className="font-semibold">Payment on hold for this holding</p>
+              <p className="mt-0.5">{hold}</p>
+            </div>
+          </div>
+        )}
+
+        {!hold && notices && notices.length === 0 && (
           <div className="flex items-start gap-2.5 rounded-md border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
             <FileWarning className="mt-0.5 h-4 w-4 shrink-0" />
             <span>
@@ -219,7 +232,7 @@ export function PaymentForm({
           </div>
         )}
 
-        {notices && notices.length > 0 && (
+        {!hold && notices && notices.length > 0 && (
           <>
             <div>
               <label className={labelClass}>Demand notice</label>
