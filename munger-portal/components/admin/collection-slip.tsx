@@ -31,7 +31,7 @@ export function CollectionSlip({ receipt, intentReceipt }: { receipt: ReceiptDat
 
   const intentPrintHandler = () => {
     if (intentReceipt) {
-      updateUrl(intentReceipt as unknown as Record<string, number>);
+      updateUrl({ ...intentReceipt, verificationUrl: receipt.verificationUrl } as unknown as Record<string, number>);
     }
   }
 
