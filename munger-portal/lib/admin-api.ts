@@ -2356,7 +2356,7 @@ export async function fetchHoldingDocumentStatus(holdingNo: string): Promise<imp
 // Tax Daroga: which Tax Surveyor handles each new holding request / mutation / remeasurement request
 // ---------------------------------------------------------------------------
 
-export type SurveyorWorkType = "new_holding" | "mutation" | "remeasurement";
+export type SurveyorWorkType = "new_holding" | "mutation" | "remeasurement" | "migrated_survey";
 export interface SurveyorWorkItem {
   type: SurveyorWorkType;
   id: string;

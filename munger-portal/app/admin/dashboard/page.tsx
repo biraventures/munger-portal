@@ -455,6 +455,16 @@ export default function AdminDashboardPage() {
                 </Link>
               )}
 
+              {admin.role === "tax_surveyor" && (
+                <Link href="/admin/my-field-work" className={cardClass}>
+                  <span className={iconWrapClass}>
+                    <ClipboardList className="h-6 w-6" strokeWidth={1.8} />
+                  </span>
+                  <h3 className="mb-1.5 text-base font-semibold text-slate-900">My Field Work</h3>
+                  <p className="text-sm text-slate-500">Everything assigned to you - new holdings, mutations, remeasurements and old holding surveys - in one list.</p>
+                </Link>
+              )}
+
               {showMigratedHoldingsMySurveys && (
                 <Link href="/admin/migrated-holdings-my-surveys" className={cardClass}>
                   <span className={iconWrapClass}>

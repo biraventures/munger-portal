@@ -5,9 +5,10 @@ import { ApiError } from "../utils/ApiError";
 import { assignSurveyor, listSurveyorWork } from "../services/surveyorAssignment.service";
 import { setSurveyorWards } from "../services/surveyorWards.service";
 
-/** GET /api/v1/admin/surveyor-work - field work waiting for / with a Tax Surveyor. */
-export const getSurveyorWorkHandler = asyncHandler(async (_req: Request, res: Response) => {
-  res.status(200).json({ items: await listSurveyorWork() });
+/** GET /api/v1/admin/surveyor-work - field work waiting for / with a Tax Surveyor (a Tax Surveyor gets only his own). */
+export const getSurveyorWorkHandler = asyncHandler(async (req: Request, res: Response) => {
+  const mine = req.admin!.role === "tax_surveyor" ? req.admin!.username : undefined;
+  res.status(200).json({ items: await listSurveyorWork(mine) });
 });
 
 const assignSchema = z.object({
@@ -15,6 +16,7 @@ const assignSchema = z.object({
   remarks: z.string().trim().max(300).optional(),
 });
 const paramsSchema = z.object({ type: z.enum(["new_holding", "mutation", "remeasurement"]), id: z.coerce.number().int().positive() });
+// (Old migrated-holding surveys are listed too, but are reassigned on their own page.)
 
 /** POST /api/v1/admin/surveyor-work/:type/:id/assign - Tax Daroga gives the request to a specific Tax Surveyor. */
 export const assignSurveyorHandler = asyncHandler(async (req: Request, res: Response) => {
