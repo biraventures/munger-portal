@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Printer } from "lucide-react";
 import type { ReceiptData } from "@/lib/payment-api";
 import { ReceiptData as IntentReceiptData } from "@/app/admin/tax-collector/paymentIntentHandler";
@@ -20,6 +20,10 @@ function money(v: string | number): string {
  */
 export function CollectionSlip({ receipt, intentReceipt }: { receipt: ReceiptData, intentReceipt?: IntentReceiptData }) {
   const ref = useRef<HTMLDivElement>(null);
+
+  const intentFieldRef = useRef<HTMLInputElement>(null);
+  const [intentSuccessResult, setIntentSuccessResult] = useState<string>("");
+
   const p = receipt.property;
   const provisional = isProvisional(receipt);
   const row = (label: string, value: React.ReactNode) => (
@@ -29,22 +33,29 @@ export function CollectionSlip({ receipt, intentReceipt }: { receipt: ReceiptDat
     </div>
   );
 
-  const intentPrintHandler = () => {
-    if (intentReceipt) {
-      updateUrl({ ...intentReceipt, verificationUrl: receipt.verificationUrl } as unknown as Record<string, number>);
-    }
-  }
-
   useEffect(() => {
     if (intentReceipt) {
-      updateUrl({ ...intentReceipt, verificationUrl: receipt.verificationUrl } as unknown as Record<string, number>);
+      const intentPrintHandler = () => {
+        setIntentSuccessResult(JSON.stringify(intentReceipt, null, 2));
+        if (intentFieldRef.current) {
+          intentFieldRef.current.value = JSON.stringify(intentReceipt, null, 2);
+        }
+      }
+      intentPrintHandler()
     }
   }, [intentReceipt]);
 
   return (
     <div className="space-y-3">
+      <input
+        type="text"
+        id="intent_success"
+        ref={intentFieldRef}
+        style={{ display: "none" }}
+        value={intentSuccessResult ? JSON.stringify(intentSuccessResult, null, 2) : ""}
+      />
       <button
-        onClick={() => { ref.current && printElementInNewWindow(ref.current); intentPrintHandler() }}
+        onClick={() => { ref.current && printElementInNewWindow(ref.current); }}
         className="inline-flex items-center gap-2 rounded-md bg-nnm-blue px-4 py-2 text-sm font-semibold text-white hover:bg-nnm-blue-dark"
       >
         <Printer className="h-4 w-4" />
