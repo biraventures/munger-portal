@@ -3,6 +3,7 @@ import { z } from "zod";
 import { asyncHandler } from "../middleware/asyncHandler";
 import { ApiError } from "../utils/ApiError";
 import { assignSurveyor, listSurveyorWork } from "../services/surveyorAssignment.service";
+import { setSurveyorWards } from "../services/surveyorWards.service";
 
 /** GET /api/v1/admin/surveyor-work - field work waiting for / with a Tax Surveyor. */
 export const getSurveyorWorkHandler = asyncHandler(async (_req: Request, res: Response) => {
@@ -22,4 +23,15 @@ export const assignSurveyorHandler = asyncHandler(async (req: Request, res: Resp
   const b = assignSchema.safeParse(req.body);
   if (!b.success) throw ApiError.badRequest(b.error.issues[0]?.message ?? "Invalid input");
   res.status(200).json(await assignSurveyor(p.data.type, p.data.id, b.data.surveyorUsername, b.data.remarks || null, req.admin!));
+});
+
+const wardsSchema = z.object({ wards: z.array(z.string().trim().min(1).max(16)).max(100) });
+
+/** POST /api/v1/admin/tax-surveyors/:username/wards - Municipal Commissioner: the surveyor's complete ward set. */
+export const setSurveyorWardsHandler = asyncHandler(async (req: Request, res: Response) => {
+  const username = z.string().trim().min(1).max(100).safeParse(req.params.username);
+  if (!username.success) throw ApiError.badRequest("Invalid username");
+  const b = wardsSchema.safeParse(req.body);
+  if (!b.success) throw ApiError.badRequest("Invalid ward list");
+  res.status(200).json(await setSurveyorWards(username.data, b.data.wards, req.admin!.displayName));
 });

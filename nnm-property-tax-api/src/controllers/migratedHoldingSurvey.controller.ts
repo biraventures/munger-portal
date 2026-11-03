@@ -1,4 +1,5 @@
 import type { Request, Response } from "express";
+import { listSurveyorsWithWards } from "../services/surveyorWards.service";
 import { z } from "zod";
 import ExcelJS from "exceljs";
 import { holdingNoSchema } from "../utils/holdingNoSchema";
@@ -52,8 +53,8 @@ export const listTaxDarogasHandler = asyncHandler(async (_req: Request, res: Res
 
 /** GET /api/v1/admin/tax-surveyors - the list of active Tax Surveyor accounts, for the Tax Daroga's assignment picker. */
 export const listTaxSurveyorsHandler = asyncHandler(async (_req: Request, res: Response) => {
-  const admins = await adminRepository.listByRole("tax_surveyor");
-  res.status(200).json({ taxSurveyors: admins.map((a) => ({ username: a.username, displayName: a.display_name })) });
+  // With the wards the Municipal Commissioner has given each surveyor (used to pre-select the ward's surveyor).
+  res.status(200).json({ taxSurveyors: await listSurveyorsWithWards() });
 });
 
 const assignSchema = z.object({ taxDarogaUsername: z.string().trim().min(1) });

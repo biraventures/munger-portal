@@ -240,7 +240,7 @@ export function NewHoldingRequestPanel({
             </div>
             <div>
               <label className={lbl}>Tax Surveyor for the field report</label>
-              <SurveyorSelect value={surveyor} onChange={setSurveyor} className={inp} />
+              <SurveyorSelect value={surveyor} onChange={setSurveyor} className={inp} ward={r.ward} />
             </div>
             <div>
               <label className={lbl}>Remarks (optional)</label>

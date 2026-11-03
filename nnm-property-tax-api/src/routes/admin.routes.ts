@@ -1,5 +1,5 @@
 import { collectorHoldingParam, collectorDemandNoticeParam } from "../middleware/collectorWardGuard";
-import { assignSurveyorHandler, getSurveyorWorkHandler } from "../controllers/surveyorAssignment.controller";
+import { assignSurveyorHandler, getSurveyorWorkHandler, setSurveyorWardsHandler } from "../controllers/surveyorAssignment.controller";
 import { Router } from "express";
 import {
   getBulkReceiptCollectors,
@@ -486,6 +486,8 @@ adminRouter.get("/tax-surveyors", listTaxSurveyorsHandler);
 // Tax Daroga: which Tax Surveyor handles each new holding request / mutation / remeasurement request.
 adminRouter.get("/surveyor-work", requireAdminRole("tax_daroga", "city_manager", "deputy_commissioner", "commissioner"), getSurveyorWorkHandler);
 adminRouter.post("/surveyor-work/:type/:id/assign", requireAdminRole("tax_daroga"), assignSurveyorHandler);
+// Municipal Commissioner: which wards each Tax Surveyor covers (work in those wards is assigned to them automatically).
+adminRouter.post("/tax-surveyors/:username/wards", requireAdminRole("commissioner"), setSurveyorWardsHandler);
 
 // Tax Collector -> City Manager assignment for cancellation-request
 // routing - Commissioner only. See taxCollectorAssignment.controller.ts.

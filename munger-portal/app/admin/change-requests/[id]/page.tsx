@@ -262,7 +262,7 @@ export default function ChangeRequestDetailPage() {
                     <div className="mb-4 grid grid-cols-1 gap-3 rounded-lg border border-slate-200 bg-white p-4 sm:grid-cols-2">
                       <div>
                         <label className="mb-1 block text-xs font-medium text-slate-600">Tax Surveyor for the field report</label>
-                        <SurveyorSelect value={surveyor} onChange={setSurveyor} />
+                        <SurveyorSelect value={surveyor} onChange={setSurveyor} ward={(detail.currentProperty?.ward as string | null | undefined) ?? null} />
                       </div>
                       {isPartial(verification) && (
                         <div>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { surveyorOfWard } from "@/lib/admin-api";
 import { Camera, Loader2, MapPin, Trash2 } from "lucide-react";
 import { fieldReportPhotoUrl, fetchSurveyors, MAX_REPORT_PHOTOS, reportPhoto, type FieldReport, type FieldReportBody, type TaxSurveyor } from "@/lib/field-report";
 
@@ -204,19 +205,30 @@ export function FieldReportList({ reports }: { reports: FieldReport[] }) {
 }
 
 /** Tax Daroga: picks the Tax Surveyor for the field report. */
-export function SurveyorSelect({ value, onChange, className }: { value: string; onChange: (v: string) => void; className?: string }) {
+/**
+ * Tax Surveyor picker. Given the holding's `ward`, the surveyor the Municipal Commissioner assigned to that ward is
+ * selected automatically (the Tax Daroga can still choose another).
+ */
+export function SurveyorSelect({ value, onChange, className, ward }: { value: string; onChange: (v: string) => void; className?: string; ward?: string | null }) {
   const [list, setList] = useState<TaxSurveyor[] | null>(null);
   useEffect(() => {
     fetchSurveyors()
       .then(setList)
       .catch(() => setList([]));
   }, []);
+  const wardSurveyor = list ? surveyorOfWard(list, ward) : undefined;
+  useEffect(() => {
+    if (!value && wardSurveyor) onChange(wardSurveyor.username);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [wardSurveyor?.username]);
   return (
     <select value={value} onChange={(e) => onChange(e.target.value)} className={className ?? input}>
       <option value="">{list === null ? "Loading…" : list.length ? "Choose the Tax Surveyor" : "No Tax Surveyor login found"}</option>
       {(list ?? []).map((s) => (
         <option key={s.username} value={s.username}>
           {s.displayName}
+          {s.wards?.length ? ` - Ward ${s.wards.join(", ")}` : ""}
+          {wardSurveyor?.username === s.username ? " (this ward)" : ""}
         </option>
       ))}
     </select>

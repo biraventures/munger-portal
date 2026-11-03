@@ -619,6 +619,16 @@ export default function AdminDashboardPage() {
                 </Link>
               )}
 
+              {isCommissioner && (
+                <Link href="/admin/surveyor-wards" className={cardClass}>
+                  <span className={iconWrapClass}>
+                    <MapIcon className="h-6 w-6" strokeWidth={1.8} />
+                  </span>
+                  <h3 className="mb-1.5 text-base font-semibold text-slate-900">Tax Surveyor Wards</h3>
+                  <p className="text-sm text-slate-500">Give wards to Tax Surveyors - requests from a ward go to its surveyor automatically.</p>
+                </Link>
+              )}
+
               {showSurveyorAssignments && (
                 <Link href="/admin/surveyor-assignments" className={cardClass}>
                   <span className={iconWrapClass}>

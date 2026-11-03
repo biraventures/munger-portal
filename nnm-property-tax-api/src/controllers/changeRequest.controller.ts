@@ -73,7 +73,7 @@ const notesBodySchema = z.object({
   // Tax Daroga (mutation): the Tax Surveyor for the field report, and the demand register's number for a new holding.
   assignment: z
     .object({
-      surveyorUsername: z.string().trim().min(1, "Choose the Tax Surveyor."),
+      surveyorUsername: z.string().trim().max(100).optional(),
       registerOldHoldingNo: z.string().trim().max(32).nullish(),
     })
     .optional(),

@@ -964,6 +964,28 @@ export function fetchMyMigratedAssignments(): Promise<MigratedHoldingSurvey[]> {
 export interface TaxSurveyorOption {
   username: string;
   displayName: string;
+  /** Wards given to this surveyor by the Municipal Commissioner. */
+  wards?: string[];
+}
+
+/** The surveyor covering a ward (wards compared without leading zeros), or undefined. */
+export function surveyorOfWard<T extends { wards?: string[] }>(list: T[], ward: string | null | undefined): T | undefined {
+  const w = String(ward ?? "").trim().toUpperCase().replace(/^0+(?=.)/, "");
+  return w ? list.find((s) => (s.wards ?? []).includes(w)) : undefined;
+}
+
+export async function setSurveyorWards(
+  username: string,
+  wards: string[],
+): Promise<{ wards: string[]; movedFrom: { ward: string; from: string }[]; autoAssigned: number }> {
+  const res = await fetch(`${API_BASE_URL}/admin/tax-surveyors/${encodeURIComponent(username)}/wards`, {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify({ wards }),
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body.error || "Could not save the wards.");
+  return body;
 }
 
 export async function fetchTaxSurveyors(): Promise<TaxSurveyorOption[]> {

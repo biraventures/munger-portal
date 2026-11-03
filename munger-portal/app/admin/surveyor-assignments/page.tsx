@@ -12,6 +12,7 @@ import {
   type SurveyorWorkItem,
   type SurveyorWorkType,
   type TaxSurveyorOption,
+  surveyorOfWard,
 } from "@/lib/admin-api";
 
 const VIEW_ROLES = ["tax_daroga", "city_manager", "deputy_commissioner", "commissioner"];
@@ -72,7 +73,7 @@ export default function SurveyorAssignmentsPage() {
 
   async function assign(w: SurveyorWorkItem) {
     const key = `${w.type}:${w.id}`;
-    const username = choice[key];
+    const username = choice[key] ?? (!w.surveyor_username ? surveyorOfWard(surveyors, w.ward)?.username : undefined);
     if (!username) return setError("Choose a Tax Surveyor first.");
     setBusy(key);
     setError(null);
@@ -159,6 +160,12 @@ export default function SurveyorAssignmentsPage() {
                         {w.ward ? ` · Ward ${w.ward}` : ""} <span className="text-xs text-slate-400">· waiting {since(w.waiting_since)}</span>
                       </p>
                       <p className="mt-0.5 text-xs text-slate-500">{w.stage_label}</p>
+                      {(() => {
+                        const ws = surveyorOfWard(surveyors, w.ward);
+                        return ws && ws.username !== w.surveyor_username ? (
+                          <p className="mt-0.5 text-xs text-nnm-blue">Ward surveyor: {ws.displayName}</p>
+                        ) : null;
+                      })()}
                     </div>
                     <div className="text-right text-sm">
                       <div className="text-xs text-slate-500">Surveyor</div>
@@ -169,7 +176,7 @@ export default function SurveyorAssignmentsPage() {
                     (w.assignable_here ? (
                       <div className="mt-3 flex flex-col gap-2 sm:flex-row">
                         <select
-                          value={choice[key] ?? ""}
+                          value={choice[key] ?? (!w.surveyor_username ? (surveyorOfWard(surveyors, w.ward)?.username ?? "") : "")}
                           onChange={(e) => setChoice((c) => ({ ...c, [key]: e.target.value }))}
                           aria-label={`Tax Surveyor for ${w.reference}`}
                           className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm sm:max-w-xs"
@@ -185,7 +192,7 @@ export default function SurveyorAssignmentsPage() {
                         </select>
                         <button
                           onClick={() => assign(w)}
-                          disabled={busy !== null || !choice[key]}
+                          disabled={busy !== null || !(choice[key] ?? (!w.surveyor_username ? surveyorOfWard(surveyors, w.ward)?.username : ""))}
                           className="rounded-md bg-nnm-blue px-4 py-2 text-sm font-semibold text-white hover:bg-nnm-blue-dark disabled:opacity-60"
                         >
                           {busy === key ? "Saving…" : w.surveyor_name ? "Reassign" : "Assign"}

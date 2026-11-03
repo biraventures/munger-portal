@@ -48,6 +48,8 @@ export async function fieldReportPhotoUrl(photoId: string): Promise<string> {
 export interface TaxSurveyor {
   username: string;
   displayName: string;
+  /** Wards given to this surveyor by the Municipal Commissioner. */
+  wards?: string[];
 }
 
 export async function fetchSurveyors(): Promise<TaxSurveyor[]> {
