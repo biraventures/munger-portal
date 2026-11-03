@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef } from "react";
+import { useEffect, useRef } from "react";
 import { Printer } from "lucide-react";
 import type { ReceiptData } from "@/lib/payment-api";
 import { ReceiptData as IntentReceiptData } from "@/app/admin/tax-collector/paymentIntentHandler";
@@ -34,6 +34,12 @@ export function CollectionSlip({ receipt, intentReceipt }: { receipt: ReceiptDat
       updateUrl({ ...intentReceipt, verificationUrl: receipt.verificationUrl } as unknown as Record<string, number>);
     }
   }
+
+  useEffect(() => {
+    if (intentReceipt) {
+      updateUrl({ ...intentReceipt, verificationUrl: receipt.verificationUrl } as unknown as Record<string, number>);
+    }
+  }, [intentReceipt]);
 
   return (
     <div className="space-y-3">
