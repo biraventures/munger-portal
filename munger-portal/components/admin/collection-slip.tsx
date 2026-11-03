@@ -30,15 +30,15 @@ export function CollectionSlip({ receipt, intentReceipt }: { receipt: ReceiptDat
   );
 
   const intentPrintHandler = () => {
-    // if (intentReceipt) {
-    //   updateUrl({ ...intentReceipt, verificationUrl: receipt.verificationUrl } as unknown as Record<string, number>);
-    // }
+    if (intentReceipt) {
+      updateUrl({ ...intentReceipt, verificationUrl: receipt.verificationUrl } as unknown as Record<string, number>);
+    }
   }
 
   useEffect(() => {
-    // if (intentReceipt) {
-    //   updateUrl({ ...intentReceipt, verificationUrl: receipt.verificationUrl } as unknown as Record<string, number>);
-    // }
+    if (intentReceipt) {
+      updateUrl({ ...intentReceipt, verificationUrl: receipt.verificationUrl } as unknown as Record<string, number>);
+    }
   }, [intentReceipt]);
 
   return (
