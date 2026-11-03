@@ -52,6 +52,10 @@ export const fieldReportSchema = z.object({
   latitude: z.number().min(24).max(27).nullish(),
   longitude: z.number().min(85).max(88).nullish(),
   photos: z.array(z.object({ base64: z.string().min(10).max(1_100_000), mimeType: z.string().max(20) })).max(4).optional(),
+  // New holding requests only (see saveFieldReport): self-assessment check, its 4 pages, 2 photos of holding with owner.
+  selfAssessmentCorrect: z.boolean().nullish(),
+  formPagePhotos: z.array(z.object({ base64: z.string().min(10).max(1_100_000), mimeType: z.string().max(20) })).max(4).optional(),
+  holdingOwnerPhotos: z.array(z.object({ base64: z.string().min(10).max(1_100_000), mimeType: z.string().max(20) })).max(2).optional(),
 });
 
 const areaSqft = z.coerce.number({ invalid_type_error: "Enter the area in sq ft." }).positive("Areas must be more than 0 sq ft.").max(10_000_000);
