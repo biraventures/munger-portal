@@ -1,6 +1,6 @@
 import { pool } from "../config/db";
 import type { PoolClient } from "pg";
-import { supersedeNoticesWithoutSolidWaste } from "./solidWasteGuard.service";
+import { supersedeNoticesWithoutSolidWaste, supersedeOpenFullNotices } from "./solidWasteGuard.service";
 import { generateDemandNotice } from "./demandNotice.service";
 import { propertyRepository } from "../repositories/property.repository";
 import { adminRepository } from "../repositories/admin.repository";
@@ -50,6 +50,7 @@ export interface SolidWasteRequestRow {
   rejected_at: Date | null;
   reject_reason: string | null;
   facility_photo_path: string | null;
+  previous_type: string | null;
 }
 
 interface Actor {
@@ -67,14 +68,23 @@ export async function submitSolidWasteRequest(
   type: string,
   collector: Actor,
   facilityPhotoPath: string,
+  previousType: string | null = null,
 ): Promise<SolidWasteRequestRow> {
   if (SOLID_WASTE_RATE[type] === undefined) throw ApiError.badRequest("Unknown solid waste user type.");
   const me = await adminRepository.findByUsername(collector.username);
   try {
     const { rows } = await pool.query<SolidWasteRequestRow>(
-      `INSERT INTO solid_waste_type_requests (holding_no, requested_type, requested_by_username, requested_by_display_name, assigned_city_manager_username, facility_photo_path)
-       VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
-      [holdingNo, type, collector.username, collector.displayName, me?.assigned_city_manager_username ?? null, facilityPhotoPath],
+      `INSERT INTO solid_waste_type_requests (holding_no, requested_type, requested_by_username, requested_by_display_name, assigned_city_manager_username, facility_photo_path, previous_type)
+       VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
+      [
+        holdingNo,
+        type,
+        collector.username,
+        collector.displayName,
+        me?.assigned_city_manager_username ?? null,
+        facilityPhotoPath,
+        previousType,
+      ],
     );
     return rows[0]!;
   } catch (err) {
@@ -136,17 +146,24 @@ export async function listSolidWasteRequestsFor(admin: Actor) {
   );
 }
 
-/** Writes the approved type and its charge on the holding; open notices printed without the user charge are superseded. */
+/**
+ * Writes the approved type and its charge on the holding. Open notices that no longer match are superseded: when a
+ * missing type is entered, those printed without the user charge; when a wrong type is corrected and the charge
+ * changes, every open notice (they all carry the old charge). The caller then raises a fresh notice.
+ */
 async function applyApprovedType(client: PoolClient, r: SolidWasteRequestRow, by: string): Promise<number> {
   const property = await propertyRepository.findByHoldingNo(r.holding_no);
   if (!property) throw ApiError.notFound("Holding not found.");
-  const charge = annualSolidWasteCharge({ ...property, solid_waste_charge_type: r.requested_type });
+  const hadType = property.is_bwg || SOLID_WASTE_RATE[String(property.solid_waste_charge_type ?? "").trim()] !== undefined;
+  const oldCharge = hadType ? Number(annualSolidWasteCharge(property)) : null;
+  const charge = Number(annualSolidWasteCharge({ ...property, solid_waste_charge_type: r.requested_type }));
   await client.query(
     `UPDATE properties SET solid_waste_charge_type = $2, solid_waste_charge = $3,
        solid_waste_months = COALESCE(NULLIF(solid_waste_months, 0), 12),
        last_modified_by = LEFT($4, 64), last_modified_date = now() WHERE holding_no = $1`,
     [r.holding_no, r.requested_type, charge, by],
   );
+  if (oldCharge !== null) return charge !== oldCharge ? supersedeOpenFullNotices(r.holding_no, client) : 0;
   return charge > 0 ? supersedeNoticesWithoutSolidWaste(r.holding_no, client) : 0;
 }
 

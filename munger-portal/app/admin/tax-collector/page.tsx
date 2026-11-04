@@ -12,8 +12,7 @@ import { PrintedNoticeLocation } from "@/components/admin/printed-notice-locatio
 import { AdminHeader } from "@/components/admin-header";
 import { useAdminGuard } from "@/lib/use-admin-guard";
 import { FieldVerificationCapture } from "@/components/admin/field-verification-capture";
-import { fileToBase64 } from "@/components/admin/discrepancy-capture-section";
-import { shrinkPhotoFile } from "@/lib/upload-limits";
+import { SolidWasteTypeCard } from "@/components/admin/solid-waste-type-card";
 import { CollectionIssueList } from "@/components/admin/collection-issue-list";
 import { ReceiptView } from "@/components/operator/receipt-view";
 import { CollectionSlip } from "@/components/admin/collection-slip";
@@ -148,8 +147,6 @@ export default function TaxCollectorPage() {
   }, [admin]);
 
   const [formOptions, setFormOptions] = useState<FormOptions | null>(null);
-  const [swType, setSwType] = useState("");
-  const [swPhoto, setSwPhoto] = useState<File | null>(null);
   const [waterStatus, setWaterStatus] = useState<WaterConnectionStatus | "">("");
   const [waterCount, setWaterCount] = useState("");
   const [savingDetails, setSavingDetails] = useState(false);
@@ -171,16 +168,8 @@ export default function TaxCollectorPage() {
   async function handleSaveDetails() {
     if (!result?.property) return;
     const p = result.property;
-    const needSw = !!p.solidWasteTypeMissing && !swOpen;
     const needWater = !p.water_connection_status;
     const input: Parameters<typeof saveCollectorDetails>[1] = {};
-    if (needSw) {
-      if (!swType) return setError("Select the solid waste user type.");
-      if (!swPhoto) return setError("Take a photo of the facility for the Tax Daroga to verify the solid waste user type.");
-      input.solidWasteChargeType = swType;
-      input.facilityPhotoBase64Data = await fileToBase64(swPhoto);
-      input.facilityPhotoMimeType = swPhoto.type;
-    }
     if (needWater) {
       if (!waterStatus) return setError("Select the tap water connection status.");
       input.waterConnectionStatus = waterStatus;
@@ -194,8 +183,7 @@ export default function TaxCollectorPage() {
     setError(null);
     try {
       await saveCollectorDetails(p.holding_no, input);
-      setDetailsMsg(needSw ? "Details saved. The solid waste user type has gone to the Tax Daroga for approval." : "Details saved.");
-      setSwPhoto(null);
+      setDetailsMsg("Details saved.");
       await reloadProperty(p.holding_no);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not save these details.");
@@ -205,8 +193,6 @@ export default function TaxCollectorPage() {
   }
 
   function resetForNewSearch() {
-    setSwType("");
-    setSwPhoto(null);
     setSwRequest(null);
     setWaterStatus("");
     setWaterCount("");
@@ -358,7 +344,6 @@ export default function TaxCollectorPage() {
   }
 
   const property = result?.property;
-  const swOpen = !!swRequest && (swRequest.stage === "tax_daroga" || swRequest.stage === "city_manager");
   const floors = result?.floors ?? [];
 
   return (
@@ -438,53 +423,21 @@ export default function TaxCollectorPage() {
               </div>
             </div>
 
-            {((!!property.solidWasteTypeMissing && !swOpen) ||
-              !property.water_connection_status ||
-              (!!property.solidWasteTypeMissing && swOpen)) && (
+            <SolidWasteTypeCard
+              holdingNo={property.holding_no}
+              currentType={property.solid_waste_charge_type ? String(property.solid_waste_charge_type) : null}
+              missing={!!property.solidWasteTypeMissing}
+              isBwg={!!property.is_bwg}
+              request={swRequest}
+              types={formOptions?.solidWasteChargeTypes ?? []}
+              rates={formOptions?.solidWasteRates ?? {}}
+              onSubmitted={() => reloadProperty(property.holding_no)}
+            />
+
+            {!property.water_connection_status && (
               <div className="rounded-xl border border-amber-300 bg-amber-50 p-5">
                 <h3 className="mb-1 text-sm font-semibold text-amber-900">Mandatory details - needed before collecting payment</h3>
                 <p className="mb-3 text-xs text-amber-800">These are missing for this holding. Please enter them from the field.</p>
-                {!!property.solidWasteTypeMissing && swOpen && swRequest && (
-                  <p className="mb-3 rounded-md border border-amber-200 bg-white p-3 text-xs text-amber-900">
-                    Solid waste user type <b>{swRequest.requested_type}</b> submitted - waiting for the Tax Daroga&apos;s approval. Payment
-                    can be collected once it is approved.
-                  </p>
-                )}
-                {!!property.solidWasteTypeMissing && !swOpen && swRequest?.stage === "rejected" && (
-                  <p className="mb-3 rounded-md border border-red-200 bg-white p-3 text-xs text-red-700">
-                    Earlier entry ({swRequest.requested_type}) was rejected by {swRequest.rejected_by}: {swRequest.reject_reason}. Please
-                    enter it again.
-                  </p>
-                )}
-                {!!property.solidWasteTypeMissing && !swOpen && (
-                  <div className="mb-3">
-                    <label className="mb-1 block text-xs font-medium text-slate-700">
-                      Solid waste user type (needs the Tax Daroga&apos;s approval; amount is set automatically)
-                    </label>
-                    <select value={swType} onChange={(e) => setSwType(e.target.value)} className={inputClass}>
-                      <option value="">Select user type…</option>
-                      {(formOptions?.solidWasteChargeTypes ?? []).map((t) => (
-                        <option key={t} value={t}>
-                          {t} - ₹{formOptions?.solidWasteRates[t] ?? 0}/month
-                        </option>
-                      ))}
-                    </select>
-                    <label className="mb-1 mt-3 block text-xs font-medium text-slate-700">
-                      Photo of the facility (shop, house, hotel, etc.) - required, for the Tax Daroga to verify the type
-                    </label>
-                    <input
-                      type="file"
-                      accept="image/jpeg,image/png"
-                      capture="environment"
-                      onChange={async (e) => {
-                        const f = e.target.files?.[0];
-                        setSwPhoto(f ? await shrinkPhotoFile(f) : null);
-                      }}
-                      className="block w-full text-xs text-slate-700 file:mr-3 file:rounded-md file:border-0 file:bg-nnm-blue file:px-3 file:py-2 file:text-xs file:font-semibold file:text-white"
-                    />
-                    {swPhoto && <p className="mt-1 text-xs text-green-700">Photo attached: {swPhoto.name}</p>}
-                  </div>
-                )}
                 {!property.water_connection_status && (
                   <div className="mb-3">
                     <label className="mb-1 block text-xs font-medium text-slate-700">Does the holding have a tap water connection?</label>
@@ -513,7 +466,7 @@ export default function TaxCollectorPage() {
                   </div>
                 )}
                 {detailsMsg && <p className="mb-2 text-xs text-green-700">{detailsMsg}</p>}
-                {((!!property.solidWasteTypeMissing && !swOpen) || !property.water_connection_status) && (
+                {!property.water_connection_status && (
                   <button
                     onClick={handleSaveDetails}
                     disabled={savingDetails}
@@ -731,7 +684,8 @@ export default function TaxCollectorPage() {
                 <h3 className="text-sm font-semibold text-slate-800">Something doesn&apos;t match?</h3>
                 <p className="text-xs text-slate-500">
                   If what you find on the ground looks different from these details, submit the corrected details here - it will go through
-                  Tax Surveyor, Tax Daroga, City Manager, and DMC review.
+                  Tax Surveyor, Tax Daroga, City Manager, and DMC review. (For the solid waste user type alone, use the Solid waste user
+                  type box above instead.)
                 </p>
               </div>
             </Link>

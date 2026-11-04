@@ -29,13 +29,18 @@ function typeMissing(p: Pick<PropertyRow, "is_bwg" | "solid_waste_charge_type">)
 }
 
 /** Message (or null) when the solid waste user type is unknown. */
-export async function solidWasteTypeBlock(property: Pick<PropertyRow, "holding_no" | "is_bwg" | "solid_waste_charge_type">): Promise<string | null> {
+export async function solidWasteTypeBlock(
+  property: Pick<PropertyRow, "holding_no" | "is_bwg" | "solid_waste_charge_type">,
+): Promise<string | null> {
   if (!typeMissing(property)) return null;
   return `The solid waste user type of Holding No ${property.holding_no} is not known, so holding tax cannot be collected yet.${await pendingRequestNote(property.holding_no)}`;
 }
 
 /** Message (or null) when this (full) notice does not include the solid waste user charge the holding owes. */
-export function noticeMissingSolidWasteCharge(property: PropertyRow, notice: Pick<DemandNoticeRow, "demand_no" | "part_payment" | "paid_through_year" | "snapshot">): string | null {
+export function noticeMissingSolidWasteCharge(
+  property: PropertyRow,
+  notice: Pick<DemandNoticeRow, "demand_no" | "part_payment" | "paid_through_year" | "snapshot">,
+): string | null {
   if (notice.part_payment && notice.paid_through_year) return null; // part payment: holding tax only, by design
   const printed = (notice.snapshot?.property as Record<string, unknown> | undefined)?.solid_waste_charge;
   if (printed === undefined || printed === null) return null; // very old notice - nothing recorded to compare
@@ -65,6 +70,21 @@ export async function supersedeNoticesWithoutSolidWaste(holdingNo: string, clien
       WHERE holding_no = $1 AND NOT settled AND NOT cancelled AND NOT superseded AND NOT on_hold
         AND NOT COALESCE(part_payment, FALSE)
         AND COALESCE((snapshot #>> '{property,solid_waste_charge}')::numeric, 1) = 0`,
+    [holdingNo],
+  );
+  return res.rowCount ?? 0;
+}
+
+/**
+ * The holding's solid waste user type was corrected and its charge changed: every open full notice carries the old
+ * charge, so each is superseded and can no longer be paid; the next notice uses the corrected charge. Part-payment
+ * notices are holding tax only and are left alone.
+ */
+export async function supersedeOpenFullNotices(holdingNo: string, client: PoolClient): Promise<number> {
+  const res = await client.query(
+    `UPDATE demand_notices SET superseded = TRUE
+      WHERE holding_no = $1 AND NOT settled AND NOT cancelled AND NOT superseded AND NOT on_hold
+        AND NOT COALESCE(part_payment, FALSE)`,
     [holdingNo],
   );
   return res.rowCount ?? 0;

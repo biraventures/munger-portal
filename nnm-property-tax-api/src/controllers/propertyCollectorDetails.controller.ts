@@ -41,8 +41,16 @@ export const putCollectorDetails = asyncHandler(async (req: Request, res: Respon
 
   const property = await propertyRepository.findByHoldingNo(params.data.holdingNo);
   if (!property) throw ApiError.notFound("Holding not found.");
-  if (d.solidWasteChargeType !== undefined && !isSolidWasteTypeMissing(property)) {
-    throw ApiError.badRequest("This holding already has a solid waste user type on record.");
+  // A missing type is entered, or a wrong one corrected - either way it waits for the Tax Daroga's approval.
+  if (d.solidWasteChargeType !== undefined && property.is_bwg) {
+    throw ApiError.badRequest("This holding is marked as a bulk waste generator - its user charge is not set from here.");
+  }
+  if (
+    d.solidWasteChargeType !== undefined &&
+    !isSolidWasteTypeMissing(property) &&
+    property.solid_waste_charge_type === d.solidWasteChargeType
+  ) {
+    throw ApiError.badRequest("This is already the holding's solid waste user type.");
   }
   if (d.solidWasteChargeType !== undefined && (!d.facilityPhotoBase64Data || !d.facilityPhotoMimeType)) {
     throw ApiError.badRequest("Attach a photo of the facility with the solid waste user type, so the Tax Daroga can verify it.");
@@ -66,7 +74,8 @@ export const putCollectorDetails = asyncHandler(async (req: Request, res: Respon
       throw ApiError.badRequest("A solid waste user type for this holding is already waiting for approval.");
     }
     const photoPath = await saveFacilityPhoto(params.data.holdingNo, d.facilityPhotoBase64Data!, d.facilityPhotoMimeType!);
-    const request = await submitSolidWasteRequest(params.data.holdingNo, d.solidWasteChargeType, req.admin, photoPath);
+    const previousType = isSolidWasteTypeMissing(property) ? null : property.solid_waste_charge_type;
+    const request = await submitSolidWasteRequest(params.data.holdingNo, d.solidWasteChargeType, req.admin, photoPath, previousType);
     solidWasteRequestId = request.id;
   }
   res.status(200).json({ ok: true, solidWasteRequestId });
