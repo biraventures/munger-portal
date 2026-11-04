@@ -19,8 +19,6 @@ function money(v: string | number): string {
  */
 export function CollectionSlip({ receipt, intentReceipt }: { receipt: ReceiptData, intentReceipt?: IntentReceiptData }) {
   const ref = useRef<HTMLDivElement>(null);
-
-  const intentFieldRef = useRef<HTMLInputElement>(null);
   const [intentSuccessResult, setIntentSuccessResult] = useState<string>("");
 
   const p = receipt.property;
@@ -35,10 +33,7 @@ export function CollectionSlip({ receipt, intentReceipt }: { receipt: ReceiptDat
   useEffect(() => {
     if (intentReceipt) {
       const intentPrintHandler = () => {
-        setIntentSuccessResult(JSON.stringify(intentReceipt, null, 2));
-        if (intentFieldRef.current) {
-          intentFieldRef.current.value = JSON.stringify(intentReceipt, null, 2);
-        }
+        setIntentSuccessResult(JSON.stringify(receipt.verificationUrl));
       }
       intentPrintHandler()
     }
@@ -49,8 +44,7 @@ export function CollectionSlip({ receipt, intentReceipt }: { receipt: ReceiptDat
       <input
         type="text"
         id="intent_success"
-        ref={intentFieldRef}
-        style={{ display: "none" }}
+        // style={{ display: "none" }}
         value={intentSuccessResult ? JSON.stringify(intentSuccessResult, null, 2) : ""}
       />
       <button
