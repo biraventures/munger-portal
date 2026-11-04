@@ -371,9 +371,9 @@ export default function TaxCollectorPage() {
   const floors = result?.floors ?? [];
 
   const handleIntentResponse = async (data: IntentResponse) => {
-    alert("Payment intent response received. Check the console for details.");
     if (data.ok && data.statusCode === '00') {
       const { receiptData } = data;
+      alert(JSON.stringify(receiptData, null, 2));
       receiptData.demandNo = String(selectedDemandNo)
       setIntentReceipt(receiptData);
       await executeCollectPayment(true)
