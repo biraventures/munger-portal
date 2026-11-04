@@ -5,13 +5,16 @@ import { UserChargePaidTill } from "@/components/operator/user-charge-paid-till"
 import { Plus } from "lucide-react";
 import { FloorRow, makeBlankFloor, type FloorFormState } from "@/components/operator/floor-row";
 
-const inputClass = "w-full rounded-md border border-slate-300 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-nnm-blue focus:ring-offset-1";
+const inputClass =
+  "w-full rounded-md border border-slate-300 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-nnm-blue focus:ring-offset-1";
 const labelClass = "mb-1.5 block text-sm font-medium text-slate-700";
 
 export interface AdminPropertyFormState {
   ownerName: string;
   mobileNo: string;
   aadhaarNumber: string;
+  /** The original owner has died: no Aadhaar number is required. */
+  ownerDeceased: boolean;
   areaSqft: string;
   address: string;
   ward: string;
@@ -30,6 +33,7 @@ export function blankAdminPropertyForm(): AdminPropertyFormState {
     ownerName: "",
     mobileNo: "",
     aadhaarNumber: "",
+    ownerDeceased: false,
     areaSqft: "",
     address: "",
     ward: "",
@@ -48,7 +52,8 @@ export function propertyFormToPayload(form: AdminPropertyFormState): Record<stri
   return {
     ownerName: form.ownerName.trim(),
     mobileNo: form.mobileNo.trim() || null,
-    aadhaarNumber: form.aadhaarNumber.trim() || null,
+    aadhaarNumber: form.ownerDeceased ? null : form.aadhaarNumber.trim() || null,
+    ...(form.ownerDeceased ? { ownerDeceased: true } : {}),
     areaSqft: Number(form.areaSqft) || 0,
     address: form.address.trim(),
     ward: form.ward.trim() || null,
@@ -79,6 +84,7 @@ export function propertyFormFromProposedData(data: Record<string, unknown>): Adm
     ownerName: String(data.ownerName ?? ""),
     mobileNo: String(data.mobileNo ?? ""),
     aadhaarNumber: String(data.aadhaarNumber ?? ""),
+    ownerDeceased: data.ownerDeceased === true,
     areaSqft: String(data.areaSqft ?? ""),
     address: String(data.address ?? ""),
     ward: String(data.ward ?? ""),
@@ -110,6 +116,7 @@ export function propertyFormFromExisting(property: Record<string, unknown>, floo
     ownerName: String(property.owner_name ?? ""),
     mobileNo: String(property.mobile_no ?? ""),
     aadhaarNumber: String(property.aadhaar_number ?? ""),
+    ownerDeceased: false,
     areaSqft: String(property.area_sqft ?? ""),
     address: String(property.address ?? ""),
     ward: String(property.ward ?? ""),
@@ -174,7 +181,13 @@ export function AdminPropertyDetailsForm({
         </div>
         <div>
           <label className={labelClass}>Total area (sq ft)</label>
-          <input type="number" min="0" value={form.areaSqft} onChange={(e) => updateField("areaSqft", e.target.value)} className={inputClass} />
+          <input
+            type="number"
+            min="0"
+            value={form.areaSqft}
+            onChange={(e) => updateField("areaSqft", e.target.value)}
+            className={inputClass}
+          />
         </div>
       </div>
 
@@ -185,7 +198,23 @@ export function AdminPropertyDetailsForm({
         </div>
         <div>
           <label className={labelClass}>Aadhaar number</label>
-          <input value={form.aadhaarNumber} onChange={(e) => updateField("aadhaarNumber", e.target.value.replace(/\D/g, ""))} maxLength={12} placeholder="12-digit number" className={inputClass} />
+          <input
+            value={form.ownerDeceased ? "" : form.aadhaarNumber}
+            onChange={(e) => updateField("aadhaarNumber", e.target.value.replace(/\D/g, ""))}
+            maxLength={12}
+            disabled={form.ownerDeceased}
+            placeholder={form.ownerDeceased ? "Not required - original owner has died" : "12-digit number"}
+            className={`${inputClass} disabled:bg-slate-100`}
+          />
+          <label className="mt-1.5 flex items-center gap-1.5 text-xs text-slate-700">
+            <input
+              type="checkbox"
+              checked={form.ownerDeceased}
+              onChange={(e) => onChange({ ...form, ownerDeceased: e.target.checked })}
+              className="h-3.5 w-3.5"
+            />
+            Original owner has died (Aadhaar not required)
+          </label>
         </div>
       </div>
 
@@ -201,11 +230,20 @@ export function AdminPropertyDetailsForm({
         </div>
         <div>
           <label className={labelClass}>Assessment year (YYYY-YYYY)</label>
-          <input value={form.assessmentYear} onChange={(e) => updateField("assessmentYear", e.target.value)} placeholder="2023-2024" className={inputClass} />
+          <input
+            value={form.assessmentYear}
+            onChange={(e) => updateField("assessmentYear", e.target.value)}
+            placeholder="2023-2024"
+            className={inputClass}
+          />
         </div>
         <div>
           <label className={labelClass}>Road type</label>
-          <select value={form.roadType} onChange={(e) => updateField("roadType", e.target.value as "PMR" | "MR" | "OR")} className={inputClass}>
+          <select
+            value={form.roadType}
+            onChange={(e) => updateField("roadType", e.target.value as "PMR" | "MR" | "OR")}
+            className={inputClass}
+          >
             <option value="PMR">Principal Main Road (PMR)</option>
             <option value="MR">Main Road (MR)</option>
             <option value="OR">Other Road (OR)</option>
@@ -216,7 +254,12 @@ export function AdminPropertyDetailsForm({
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div>
           <label className={labelClass}>Holding creation year (YYYY-YYYY)</label>
-          <input value={form.holdingCreationYear} onChange={(e) => updateField("holdingCreationYear", e.target.value)} placeholder="2020-2021" className={inputClass} />
+          <input
+            value={form.holdingCreationYear}
+            onChange={(e) => updateField("holdingCreationYear", e.target.value)}
+            placeholder="2020-2021"
+            className={inputClass}
+          />
         </div>
       </div>
 
@@ -225,7 +268,11 @@ export function AdminPropertyDetailsForm({
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
             <label className={labelClass}>Charge type</label>
-            <select value={form.solidWasteChargeType} onChange={(e) => updateField("solidWasteChargeType", e.target.value)} className={inputClass}>
+            <select
+              value={form.solidWasteChargeType}
+              onChange={(e) => updateField("solidWasteChargeType", e.target.value)}
+              className={inputClass}
+            >
               <option value="">-</option>
               {solidWasteChargeTypes.map((s) => (
                 <option key={s} value={s}>
@@ -269,14 +316,25 @@ export function AdminPropertyDetailsForm({
       <div>
         <div className="mb-2 flex items-center justify-between">
           <h3 className="text-sm font-semibold text-slate-800">Floors</h3>
-          <button type="button" onClick={addFloor} className="inline-flex items-center gap-1 text-xs font-semibold text-nnm-blue hover:underline">
+          <button
+            type="button"
+            onClick={addFloor}
+            className="inline-flex items-center gap-1 text-xs font-semibold text-nnm-blue hover:underline"
+          >
             <Plus className="h-3.5 w-3.5" />
             Add floor
           </button>
         </div>
         <div className="space-y-3">
           {form.floors.map((floor, i) => (
-            <FloorRow key={floor.key} floor={floor} usageTypes={usageTypes} onChange={(next) => updateFloor(i, next)} onRemove={() => removeFloor(i)} removable={form.floors.length > 1} />
+            <FloorRow
+              key={floor.key}
+              floor={floor}
+              usageTypes={usageTypes}
+              onChange={(next) => updateFloor(i, next)}
+              onRemove={() => removeFloor(i)}
+              removable={form.floors.length > 1}
+            />
           ))}
         </div>
       </div>

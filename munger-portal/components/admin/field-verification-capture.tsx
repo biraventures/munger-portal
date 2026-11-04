@@ -31,6 +31,7 @@ interface FieldVerificationState {
   gpsLat: number | null;
   gpsLng: number | null;
   aadhaarNumber: string;
+  ownerDeceased: boolean;
   holdingFile: File | null;
   aadhaarFile: File | null;
   previousReceiptFile: File | null;
@@ -43,6 +44,7 @@ function blankState(): FieldVerificationState {
     gpsLat: null,
     gpsLng: null,
     aadhaarNumber: "",
+    ownerDeceased: false,
     holdingFile: null,
     aadhaarFile: null,
     previousReceiptFile: null,
@@ -120,7 +122,7 @@ function PhotoSlot({
  */
 const REQUIRED: { key: HoldingDocumentKey; label: string }[] = [
   { key: "gps", label: "GPS location" },
-  { key: "aadhaar", label: "Aadhaar number" },
+  { key: "aadhaar", label: "Aadhaar number (or owner deceased)" },
   { key: "holdingPhoto", label: "Holding photo" },
   { key: "previousReceipt", label: "Previous year's receipt" },
   { key: "landDocument", label: "Land ownership document" },
@@ -174,7 +176,7 @@ export function FieldVerificationCapture({
 
   const given: Record<HoldingDocumentKey, boolean> = {
     gps: state.gpsLat !== null,
-    aadhaar: !!state.aadhaarNumber.trim(),
+    aadhaar: !!state.aadhaarNumber.trim() || state.ownerDeceased,
     holdingPhoto: !!state.holdingFile,
     previousReceipt: !!state.previousReceiptFile,
     landDocument: !!state.landDocumentFile,
@@ -183,7 +185,7 @@ export function FieldVerificationCapture({
   const stillMissing = mandatory ? REQUIRED.filter((r) => !documentStatus?.onFile[r.key] && !given[r.key]) : [];
 
   async function handleSave() {
-    if (state.aadhaarNumber && !isValidAadhaar(state.aadhaarNumber)) {
+    if (!state.ownerDeceased && state.aadhaarNumber && !isValidAadhaar(state.aadhaarNumber)) {
       setError("This is not a valid Aadhaar number - please check it.");
       return;
     }
@@ -209,11 +211,12 @@ export function FieldVerificationCapture({
       await recordFieldVerification(holdingNo, {
         gpsLat: state.gpsLat,
         gpsLng: state.gpsLng,
-        aadhaarNumber: state.aadhaarNumber.trim() || null,
+        aadhaarNumber: state.ownerDeceased ? null : state.aadhaarNumber.trim() || null,
+        ownerDeceased: state.ownerDeceased || undefined,
         holdingPhotoBase64Data: holdingPhoto,
         holdingPhotoMimeType: state.holdingFile?.type,
-        aadhaarPhotoBase64Data: aadhaarPhoto,
-        aadhaarPhotoMimeType: state.aadhaarFile?.type,
+        aadhaarPhotoBase64Data: state.ownerDeceased ? undefined : aadhaarPhoto,
+        aadhaarPhotoMimeType: state.ownerDeceased ? undefined : state.aadhaarFile?.type,
         previousReceiptPhotoBase64Data: previousReceiptPhoto,
         previousReceiptPhotoMimeType: state.previousReceiptFile?.type,
         landDocumentPhotoBase64Data: landDocumentPhoto,
@@ -237,6 +240,7 @@ export function FieldVerificationCapture({
     state.gpsLat !== null ||
     !!water.status ||
     state.aadhaarNumber.trim() ||
+    state.ownerDeceased ||
     state.holdingFile ||
     state.aadhaarFile ||
     state.previousReceiptFile ||
@@ -340,14 +344,48 @@ export function FieldVerificationCapture({
           </div>
 
           <div className="mb-4">
-            <label className="mb-1 block text-xs font-medium text-slate-600">Owner&apos;s Aadhaar number</label>
-            <input
-              value={state.aadhaarNumber}
-              onChange={(e) => setState((s) => ({ ...s, aadhaarNumber: e.target.value.replace(/\D/g, "").slice(0, 12) }))}
-              placeholder="12-digit Aadhaar number"
-              inputMode="numeric"
-              className="w-full rounded-md border border-slate-300 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-nnm-blue focus:ring-offset-1"
-            />
+            {documentStatus?.ownerDeceased ? (
+              <p className="rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+                The original owner is recorded as deceased{documentStatus.ownerDeceasedBy ? ` (by ${documentStatus.ownerDeceasedBy})` : ""}{" "}
+                - the Aadhaar number is not required for this holding.
+              </p>
+            ) : (
+              <>
+                <label className="mb-2 flex items-start gap-2 text-sm text-slate-800">
+                  <input
+                    type="checkbox"
+                    checked={state.ownerDeceased}
+                    onChange={(e) =>
+                      setState((s) => ({
+                        ...s,
+                        ownerDeceased: e.target.checked,
+                        aadhaarNumber: e.target.checked ? "" : s.aadhaarNumber,
+                        aadhaarFile: e.target.checked ? null : s.aadhaarFile,
+                      }))
+                    }
+                    className="mt-0.5 h-4 w-4"
+                  />
+                  <span>
+                    The original owner of this holding has died
+                    <span className="block text-xs text-slate-500">
+                      Tick only if true. The Aadhaar number and Aadhaar card photo are then not required.
+                    </span>
+                  </span>
+                </label>
+                {!state.ownerDeceased && (
+                  <>
+                    <label className="mb-1 block text-xs font-medium text-slate-600">Owner&apos;s Aadhaar number</label>
+                    <input
+                      value={state.aadhaarNumber}
+                      onChange={(e) => setState((s) => ({ ...s, aadhaarNumber: e.target.value.replace(/\D/g, "").slice(0, 12) }))}
+                      placeholder="12-digit Aadhaar number"
+                      inputMode="numeric"
+                      className="w-full rounded-md border border-slate-300 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-nnm-blue focus:ring-offset-1"
+                    />
+                  </>
+                )}
+              </>
+            )}
           </div>
 
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -357,12 +395,14 @@ export function FieldVerificationCapture({
               file={state.holdingFile}
               onChange={(f) => setState((s) => ({ ...s, holdingFile: f }))}
             />
-            <PhotoSlot
-              label={mandatory ? "Owner's Aadhaar Card (optional)" : "Owner's Aadhaar Card"}
-              icon={<CreditCard className="h-5 w-5" />}
-              file={state.aadhaarFile}
-              onChange={(f) => setState((s) => ({ ...s, aadhaarFile: f }))}
-            />
+            {!state.ownerDeceased && (
+              <PhotoSlot
+                label={mandatory ? "Owner's Aadhaar Card (optional)" : "Owner's Aadhaar Card"}
+                icon={<CreditCard className="h-5 w-5" />}
+                file={state.aadhaarFile}
+                onChange={(f) => setState((s) => ({ ...s, aadhaarFile: f }))}
+              />
+            )}
             <PhotoSlot
               label="Previous Year's Tax Receipt"
               icon={<FileText className="h-5 w-5" />}

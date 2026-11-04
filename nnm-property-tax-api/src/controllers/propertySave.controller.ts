@@ -13,8 +13,14 @@ const taxExemptionSchema = z
     isExempt: z.boolean(),
     category: z.enum(TAX_EXEMPTION_CATEGORIES).nullish(),
     orderNo: z.string().trim().max(100).nullish(),
-    orderDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use YYYY-MM-DD").nullish(),
-    fromYear: z.string().regex(/^\d{4}-\d{4}$/, "Use YYYY-YYYY format").nullish(),
+    orderDate: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/, "Use YYYY-MM-DD")
+      .nullish(),
+    fromYear: z
+      .string()
+      .regex(/^\d{4}-\d{4}$/, "Use YYYY-YYYY format")
+      .nullish(),
     remarks: z.string().trim().max(1000).nullish(),
     orderDocId: z.coerce.string().regex(/^\d+$/).nullish(),
   })
@@ -55,7 +61,12 @@ export const propertySaveSchema = z.object({
   khesraNo: z.string().nullish(),
   surveySheetNo: z.string().nullish(),
   khataNo: z.string().nullish(),
-  aadhaarNumber: z.string().regex(/^[0-9]{12}$/, "Aadhaar number must be exactly 12 digits").nullish(),
+  aadhaarNumber: z
+    .string()
+    .regex(/^[0-9]{12}$/, "Aadhaar number must be exactly 12 digits")
+    .nullish(),
+  // Field reports only: the original owner has died, so no Aadhaar can be given.
+  ownerDeceased: z.boolean().optional(),
   ownerName: z.string().min(1),
   relationType: z.enum(["S/O", "D/O", "W/O", "C/O"]).nullish(),
   relationName: z.string().nullish(),
@@ -75,9 +86,9 @@ export const propertySaveSchema = z.object({
   isSlum: z.boolean().optional(),
   taxExemption: taxExemptionSchema.optional(),
   // No upper bound - an operator can enter more than 12 months to
-	// reflect multiple pending years of solid waste charge as part of
-	// arrears (see migration 018_remove_solid_waste_months_cap.sql).
-	solidWasteMonths: z.coerce.number().min(1).optional(),
+  // reflect multiple pending years of solid waste charge as part of
+  // arrears (see migration 018_remove_solid_waste_months_cap.sql).
+  solidWasteMonths: z.coerce.number().min(1).optional(),
   solidWastePaidTillYear: z.union([z.string().regex(/^\d{4}-\d{4}$/, "Use the format 2023-2024"), z.literal("")]).nullish(),
   penalCharge: z.coerce.number().optional(),
   waterCharge: z.coerce.number().optional(),

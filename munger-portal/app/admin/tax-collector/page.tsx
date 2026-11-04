@@ -12,10 +12,18 @@ import { PrintedNoticeLocation } from "@/components/admin/printed-notice-locatio
 import { AdminHeader } from "@/components/admin-header";
 import { useAdminGuard } from "@/lib/use-admin-guard";
 import { FieldVerificationCapture } from "@/components/admin/field-verification-capture";
+import { fileToBase64 } from "@/components/admin/discrepancy-capture-section";
+import { shrinkPhotoFile } from "@/lib/upload-limits";
 import { CollectionIssueList } from "@/components/admin/collection-issue-list";
 import { ReceiptView } from "@/components/operator/receipt-view";
 import { CollectionSlip } from "@/components/admin/collection-slip";
-import { EMPTY_INSTRUMENT, InstrumentFields, instrumentError, instrumentPayload, type InstrumentValue } from "@/components/operator/instrument-fields";
+import {
+  EMPTY_INSTRUMENT,
+  InstrumentFields,
+  instrumentError,
+  instrumentPayload,
+  type InstrumentValue,
+} from "@/components/operator/instrument-fields";
 import { FIELD_PAYMENT_MODES } from "@/lib/payment-modes";
 import type { ReceiptData } from "@/lib/payment-api";
 import {
@@ -40,7 +48,8 @@ import {
 } from "@/lib/admin-api";
 import { PaymentResponsibilityWarning } from "@/components/payment-responsibility-warning";
 
-const inputClass = "w-full rounded-md border border-slate-300 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-nnm-blue focus:ring-offset-1";
+const inputClass =
+  "w-full rounded-md border border-slate-300 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-nnm-blue focus:ring-offset-1";
 const PAYMENT_MODES: readonly string[] = FIELD_PAYMENT_MODES;
 
 /** Every property field worth showing the collector, in reading order. Aadhaar is masked to the last 4 digits. */
@@ -140,6 +149,7 @@ export default function TaxCollectorPage() {
 
   const [formOptions, setFormOptions] = useState<FormOptions | null>(null);
   const [swType, setSwType] = useState("");
+  const [swPhoto, setSwPhoto] = useState<File | null>(null);
   const [waterStatus, setWaterStatus] = useState<WaterConnectionStatus | "">("");
   const [waterCount, setWaterCount] = useState("");
   const [savingDetails, setSavingDetails] = useState(false);
@@ -147,7 +157,9 @@ export default function TaxCollectorPage() {
   const [detailsMsg, setDetailsMsg] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchFormOptions().then(setFormOptions).catch(() => undefined);
+    fetchFormOptions()
+      .then(setFormOptions)
+      .catch(() => undefined);
   }, []);
 
   async function reloadProperty(holdingNo: string) {
@@ -161,10 +173,13 @@ export default function TaxCollectorPage() {
     const p = result.property;
     const needSw = !!p.solidWasteTypeMissing && !swOpen;
     const needWater = !p.water_connection_status;
-    const input: { solidWasteChargeType?: string; waterConnectionStatus?: WaterConnectionStatus; waterConnectionCount?: number } = {};
+    const input: Parameters<typeof saveCollectorDetails>[1] = {};
     if (needSw) {
       if (!swType) return setError("Select the solid waste user type.");
+      if (!swPhoto) return setError("Take a photo of the facility for the Tax Daroga to verify the solid waste user type.");
       input.solidWasteChargeType = swType;
+      input.facilityPhotoBase64Data = await fileToBase64(swPhoto);
+      input.facilityPhotoMimeType = swPhoto.type;
     }
     if (needWater) {
       if (!waterStatus) return setError("Select the tap water connection status.");
@@ -179,7 +194,8 @@ export default function TaxCollectorPage() {
     setError(null);
     try {
       await saveCollectorDetails(p.holding_no, input);
-      setDetailsMsg("Details saved.");
+      setDetailsMsg(needSw ? "Details saved. The solid waste user type has gone to the Tax Daroga for approval." : "Details saved.");
+      setSwPhoto(null);
       await reloadProperty(p.holding_no);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not save these details.");
@@ -190,6 +206,7 @@ export default function TaxCollectorPage() {
 
   function resetForNewSearch() {
     setSwType("");
+    setSwPhoto(null);
     setSwRequest(null);
     setWaterStatus("");
     setWaterCount("");
@@ -218,8 +235,12 @@ export default function TaxCollectorPage() {
       await reportCollectionIssue(result.property.holding_no, issueType, issueNotes.trim() || undefined);
       setIssueSuccess(true);
       setIssueNotes("");
-      fetchCollectionIssuesForHolding(result.property.holding_no).then(setHoldingIssues).catch(() => undefined);
-      fetchMyCollectionIssues().then(setMyIssues).catch(() => undefined);
+      fetchCollectionIssuesForHolding(result.property.holding_no)
+        .then(setHoldingIssues)
+        .catch(() => undefined);
+      fetchMyCollectionIssues()
+        .then(setMyIssues)
+        .catch(() => undefined);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not submit this report.");
     } finally {
@@ -241,7 +262,9 @@ export default function TaxCollectorPage() {
       const res = await fetchPropertyForCollector(holdingNo);
       setResult(res);
       if (res.found) {
-        fetchLatestSolidWasteRequest(res.property!.holding_no).then(setSwRequest).catch(() => undefined);
+        fetchLatestSolidWasteRequest(res.property!.holding_no)
+          .then(setSwRequest)
+          .catch(() => undefined);
         fetchCollectionIssuesForHolding(res.property!.holding_no)
           .then(setHoldingIssues)
           .catch(() => setHoldingIssues([]));
@@ -347,12 +370,24 @@ export default function TaxCollectorPage() {
           <Receipt className="h-6 w-6" />
           Tax Collection
         </h1>
-        <p className="mb-6 text-sm text-slate-500">Search a holding number to view full details and pendency, collect tax, and issue a receipt.</p>
+        <p className="mb-6 text-sm text-slate-500">
+          Search a holding number to view full details and pendency, collect tax, and issue a receipt.
+        </p>
 
         <form onSubmit={handleSearch} className="mb-6 flex items-center gap-2 rounded-md border border-slate-300 bg-white px-3 py-2.5">
           <Search className="h-4 w-4 text-slate-400" />
-          <input value={holdingNoInput} onChange={(e) => setHoldingNoInput(sanitizeHoldingNoInput(e.target.value))} placeholder="Holding number" className="flex-1 text-sm outline-none" autoFocus />
-          <button type="submit" disabled={searching} className="rounded-md bg-nnm-blue px-3 py-1.5 text-xs font-semibold text-white hover:bg-nnm-blue-dark disabled:opacity-60">
+          <input
+            value={holdingNoInput}
+            onChange={(e) => setHoldingNoInput(sanitizeHoldingNoInput(e.target.value))}
+            placeholder="Holding number"
+            className="flex-1 text-sm outline-none"
+            autoFocus
+          />
+          <button
+            type="submit"
+            disabled={searching}
+            className="rounded-md bg-nnm-blue px-3 py-1.5 text-xs font-semibold text-white hover:bg-nnm-blue-dark disabled:opacity-60"
+          >
             {searching ? "Searching…" : "Search"}
           </button>
         </form>
@@ -403,23 +438,29 @@ export default function TaxCollectorPage() {
               </div>
             </div>
 
-            {((!!property.solidWasteTypeMissing && !swOpen) || !property.water_connection_status || (!!property.solidWasteTypeMissing && swOpen)) && (
+            {((!!property.solidWasteTypeMissing && !swOpen) ||
+              !property.water_connection_status ||
+              (!!property.solidWasteTypeMissing && swOpen)) && (
               <div className="rounded-xl border border-amber-300 bg-amber-50 p-5">
                 <h3 className="mb-1 text-sm font-semibold text-amber-900">Mandatory details - needed before collecting payment</h3>
                 <p className="mb-3 text-xs text-amber-800">These are missing for this holding. Please enter them from the field.</p>
                 {!!property.solidWasteTypeMissing && swOpen && swRequest && (
                   <p className="mb-3 rounded-md border border-amber-200 bg-white p-3 text-xs text-amber-900">
-                    Solid waste user type <b>{swRequest.requested_type}</b> submitted - waiting for the Tax Daroga&apos;s approval. Payment can be collected once it is approved.
+                    Solid waste user type <b>{swRequest.requested_type}</b> submitted - waiting for the Tax Daroga&apos;s approval. Payment
+                    can be collected once it is approved.
                   </p>
                 )}
                 {!!property.solidWasteTypeMissing && !swOpen && swRequest?.stage === "rejected" && (
                   <p className="mb-3 rounded-md border border-red-200 bg-white p-3 text-xs text-red-700">
-                    Earlier entry ({swRequest.requested_type}) was rejected by {swRequest.rejected_by}: {swRequest.reject_reason}. Please enter it again.
+                    Earlier entry ({swRequest.requested_type}) was rejected by {swRequest.rejected_by}: {swRequest.reject_reason}. Please
+                    enter it again.
                   </p>
                 )}
                 {!!property.solidWasteTypeMissing && !swOpen && (
                   <div className="mb-3">
-                    <label className="mb-1 block text-xs font-medium text-slate-700">Solid waste user type (needs the Tax Daroga&apos;s approval; amount is set automatically)</label>
+                    <label className="mb-1 block text-xs font-medium text-slate-700">
+                      Solid waste user type (needs the Tax Daroga&apos;s approval; amount is set automatically)
+                    </label>
                     <select value={swType} onChange={(e) => setSwType(e.target.value)} className={inputClass}>
                       <option value="">Select user type…</option>
                       {(formOptions?.solidWasteChargeTypes ?? []).map((t) => (
@@ -428,12 +469,30 @@ export default function TaxCollectorPage() {
                         </option>
                       ))}
                     </select>
+                    <label className="mb-1 mt-3 block text-xs font-medium text-slate-700">
+                      Photo of the facility (shop, house, hotel, etc.) - required, for the Tax Daroga to verify the type
+                    </label>
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png"
+                      capture="environment"
+                      onChange={async (e) => {
+                        const f = e.target.files?.[0];
+                        setSwPhoto(f ? await shrinkPhotoFile(f) : null);
+                      }}
+                      className="block w-full text-xs text-slate-700 file:mr-3 file:rounded-md file:border-0 file:bg-nnm-blue file:px-3 file:py-2 file:text-xs file:font-semibold file:text-white"
+                    />
+                    {swPhoto && <p className="mt-1 text-xs text-green-700">Photo attached: {swPhoto.name}</p>}
                   </div>
                 )}
                 {!property.water_connection_status && (
                   <div className="mb-3">
                     <label className="mb-1 block text-xs font-medium text-slate-700">Does the holding have a tap water connection?</label>
-                    <select value={waterStatus} onChange={(e) => setWaterStatus(e.target.value as WaterConnectionStatus | "")} className={inputClass}>
+                    <select
+                      value={waterStatus}
+                      onChange={(e) => setWaterStatus(e.target.value as WaterConnectionStatus | "")}
+                      className={inputClass}
+                    >
                       <option value="">Select…</option>
                       {(Object.keys(WATER_CONNECTION_LABELS) as WaterConnectionStatus[]).map((k) => (
                         <option key={k} value={k}>
@@ -455,9 +514,13 @@ export default function TaxCollectorPage() {
                 )}
                 {detailsMsg && <p className="mb-2 text-xs text-green-700">{detailsMsg}</p>}
                 {((!!property.solidWasteTypeMissing && !swOpen) || !property.water_connection_status) && (
-                <button onClick={handleSaveDetails} disabled={savingDetails} className="rounded-md bg-nnm-blue px-4 py-2 text-sm font-semibold text-white hover:bg-nnm-blue-dark disabled:opacity-60">
-                  {savingDetails ? "Saving…" : "Save details"}
-                </button>
+                  <button
+                    onClick={handleSaveDetails}
+                    disabled={savingDetails}
+                    className="rounded-md bg-nnm-blue px-4 py-2 text-sm font-semibold text-white hover:bg-nnm-blue-dark disabled:opacity-60"
+                  >
+                    {savingDetails ? "Saving…" : "Save details"}
+                  </button>
                 )}
               </div>
             )}
@@ -471,7 +534,11 @@ export default function TaxCollectorPage() {
               holdingNo={property.holding_no}
               documentStatus={docStatus}
               lastWaterStatus={(property.water_connection_status as string | null | undefined) ?? null}
-              onSaved={() => fetchHoldingDocumentStatus(property.holding_no).then(setDocStatus).catch(() => undefined)}
+              onSaved={() =>
+                fetchHoldingDocumentStatus(property.holding_no)
+                  .then(setDocStatus)
+                  .catch(() => undefined)
+              }
             />
 
             <div className="rounded-xl border border-slate-200 bg-white p-5">
@@ -517,7 +584,9 @@ export default function TaxCollectorPage() {
                 {!notices ? (
                   <p className="text-sm text-slate-400">Loading…</p>
                 ) : notices.length === 0 ? (
-                  <p className="text-sm text-slate-400">No demand notice generated yet for this holding - ask the operator to generate one before collecting.</p>
+                  <p className="text-sm text-slate-400">
+                    No demand notice generated yet for this holding - ask the operator to generate one before collecting.
+                  </p>
                 ) : (
                   <>
                     <div className="mb-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
@@ -537,8 +606,15 @@ export default function TaxCollectorPage() {
                       </select>
                       <InstrumentFields
                         paymentMode={paymentMode ?? ""}
-                        amountDemanded={notices.find((n) => n.demandNo === selectedDemandNo) ? Number(notices.find((n) => n.demandNo === selectedDemandNo)!.totalAmountDemanded) : null}
-                        value={instrument} onChange={setInstrument} inputClassName={inputClass} />
+                        amountDemanded={
+                          notices.find((n) => n.demandNo === selectedDemandNo)
+                            ? Number(notices.find((n) => n.demandNo === selectedDemandNo)!.totalAmountDemanded)
+                            : null
+                        }
+                        value={instrument}
+                        onChange={setInstrument}
+                        inputClassName={inputClass}
+                      />
                     </div>
                     {docStatus && !docStatus.collectionComplete && (
                       <p role="alert" className="mb-3 rounded-md border border-red-200 bg-red-50 p-3 text-xs text-red-800">
@@ -547,9 +623,17 @@ export default function TaxCollectorPage() {
                     )}
                     <button
                       onClick={handleCollectPayment}
-                      disabled={collecting || !!property.solidWasteTypeMissing || !property.water_connection_status || !docStatus?.collectionComplete || !!paymentHold}
+                      disabled={
+                        collecting ||
+                        !!property.solidWasteTypeMissing ||
+                        !property.water_connection_status ||
+                        !docStatus?.collectionComplete ||
+                        !!paymentHold
+                      }
                       title={
-                        property.solidWasteTypeMissing || !property.water_connection_status || !docStatus?.collectionComplete ? "Enter the mandatory details above first" : undefined
+                        property.solidWasteTypeMissing || !property.water_connection_status || !docStatus?.collectionComplete
+                          ? "Enter the mandatory details above first"
+                          : undefined
                       }
                       className="rounded-md bg-nnm-blue px-4 py-2 text-sm font-semibold text-white hover:bg-nnm-blue-dark disabled:opacity-60"
                     >
@@ -624,7 +708,10 @@ export default function TaxCollectorPage() {
                       >
                         {cancelSubmitting ? "Submitting…" : "Request Cancellation"}
                       </button>
-                      <button onClick={() => setRequestingCancel(false)} className="rounded-md border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50">
+                      <button
+                        onClick={() => setRequestingCancel(false)}
+                        className="rounded-md border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50"
+                      >
                         Cancel
                       </button>
                     </div>
@@ -643,8 +730,8 @@ export default function TaxCollectorPage() {
               <div>
                 <h3 className="text-sm font-semibold text-slate-800">Something doesn&apos;t match?</h3>
                 <p className="text-xs text-slate-500">
-                  If what you find on the ground looks different from these details, submit the corrected details here - it will go through Tax
-                  Surveyor, Tax Daroga, City Manager, and DMC review.
+                  If what you find on the ground looks different from these details, submit the corrected details here - it will go through
+                  Tax Surveyor, Tax Daroga, City Manager, and DMC review.
                 </p>
               </div>
             </Link>
@@ -707,9 +794,7 @@ export default function TaxCollectorPage() {
         >
           <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-150">
             <div className="flex items-center justify-between pb-3 border-b border-slate-200">
-              <h3 className="text-base font-semibold text-slate-900">
-                Confirm Property Tax Collection
-              </h3>
+              <h3 className="text-base font-semibold text-slate-900">Confirm Property Tax Collection</h3>
               <button
                 type="button"
                 onClick={() => !collecting && setShowConfirmModal(false)}
@@ -728,15 +813,11 @@ export default function TaxCollectorPage() {
             <div className="my-4 rounded-lg border border-slate-200 bg-slate-50 p-4 text-xs space-y-2.5">
               <div className="flex justify-between items-center">
                 <span className="text-slate-500">Holding No.:</span>
-                <span className="font-mono font-medium text-slate-900">
-                  {result.property.holding_no}
-                </span>
+                <span className="font-mono font-medium text-slate-900">{result.property.holding_no}</span>
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-slate-500">Owner Name:</span>
-                <span className="font-medium text-slate-900 text-right">
-                  {String(result.property.owner_name || "-")}
-                </span>
+                <span className="font-medium text-slate-900 text-right">{String(result.property.owner_name || "-")}</span>
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-slate-500">Demand Notice:</span>
@@ -753,16 +834,12 @@ export default function TaxCollectorPage() {
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-slate-500">Payment Mode:</span>
-                <span className="font-medium text-slate-900">
-                  {paymentMode}
-                </span>
+                <span className="font-medium text-slate-900">{paymentMode}</span>
               </div>
               {instrument.instrumentNo && (
                 <div className="flex justify-between items-center">
                   <span className="text-slate-500">Instrument No.:</span>
-                  <span className="font-mono font-medium text-slate-900">
-                    {instrument.instrumentNo}
-                  </span>
+                  <span className="font-mono font-medium text-slate-900">{instrument.instrumentNo}</span>
                 </div>
               )}
               {(instrument.bankChoice || instrument.otherBank) && (
@@ -774,9 +851,7 @@ export default function TaxCollectorPage() {
                 </div>
               )}
               <div className="border-t border-slate-200 pt-2.5 flex justify-between items-baseline">
-                <span className="text-xs font-semibold uppercase tracking-wider text-teal-700">
-                  Final Amount:
-                </span>
+                <span className="text-xs font-semibold uppercase tracking-wider text-teal-700">Final Amount:</span>
                 <span className="font-mono text-lg font-bold text-nnm-blue">
                   ₹{Number(notices?.find((n) => n.demandNo === selectedDemandNo)?.totalAmountDemanded ?? 0).toLocaleString("en-IN")}
                 </span>

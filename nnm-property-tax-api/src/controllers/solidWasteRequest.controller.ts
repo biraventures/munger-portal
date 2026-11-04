@@ -1,8 +1,12 @@
 import type { Request, Response } from "express";
 import { z } from "zod";
 import { holdingNoSchema } from "../utils/holdingNoSchema";
+import fs from "node:fs";
+import path from "node:path";
+import { env } from "../config/env";
 import {
   approveSolidWasteRequest,
+  findSolidWasteRequest,
   latestSolidWasteRequest,
   listSolidWasteRequestsFor,
   rejectSolidWasteRequest,
@@ -38,4 +42,15 @@ export const postRejectSolidWasteRequest = asyncHandler(async (req: Request, res
   if (!b.success) throw ApiError.badRequest("A reason is required.");
   await rejectSolidWasteRequest(p.data.id, req.admin, b.data.reason);
   res.status(200).json({ ok: true });
+});
+
+/** GET /api/v1/admin/solid-waste-requests/:id/photo - the facility photo the Tax Collector attached. */
+export const getSolidWasteRequestPhoto = asyncHandler(async (req: Request, res: Response) => {
+  const p = idSchema.safeParse(req.params);
+  if (!p.success) throw ApiError.badRequest("Invalid request.");
+  const r = await findSolidWasteRequest(p.data.id);
+  if (!r?.facility_photo_path) throw ApiError.notFound("No facility photo was attached to this request.");
+  const fullPath = path.join(env.PHOTO_UPLOAD_DIR, r.facility_photo_path);
+  if (!fs.existsSync(fullPath)) throw ApiError.notFound("Photo file is missing from storage.");
+  res.sendFile(path.resolve(fullPath));
 });

@@ -9,7 +9,13 @@ import { holdingNoSchema } from "../utils/holdingNoSchema";
 import { recordFieldVerification, listFieldVerificationsForHolding } from "../services/propertyFieldVerification.service";
 import { propertyFieldVerificationRepository } from "../repositories/propertyFieldVerification.repository";
 import { asyncHandler } from "../middleware/asyncHandler";
-import { COLLECTION_DOCUMENT_KEYS, getHoldingDocumentStatus, HOLDING_DOCUMENT_LABELS, isValidAadhaar, type HoldingDocumentKey } from "../services/holdingDocuments.service";
+import {
+  COLLECTION_DOCUMENT_KEYS,
+  getHoldingDocumentStatus,
+  HOLDING_DOCUMENT_LABELS,
+  isValidAadhaar,
+  type HoldingDocumentKey,
+} from "../services/holdingDocuments.service";
 import { ApiError } from "../utils/ApiError";
 
 const holdingNoParamSchema = z.object({ holdingNo: holdingNoSchema });
@@ -34,6 +40,8 @@ const fieldVerificationSchema = z.object({
   landDocumentPhotoMimeType: z.string().min(1).optional(),
   registerPhotoBase64Data: z.string().min(1).optional(),
   registerPhotoMimeType: z.string().min(1).optional(),
+  // The original owner has died: no Aadhaar number can be collected for this holding.
+  ownerDeceased: z.boolean().optional(),
   // Required from a Tax Collector (checked below); optional for the Tax Surveyor.
   waterConnectionStatus: waterStatusFields.waterConnectionStatus.optional(),
   waterConnectionCount: waterStatusFields.waterConnectionCount,
@@ -55,8 +63,10 @@ export const postRecordFieldVerification = asyncHandler(async (req: Request, res
   }
 
   const b = bodyParsed.data;
-  if (b.aadhaarNumber && !isValidAadhaar(b.aadhaarNumber)) throw ApiError.badRequest("This is not a valid Aadhaar number - please check it.");
-  if (req.admin.role === "tax_collector" && !b.waterConnectionStatus) throw ApiError.badRequest("Select the holding's water supply status.");
+  if (b.aadhaarNumber && !isValidAadhaar(b.aadhaarNumber))
+    throw ApiError.badRequest("This is not a valid Aadhaar number - please check it.");
+  if (req.admin.role === "tax_collector" && !b.waterConnectionStatus)
+    throw ApiError.badRequest("Select the holding's water supply status.");
   const countError = checkWaterCount(b);
   if (countError) throw ApiError.badRequest(countError);
   // A Tax Collector must collect all five documents: together with what is already on file, nothing may be missing.
@@ -64,7 +74,7 @@ export const postRecordFieldVerification = asyncHandler(async (req: Request, res
     const status = await getHoldingDocumentStatus(paramsParsed.data.holdingNo);
     const given: Record<HoldingDocumentKey, boolean> = {
       gps: b.gpsLat != null && b.gpsLng != null,
-      aadhaar: !!b.aadhaarNumber,
+      aadhaar: !!b.aadhaarNumber || !!b.ownerDeceased,
       holdingPhoto: !!b.holdingPhotoBase64Data,
       previousReceipt: !!b.previousReceiptPhotoBase64Data,
       landDocument: !!b.landDocumentPhotoBase64Data,
@@ -92,6 +102,7 @@ export const postRecordFieldVerification = asyncHandler(async (req: Request, res
     registerPhotoMimeType: bodyParsed.data.registerPhotoMimeType,
     waterConnectionStatus: b.waterConnectionStatus ?? null,
     waterConnectionCount: b.waterConnectionStatus === "multiple" ? (b.waterConnectionCount ?? null) : null,
+    ownerDeceased: !!b.ownerDeceased,
   });
   res.status(200).json({ record });
 });
@@ -111,7 +122,10 @@ export const listFieldVerifications = asyncHandler(async (req: Request, res: Res
   res.status(200).json({ records: records.map((r) => ({ ...r, aadhaar_number: maskAadhaar(r.aadhaar_number) })) });
 });
 
-const photoKindParamSchema = z.object({ id: z.coerce.number().int().positive(), kind: z.enum(["holding", "aadhaar", "receipt", "landdoc", "register"]) });
+const photoKindParamSchema = z.object({
+  id: z.coerce.number().int().positive(),
+  kind: z.enum(["holding", "aadhaar", "receipt", "landdoc", "register"]),
+});
 const PHOTO_KIND_FIELD: Record<
   "holding" | "aadhaar" | "receipt" | "landdoc" | "register",
   "holding_photo_path" | "aadhaar_photo_path" | "previous_receipt_photo_path" | "land_document_photo_path" | "register_photo_path"

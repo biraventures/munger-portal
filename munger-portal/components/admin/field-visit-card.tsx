@@ -28,6 +28,8 @@ export interface FieldVisit extends FieldVerificationPhotoFlags {
   aadhaar_number?: string | null;
   water_connection_status?: string | null;
   water_connection_count?: number | null;
+  /** Recorded on this visit: the original owner has died (Aadhaar not required). */
+  owner_deceased?: boolean;
 }
 
 const when = (v: string) =>
@@ -77,6 +79,9 @@ export function FieldVisitCard({ visit, viewerRole }: { visit: FieldVisit; viewe
       )}
       {visit.water_connection_status && (
         <p className="mt-1 text-slate-600">Water supply: {waterStatusLabel(visit.water_connection_status, visit.water_connection_count)}</p>
+      )}
+      {visit.owner_deceased && (
+        <p className="mt-1 font-semibold text-amber-800">Original owner recorded as deceased - Aadhaar not required for this holding.</p>
       )}
       {visit.aadhaar_number && (
         <p className="mt-1 flex flex-wrap items-center gap-2 text-slate-600">

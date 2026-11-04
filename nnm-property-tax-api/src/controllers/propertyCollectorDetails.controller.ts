@@ -3,7 +3,7 @@ import { z } from "zod";
 import { holdingNoSchema } from "../utils/holdingNoSchema";
 import { propertyRepository } from "../repositories/property.repository";
 import { isSolidWasteTypeMissing } from "../services/property.service";
-import { submitSolidWasteRequest } from "../services/solidWasteRequest.service";
+import { latestSolidWasteRequest, saveFacilityPhoto, submitSolidWasteRequest } from "../services/solidWasteRequest.service";
 import { SOLID_WASTE_RATE } from "../constants/taxRates";
 import { asyncHandler } from "../middleware/asyncHandler";
 import { ApiError } from "../utils/ApiError";
@@ -13,6 +13,9 @@ const bodySchema = z
     solidWasteChargeType: z.string().trim().optional(),
     waterConnectionStatus: z.enum(["multiple", "single_wtp", "single_submersible", "connected_no_water", "none"]).optional(),
     waterConnectionCount: z.number().int().min(2).max(500).optional(),
+    // A photo of the facility, required with a proposed solid waste user type (for the Tax Daroga's decision).
+    facilityPhotoBase64Data: z.string().min(1).optional(),
+    facilityPhotoMimeType: z.string().min(1).optional(),
   })
   .refine((d) => d.waterConnectionStatus !== "multiple" || d.waterConnectionCount !== undefined, {
     message: "Enter the number of connections (2 or more).",
@@ -41,9 +44,12 @@ export const putCollectorDetails = asyncHandler(async (req: Request, res: Respon
   if (d.solidWasteChargeType !== undefined && !isSolidWasteTypeMissing(property)) {
     throw ApiError.badRequest("This holding already has a solid waste user type on record.");
   }
+  if (d.solidWasteChargeType !== undefined && (!d.facilityPhotoBase64Data || !d.facilityPhotoMimeType)) {
+    throw ApiError.badRequest("Attach a photo of the facility with the solid waste user type, so the Tax Daroga can verify it.");
+  }
 
   // The water-connection answer is saved straight away. A solid waste user type is only
-  // PROPOSED - it waits for Tax Daroga verification and City Manager approval.
+  // PROPOSED - it waits for the Tax Daroga's approval, which applies it to the holding and its demand notice.
   if (d.waterConnectionStatus !== undefined) {
     await propertyRepository.updateCollectorDetails(params.data.holdingNo, {
       waterConnectionStatus: d.waterConnectionStatus,
@@ -55,7 +61,12 @@ export const putCollectorDetails = asyncHandler(async (req: Request, res: Respon
   }
   let solidWasteRequestId: number | null = null;
   if (d.solidWasteChargeType !== undefined) {
-    const request = await submitSolidWasteRequest(params.data.holdingNo, d.solidWasteChargeType, req.admin);
+    const open = await latestSolidWasteRequest(params.data.holdingNo);
+    if (open && (open.stage === "tax_daroga" || open.stage === "city_manager")) {
+      throw ApiError.badRequest("A solid waste user type for this holding is already waiting for approval.");
+    }
+    const photoPath = await saveFacilityPhoto(params.data.holdingNo, d.facilityPhotoBase64Data!, d.facilityPhotoMimeType!);
+    const request = await submitSolidWasteRequest(params.data.holdingNo, d.solidWasteChargeType, req.admin, photoPath);
     solidWasteRequestId = request.id;
   }
   res.status(200).json({ ok: true, solidWasteRequestId });

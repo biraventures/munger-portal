@@ -7,6 +7,31 @@ import { adminRepository } from "../repositories/admin.repository";
 import { annualSolidWasteCharge } from "./charges.service";
 import { SOLID_WASTE_RATE } from "../constants/taxRates";
 import { ApiError } from "../utils/ApiError";
+import fs from "node:fs";
+import path from "node:path";
+import { env } from "../config/env";
+import { MAX_PHOTO_BYTES, uploadLimitMessage } from "../utils/uploadLimits";
+
+const PHOTO_EXT: Record<string, string> = { "image/jpeg": "jpg", "image/jpg": "jpg", "image/png": "png" };
+
+/** Saves the facility photo that goes with a proposed solid waste user type; returns its path under PHOTO_UPLOAD_DIR. */
+export async function saveFacilityPhoto(holdingNo: string, base64Data: string, mimeType: string): Promise<string> {
+  const ext = PHOTO_EXT[mimeType];
+  if (!ext) throw ApiError.badRequest("Only JPEG or PNG photos are accepted.");
+  const buffer = Buffer.from(base64Data, "base64");
+  if (buffer.length === 0) throw ApiError.badRequest("The facility photo is empty.");
+  if (buffer.length > MAX_PHOTO_BYTES) throw ApiError.badRequest(uploadLimitMessage("image/jpeg", buffer.length));
+  const relativePath = path.join("solid-waste-facility-photos", `${holdingNo.replace(/[^\w.-]/g, "_")}-${Date.now()}.${ext}`);
+  const fullPath = path.join(env.PHOTO_UPLOAD_DIR, relativePath);
+  await fs.promises.mkdir(path.dirname(fullPath), { recursive: true });
+  await fs.promises.writeFile(fullPath, buffer);
+  return relativePath;
+}
+
+export async function findSolidWasteRequest(id: number): Promise<SolidWasteRequestRow | null> {
+  const { rows } = await pool.query<SolidWasteRequestRow>(`SELECT * FROM solid_waste_type_requests WHERE id = $1`, [id]);
+  return rows[0] ?? null;
+}
 
 export interface SolidWasteRequestRow {
   id: number;
@@ -24,6 +49,7 @@ export interface SolidWasteRequestRow {
   rejected_by: string | null;
   rejected_at: Date | null;
   reject_reason: string | null;
+  facility_photo_path: string | null;
 }
 
 interface Actor {
@@ -32,15 +58,23 @@ interface Actor {
   role: string;
 }
 
-/** A Tax Collector proposes a solid waste user type; the Tax Daroga approves (final) or rejects it. */
-export async function submitSolidWasteRequest(holdingNo: string, type: string, collector: Actor): Promise<SolidWasteRequestRow> {
+/**
+ * A Tax Collector proposes a solid waste user type, with a photo of the facility; the Tax Daroga approves (final) or
+ * rejects it.
+ */
+export async function submitSolidWasteRequest(
+  holdingNo: string,
+  type: string,
+  collector: Actor,
+  facilityPhotoPath: string,
+): Promise<SolidWasteRequestRow> {
   if (SOLID_WASTE_RATE[type] === undefined) throw ApiError.badRequest("Unknown solid waste user type.");
   const me = await adminRepository.findByUsername(collector.username);
   try {
     const { rows } = await pool.query<SolidWasteRequestRow>(
-      `INSERT INTO solid_waste_type_requests (holding_no, requested_type, requested_by_username, requested_by_display_name, assigned_city_manager_username)
-       VALUES ($1,$2,$3,$4,$5) RETURNING *`,
-      [holdingNo, type, collector.username, collector.displayName, me?.assigned_city_manager_username ?? null],
+      `INSERT INTO solid_waste_type_requests (holding_no, requested_type, requested_by_username, requested_by_display_name, assigned_city_manager_username, facility_photo_path)
+       VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
+      [holdingNo, type, collector.username, collector.displayName, me?.assigned_city_manager_username ?? null, facilityPhotoPath],
     );
     return rows[0]!;
   } catch (err) {
@@ -173,7 +207,9 @@ export async function rejectSolidWasteRequest(id: number, admin: Actor, reason: 
   const allowed =
     (r.stage === "tax_daroga" && admin.role === "tax_daroga") ||
     (r.stage === "city_manager" && admin.role === "tax_daroga") ||
-    (r.stage === "city_manager" && admin.role === "city_manager" && (!r.assigned_city_manager_username || r.assigned_city_manager_username === admin.username));
+    (r.stage === "city_manager" &&
+      admin.role === "city_manager" &&
+      (!r.assigned_city_manager_username || r.assigned_city_manager_username === admin.username));
   if (!allowed) throw new ApiError(403, "You cannot reject this request at its current stage.");
   const res = await pool.query(
     `UPDATE solid_waste_type_requests SET stage = 'rejected', rejected_by = $2, rejected_at = now(), reject_reason = $3

@@ -7,10 +7,21 @@ import { AdminHeader } from "@/components/admin-header";
 import { useAdminGuard } from "@/lib/use-admin-guard";
 import { fetchDiscrepancyRequestDetail, resubmitDiscrepancyRequest } from "@/lib/admin-api";
 import { fetchFormOptions, type FormOptions } from "@/lib/operator-api";
-import { AdminPropertyDetailsForm, propertyFormFromProposedData, propertyFormToPayload, type AdminPropertyFormState } from "@/components/admin/property-details-form";
-import { DiscrepancyCaptureSection, blankCaptureState, fileToBase64, type CaptureState } from "@/components/admin/discrepancy-capture-section";
+import {
+  AdminPropertyDetailsForm,
+  propertyFormFromProposedData,
+  propertyFormToPayload,
+  type AdminPropertyFormState,
+} from "@/components/admin/property-details-form";
+import {
+  DiscrepancyCaptureSection,
+  blankCaptureState,
+  fileToBase64,
+  type CaptureState,
+} from "@/components/admin/discrepancy-capture-section";
 
-const inputClass = "w-full rounded-md border border-slate-300 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-nnm-blue focus:ring-offset-1";
+const inputClass =
+  "w-full rounded-md border border-slate-300 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-nnm-blue focus:ring-offset-1";
 
 export default function ResubmitDiscrepancyPage() {
   const admin = useAdminGuard();
@@ -30,7 +41,9 @@ export default function ResubmitDiscrepancyPage() {
 
   useEffect(() => {
     if (!admin || !id) return;
-    fetchFormOptions().then(setFormOptions).catch(() => setFormOptions(null));
+    fetchFormOptions()
+      .then(setFormOptions)
+      .catch(() => setFormOptions(null));
     fetchDiscrepancyRequestDetail(id)
       .then(({ request }) => {
         if (request.status !== "reverted") {
@@ -50,8 +63,8 @@ export default function ResubmitDiscrepancyPage() {
       setSubmitError("Describe what you found that doesn't match the records.");
       return;
     }
-    if (!form.aadhaarNumber.trim()) {
-      setSubmitError("The holding owner's Aadhaar number is required.");
+    if (!form.aadhaarNumber.trim() && !form.ownerDeceased) {
+      setSubmitError("The holding owner's Aadhaar number is required (or tick that the original owner has died).");
       return;
     }
     setSubmitting(true);
@@ -110,7 +123,8 @@ export default function ResubmitDiscrepancyPage() {
           Correct &amp; Resubmit
         </h1>
         <p className="mb-6 text-sm text-slate-500">
-          {holdingNo ? `Holding ${holdingNo}` : "Loading…"} - correct what needed fixing and resubmit; it re-enters review from the Tax Surveyor.
+          {holdingNo ? `Holding ${holdingNo}` : "Loading…"} - correct what needed fixing and resubmit; it re-enters review from the Tax
+          Surveyor.
         </p>
 
         {revertComment && (
@@ -145,11 +159,18 @@ export default function ResubmitDiscrepancyPage() {
 
             <div className="rounded-xl border border-slate-200 bg-white p-6">
               <h2 className="mb-4 text-sm font-semibold text-slate-800">Corrected details</h2>
-              <AdminPropertyDetailsForm form={form} onChange={setForm} usageTypes={formOptions?.usageTypes ?? []} solidWasteChargeTypes={formOptions?.solidWasteChargeTypes ?? []} />
+              <AdminPropertyDetailsForm
+                form={form}
+                onChange={setForm}
+                usageTypes={formOptions?.usageTypes ?? []}
+                solidWasteChargeTypes={formOptions?.solidWasteChargeTypes ?? []}
+              />
             </div>
 
             <DiscrepancyCaptureSection state={capture} onChange={setCapture} />
-            <p className="-mt-4 text-xs text-slate-400">Leaving a photo slot empty on resubmission keeps the one already on file from your original report.</p>
+            <p className="-mt-4 text-xs text-slate-400">
+              Leaving a photo slot empty on resubmission keeps the one already on file from your original report.
+            </p>
 
             {submitError && (
               <div role="alert" className="flex items-center gap-2 rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-700">

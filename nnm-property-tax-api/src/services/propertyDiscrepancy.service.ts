@@ -27,7 +27,12 @@ const ALLOWED_PHOTO_MIME_TO_EXT: Record<string, string> = {
 };
 
 /** Saves a photo to PHOTO_UPLOAD_DIR (same shared storage as the Jamadar daily-photo flow), returns the relative path to store. Returns null when no photo was given. `kind` (holding/receipt/aadhaar) keeps the three photos on one request distinct on disk. */
-async function saveDiscrepancyPhoto(holdingNo: string, kind: string, base64Data: string | undefined, mimeType: string | undefined): Promise<string | null> {
+async function saveDiscrepancyPhoto(
+  holdingNo: string,
+  kind: string,
+  base64Data: string | undefined,
+  mimeType: string | undefined,
+): Promise<string | null> {
   if (!base64Data || !mimeType) return null;
   const ext = ALLOWED_PHOTO_MIME_TO_EXT[mimeType];
   if (!ext) throw ApiError.badRequest("Only JPEG or PNG photos are accepted.");
@@ -57,7 +62,12 @@ export interface DiscrepancyPhotoInputs {
 async function saveAllDiscrepancyPhotos(holdingNo: string, photos: DiscrepancyPhotoInputs) {
   return {
     photoPath: await saveDiscrepancyPhoto(holdingNo, "holding", photos.photoBase64Data, photos.photoMimeType),
-    previousReceiptPhotoPath: await saveDiscrepancyPhoto(holdingNo, "receipt", photos.previousReceiptPhotoBase64Data, photos.previousReceiptPhotoMimeType),
+    previousReceiptPhotoPath: await saveDiscrepancyPhoto(
+      holdingNo,
+      "receipt",
+      photos.previousReceiptPhotoBase64Data,
+      photos.previousReceiptPhotoMimeType,
+    ),
     aadhaarPhotoPath: await saveDiscrepancyPhoto(holdingNo, "aadhaar", photos.aadhaarPhotoBase64Data, photos.aadhaarPhotoMimeType),
   };
 }
@@ -80,7 +90,9 @@ export async function reportPropertyDiscrepancy(
 ): Promise<PropertyDiscrepancyRequestRow> {
   const property = await propertyRepository.findByHoldingNo(holdingNo);
   if (!property) throw ApiError.notFound("Holding not found.");
-  if (!proposedData.aadhaarNumber?.trim()) throw ApiError.badRequest("The holding owner's Aadhaar number is required.");
+  if (!proposedData.aadhaarNumber?.trim() && !proposedData.ownerDeceased) {
+    throw ApiError.badRequest("The holding owner's Aadhaar number is required (or tick that the original owner has died).");
+  }
 
   const existingPending = await propertyDiscrepancyRepository.findPendingForHolding(holdingNo);
   if (existingPending) throw ApiError.badRequest("This holding already has a discrepancy report pending review.");
@@ -165,7 +177,15 @@ export async function approveDiscrepancyAtCurrentStage(
   const dataForwarded = editedData ?? request.proposed_data;
   const decision = editedData ? "edited_and_forwarded" : "approved";
 
-  await propertyDiscrepancyRepository.recordApprovalLogEntry(id, request.current_stage, decision, admin.username, admin.displayName, notes ?? null, dataForwarded);
+  await propertyDiscrepancyRepository.recordApprovalLogEntry(
+    id,
+    request.current_stage,
+    decision,
+    admin.username,
+    admin.displayName,
+    notes ?? null,
+    dataForwarded,
+  );
 
   const atFinalStage = request.current_stage === FINAL_STAGE;
 
@@ -202,7 +222,12 @@ export async function approveDiscrepancyAtCurrentStage(
   // move it to a fresh MNN- number, exactly as the older survey workflow
   // does on its final approval.
   if (request.holding_no.startsWith(MIGRATED_HOLDING_NO_PREFIX)) {
-    const survey = await migratedHoldingSurveyRepository.finalizeViaCollectorChain(request.holding_no, admin.username, admin.displayName, request.reported_by_display_name);
+    const survey = await migratedHoldingSurveyRepository.finalizeViaCollectorChain(
+      request.holding_no,
+      admin.username,
+      admin.displayName,
+      request.reported_by_display_name,
+    );
     if (survey) {
       const newHoldingNo = await getNextFinalizedMigratedHoldingNo();
       await renameHoldingTo(request.holding_no, newHoldingNo, admin.displayName);
@@ -214,12 +239,24 @@ export async function approveDiscrepancyAtCurrentStage(
 }
 
 /** Rejecting at any stage stops the chain - it does not move on, and nothing is applied. */
-export async function rejectDiscrepancyAtCurrentStage(id: number, admin: AdminTokenPayload, notes: string): Promise<PropertyDiscrepancyRequestRow> {
+export async function rejectDiscrepancyAtCurrentStage(
+  id: number,
+  admin: AdminTokenPayload,
+  notes: string,
+): Promise<PropertyDiscrepancyRequestRow> {
   const request = await propertyDiscrepancyRepository.findById(id);
   if (!request) throw ApiError.notFound("Discrepancy request not found");
   assertActionable(request, admin);
 
-  await propertyDiscrepancyRepository.recordApprovalLogEntry(id, request.current_stage, "rejected", admin.username, admin.displayName, notes, request.proposed_data);
+  await propertyDiscrepancyRepository.recordApprovalLogEntry(
+    id,
+    request.current_stage,
+    "rejected",
+    admin.username,
+    admin.displayName,
+    notes,
+    request.proposed_data,
+  );
 
   const finalized = await propertyDiscrepancyRepository.finalize(id, request.current_stage, "rejected");
   if (!finalized) {
@@ -237,13 +274,25 @@ export async function rejectDiscrepancyAtCurrentStage(id: number, admin: AdminTo
  * in the unified entry_revert_events table (Commissioner's
  * cross-workflow revert log).
  */
-export async function revertDiscrepancyToCollector(id: number, admin: AdminTokenPayload, comment: string): Promise<PropertyDiscrepancyRequestRow> {
+export async function revertDiscrepancyToCollector(
+  id: number,
+  admin: AdminTokenPayload,
+  comment: string,
+): Promise<PropertyDiscrepancyRequestRow> {
   const request = await propertyDiscrepancyRepository.findById(id);
   if (!request) throw ApiError.notFound("Discrepancy request not found");
   assertActionable(request, admin);
   if (!comment.trim()) throw ApiError.badRequest("A comment is required explaining what needs to be corrected.");
 
-  await propertyDiscrepancyRepository.recordApprovalLogEntry(id, request.current_stage, "reverted", admin.username, admin.displayName, comment.trim(), request.proposed_data);
+  await propertyDiscrepancyRepository.recordApprovalLogEntry(
+    id,
+    request.current_stage,
+    "reverted",
+    admin.username,
+    admin.displayName,
+    comment.trim(),
+    request.proposed_data,
+  );
 
   const reverted = await propertyDiscrepancyRepository.revert(id, request.current_stage, admin.displayName, admin.role, comment.trim());
   if (!reverted) throw ApiError.badRequest("This request moved on before it could be reverted - please refresh.");
@@ -279,8 +328,11 @@ export async function resubmitDiscrepancyAfterRevert(
   const request = await propertyDiscrepancyRepository.findById(id);
   if (!request) throw ApiError.notFound("Discrepancy request not found");
   if (request.status !== "reverted") throw ApiError.badRequest("This request isn't currently awaiting correction.");
-  if (request.reported_by_username !== admin.username) throw new ApiError(403, "Only the Tax Collector who originally reported this can resubmit it.");
-  if (!proposedData.aadhaarNumber?.trim()) throw ApiError.badRequest("The holding owner's Aadhaar number is required.");
+  if (request.reported_by_username !== admin.username)
+    throw new ApiError(403, "Only the Tax Collector who originally reported this can resubmit it.");
+  if (!proposedData.aadhaarNumber?.trim() && !proposedData.ownerDeceased) {
+    throw ApiError.badRequest("The holding owner's Aadhaar number is required (or tick that the original owner has died).");
+  }
 
   // A photo not re-attached on resubmission keeps whatever was on file from the original submission.
   const savedPhotos = await saveAllDiscrepancyPhotos(request.holding_no, photos);
@@ -299,7 +351,15 @@ export async function resubmitDiscrepancyAfterRevert(
   });
   if (!resubmitted) throw ApiError.badRequest("This request is no longer awaiting correction.");
 
-  await propertyDiscrepancyRepository.recordApprovalLogEntry(id, "tax_collector", "submitted", admin.username, admin.displayName, discrepancyNotes.trim(), proposedData);
+  await propertyDiscrepancyRepository.recordApprovalLogEntry(
+    id,
+    "tax_collector",
+    "submitted",
+    admin.username,
+    admin.displayName,
+    discrepancyNotes.trim(),
+    proposedData,
+  );
   await entryRevertEventRepository.markResubmitted("property_discrepancy", id);
 
   return resubmitted;
