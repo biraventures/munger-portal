@@ -308,7 +308,7 @@ export default function TaxCollectorPage() {
     setCollecting(true);
     setError(null);
     try {
-      alert(paymentMode);
+      alert(`${intentSuccess} intentSuccess`);
       if ((paymentMode === 'Card' || paymentMode === 'UPI') && !intentSuccess) {
         updateUrl({
           amount: Number(selected.totalAmountDemanded),
@@ -375,12 +375,17 @@ export default function TaxCollectorPage() {
   const floors = result?.floors ?? [];
 
   const handleIntentResponse = async (data: IntentResponse) => {
+    alert("1");
     if (data.ok && data.statusCode === '00') {
+      alert("2");
       const { receiptData } = data;
+      alert("3");
       receiptData.demandNo = String(selectedDemandNo)
+      alert("4");
       setIntentReceipt(receiptData);
-      alert("Payment successful! You can now proceed to collect the payment and issue the slip.");
+      alert("5");
       await executeCollectPayment(true)
+      alert("6");
       cleanQueryParams()
     } else {
       console.warn(data.statusMsg);
