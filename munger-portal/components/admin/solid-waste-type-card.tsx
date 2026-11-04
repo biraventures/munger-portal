@@ -2,9 +2,8 @@
 
 import { useState } from "react";
 import { CheckCircle2, Clock, Recycle } from "lucide-react";
-import { fileToBase64 } from "@/components/admin/discrepancy-capture-section";
 import { saveCollectorDetails, type SolidWasteRequest } from "@/lib/admin-api";
-import { shrinkPhotoFile } from "@/lib/upload-limits";
+import { LiveCameraCapture, type CapturedPhoto } from "@/components/admin/live-camera-capture";
 
 const inputClass =
   "w-full rounded-md border border-slate-300 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-nnm-blue focus:ring-offset-1";
@@ -35,7 +34,7 @@ export function SolidWasteTypeCard({
 }) {
   const [changing, setChanging] = useState(false);
   const [type, setType] = useState("");
-  const [photo, setPhoto] = useState<File | null>(null);
+  const [photo, setPhoto] = useState<CapturedPhoto | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
@@ -51,8 +50,8 @@ export function SolidWasteTypeCard({
     try {
       await saveCollectorDetails(holdingNo, {
         solidWasteChargeType: type,
-        facilityPhotoBase64Data: await fileToBase64(photo),
-        facilityPhotoMimeType: photo.type,
+        facilityPhotoBase64Data: photo.base64,
+        facilityPhotoMimeType: photo.mimeType,
       });
       setDone(`"${type}" sent to the Tax Daroga for approval.`);
       setType("");
@@ -128,20 +127,11 @@ export function SolidWasteTypeCard({
               ))}
             </select>
           </label>
-          <label className="block text-xs font-medium text-slate-700">
-            Photo of the facility (shop, house, hotel, etc.) - required
-            <input
-              type="file"
-              accept="image/jpeg,image/png"
-              capture="environment"
-              onChange={async (e) => {
-                const f = e.target.files?.[0];
-                setPhoto(f ? await shrinkPhotoFile(f) : null);
-              }}
-              className="mt-1 block w-full text-xs text-slate-700 file:mr-3 file:rounded-md file:border-0 file:bg-nnm-blue file:px-3 file:py-2 file:text-xs file:font-semibold file:text-white"
-            />
-          </label>
-          {photo && <p className="text-xs text-green-700">Photo attached: {photo.name}</p>}
+          <LiveCameraCapture
+            label="Photo of the facility (shop, house, hotel, etc.) - taken with the camera at the holding"
+            photo={photo}
+            onChange={setPhoto}
+          />
           {error && (
             <p role="alert" className="text-xs text-red-600">
               {error}
