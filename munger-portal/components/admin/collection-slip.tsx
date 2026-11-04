@@ -33,7 +33,7 @@ export function CollectionSlip({ receipt, intentReceipt }: { receipt: ReceiptDat
   useEffect(() => {
     if (intentReceipt) {
       const intentPrintHandler = () => {
-        setIntentSuccessResult(JSON.stringify(receipt.verificationUrl));
+        setIntentSuccessResult(JSON.stringify(receipt));
       }
       intentPrintHandler()
     }
@@ -44,7 +44,7 @@ export function CollectionSlip({ receipt, intentReceipt }: { receipt: ReceiptDat
       <input
         type="text"
         id="intent_success"
-        style={{ display: "none" }}
+        // style={{ display: "none" }}
         value={intentSuccessResult ? JSON.stringify(intentSuccessResult, null, 2) : ""}
       />
       <button
