@@ -5,7 +5,7 @@ import { withEffectivePaidTill } from "./paidYearGuard.service";
 import { demandNoticeRepository } from "../repositories/demandNotice.repository";
 import { calculateTax } from "./taxCalculation.service";
 import { calculateRebateOrLateFee, calculateSolidWasteCharge } from "./charges.service";
-import { summarizeArrears } from "./arrears.service";
+import { assertNoMissingTaxYears, summarizeArrears } from "./arrears.service";
 import { parseYearStartOrNull } from "../utils/assessmentYear";
 import { num } from "../utils/num";
 import { SOLID_WASTE_RATE } from "../constants/taxRates";
@@ -70,8 +70,7 @@ export async function searchPropertyByHoldingNo(holdingNoRaw: string): Promise<P
   const arrears = summarizeArrears(property, taxHistory);
 
   const taxPaidTillYearNum = parseYearStartOrNull(property.tax_paid_till_year);
-  const currentCyclePaid =
-    currentYearStartNum !== null && taxPaidTillYearNum !== null && taxPaidTillYearNum >= currentYearStartNum;
+  const currentCyclePaid = currentYearStartNum !== null && taxPaidTillYearNum !== null && taxPaidTillYearNum >= currentYearStartNum;
 
   const currentCycleOtherCharges =
     solidWasteChargeNum +
@@ -82,14 +81,14 @@ export async function searchPropertyByHoldingNo(holdingNoRaw: string): Promise<P
     num(property.misc_cost) -
     num(property.misc_rebate);
 
-	// Rounded up to the next whole rupee - same reasoning as demand notice
-	// generation (see demandNotice.service.ts): the Nigam collects in
-	// whole rupees, and this figure needs to match what a demand notice
-	// for the same property would show, or citizens and operators would
-	// see two different "amounts due" for the same holding.
-	const totalPayable = Math.ceil(
-		arrears.totalPending + arrears.penalty + (currentCyclePaid ? 0 : currentYearTiming.net + currentCycleOtherCharges),
-	);
+  // Rounded up to the next whole rupee - same reasoning as demand notice
+  // generation (see demandNotice.service.ts): the Nigam collects in
+  // whole rupees, and this figure needs to match what a demand notice
+  // for the same property would show, or citizens and operators would
+  // see two different "amounts due" for the same holding.
+  const totalPayable = Math.ceil(
+    arrears.totalPending + arrears.penalty + (currentCyclePaid ? 0 : currentYearTiming.net + currentCycleOtherCharges),
+  );
 
   // Live (unsettled, not superseded, not cancelled) demand notices. Surfaced
   // so the public lookup never reads as plain "no dues" while a notice is
@@ -102,10 +101,20 @@ export async function searchPropertyByHoldingNo(holdingNoRaw: string): Promise<P
     totalAmountDemanded: n.total_amount_demanded,
   }));
 
+  // On hold while a pending year has no assessment on file (pre-2011 years need the register ARV): shown wherever
+  // payment is taken; demand notices and payments are refused until it is entered (assertNoMissingTaxYears).
+  let paymentHold: string | null = null;
+  try {
+    assertNoMissingTaxYears(property, taxHistory);
+  } catch (err) {
+    paymentHold = err instanceof Error ? err.message : "Tax assessment missing for some years.";
+  }
+
   return {
     found: true,
     property: {
       ...property,
+      paymentHold,
       pendingDemandNotices,
       solidWasteTypeMissing: isSolidWasteTypeMissing(property),
       currentTax: calc.currentTax,
@@ -149,9 +158,7 @@ export async function searchPropertyByHoldingNo(holdingNoRaw: string): Promise<P
 export async function searchPropertyForCitizen(
   holdingNoRaw: string,
   mobileNoRaw: string,
-): Promise<
-  PropertySearchResult & { mobileMismatch?: boolean; registeredMobileLastTwoDigits?: string | null }
-> {
+): Promise<PropertySearchResult & { mobileMismatch?: boolean; registeredMobileLastTwoDigits?: string | null }> {
   const notFound: PropertySearchResult = {
     found: false,
     message:
@@ -190,10 +197,17 @@ export async function searchPropertyForCitizen(
   // Online payment needs the holding's documents on file - the citizen is told what to get uploaded.
   const docs = await getHoldingDocumentStatus(result.property.holding_no);
   const swMsg = await solidWasteTypeBlock(result.property);
-  const blocked = swMsg
-    ? `${swMsg.replace("holding tax cannot be collected yet", "online payment is not available yet")} Please contact your ward's Tax Collector or the Holding Tax Section, Municipal Corporation Office, Munger.`
-    : docs.complete
-      ? null
-      : onlinePaymentDocumentsMessage(docs.missing);
-  return { ...result, property: { ...result.property, onlinePaymentBlockedReason: blocked } };
+  const hold = result.property.paymentHold
+    ? `Holding tax of this holding cannot be paid yet: its tax for some earlier years is still being assessed by the Nagar Nigam${
+        /before 2011/.test(result.property.paymentHold) ? " (ARV of the years before 2011-12 from the old demand register)" : ""
+      }. Please contact the Holding Tax Section, Municipal Corporation Office, Munger.`
+    : null;
+  const blocked =
+    hold ??
+    (swMsg
+      ? `${swMsg.replace("holding tax cannot be collected yet", "online payment is not available yet")} Please contact your ward's Tax Collector or the Holding Tax Section, Municipal Corporation Office, Munger.`
+      : docs.complete
+        ? null
+        : onlinePaymentDocumentsMessage(docs.missing));
+  return { ...result, property: { ...result.property, paymentHold: null, onlinePaymentBlockedReason: blocked } };
 }

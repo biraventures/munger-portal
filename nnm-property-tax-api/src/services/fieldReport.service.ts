@@ -9,7 +9,9 @@ import { MAX_PHOTO_BYTES, uploadLimitMessage } from "../utils/uploadLimits";
 
 /**
  * The Tax Surveyor's field report on a mutation (change request) or a new holding request: the visit date, whether
- * the site matches the application, measured areas, remarks, GPS and up to 4 photos.
+ * the site matches the application, measured areas, remarks, GPS and up to 4 photos. For a new holding request the
+ * report also confirms the applicant's self-assessment form (correct or not), with photos of its 4 pages and exactly 2
+ * photos of the holding with its owner (no other photos).
  */
 
 export type FieldReportEntity = "mutation" | "new_holding";
@@ -23,7 +25,16 @@ export interface FieldReportInput {
   latitude?: number | null;
   longitude?: number | null;
   photos?: { base64: string; mimeType: string }[];
+  /** New holding requests: are all details in the applicant's self-assessment form correct? */
+  selfAssessmentCorrect?: boolean | null;
+  /** New holding requests: the 4 pages of the self-assessment form, in page order. */
+  formPagePhotos?: { base64: string; mimeType: string }[];
+  /** New holding requests: exactly 2 photos of the holding with its owner. */
+  holdingOwnerPhotos?: { base64: string; mimeType: string }[];
 }
+
+export const SELF_ASSESSMENT_PAGES = 4;
+export const HOLDING_OWNER_PHOTOS = 2;
 
 export const MAX_REPORT_PHOTOS = 4;
 
@@ -48,14 +59,46 @@ export async function saveFieldReport(
 ): Promise<string> {
   const remarks = input.remarks.trim();
   if (remarks.length < 10) throw ApiError.badRequest("Write the field report (at least a line on what was found at the site).");
-  const photos = (input.photos ?? []).map(decodePhoto);
-  if (photos.length > MAX_REPORT_PHOTOS) throw ApiError.badRequest(`At most ${MAX_REPORT_PHOTOS} photos.`);
+  let photos: { buf: Buffer; ext: string; mime: string; kind: string; page: number | null }[];
+  let selfAssessmentCorrect: boolean | null = null;
+  if (entity === "new_holding") {
+    // A new holding's field report checks the applicant's self-assessment form and pictures the holding with its owner.
+    if (typeof input.selfAssessmentCorrect !== "boolean") {
+      throw ApiError.badRequest("Say whether all the details in the applicant's self-assessment form are correct.");
+    }
+    selfAssessmentCorrect = input.selfAssessmentCorrect;
+    const pages = input.formPagePhotos ?? [];
+    const owner = input.holdingOwnerPhotos ?? [];
+    if (pages.length !== SELF_ASSESSMENT_PAGES) throw ApiError.badRequest(`Take a photo of each of the ${SELF_ASSESSMENT_PAGES} pages of the self-assessment form (${pages.length} given).`);
+    if (owner.length !== HOLDING_OWNER_PHOTOS) throw ApiError.badRequest(`Take exactly ${HOLDING_OWNER_PHOTOS} photos of the holding with its owner (${owner.length} given).`);
+    if (input.photos?.length) throw ApiError.badRequest(`Only the ${HOLDING_OWNER_PHOTOS} photos of the holding with its owner are taken - no other site photos.`);
+    photos = [
+      ...pages.map((p, i) => ({ ...decodePhoto(p), kind: "sa_form", page: i + 1 })),
+      ...owner.map((p) => ({ ...decodePhoto(p), kind: "holding_owner", page: null })),
+    ];
+  } else {
+    photos = (input.photos ?? []).map((p) => ({ ...decodePhoto(p), kind: "site", page: null }));
+    if (photos.length > MAX_REPORT_PHOTOS) throw ApiError.badRequest(`At most ${MAX_REPORT_PHOTOS} photos.`);
+  }
   const db = client ?? pool;
   const { rows } = await db.query<{ id: string }>(
     `INSERT INTO field_reports (entity_type, entity_id, surveyor_username, surveyor_name, visited_on, site_matches, measured_plot_area_sqft,
-       measured_builtup_sqft, remarks, latitude, longitude)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id`,
-    [entity, entityId, surveyor.username, surveyor.displayName, input.visitedOn, input.siteMatches, input.measuredPlotAreaSqft ?? null, input.measuredBuiltupSqft ?? null, remarks, input.latitude ?? null, input.longitude ?? null],
+       measured_builtup_sqft, remarks, latitude, longitude, self_assessment_correct)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING id`,
+    [
+      entity,
+      entityId,
+      surveyor.username,
+      surveyor.displayName,
+      input.visitedOn,
+      input.siteMatches,
+      input.measuredPlotAreaSqft ?? null,
+      input.measuredBuiltupSqft ?? null,
+      remarks,
+      input.latitude ?? null,
+      input.longitude ?? null,
+      selfAssessmentCorrect,
+    ],
   );
   const reportId = rows[0]!.id;
   for (const ph of photos) {
@@ -63,7 +106,14 @@ export async function saveFieldReport(
     const full = path.join(env.PHOTO_UPLOAD_DIR, rel);
     await fs.promises.mkdir(path.dirname(full), { recursive: true });
     await fs.promises.writeFile(full, ph.buf);
-    await db.query(`INSERT INTO field_report_photos (report_id, file_path, mime_type, size_bytes) VALUES ($1,$2,$3,$4)`, [reportId, rel, ph.mime, ph.buf.length]);
+    await db.query(`INSERT INTO field_report_photos (report_id, file_path, mime_type, size_bytes, kind, page_no) VALUES ($1,$2,$3,$4,$5,$6)`, [
+      reportId,
+      rel,
+      ph.mime,
+      ph.buf.length,
+      ph.kind,
+      ph.page,
+    ]);
   }
   return reportId;
 }
@@ -81,13 +131,20 @@ export interface FieldReportView {
   longitude: string | null;
   created_at: Date;
   photo_ids: string[];
+  /** New holding reports: the self-assessment check (null on older reports and mutations). */
+  self_assessment_correct: boolean | null;
+  /** Every photo with what it shows. */
+  photos: { id: string; kind: "site" | "holding_owner" | "sa_form"; page_no: number | null }[];
 }
 
 export async function listFieldReports(entity: FieldReportEntity, entityId: string | number): Promise<FieldReportView[]> {
   const { rows } = await pool.query<FieldReportView>(
     `SELECT r.id, r.surveyor_name, r.surveyor_username, to_char(r.visited_on, 'YYYY-MM-DD') AS visited_on, r.site_matches,
             r.measured_plot_area_sqft, r.measured_builtup_sqft, r.remarks, r.latitude, r.longitude, r.created_at,
-            COALESCE((SELECT array_agg(p.id::text ORDER BY p.id) FROM field_report_photos p WHERE p.report_id = r.id), '{}') AS photo_ids
+            COALESCE((SELECT array_agg(p.id::text ORDER BY p.id) FROM field_report_photos p WHERE p.report_id = r.id), '{}') AS photo_ids,
+            r.self_assessment_correct,
+            COALESCE((SELECT json_agg(json_build_object('id', p.id::text, 'kind', p.kind, 'page_no', p.page_no) ORDER BY p.kind DESC, p.page_no, p.id)
+                        FROM field_report_photos p WHERE p.report_id = r.id), '[]'::json) AS photos
        FROM field_reports r WHERE r.entity_type = $1 AND r.entity_id = $2 ORDER BY r.created_at`,
     [entity, entityId],
   );

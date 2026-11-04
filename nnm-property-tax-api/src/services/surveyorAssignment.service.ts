@@ -13,7 +13,7 @@ import { recordAuditEvent } from "./mutationAudit.service";
  *                  area verification.
  *   remeasurement- at the surveyor stage: assign / reassign here. Once assigned, only that surveyor sees and acts on it.
  */
-export type SurveyorWorkType = "new_holding" | "mutation" | "remeasurement";
+export type SurveyorWorkType = "new_holding" | "mutation" | "remeasurement" | "migrated_survey";
 
 export interface SurveyorWorkItem {
   type: SurveyorWorkType;
@@ -30,8 +30,12 @@ export interface SurveyorWorkItem {
   stage_label: string;
 }
 
-export async function listSurveyorWork(): Promise<SurveyorWorkItem[]> {
-  const { rows } = await pool.query<SurveyorWorkItem>(
+/**
+ * `forSurveyor`: only that Tax Surveyor's own work - what is assigned to him (plus remeasurement requests of his ward
+ * not yet given to anyone), and only what is actually waiting for him (at the surveyor stage).
+ */
+export async function listSurveyorWork(forSurveyor?: string): Promise<SurveyorWorkItem[]> {
+  const { rows: all } = await pool.query<SurveyorWorkItem>(
     `SELECT 'new_holding' AS type, r.id::text AS id, r.application_no AS reference, r.new_holding_no AS holding_no,
             r.owner_name AS owner, r.ward, COALESCE(r.stage_since, r.submitted_at, r.created_at) AS waiting_since,
             r.assigned_surveyor_username AS surveyor_username, r.assigned_surveyor_name AS surveyor_name,
@@ -56,9 +60,21 @@ export async function listSurveyorWork(): Promise<SurveyorWorkItem[]> {
        FROM property_discrepancy_requests d
        LEFT JOIN properties p ON p.holding_no = d.holding_no
       WHERE d.status = 'pending' AND d.current_stage = 'tax_surveyor'
+     UNION ALL
+     SELECT 'migrated_survey', m.id::text, 'Survey ' || m.holding_no, m.holding_no, p.owner_name, btrim(m.ward), COALESCE(m.assigned_to_tax_surveyor_at, m.assigned_at),
+            m.assigned_to_tax_surveyor_username, m.assigned_to_tax_surveyor_display_name, FALSE,
+            'Old (migrated) holding to be surveyed'
+       FROM migrated_holding_surveys m
+       LEFT JOIN properties p ON p.holding_no = m.holding_no
+      WHERE m.status = 'assigned_to_tax_surveyor'
       ORDER BY waiting_since`,
   );
-  return rows;
+  if (!forSurveyor) return all;
+  // A surveyor's own list: only work actually waiting at the surveyor stage.
+  return all
+    .filter((w) => w.surveyor_username === forSurveyor || (w.type === "remeasurement" && !w.surveyor_username))
+    .filter((w) => w.type !== "new_holding" || w.assignable_here)
+    .filter((w) => w.type !== "mutation" || w.assignable_here);
 }
 
 /** Tax Daroga: give a request to a specific Tax Surveyor (or move it to another one). */
@@ -90,17 +106,27 @@ export async function assignSurveyor(
     ]);
     await pool.query(
       `INSERT INTO new_holding_request_events (request_id, event, stage, actor, actor_role, remarks, details) VALUES ($1, 'assigned', 'at_surveyor', $2, $3, $4, $5)`,
-      [id, by.displayName, by.role, `Reassigned to ${surveyor.displayName}${remarks ? ` - ${remarks}` : ""}`.slice(0, 500), JSON.stringify({ surveyorUsername: surveyor.username, previous })],
+      [
+        id,
+        by.displayName,
+        by.role,
+        `Reassigned to ${surveyor.displayName}${remarks ? ` - ${remarks}` : ""}`.slice(0, 500),
+        JSON.stringify({ surveyorUsername: surveyor.username, previous }),
+      ],
     );
   } else if (type === "mutation") {
-    const { rows } = await pool.query<{ status: string; current_stage: string; approval_tier: string; assigned_surveyor_name: string | null }>(
-      `SELECT status, current_stage, approval_tier, assigned_surveyor_name FROM property_change_requests WHERE id = $1`,
-      [id],
-    );
+    const { rows } = await pool.query<{
+      status: string;
+      current_stage: string;
+      approval_tier: string;
+      assigned_surveyor_name: string | null;
+    }>(`SELECT status, current_stage, approval_tier, assigned_surveyor_name FROM property_change_requests WHERE id = $1`, [id]);
     const r = rows[0];
     if (!r || r.approval_tier !== "mutation") throw ApiError.notFound("Mutation not found.");
     if (r.status !== "pending" || r.current_stage !== "tax_surveyor") {
-      throw ApiError.badRequest("This mutation is not with a surveyor - the Tax Daroga assigns one on the mutation's page with the area verification.");
+      throw ApiError.badRequest(
+        "This mutation is not with a surveyor - the Tax Daroga assigns one on the mutation's page with the area verification.",
+      );
     }
     previous = r.assigned_surveyor_name;
     await pool.query(`UPDATE property_change_requests SET assigned_surveyor_username = $2, assigned_surveyor_name = $3 WHERE id = $1`, [
@@ -124,13 +150,13 @@ export async function assignSurveyor(
     );
     const r = rows[0];
     if (!r) throw ApiError.notFound("Remeasurement request not found.");
-    if (r.status !== "pending" || r.current_stage !== "tax_surveyor") throw ApiError.badRequest("This request is no longer at the surveyor stage.");
+    if (r.status !== "pending" || r.current_stage !== "tax_surveyor")
+      throw ApiError.badRequest("This request is no longer at the surveyor stage.");
     previous = r.assigned_surveyor_name;
-    await pool.query(`UPDATE property_discrepancy_requests SET assigned_surveyor_username = $2, assigned_surveyor_name = $3 WHERE id = $1`, [
-      id,
-      surveyor.username,
-      surveyor.displayName,
-    ]);
+    await pool.query(
+      `UPDATE property_discrepancy_requests SET assigned_surveyor_username = $2, assigned_surveyor_name = $3 WHERE id = $1`,
+      [id, surveyor.username, surveyor.displayName],
+    );
   }
 
   await pool.query(

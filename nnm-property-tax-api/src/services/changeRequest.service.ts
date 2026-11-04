@@ -1,4 +1,5 @@
 import { taxEffect } from "./taxPreview.service";
+import { surveyorForWard } from "./surveyorWards.service";
 import { changeRequestRepository } from "../repositories/changeRequest.repository";
 import { propertyRepository } from "../repositories/property.repository";
 import { entryRevertEventRepository } from "../repositories/entryRevertEvent.repository";
@@ -208,8 +209,8 @@ async function recordVerification(request: ChangeRequestRow, v: AreaVerification
  * request's own final_stage actually applies the change.
  */
 export interface DarogaAssignment {
-  /** Tax Surveyor who gives the field report. */
-  surveyorUsername: string;
+  /** Tax Surveyor who gives the field report; left out, the ward's Tax Surveyor takes it. */
+  surveyorUsername?: string;
   /** Required when the mutation creates a new holding (part of the area / some floors): number from the demand register. */
   registerOldHoldingNo?: string | null;
 }
@@ -245,9 +246,12 @@ export async function approveAtCurrentStage(
     }
     // The areas are checked (and recorded) first, then the field-report assignment.
     const saved = await recordVerification(request, verification, admin);
-    if (!assignment?.surveyorUsername) throw ApiError.badRequest("Choose the Tax Surveyor who will give the field report.");
-    const surveyor = await findTaxSurveyor(assignment.surveyorUsername);
-    const oldNo = assignment.registerOldHoldingNo?.trim().toUpperCase() || null;
+    // No surveyor named: the ward's Tax Surveyor (given by the Municipal Commissioner) takes it.
+    const wardOf = (await propertyRepository.findByHoldingNo(request.holding_no))?.ward ?? null;
+    const named = assignment?.surveyorUsername?.trim();
+    const surveyor = named ? await findTaxSurveyor(named) : await surveyorForWard(wardOf);
+    if (!surveyor) throw ApiError.badRequest(`No Tax Surveyor is assigned to Ward ${wardOf ?? "-"} - choose one, or ask the Municipal Commissioner to assign the ward.`);
+    const oldNo = assignment?.registerOldHoldingNo?.trim().toUpperCase() || null;
     if (saved.is_partial) {
       if (!oldNo) throw ApiError.badRequest("This mutation creates a new holding - enter the old holding number given to it in the demand register.");
       const parent = await propertyRepository.findByHoldingNo(request.holding_no);

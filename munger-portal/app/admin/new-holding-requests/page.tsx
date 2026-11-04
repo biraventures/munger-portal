@@ -52,6 +52,7 @@ export default function NewHoldingRequestsPage() {
   const [open, setOpen] = useState<string | null>(null);
   const [usageTypes, setUsageTypes] = useState<string[]>([]);
   const [swTypes, setSwTypes] = useState<string[]>([]);
+  const [surveyorFilter, setSurveyorFilter] = useState<string | null>(null);
 
   function load() {
     if (filter === null) return;
@@ -70,6 +71,7 @@ export default function NewHoldingRequestsPage() {
 
   useEffect(() => {
     if (!admin || !ALLOWED.includes(admin.role)) return;
+    setSurveyorFilter(null);
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [admin, filter, ward]);
@@ -99,10 +101,10 @@ export default function NewHoldingRequestsPage() {
       <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
         <h1 className="mb-1 text-2xl font-semibold text-slate-900">New Holding Requests</h1>
         <p className="mb-5 text-sm text-slate-500">
-          Requests from the public for properties never assessed. <b>Tax Daroga</b> checks that no holding exists (possible matches are listed), enters the
-          property in the offline demand register and gives its old holding number, choosing a <b>Tax Surveyor</b> → field report → <b>Tax Daroga</b>&apos;s
-          comments → <b>DMC</b> → <b>Commissioner</b>, whose approval creates the holding with the next MMC- number. Until the Tax Daroga acts, the applicant can
-          still correct the request.
+          Requests from the public for properties never assessed. <b>Tax Daroga</b> checks that no holding exists (possible matches are
+          listed), enters the property in the offline demand register and gives its old holding number, choosing a <b>Tax Surveyor</b> →
+          field report → <b>Tax Daroga</b>&apos;s comments → <b>DMC</b> → <b>Commissioner</b>, whose approval creates the holding with the
+          next MMC- number. Until the Tax Daroga acts, the applicant can still correct the request.
         </p>
 
         {pending && (
@@ -129,7 +131,9 @@ export default function NewHoldingRequestsPage() {
           </div>
         )}
 
-        {notice && <div className="mb-4 rounded-md border border-green-200 bg-green-50 p-3 text-sm font-medium text-green-800">{notice}</div>}
+        {notice && (
+          <div className="mb-4 rounded-md border border-green-200 bg-green-50 p-3 text-sm font-medium text-green-800">{notice}</div>
+        )}
 
         <div className="mb-4 flex flex-wrap items-center gap-2">
           {FILTERS.map((f) => (
@@ -141,7 +145,11 @@ export default function NewHoldingRequestsPage() {
               {f.label}
             </button>
           ))}
-          <select value={ward} onChange={(e) => setWard(e.target.value)} className="ml-auto rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm">
+          <select
+            value={ward}
+            onChange={(e) => setWard(e.target.value)}
+            className="ml-auto rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm"
+          >
             <option value="">All wards</option>
             {WARDS.map((w) => (
               <option key={w} value={w}>
@@ -151,35 +159,87 @@ export default function NewHoldingRequestsPage() {
           </select>
         </div>
 
+        {/* Field verification tab: who has how many (officers' view), and filter to one surveyor */}
+        {rows && filter === "at_surveyor" && admin.role !== "tax_surveyor" && rows.length > 0 && (
+          <div className="mb-4 rounded-xl border border-slate-200 bg-white p-3">
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Tax Surveyor-wise</p>
+            <div className="flex flex-wrap gap-2 text-sm">
+              <button
+                onClick={() => setSurveyorFilter(null)}
+                aria-pressed={surveyorFilter === null}
+                className={`rounded-full border px-3 py-1 font-semibold ${surveyorFilter === null ? "border-nnm-blue bg-blue-50 text-nnm-blue" : "border-slate-300 text-slate-600"}`}
+              >
+                All: {rows.length}
+              </button>
+              {[
+                ...rows.reduce(
+                  (m, r) => m.set(r.assigned_surveyor_name ?? "", (m.get(r.assigned_surveyor_name ?? "") ?? 0) + 1),
+                  new Map<string, number>(),
+                ),
+              ]
+                .sort((a, b) => b[1] - a[1])
+                .map(([name, n]) => (
+                  <button
+                    key={name || "-"}
+                    onClick={() => setSurveyorFilter(surveyorFilter === name ? null : name)}
+                    aria-pressed={surveyorFilter === name}
+                    className={`rounded-full border px-3 py-1 font-semibold ${surveyorFilter === name ? "border-nnm-blue bg-blue-50 text-nnm-blue" : "border-slate-300 text-slate-600"}`}
+                  >
+                    {name || "No surveyor"}: {n}
+                  </button>
+                ))}
+            </div>
+          </div>
+        )}
+
         {!rows ? (
           <p className="text-sm text-slate-400">Loading…</p>
         ) : rows.length === 0 ? (
           <p className="rounded-xl border border-slate-200 bg-white p-6 text-sm text-slate-500">Nothing here.</p>
         ) : (
           <div className="space-y-2">
-            {rows.map((a) => (
-              <div key={a.id} className="rounded-xl border border-slate-200 bg-white text-sm">
-                <button onClick={() => setOpen(open === a.id ? null : a.id)} className="flex w-full flex-wrap items-center gap-3 p-3 text-left">
-                  <span className="font-mono font-semibold text-slate-900">{a.application_no}</span>
-                  <span className="text-slate-700">{a.owner_name}</span>
-                  <span className="text-slate-500">
-                    Ward {a.ward} · {Number(a.plot_area_sqft).toLocaleString("en-IN")} sq ft · {a.floor_count} floor{a.floor_count === 1 ? "" : "s"}
-                  </span>
-                  {a.stage_since && !["created", "rejected"].includes(a.status) && <span className="text-xs text-slate-400">{daysSince(a.stage_since)} d at this desk</span>}
-                  {a.new_holding_no && <span className="font-mono text-xs font-semibold text-green-700">{a.new_holding_no}</span>}
-                  <span className={`ml-auto rounded-full px-2 py-0.5 text-xs font-semibold ${STATUS_CLASS[a.status] ?? "bg-slate-100"}`}>{STATUS_LABEL[a.status] ?? a.status}</span>
-                  {open === a.id ? <ChevronUp className="h-4 w-4 text-slate-400" /> : <ChevronDown className="h-4 w-4 text-slate-400" />}
-                </button>
-                {open === a.id && (
-                  <div className="border-t border-slate-100 p-4">
-                    <NewHoldingRequestPanel requestId={a.id} role={admin.role} usageTypes={usageTypes} solidWasteTypes={swTypes} onChanged={(m) => {
-                        if (m) setNotice(m);
-                        load();
-                      }} />
-                  </div>
-                )}
-              </div>
-            ))}
+            {rows
+              .filter((a) => filter !== "at_surveyor" || surveyorFilter === null || (a.assigned_surveyor_name ?? "") === surveyorFilter)
+              .map((a) => (
+                <div key={a.id} className="rounded-xl border border-slate-200 bg-white text-sm">
+                  <button
+                    onClick={() => setOpen(open === a.id ? null : a.id)}
+                    className="flex w-full flex-wrap items-center gap-3 p-3 text-left"
+                  >
+                    <span className="font-mono font-semibold text-slate-900">{a.application_no}</span>
+                    <span className="text-slate-700">{a.owner_name}</span>
+                    <span className="text-slate-500">
+                      Ward {a.ward} · {Number(a.plot_area_sqft).toLocaleString("en-IN")} sq ft · {a.floor_count} floor
+                      {a.floor_count === 1 ? "" : "s"}
+                    </span>
+                    {a.stage_since && !["created", "rejected"].includes(a.status) && (
+                      <span className="text-xs text-slate-400">{daysSince(a.stage_since)} d at this desk</span>
+                    )}
+                    {a.new_holding_no && <span className="font-mono text-xs font-semibold text-green-700">{a.new_holding_no}</span>}
+                    {a.status === "at_surveyor" && admin.role !== "tax_surveyor" && (
+                      <span className="text-xs font-semibold text-slate-600">Surveyor: {a.assigned_surveyor_name ?? "-"}</span>
+                    )}
+                    <span className={`ml-auto rounded-full px-2 py-0.5 text-xs font-semibold ${STATUS_CLASS[a.status] ?? "bg-slate-100"}`}>
+                      {STATUS_LABEL[a.status] ?? a.status}
+                    </span>
+                    {open === a.id ? <ChevronUp className="h-4 w-4 text-slate-400" /> : <ChevronDown className="h-4 w-4 text-slate-400" />}
+                  </button>
+                  {open === a.id && (
+                    <div className="border-t border-slate-100 p-4">
+                      <NewHoldingRequestPanel
+                        requestId={a.id}
+                        role={admin.role}
+                        usageTypes={usageTypes}
+                        solidWasteTypes={swTypes}
+                        onChanged={(m) => {
+                          if (m) setNotice(m);
+                          load();
+                        }}
+                      />
+                    </div>
+                  )}
+                </div>
+              ))}
           </div>
         )}
       </main>

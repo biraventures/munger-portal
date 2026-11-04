@@ -240,7 +240,7 @@ export function NewHoldingRequestPanel({
             </div>
             <div>
               <label className={lbl}>Tax Surveyor for the field report</label>
-              <SurveyorSelect value={surveyor} onChange={setSurveyor} className={inp} />
+              <SurveyorSelect value={surveyor} onChange={setSurveyor} className={inp} ward={r.ward} />
             </div>
             <div>
               <label className={lbl}>Remarks (optional)</label>
@@ -269,10 +269,10 @@ export function NewHoldingRequestPanel({
   } else if (role === "tax_surveyor" && r.status === "at_surveyor") {
     action = (
       <div>
-        <FieldReportForm value={report} onChange={setReport} onError={setError} />
+        <FieldReportForm value={report} onChange={setReport} onError={setError} newHolding />
         <button
           onClick={() => {
-            const b = fieldReportBody(report);
+            const b = fieldReportBody(report, true);
             if (typeof b === "string") return setError(b);
             run(async () => {
               await submitFieldReport(r.id, b);

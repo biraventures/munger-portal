@@ -219,7 +219,8 @@ export const postAssign = asyncHandler(async (req: Request, res: Response) => {
   const b = body(
     z.object({
       registerOldHoldingNo: z.string().trim().min(1, "Enter the old holding number from the demand register.").max(32),
-      surveyorUsername: z.string().trim().min(1, "Choose the Tax Surveyor."),
+      // Optional: left blank, the ward's Tax Surveyor takes it.
+      surveyorUsername: z.string().trim().max(100).nullish(),
       remarks: z.string().trim().max(500).nullish(),
     }),
     req,

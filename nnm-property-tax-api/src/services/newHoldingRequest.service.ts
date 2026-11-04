@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import { surveyorForWard } from "./surveyorWards.service";
 import path from "node:path";
 import crypto from "node:crypto";
 import type { Request } from "express";
@@ -804,14 +805,16 @@ function requireRole(viewer: Viewer, ...roles: string[]) {
  * Tax Daroga, first step: no holding exists for the property - it has been entered in the offline demand register
  * under `registerOldHoldingNo`. A Tax Surveyor is chosen for the field verification.
  */
-export async function assignRequest(id: string, input: { registerOldHoldingNo: string; surveyorUsername: string; remarks?: string | null }, viewer: Viewer) {
+export async function assignRequest(id: string, input: { registerOldHoldingNo: string; surveyorUsername?: string | null; remarks?: string | null }, viewer: Viewer) {
   requireRole(viewer, "tax_daroga");
   const row = await staffRow(id, viewer);
   if (row.status !== "submitted") throw ApiError.badRequest("Only a newly received request can be sent for field verification.");
   const oldNo = input.registerOldHoldingNo.trim().toUpperCase();
   if (!oldNo) throw ApiError.badRequest("Enter the old holding number given in the demand register.");
   await assertRegisterNoFree(oldNo, row.ward);
-  const surveyor = await findTaxSurveyor(input.surveyorUsername);
+  // No surveyor named: the ward's Tax Surveyor (given by the Municipal Commissioner) takes it.
+  const surveyor = input.surveyorUsername?.trim() ? await findTaxSurveyor(input.surveyorUsername) : await surveyorForWard(row.ward);
+  if (!surveyor) throw ApiError.badRequest(`No Tax Surveyor is assigned to Ward ${row.ward ?? "-"} - choose one, or ask the Municipal Commissioner to assign the ward.`);
   await move(id, ["submitted"], "at_surveyor", {
     register_old_holding_no: oldNo,
     assigned_surveyor_username: surveyor.username,

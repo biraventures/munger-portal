@@ -17,6 +17,9 @@ export interface FieldReport {
   longitude: string | null;
   created_at: string;
   photo_ids: string[];
+  /** New holding reports: are all details in the applicant's self-assessment form correct? (null otherwise) */
+  self_assessment_correct?: boolean | null;
+  photos?: { id: string; kind: "site" | "holding_owner" | "sa_form"; page_no: number | null }[];
 }
 
 export interface FieldReportBody {
@@ -28,9 +31,15 @@ export interface FieldReportBody {
   latitude?: number | null;
   longitude?: number | null;
   photos?: { base64: string; mimeType: string }[];
+  selfAssessmentCorrect?: boolean;
+  formPagePhotos?: { base64: string; mimeType: string }[];
+  holdingOwnerPhotos?: { base64: string; mimeType: string }[];
 }
 
 export const MAX_REPORT_PHOTOS = 4;
+/** New holding field report: pages of the applicant's self-assessment form, and photos of the holding with its owner. */
+export const SELF_ASSESSMENT_PAGES = 4;
+export const HOLDING_OWNER_PHOTOS = 2;
 
 /** A photo shrunk to at most 750 KB, as base64 for the report. */
 export async function reportPhoto(file: File): Promise<{ base64: string; mimeType: string; preview: string }> {
@@ -48,6 +57,8 @@ export async function fieldReportPhotoUrl(photoId: string): Promise<string> {
 export interface TaxSurveyor {
   username: string;
   displayName: string;
+  /** Wards given to this surveyor by the Municipal Commissioner. */
+  wards?: string[];
 }
 
 export async function fetchSurveyors(): Promise<TaxSurveyor[]> {

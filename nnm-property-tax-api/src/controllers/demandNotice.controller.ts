@@ -1,4 +1,8 @@
 import type { Request, Response } from "express";
+import { withEffectivePaidTill } from "../services/paidYearGuard.service";
+import { propertyRepository } from "../repositories/property.repository";
+import { assertNoMissingTaxYears } from "../services/arrears.service";
+import { solidWasteTypeBlock } from "../services/solidWasteGuard.service";
 import { listRefreshRuns, startManualRefresh } from "../services/demandRefresh.service";
 import { z } from "zod";
 import { holdingNoSchema } from "../utils/holdingNoSchema";
@@ -49,7 +53,21 @@ export const getUnsettledDemandNotices = asyncHandler(async (req: Request, res: 
   }
 
   const notices = await listUnsettledDemandNotices(paramsParsed.data.holdingNo);
-  res.status(200).json({ notices });
+  // Why no payment can be taken now (shown on the payment form, and the payment refused): a pending year without an
+  // assessment (pre-2011 years need the register ARV), or the solid waste user type not yet known.
+  const stored = await propertyRepository.findByHoldingNo(paramsParsed.data.holdingNo);
+  // Counted from the last year actually paid, like billing and payment themselves.
+  const property = stored ? await withEffectivePaidTill(stored) : null;
+  let paymentHold: string | null = null;
+  if (property) {
+    try {
+      assertNoMissingTaxYears(property, await propertyRepository.findTaxHistoryByHoldingNo(property.holding_no));
+      paymentHold = await solidWasteTypeBlock(property);
+    } catch (err) {
+      paymentHold = err instanceof Error ? err.message : "Payment cannot be taken for this holding yet.";
+    }
+  }
+  res.status(200).json({ notices, paymentHold });
 });
 
 /**

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { Upload, AlertCircle, CheckCircle2, Loader2, Download } from "lucide-react";
 import { AdminHeader } from "@/components/admin-header";
@@ -48,7 +49,7 @@ export default function MigratedHoldingsBulkUploadPage() {
     setUploading(true);
     try {
       const base64 = await fileToBase64(file);
-      const res = await uploadMigratedHoldingsXlsx(base64);
+      const res = await uploadMigratedHoldingsXlsx(base64, file.name);
       setResult(res);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not upload this file.");
@@ -127,10 +128,32 @@ export default function MigratedHoldingsBulkUploadPage() {
                   <span className="font-semibold">{result.holdingsCreated}</span>
                 </div>
                 <div>
-                  <span className="block text-xs text-slate-400">Rows Skipped (Needs Review)</span>
-                  <span className="font-semibold">{result.rowsSkipped}</span>
+                  <span className="block text-xs text-slate-400">Held back for review</span>
+                  <span className="font-semibold">{result.review?.length ?? result.rowsSkipped}</span>
                 </div>
+                {!!result.alreadyImported && (
+                  <div>
+                    <span className="block text-xs text-slate-400">Already in the system (not created again)</span>
+                    <span className="font-semibold">{result.alreadyImported}</span>
+                  </div>
+                )}
               </div>
+
+              {!!result.review?.length && (
+                <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+                  <p className="font-semibold">{result.review.length} row(s) need review - they are kept in the review list to correct and import one by one.</p>
+                  <ul className="mt-2 max-h-48 space-y-0.5 overflow-y-auto text-xs">
+                    {result.review.map((r, i) => (
+                      <li key={i}>
+                        <span className="font-mono">Row {r.row}</span>: {r.reason}
+                      </li>
+                    ))}
+                  </ul>
+                  <Link href="/admin/migrated-holdings-review" className="mt-2 inline-block font-semibold text-nnm-blue underline">
+                    Open the review list
+                  </Link>
+                </div>
+              )}
 
               {result.errors.length > 0 && (
                 <details className="rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">

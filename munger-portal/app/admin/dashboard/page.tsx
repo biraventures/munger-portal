@@ -435,6 +435,16 @@ export default function AdminDashboardPage() {
                 </Link>
               )}
 
+              {(isCommissioner || admin.role === "tax_daroga") && (
+                <Link href="/admin/migrated-holdings-review" className={cardClass}>
+                  <span className={iconWrapClass}>
+                    <ClipboardCheck className="h-6 w-6" strokeWidth={1.8} />
+                  </span>
+                  <h3 className="mb-1.5 text-base font-semibold text-slate-900">Old Holdings - Rows to Review</h3>
+                  <p className="text-sm text-slate-500">Rows of the old-holding upload that were held back: see the issue, correct and import, or discard - one by one.</p>
+                </Link>
+              )}
+
               {showMigratedHoldingsAssign && (
                 <Link href="/admin/migrated-holdings-assign" className={cardClass}>
                   <span className={iconWrapClass}>
@@ -452,6 +462,16 @@ export default function AdminDashboardPage() {
                   </span>
                   <h3 className="mb-1.5 text-base font-semibold text-slate-900">My Migrated Holding Surveys</h3>
                   <p className="text-sm text-slate-500">Assign to a Tax Surveyor, verify submissions, revert if needed.</p>
+                </Link>
+              )}
+
+              {admin.role === "tax_surveyor" && (
+                <Link href="/admin/my-field-work" className={cardClass}>
+                  <span className={iconWrapClass}>
+                    <ClipboardList className="h-6 w-6" strokeWidth={1.8} />
+                  </span>
+                  <h3 className="mb-1.5 text-base font-semibold text-slate-900">My Field Work</h3>
+                  <p className="text-sm text-slate-500">Everything assigned to you - new holdings, mutations, remeasurements and old holding surveys - in one list.</p>
                 </Link>
               )}
 
@@ -616,6 +636,16 @@ export default function AdminDashboardPage() {
                   </span>
                   <h3 className="mb-1.5 text-base font-semibold text-slate-900">Re-Survey Flags</h3>
                   <p className="text-sm text-slate-500">Holdings flagged by Tax Collectors as looking different on the ground.</p>
+                </Link>
+              )}
+
+              {isCommissioner && (
+                <Link href="/admin/surveyor-wards" className={cardClass}>
+                  <span className={iconWrapClass}>
+                    <MapIcon className="h-6 w-6" strokeWidth={1.8} />
+                  </span>
+                  <h3 className="mb-1.5 text-base font-semibold text-slate-900">Tax Surveyor Wards</h3>
+                  <p className="text-sm text-slate-500">Give wards to Tax Surveyors - requests from a ward go to its surveyor automatically.</p>
                 </Link>
               )}
 

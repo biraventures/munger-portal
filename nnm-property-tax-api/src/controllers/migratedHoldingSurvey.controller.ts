@@ -1,8 +1,9 @@
 import type { Request, Response } from "express";
+import { listSurveyorsWithWards } from "../services/surveyorWards.service";
 import { z } from "zod";
 import ExcelJS from "exceljs";
 import { holdingNoSchema } from "../utils/holdingNoSchema";
-import { importMigratedHoldingsXlsx } from "../services/migratedHoldingImport.service";
+import { importMigratedHoldingsXlsx, listReviewRows, importReviewRow, discardReviewRow } from "../services/migratedHoldingImport.service";
 import { applyPropertySave } from "../services/propertySave.service";
 import { renameHoldingTo } from "../services/propertyRenumber.service";
 import { getNextFinalizedMigratedHoldingNo } from "../services/holdingNumberSeries.service";
@@ -18,7 +19,7 @@ const holdingNoParamSchema = z.object({ holdingNo: holdingNoSchema });
 
 /** POST /api/v1/admin/migrated-holdings/bulk-upload - commissioner only, matching the existing bulk-upload pattern. */
 export const uploadMigratedHoldingsHandler = asyncHandler(async (req: Request, res: Response) => {
-  const parsed = z.object({ fileDataBase64: z.string().min(1) }).safeParse(req.body);
+  const parsed = z.object({ fileDataBase64: z.string().min(1), fileName: z.string().max(255).optional() }).safeParse(req.body);
   if (!parsed.success) throw ApiError.badRequest("Invalid input", parsed.error.flatten().fieldErrors);
   let fileBuffer: Buffer;
   try {
@@ -28,7 +29,7 @@ export const uploadMigratedHoldingsHandler = asyncHandler(async (req: Request, r
   }
   if (fileBuffer.length === 0) throw ApiError.badRequest("The uploaded file is empty.");
 
-  const result = await importMigratedHoldingsXlsx(fileBuffer, req.admin!.displayName);
+  const result = await importMigratedHoldingsXlsx(fileBuffer, req.admin!.displayName, parsed.data.fileName ?? null);
   res.status(200).json(result);
 });
 
@@ -52,8 +53,8 @@ export const listTaxDarogasHandler = asyncHandler(async (_req: Request, res: Res
 
 /** GET /api/v1/admin/tax-surveyors - the list of active Tax Surveyor accounts, for the Tax Daroga's assignment picker. */
 export const listTaxSurveyorsHandler = asyncHandler(async (_req: Request, res: Response) => {
-  const admins = await adminRepository.listByRole("tax_surveyor");
-  res.status(200).json({ taxSurveyors: admins.map((a) => ({ username: a.username, displayName: a.display_name })) });
+  // With the wards the Municipal Commissioner has given each surveyor (used to pre-select the ward's surveyor).
+  res.status(200).json({ taxSurveyors: await listSurveyorsWithWards() });
 });
 
 const assignSchema = z.object({ taxDarogaUsername: z.string().trim().min(1) });
@@ -341,4 +342,54 @@ export const exportMigratedHoldingsHandler = asyncHandler(async (req: Request, r
   res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
   await workbook.xlsx.write(res);
   res.end();
+});
+
+// ---------------------------------------------------------------------------
+// Old-holding upload: rows held back for review
+// ---------------------------------------------------------------------------
+
+const rowDataSchema = z.object({
+  ward: z.string().trim().min(1, "Ward is required").max(16),
+  oldHoldingNo: z.string().trim().max(64).nullish().transform((v) => v || null),
+  oldPid: z.string().trim().max(64).nullish().transform((v) => v || null),
+  ownerName: z.string().trim().min(1, "Owner name is required").max(255),
+  relation: z.string().trim().max(8).nullish().transform((v) => (v ? v.toUpperCase() : null)),
+  relativeName: z.string().trim().max(255).nullish().transform((v) => v || null),
+  arvPre96: z.coerce.number().nonnegative().nullish().transform((v) => v ?? null),
+  arv97to2010: z.coerce.number().nonnegative().nullish().transform((v) => v ?? null),
+  arv2011to2020: z.coerce.number().nonnegative().nullish().transform((v) => v ?? null),
+  arv97to2000: z.coerce.number().nonnegative().nullish().transform((v) => v ?? null),
+  arv2000to2011: z.coerce.number().nonnegative().nullish().transform((v) => v ?? null),
+  arv2011to2017: z.coerce.number().nonnegative().nullish().transform((v) => v ?? null),
+  arv2017to2021: z.coerce.number().nonnegative().nullish().transform((v) => v ?? null),
+  arv2021on: z.coerce.number().nonnegative().nullish().transform((v) => v ?? null),
+  holdingCreationYear: z.string().trim().max(16).nullish().transform((v) => v || null),
+  lastPaymentYear: z.string().trim().max(32).nullish().transform((v) => v || null),
+  taxStatus: z.string().trim().max(64).nullish().transform((v) => v || null),
+  remarks: z.string().trim().max(1000).nullish().transform((v) => v || null),
+});
+
+/** GET /api/v1/admin/migrated-holdings/review-rows?status=pending|imported|discarded */
+export const listReviewRowsHandler = asyncHandler(async (req: Request, res: Response) => {
+  const status = z.enum(["pending", "imported", "discarded"]).catch("pending").parse(req.query.status);
+  res.status(200).json({ rows: await listReviewRows(status) });
+});
+
+/** POST /api/v1/admin/migrated-holdings/review-rows/:id/import - the corrected row becomes a MUNG-MIG holding. */
+export const importReviewRowHandler = asyncHandler(async (req: Request, res: Response) => {
+  const id = z.coerce.number().int().positive().safeParse(req.params.id);
+  if (!id.success) throw ApiError.badRequest("Invalid id");
+  const b = z.object({ data: rowDataSchema, note: z.string().trim().max(500).optional() }).safeParse(req.body);
+  if (!b.success) throw ApiError.badRequest(b.error.issues[0]?.message ?? "Invalid row");
+  res.status(200).json(await importReviewRow(id.data, b.data.data, b.data.note || null, req.admin!.displayName));
+});
+
+/** POST /api/v1/admin/migrated-holdings/review-rows/:id/discard */
+export const discardReviewRowHandler = asyncHandler(async (req: Request, res: Response) => {
+  const id = z.coerce.number().int().positive().safeParse(req.params.id);
+  if (!id.success) throw ApiError.badRequest("Invalid id");
+  const b = z.object({ note: z.string().trim().min(3, "Say why this row is discarded").max(500) }).safeParse(req.body);
+  if (!b.success) throw ApiError.badRequest(b.error.issues[0]?.message ?? "Invalid input");
+  await discardReviewRow(id.data, b.data.note, req.admin!.displayName);
+  res.status(200).json({ ok: true });
 });

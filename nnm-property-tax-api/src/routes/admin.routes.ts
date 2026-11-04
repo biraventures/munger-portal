@@ -1,5 +1,5 @@
 import { collectorHoldingParam, collectorDemandNoticeParam } from "../middleware/collectorWardGuard";
-import { assignSurveyorHandler, getSurveyorWorkHandler } from "../controllers/surveyorAssignment.controller";
+import { assignSurveyorHandler, getSurveyorWorkHandler, reassignByWardHandler, setSurveyorWardsHandler } from "../controllers/surveyorAssignment.controller";
 import { Router } from "express";
 import {
   getBulkReceiptCollectors,
@@ -99,7 +99,7 @@ import {
 } from "../controllers/shopAgreementDocument.controller";
 import { postCreateShopInspection, listShopInspectionsForShop, listAllShopInspections } from "../controllers/shopInspection.controller";
 import {
-  uploadMigratedHoldingsHandler,
+  uploadMigratedHoldingsHandler, listReviewRowsHandler, importReviewRowHandler, discardReviewRowHandler,
   listPendingAssignmentHandler,
   listTaxDarogasHandler,
   listTaxSurveyorsHandler,
@@ -479,13 +479,21 @@ adminRouter.post("/shops/:shopNo/inspections", requireInspectionRole, postCreate
 // handles even wards, and each verifies only what they themselves
 // assigned. See migratedHoldingSurvey.controller.ts.
 adminRouter.post("/migrated-holdings/bulk-upload", requireAdminRole("commissioner"), uploadMigratedHoldingsHandler);
+// Rows of the old-holding upload held back for review: correct and import, or discard, one by one.
+const requireMigratedReviewRole = requireAdminRole("commissioner", "tax_daroga");
+adminRouter.get("/migrated-holdings/review-rows", requireMigratedReviewRole, listReviewRowsHandler);
+adminRouter.post("/migrated-holdings/review-rows/:id/import", requireMigratedReviewRole, importReviewRowHandler);
+adminRouter.post("/migrated-holdings/review-rows/:id/discard", requireMigratedReviewRole, discardReviewRowHandler);
 adminRouter.get("/migrated-holdings/export", requireAdminRole("commissioner"), exportMigratedHoldingsHandler);
 adminRouter.get("/migrated-holdings/pending-assignment", listPendingAssignmentHandler);
 adminRouter.get("/tax-darogas", listTaxDarogasHandler);
 adminRouter.get("/tax-surveyors", listTaxSurveyorsHandler);
 // Tax Daroga: which Tax Surveyor handles each new holding request / mutation / remeasurement request.
-adminRouter.get("/surveyor-work", requireAdminRole("tax_daroga", "city_manager", "deputy_commissioner", "commissioner"), getSurveyorWorkHandler);
+adminRouter.get("/surveyor-work", requireAdminRole("tax_daroga", "tax_surveyor", "city_manager", "deputy_commissioner", "commissioner"), getSurveyorWorkHandler);
+adminRouter.post("/surveyor-work/reassign-by-ward", requireAdminRole("commissioner", "tax_daroga"), reassignByWardHandler);
 adminRouter.post("/surveyor-work/:type/:id/assign", requireAdminRole("tax_daroga"), assignSurveyorHandler);
+// Municipal Commissioner: which wards each Tax Surveyor covers (work in those wards is assigned to them automatically).
+adminRouter.post("/tax-surveyors/:username/wards", requireAdminRole("commissioner"), setSurveyorWardsHandler);
 
 // Tax Collector -> City Manager assignment for cancellation-request
 // routing - Commissioner only. See taxCollectorAssignment.controller.ts.

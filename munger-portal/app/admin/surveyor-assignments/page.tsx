@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { AlertCircle, CheckCircle2, Loader2, UserCheck } from "lucide-react";
 import { AdminHeader } from "@/components/admin-header";
+import { ReassignByWardButton } from "@/components/admin/reassign-by-ward-button";
 import { useAdminGuard } from "@/lib/use-admin-guard";
 import {
   assignSurveyorToWork,
@@ -12,17 +13,30 @@ import {
   type SurveyorWorkItem,
   type SurveyorWorkType,
   type TaxSurveyorOption,
+  surveyorOfWard,
 } from "@/lib/admin-api";
 
 const VIEW_ROLES = ["tax_daroga", "city_manager", "deputy_commissioner", "commissioner"];
-const TYPE_LABEL: Record<SurveyorWorkType, string> = { new_holding: "New holding", mutation: "Mutation", remeasurement: "Remeasurement" };
+const TYPE_LABEL: Record<SurveyorWorkType, string> = {
+  new_holding: "New holding",
+  mutation: "Mutation",
+  remeasurement: "Remeasurement",
+  migrated_survey: "Old holding survey",
+};
 const TYPE_TONE: Record<SurveyorWorkType, string> = {
   new_holding: "bg-blue-100 text-blue-800",
   mutation: "bg-purple-100 text-purple-800",
   remeasurement: "bg-amber-100 text-amber-800",
+  migrated_survey: "bg-teal-100 text-teal-800",
 };
 const pageOf = (w: SurveyorWorkItem) =>
-  w.type === "new_holding" ? "/admin/new-holding-requests" : w.type === "mutation" ? `/admin/change-requests/${w.id}` : `/admin/property-discrepancy-requests/${w.id}`;
+  w.type === "new_holding"
+    ? "/admin/new-holding-requests"
+    : w.type === "mutation"
+      ? `/admin/change-requests/${w.id}`
+      : w.type === "migrated_survey"
+        ? "/admin/migrated-holdings-surveyor"
+        : `/admin/property-discrepancy-requests/${w.id}`;
 const since = (v: string) => {
   const days = Math.floor((Date.now() - new Date(v).getTime()) / 86400000);
   return days <= 0 ? "today" : days === 1 ? "1 day" : `${days} days`;
@@ -38,6 +52,7 @@ export default function SurveyorAssignmentsPage() {
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
   const [filter, setFilter] = useState<"all" | "unassigned">("all");
+  const [who, setWho] = useState<string>("");
   const canAssign = admin?.role === "tax_daroga";
 
   async function load() {
@@ -72,7 +87,7 @@ export default function SurveyorAssignmentsPage() {
 
   async function assign(w: SurveyorWorkItem) {
     const key = `${w.type}:${w.id}`;
-    const username = choice[key];
+    const username = choice[key] ?? (!w.surveyor_username ? surveyorOfWard(surveyors, w.ward)?.username : undefined);
     if (!username) return setError("Choose a Tax Surveyor first.");
     setBusy(key);
     setError(null);
@@ -89,7 +104,15 @@ export default function SurveyorAssignmentsPage() {
     }
   }
 
-  const shown = (items ?? []).filter((w) => filter === "all" || !w.surveyor_username);
+  const shown = (items ?? []).filter((w) => (filter === "all" || !w.surveyor_username) && (!who || w.surveyor_username === who));
+  // How much each surveyor has - so it is clear where every request went.
+  const perSurveyor = new Map<string, { name: string; n: number }>();
+  for (const w of items ?? []) {
+    if (!w.surveyor_username) continue;
+    const e = perSurveyor.get(w.surveyor_username) ?? { name: w.surveyor_name ?? w.surveyor_username, n: 0 };
+    e.n++;
+    perSurveyor.set(w.surveyor_username, e);
+  }
   const unassigned = (items ?? []).filter((w) => !w.surveyor_username).length;
 
   return (
@@ -120,6 +143,12 @@ export default function SurveyorAssignmentsPage() {
           </p>
         )}
 
+        {(canAssign || admin.role === "commissioner") && (
+          <div className="mt-4">
+            <ReassignByWardButton onDone={() => load()} />
+          </div>
+        )}
+
         <div className="mt-5 inline-flex rounded-md border border-slate-300 bg-white p-0.5 text-xs font-semibold" role="group" aria-label="Show">
           <button onClick={() => setFilter("all")} aria-pressed={filter === "all"} className={`rounded px-3 py-1.5 ${filter === "all" ? "bg-nnm-blue text-white" : "text-slate-600"}`}>
             All ({items?.length ?? 0})
@@ -132,6 +161,28 @@ export default function SurveyorAssignmentsPage() {
             No surveyor yet ({unassigned})
           </button>
         </div>
+
+        {perSurveyor.size > 0 && (
+          <div className="mt-3 flex flex-wrap gap-2 text-xs">
+            <button
+              onClick={() => setWho("")}
+              aria-pressed={!who}
+              className={`rounded-full border px-3 py-1 font-semibold ${!who ? "border-nnm-blue bg-blue-50 text-nnm-blue" : "border-slate-300 text-slate-600"}`}
+            >
+              Every surveyor
+            </button>
+            {[...perSurveyor.entries()].map(([u, e]) => (
+              <button
+                key={u}
+                onClick={() => setWho(who === u ? "" : u)}
+                aria-pressed={who === u}
+                className={`rounded-full border px-3 py-1 font-semibold ${who === u ? "border-nnm-blue bg-blue-50 text-nnm-blue" : "border-slate-300 text-slate-600"}`}
+              >
+                {e.name}: {e.n}
+              </button>
+            ))}
+          </div>
+        )}
 
         {items === null ? (
           <p className="mt-6 flex items-center gap-2 text-sm text-slate-400">
@@ -159,6 +210,12 @@ export default function SurveyorAssignmentsPage() {
                         {w.ward ? ` · Ward ${w.ward}` : ""} <span className="text-xs text-slate-400">· waiting {since(w.waiting_since)}</span>
                       </p>
                       <p className="mt-0.5 text-xs text-slate-500">{w.stage_label}</p>
+                      {(() => {
+                        const ws = surveyorOfWard(surveyors, w.ward);
+                        return ws && ws.username !== w.surveyor_username ? (
+                          <p className="mt-0.5 text-xs text-nnm-blue">Ward surveyor: {ws.displayName}</p>
+                        ) : null;
+                      })()}
                     </div>
                     <div className="text-right text-sm">
                       <div className="text-xs text-slate-500">Surveyor</div>
@@ -169,7 +226,7 @@ export default function SurveyorAssignmentsPage() {
                     (w.assignable_here ? (
                       <div className="mt-3 flex flex-col gap-2 sm:flex-row">
                         <select
-                          value={choice[key] ?? ""}
+                          value={choice[key] ?? (!w.surveyor_username ? (surveyorOfWard(surveyors, w.ward)?.username ?? "") : "")}
                           onChange={(e) => setChoice((c) => ({ ...c, [key]: e.target.value }))}
                           aria-label={`Tax Surveyor for ${w.reference}`}
                           className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm sm:max-w-xs"
@@ -185,7 +242,7 @@ export default function SurveyorAssignmentsPage() {
                         </select>
                         <button
                           onClick={() => assign(w)}
-                          disabled={busy !== null || !choice[key]}
+                          disabled={busy !== null || !(choice[key] ?? (!w.surveyor_username ? surveyorOfWard(surveyors, w.ward)?.username : ""))}
                           className="rounded-md bg-nnm-blue px-4 py-2 text-sm font-semibold text-white hover:bg-nnm-blue-dark disabled:opacity-60"
                         >
                           {busy === key ? "Saving…" : w.surveyor_name ? "Reassign" : "Assign"}
@@ -197,7 +254,11 @@ export default function SurveyorAssignmentsPage() {
                         <Link href={pageOf(w)} className="font-semibold text-nnm-blue hover:underline">
                           request page
                         </Link>
-                        {w.type === "new_holding" ? " - together with the demand register number." : " - together with the area verification."}
+                        {w.type === "new_holding"
+                          ? " - together with the demand register number."
+                          : w.type === "migrated_survey"
+                            ? " (Old Holdings Survey page)."
+                            : " - together with the area verification."}
                       </p>
                     ))}
                 </div>
