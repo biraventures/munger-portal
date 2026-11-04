@@ -308,6 +308,7 @@ export default function TaxCollectorPage() {
     setCollecting(true);
     setError(null);
     try {
+      alert(paymentMode);
       if ((paymentMode === 'Card' || paymentMode === 'UPI') && !intentSuccess) {
         updateUrl({
           amount: Number(selected.totalAmountDemanded),
@@ -376,9 +377,9 @@ export default function TaxCollectorPage() {
   const handleIntentResponse = async (data: IntentResponse) => {
     if (data.ok && data.statusCode === '00') {
       const { receiptData } = data;
-      alert(JSON.stringify(receiptData, null, 2));
       receiptData.demandNo = String(selectedDemandNo)
       setIntentReceipt(receiptData);
+      alert("Payment successful! You can now proceed to collect the payment and issue the slip.");
       await executeCollectPayment(true)
       cleanQueryParams()
     } else {
