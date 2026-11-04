@@ -8,7 +8,6 @@ import { DocumentVerificationQR } from "@/components/operator/document-verificat
 import { isProvisional } from "@/components/operator/cancelled-document-notice";
 import { printElementInNewWindow } from "@/lib/print-in-new-window";
 import { describePaymentDetails } from "@/lib/payment-modes";
-import { updateUrl } from "@/app/admin/tax-collector/page";
 
 function money(v: string | number): string {
   return Number(v).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
