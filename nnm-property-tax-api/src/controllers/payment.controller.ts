@@ -52,15 +52,18 @@ const holdingNoParamSchema = z.object({
 export const postPayment = asyncHandler(async (req: Request, res: Response) => {
   const paramsParsed = holdingNoParamSchema.safeParse(req.params);
   if (!paramsParsed.success) {
+    console.log('Debug 1: ', paramsParsed.error.flatten().fieldErrors);
     throw ApiError.badRequest("Invalid holding number");
   }
   if (req.admin && req.admin.role !== "tax_collector" && req.admin.role !== "agency_operator") {
+    console.log('Debug 2: ', req.admin.role);
     throw new ApiError(403, "Only a Tax Collector, the Agency Operator or an operator can record a payment.");
   }
   const isTaxCollector = req.admin?.role === "tax_collector";
 
   const bodyParsed = paymentSchema.safeParse(req.body);
   if (!bodyParsed.success) {
+    console.log('Debug 3: ', bodyParsed);
     throw ApiError.badRequest("Invalid payment data", bodyParsed.error.flatten().fieldErrors);
   }
 
