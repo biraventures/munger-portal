@@ -67,6 +67,8 @@ export const propertySaveSchema = z.object({
     .nullish(),
   // Field reports only: the original owner has died, so no Aadhaar can be given.
   ownerDeceased: z.boolean().optional(),
+  // Field reports only: the owner does not agree to give Aadhaar details.
+  aadhaarRefused: z.boolean().optional(),
   ownerName: z.string().min(1),
   relationType: z.enum(["S/O", "D/O", "W/O", "C/O"]).nullish(),
   relationName: z.string().nullish(),

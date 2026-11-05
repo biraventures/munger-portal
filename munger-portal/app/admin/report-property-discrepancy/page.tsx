@@ -111,8 +111,8 @@ function ReportPropertyDiscrepancyContent() {
       setSubmitError("Describe what you found that doesn't match the records.");
       return;
     }
-    if (!form.aadhaarNumber.trim() && !form.ownerDeceased) {
-      setSubmitError("The holding owner's Aadhaar number is required (or tick that the original owner has died).");
+    if (!form.aadhaarNumber.trim() && !form.ownerDeceased && !form.aadhaarRefused) {
+      setSubmitError("The holding owner's Aadhaar number is required (or tick that the owner has died / does not agree to give Aadhaar).");
       return;
     }
     setSubmitting(true);
@@ -121,7 +121,7 @@ function ReportPropertyDiscrepancyContent() {
       const [photoBase64Data, previousReceiptPhotoBase64Data, aadhaarPhotoBase64Data] = await Promise.all([
         capture.photoFile ? fileToBase64(capture.photoFile) : undefined,
         capture.previousReceiptFile ? fileToBase64(capture.previousReceiptFile) : undefined,
-        capture.aadhaarFile ? fileToBase64(capture.aadhaarFile) : undefined,
+        capture.aadhaarFile && !form.ownerDeceased && !form.aadhaarRefused ? fileToBase64(capture.aadhaarFile) : undefined,
       ]);
       await reportPropertyDiscrepancy(holdingNo.trim(), {
         discrepancyNotes: discrepancyNotes.trim(),
@@ -328,7 +328,7 @@ function ReportPropertyDiscrepancyContent() {
               />
             </div>
 
-            <DiscrepancyCaptureSection state={capture} onChange={setCapture} />
+            <DiscrepancyCaptureSection state={capture} onChange={setCapture} hideAadhaar={form.ownerDeceased || form.aadhaarRefused} />
 
             {submitError && (
               <div role="alert" className="flex items-center gap-2 rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-700">

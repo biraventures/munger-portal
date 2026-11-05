@@ -63,8 +63,8 @@ export default function ResubmitDiscrepancyPage() {
       setSubmitError("Describe what you found that doesn't match the records.");
       return;
     }
-    if (!form.aadhaarNumber.trim() && !form.ownerDeceased) {
-      setSubmitError("The holding owner's Aadhaar number is required (or tick that the original owner has died).");
+    if (!form.aadhaarNumber.trim() && !form.ownerDeceased && !form.aadhaarRefused) {
+      setSubmitError("The holding owner's Aadhaar number is required (or tick that the owner has died / does not agree to give Aadhaar).");
       return;
     }
     setSubmitting(true);
@@ -73,7 +73,7 @@ export default function ResubmitDiscrepancyPage() {
       const [photoBase64Data, previousReceiptPhotoBase64Data, aadhaarPhotoBase64Data] = await Promise.all([
         capture.photoFile ? fileToBase64(capture.photoFile) : undefined,
         capture.previousReceiptFile ? fileToBase64(capture.previousReceiptFile) : undefined,
-        capture.aadhaarFile ? fileToBase64(capture.aadhaarFile) : undefined,
+        capture.aadhaarFile && !form.ownerDeceased && !form.aadhaarRefused ? fileToBase64(capture.aadhaarFile) : undefined,
       ]);
       await resubmitDiscrepancyRequest(id, {
         discrepancyNotes: discrepancyNotes.trim(),
@@ -167,7 +167,7 @@ export default function ResubmitDiscrepancyPage() {
               />
             </div>
 
-            <DiscrepancyCaptureSection state={capture} onChange={setCapture} />
+            <DiscrepancyCaptureSection state={capture} onChange={setCapture} hideAadhaar={form.ownerDeceased || form.aadhaarRefused} />
             <p className="-mt-4 text-xs text-slate-400">
               Leaving a photo slot empty on resubmission keeps the one already on file from your original report.
             </p>

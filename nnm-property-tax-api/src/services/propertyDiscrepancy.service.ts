@@ -90,8 +90,8 @@ export async function reportPropertyDiscrepancy(
 ): Promise<PropertyDiscrepancyRequestRow> {
   const property = await propertyRepository.findByHoldingNo(holdingNo);
   if (!property) throw ApiError.notFound("Holding not found.");
-  if (!proposedData.aadhaarNumber?.trim() && !proposedData.ownerDeceased) {
-    throw ApiError.badRequest("The holding owner's Aadhaar number is required (or tick that the original owner has died).");
+  if (!proposedData.aadhaarNumber?.trim() && !proposedData.ownerDeceased && !proposedData.aadhaarRefused) {
+    throw ApiError.badRequest("The holding owner's Aadhaar number is required (or tick that the owner has died / does not agree to give Aadhaar).");
   }
 
   const existingPending = await propertyDiscrepancyRepository.findPendingForHolding(holdingNo);
@@ -330,8 +330,8 @@ export async function resubmitDiscrepancyAfterRevert(
   if (request.status !== "reverted") throw ApiError.badRequest("This request isn't currently awaiting correction.");
   if (request.reported_by_username !== admin.username)
     throw new ApiError(403, "Only the Tax Collector who originally reported this can resubmit it.");
-  if (!proposedData.aadhaarNumber?.trim() && !proposedData.ownerDeceased) {
-    throw ApiError.badRequest("The holding owner's Aadhaar number is required (or tick that the original owner has died).");
+  if (!proposedData.aadhaarNumber?.trim() && !proposedData.ownerDeceased && !proposedData.aadhaarRefused) {
+    throw ApiError.badRequest("The holding owner's Aadhaar number is required (or tick that the owner has died / does not agree to give Aadhaar).");
   }
 
   // A photo not re-attached on resubmission keeps whatever was on file from the original submission.

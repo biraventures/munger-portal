@@ -15,6 +15,8 @@ export interface AdminPropertyFormState {
   aadhaarNumber: string;
   /** The original owner has died: no Aadhaar number is required. */
   ownerDeceased: boolean;
+  /** The owner does not agree to give Aadhaar details: no Aadhaar number is required. */
+  aadhaarRefused: boolean;
   areaSqft: string;
   address: string;
   ward: string;
@@ -34,6 +36,7 @@ export function blankAdminPropertyForm(): AdminPropertyFormState {
     mobileNo: "",
     aadhaarNumber: "",
     ownerDeceased: false,
+    aadhaarRefused: false,
     areaSqft: "",
     address: "",
     ward: "",
@@ -52,8 +55,9 @@ export function propertyFormToPayload(form: AdminPropertyFormState): Record<stri
   return {
     ownerName: form.ownerName.trim(),
     mobileNo: form.mobileNo.trim() || null,
-    aadhaarNumber: form.ownerDeceased ? null : form.aadhaarNumber.trim() || null,
+    aadhaarNumber: form.ownerDeceased || form.aadhaarRefused ? null : form.aadhaarNumber.trim() || null,
     ...(form.ownerDeceased ? { ownerDeceased: true } : {}),
+    ...(form.aadhaarRefused && !form.ownerDeceased ? { aadhaarRefused: true } : {}),
     areaSqft: Number(form.areaSqft) || 0,
     address: form.address.trim(),
     ward: form.ward.trim() || null,
@@ -85,6 +89,7 @@ export function propertyFormFromProposedData(data: Record<string, unknown>): Adm
     mobileNo: String(data.mobileNo ?? ""),
     aadhaarNumber: String(data.aadhaarNumber ?? ""),
     ownerDeceased: data.ownerDeceased === true,
+    aadhaarRefused: data.aadhaarRefused === true,
     areaSqft: String(data.areaSqft ?? ""),
     address: String(data.address ?? ""),
     ward: String(data.ward ?? ""),
@@ -117,6 +122,7 @@ export function propertyFormFromExisting(property: Record<string, unknown>, floo
     mobileNo: String(property.mobile_no ?? ""),
     aadhaarNumber: String(property.aadhaar_number ?? ""),
     ownerDeceased: false,
+    aadhaarRefused: false,
     areaSqft: String(property.area_sqft ?? ""),
     address: String(property.address ?? ""),
     ward: String(property.ward ?? ""),
@@ -199,21 +205,40 @@ export function AdminPropertyDetailsForm({
         <div>
           <label className={labelClass}>Aadhaar number</label>
           <input
-            value={form.ownerDeceased ? "" : form.aadhaarNumber}
+            value={form.ownerDeceased || form.aadhaarRefused ? "" : form.aadhaarNumber}
             onChange={(e) => updateField("aadhaarNumber", e.target.value.replace(/\D/g, ""))}
             maxLength={12}
-            disabled={form.ownerDeceased}
-            placeholder={form.ownerDeceased ? "Not required - original owner has died" : "12-digit number"}
+            disabled={form.ownerDeceased || form.aadhaarRefused}
+            placeholder={
+              form.ownerDeceased
+                ? "Not required - original owner has died"
+                : form.aadhaarRefused
+                  ? "Not required - owner did not agree to give Aadhaar"
+                  : "12-digit number"
+            }
             className={`${inputClass} disabled:bg-slate-100`}
           />
           <label className="mt-1.5 flex items-center gap-1.5 text-xs text-slate-700">
             <input
               type="checkbox"
               checked={form.ownerDeceased}
-              onChange={(e) => onChange({ ...form, ownerDeceased: e.target.checked })}
+              onChange={(e) =>
+                onChange({ ...form, ownerDeceased: e.target.checked, aadhaarRefused: e.target.checked ? false : form.aadhaarRefused })
+              }
               className="h-3.5 w-3.5"
             />
             Original owner has died (Aadhaar not required)
+          </label>
+          <label className="mt-1 flex items-center gap-1.5 text-xs text-slate-700">
+            <input
+              type="checkbox"
+              checked={form.aadhaarRefused}
+              onChange={(e) =>
+                onChange({ ...form, aadhaarRefused: e.target.checked, ownerDeceased: e.target.checked ? false : form.ownerDeceased })
+              }
+              className="h-3.5 w-3.5"
+            />
+            Owner does not agree to give Aadhaar details (Aadhaar not required)
           </label>
         </div>
       </div>

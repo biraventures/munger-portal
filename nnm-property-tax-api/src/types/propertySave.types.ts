@@ -27,6 +27,8 @@ export interface PropertySaveInput {
   aadhaarNumber?: string | null;
   /** Field reports only: the original owner has died, so the Aadhaar number is not required. */
   ownerDeceased?: boolean;
+  /** Field reports only: the owner does not agree to give Aadhaar details, so the number is not required. */
+  aadhaarRefused?: boolean;
   ownerName: string;
   relationType?: "S/O" | "D/O" | "W/O" | "C/O" | null;
   relationName?: string | null;
