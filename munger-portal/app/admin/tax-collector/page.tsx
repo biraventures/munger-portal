@@ -326,12 +326,19 @@ export default function TaxCollectorPage() {
         })
         setShowConfirmModal(false)
       } else {
+        console.log("Submitting payment with extraData:", {
+          amount: Number(selected.totalAmountDemanded),
+          paymentMode: paymentMode ?? "",
+          demandNo: selectedDemandNo,
+          ...instrumentPayload(paymentMode ?? "", instrument),
+          ...extraData,
+        }); // Debugging line
         const res = await submitPaymentAdmin(result.property.holding_no, {
           amount: Number(selected.totalAmountDemanded),
           paymentMode: paymentMode ?? "",
           demandNo: selectedDemandNo,
           ...instrumentPayload(paymentMode ?? "", instrument),
-          ...(extraData || {}),
+          ...extraData,
         });
         setShowConfirmModal(false);
         setReceipt(res);
