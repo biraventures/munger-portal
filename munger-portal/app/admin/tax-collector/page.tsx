@@ -307,7 +307,7 @@ export default function TaxCollectorPage() {
     setShowConfirmModal(true);
   }
 
-  async function executeCollectPayment(intentSuccessOrEvent?: boolean | React.MouseEvent<HTMLButtonElement>) {
+  async function executeCollectPayment(intentSuccessOrEvent?: boolean | React.MouseEvent<HTMLButtonElement>, extraData?: Record<string, unknown>) {
 
     const intentSuccess = typeof intentSuccessOrEvent === "boolean" ? intentSuccessOrEvent : false;
 
@@ -331,6 +331,7 @@ export default function TaxCollectorPage() {
           paymentMode: paymentMode ?? "",
           demandNo: selectedDemandNo,
           ...instrumentPayload(paymentMode ?? "", instrument),
+          ...(extraData || {}),
         });
         setShowConfirmModal(false);
         setReceipt(res);
@@ -381,28 +382,26 @@ export default function TaxCollectorPage() {
   const property = result?.property;
   const floors = result?.floors ?? [];
 
-  const intentValueAssigngment = (data: IntentResponse) => {
-    if (data.pm === 'CARD') {
-      setInstrument((prev) => ({
-        ...prev,
-        instrumentNo: data.receiptData.RRN,
-        cardLast4: data.receiptData.Last4Digit,
-        cardHolderName: data.receiptData.NameOnCard
-      }))
-    } else {
-      setInstrument((prev) => ({
-        ...prev,
-        instrumentNo: data.receiptData.RRN,
-      }))
-    }
-  }
-
   const handleIntentResponse = async (data: IntentResponse) => {
     if (data.ok && data.statusCode === '00') {
-      intentValueAssigngment(data)
+
+      let extraDataToSend: Record<string, unknown> = {};
+
+      if (data.pm === 'CARD') {
+        extraDataToSend = {
+          instrumentNo: data.receiptData.RRN,
+          cardLast4: data.receiptData.Last4Digit,
+          cardHolderName: data.receiptData.NameOnCard
+        }
+      } else {
+        extraDataToSend = {
+          instrumentNo: data.receiptData.RRN,
+        }
+      }
+
       const { receiptData } = data;
       setIntentReceipt(receiptData);
-      await executeCollectPayment(true)
+      await executeCollectPayment(true, extraDataToSend);
       cleanQueryParams()
     } else {
       console.warn(data.statusMsg);
