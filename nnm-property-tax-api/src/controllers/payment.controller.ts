@@ -78,6 +78,7 @@ export const postPayment = asyncHandler(async (req: Request, res: Response) => {
         throw ApiError.badRequest(`Please record the ${missing.join(" and ")} for this holding before collecting payment.`);
       }
     }
+    console.log('Debug 4: ', prop);
   }
 
   const collectedBy = req.admin?.displayName ?? req.operator!.displayName;
@@ -92,6 +93,7 @@ export const postPayment = asyncHandler(async (req: Request, res: Response) => {
     ? { id: req.admin.sub, username: req.admin.username, role: isTaxCollector ? ("tax_collector" as const) : ("agency_operator" as const), ip: req.ip ?? null }
     : { id: req.operator!.sub, username: req.operator!.username, role: "operator" as const, ip: req.ip ?? null };
   const result = await submitPayment(paramsParsed.data.holdingNo, input, collectedBy, actor);
+  console.log('Debug 5: ', result);
   res.status(200).json(result);
 });
 
