@@ -15,7 +15,12 @@ const ALLOWED_PHOTO_MIME_TO_EXT: Record<string, string> = {
 };
 
 /** Saves a photo to PHOTO_UPLOAD_DIR (same shared storage/validation as the discrepancy-report photo flow). `kind` (holding/aadhaar/receipt/landdoc) keeps the four photos on one capture distinct on disk. Returns null when no photo was given. */
-async function savePhoto(holdingNo: string, kind: string, base64Data: string | undefined, mimeType: string | undefined): Promise<string | null> {
+async function savePhoto(
+  holdingNo: string,
+  kind: string,
+  base64Data: string | undefined,
+  mimeType: string | undefined,
+): Promise<string | null> {
   if (!base64Data || !mimeType) return null;
   const ext = ALLOWED_PHOTO_MIME_TO_EXT[mimeType];
   if (!ext) throw ApiError.badRequest("Only JPEG or PNG photos are accepted.");
@@ -47,6 +52,7 @@ export interface FieldVerificationInput {
   registerPhotoMimeType?: string | undefined;
   waterConnectionStatus?: string | null;
   waterConnectionCount?: number | null;
+  ownerDeceased?: boolean;
 }
 
 /**
@@ -59,7 +65,11 @@ export interface FieldVerificationInput {
  * NOT modify the property record; the existing discrepancy approval
  * chain remains the only path that changes property data.
  */
-export async function recordFieldVerification(holdingNo: string, admin: AdminTokenPayload, input: FieldVerificationInput): Promise<PropertyFieldVerificationRow> {
+export async function recordFieldVerification(
+  holdingNo: string,
+  admin: AdminTokenPayload,
+  input: FieldVerificationInput,
+): Promise<PropertyFieldVerificationRow> {
   const property = await propertyRepository.findByHoldingNo(holdingNo);
   if (!property) throw ApiError.notFound("Holding not found.");
 
@@ -94,6 +104,7 @@ export async function recordFieldVerification(holdingNo: string, admin: AdminTok
     registerPhotoPath,
     waterConnectionStatus: input.waterConnectionStatus ?? null,
     waterConnectionCount: input.waterConnectionCount ?? null,
+    ownerDeceased: input.ownerDeceased ?? false,
     capturedByUsername: admin.username,
     capturedByDisplayName: admin.displayName,
     capturedByRole: admin.role,

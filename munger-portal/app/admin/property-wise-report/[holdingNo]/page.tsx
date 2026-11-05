@@ -469,6 +469,8 @@ export default function PropertyWiseReportDetailPage() {
                     : `Required documents missing: ${report.documentStatus.missingForCollection.join(", ")}. Tax Collector collection is blocked${
                         report.documentStatus.complete ? "" : " and online payment is not available"
                       } until these are uploaded.`}
+                  {report.documentStatus.ownerDeceased &&
+                    ` Original owner recorded as deceased${report.documentStatus.ownerDeceasedBy ? ` by ${report.documentStatus.ownerDeceasedBy}` : ""} - Aadhaar not required.`}
                 </p>
               )}
               {report.fieldVerifications.length === 0 && (report.receivingCopies?.length ?? 0) === 0 ? (

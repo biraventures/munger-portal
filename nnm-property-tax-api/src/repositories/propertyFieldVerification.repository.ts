@@ -14,6 +14,7 @@ export const propertyFieldVerificationRepository = {
     registerPhotoPath?: string | null;
     waterConnectionStatus?: string | null;
     waterConnectionCount?: number | null;
+    ownerDeceased?: boolean;
     capturedByUsername: string;
     capturedByDisplayName: string;
     capturedByRole: string;
@@ -22,8 +23,8 @@ export const propertyFieldVerificationRepository = {
       `INSERT INTO property_field_verifications (
         holding_no, gps_lat, gps_lng, holding_photo_path, aadhaar_number, aadhaar_photo_path,
         previous_receipt_photo_path, land_document_photo_path, captured_by_username, captured_by_display_name, captured_by_role,
-        register_photo_path, water_connection_status, water_connection_count
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+        register_photo_path, water_connection_status, water_connection_count, owner_deceased
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
       RETURNING *`,
       [
         input.holdingNo,
@@ -40,6 +41,7 @@ export const propertyFieldVerificationRepository = {
         input.registerPhotoPath ?? null,
         input.waterConnectionStatus ?? null,
         input.waterConnectionCount ?? null,
+        input.ownerDeceased ?? false,
       ],
     );
     return rows[0]!;

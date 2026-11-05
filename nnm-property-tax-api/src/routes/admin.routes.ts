@@ -1,5 +1,10 @@
 import { collectorHoldingParam, collectorDemandNoticeParam } from "../middleware/collectorWardGuard";
-import { assignSurveyorHandler, getSurveyorWorkHandler, reassignByWardHandler, setSurveyorWardsHandler } from "../controllers/surveyorAssignment.controller";
+import {
+  assignSurveyorHandler,
+  getSurveyorWorkHandler,
+  reassignByWardHandler,
+  setSurveyorWardsHandler,
+} from "../controllers/surveyorAssignment.controller";
 import { Router } from "express";
 import {
   getBulkReceiptCollectors,
@@ -32,11 +37,7 @@ import {
   getDiscrepancyPhoto,
 } from "../controllers/propertyDiscrepancy.controller";
 import { getFieldVerificationPhoto, getFieldVerificationAadhaar } from "../controllers/propertyFieldVerification.controller";
-import {
-  getCancellationRequests,
-  postApproveCancellation,
-  postRejectCancellation,
-} from "../controllers/cancellationRequest.controller";
+import { getCancellationRequests, postApproveCancellation, postRejectCancellation } from "../controllers/cancellationRequest.controller";
 import { getDemandRefreshRuns, postBulkGenerateDemandNotices } from "../controllers/demandNotice.controller";
 import { postBulkRegenerateTaxHistory } from "../controllers/adminTaxHistory.controller";
 import { getDataExport } from "../controllers/export.controller";
@@ -50,7 +51,12 @@ import {
 import { listAllShops, getPerSqftReport, uploadShopsCsvHandler } from "../controllers/shop.controller";
 import { deleteShopHandler } from "../controllers/shopDelete.controller";
 import { getShopReportHandler } from "../controllers/shopReport.controller";
-import { createShopFlagHandler, listShopFlagsForShopHandler, listOpenShopFlagsHandler, resolveShopFlagHandler } from "../controllers/shopFlag.controller";
+import {
+  createShopFlagHandler,
+  listShopFlagsForShopHandler,
+  listOpenShopFlagsHandler,
+  resolveShopFlagHandler,
+} from "../controllers/shopFlag.controller";
 import { postRenumberHolding, postRenameHolding, postFixHoldingNoSpaces } from "../controllers/propertyRenumber.controller";
 import { deletePropertyHandler } from "../controllers/propertyDelete.controller";
 import { getSpacedHoldings, postDeleteSpacedHoldings, postRemoveDuplicateFloors } from "../controllers/propertyBulkCleanup.controller";
@@ -83,7 +89,12 @@ import {
   previewResidentialSolidWasteHandler,
   applyResidentialSolidWasteHandler,
 } from "../controllers/propertyBulkImport.controller";
-import { searchPropertiesHandler, getPropertyReportHandler, getCollectedHoldingsHandler, exportCollectedHoldingsHandler } from "../controllers/propertyReport.controller";
+import {
+  searchPropertiesHandler,
+  getPropertyReportHandler,
+  getCollectedHoldingsHandler,
+  exportCollectedHoldingsHandler,
+} from "../controllers/propertyReport.controller";
 import { getShopsPendingPublication, postApproveShopPublication } from "../controllers/shopPublicationApproval.controller";
 import {
   getShopEditRequests,
@@ -99,7 +110,10 @@ import {
 } from "../controllers/shopAgreementDocument.controller";
 import { postCreateShopInspection, listShopInspectionsForShop, listAllShopInspections } from "../controllers/shopInspection.controller";
 import {
-  uploadMigratedHoldingsHandler, listReviewRowsHandler, importReviewRowHandler, discardReviewRowHandler,
+  uploadMigratedHoldingsHandler,
+  listReviewRowsHandler,
+  importReviewRowHandler,
+  discardReviewRowHandler,
   listPendingAssignmentHandler,
   listTaxDarogasHandler,
   listTaxSurveyorsHandler,
@@ -115,11 +129,29 @@ import {
   listEventsForHoldingHandler,
   exportMigratedHoldingsHandler,
 } from "../controllers/migratedHoldingSurvey.controller";
-import { listResurveyFlagsHandler, reviewResurveyFlagHandler, exportResurveyFlagsHandler } from "../controllers/propertyResurveyFlag.controller";
-import { listMySolidWasteRequests, postApproveSolidWasteRequest, postRejectSolidWasteRequest } from "../controllers/solidWasteRequest.controller";
+import {
+  listResurveyFlagsHandler,
+  reviewResurveyFlagHandler,
+  exportResurveyFlagsHandler,
+} from "../controllers/propertyResurveyFlag.controller";
+import {
+  getSolidWasteRequestPhoto,
+  listMySolidWasteRequests,
+  postApproveSolidWasteRequest,
+  postRejectSolidWasteRequest,
+} from "../controllers/solidWasteRequest.controller";
 import { listAllCollectionIssues, listMyCollectionIssues } from "../controllers/collectionIssue.controller";
-import { postGenerateCollectionIssueNotice, getCollectionIssueNotices, getReprintCollectionIssueNotice } from "../controllers/collectionIssueNotice.controller";
-import { listTaxCollectorsWithAssignmentHandler, listCityManagersHandler, assignCityManagerHandler, setTaxCollectorWardsHandler } from "../controllers/taxCollectorAssignment.controller";
+import {
+  postGenerateCollectionIssueNotice,
+  getCollectionIssueNotices,
+  getReprintCollectionIssueNotice,
+} from "../controllers/collectionIssueNotice.controller";
+import {
+  listTaxCollectorsWithAssignmentHandler,
+  listCityManagersHandler,
+  assignCityManagerHandler,
+  setTaxCollectorWardsHandler,
+} from "../controllers/taxCollectorAssignment.controller";
 import { listAdminAccounts, setAdminAccountActive } from "../controllers/adminAccounts.controller";
 import { listEntryRevertEventsHandler, exportEntryRevertEventsHandler } from "../controllers/entryRevertEvent.controller";
 import {
@@ -169,7 +201,15 @@ import {
 } from "../controllers/tradeLicenseApplication.controller";
 import { requireAdmin, requireAdminRole } from "../middleware/requireAdmin";
 import * as bpc from "../controllers/buildingPermit.controller";
-import { getPre2011Entries, getPre2011Holding, getPre2011PendingCount, getPre2011Worklist, postPre2011Approve, postPre2011Entry, postPre2011Reject } from "../controllers/pre2011Arv.controller";
+import {
+  getPre2011Entries,
+  getPre2011Holding,
+  getPre2011PendingCount,
+  getPre2011Worklist,
+  postPre2011Approve,
+  postPre2011Entry,
+  postPre2011Reject,
+} from "../controllers/pre2011Arv.controller";
 import {
   searchMigratedHoldingsHandler,
   createUnsurveyedHouseHandler,
@@ -193,7 +233,12 @@ import {
   exportDuesReportHandler,
   listDuesReportWardsHandler,
 } from "../controllers/agency.controller";
-import { listDisputedHandler, getDisputeStatusHandler, flagDisputedHandler, clearDisputedHandler } from "../controllers/propertyDispute.controller";
+import {
+  listDisputedHandler,
+  getDisputeStatusHandler,
+  flagDisputedHandler,
+  clearDisputedHandler,
+} from "../controllers/propertyDispute.controller";
 import { getStreetlightReportHandler } from "../controllers/streetlightReport.controller";
 import {
   listAllPublicDocumentsHandler,
@@ -255,7 +300,13 @@ const requireSeniorAdmin = requireAdminRole("commissioner", "deputy_commissioner
 // mutation approvals, cancellation requests, tax collector management,
 // and trade license services below, per what was explicitly asked for.
 // The Tax Surveyor is in the chain for the field report of a mutation (only the cases assigned to him - see changeRequest.service).
-const requireMutationChainRole = requireAdminRole("tax_daroga", "tax_surveyor", "mutation_nodal_clerk", "deputy_commissioner", "commissioner");
+const requireMutationChainRole = requireAdminRole(
+  "tax_daroga",
+  "tax_surveyor",
+  "mutation_nodal_clerk",
+  "deputy_commissioner",
+  "commissioner",
+);
 const requireNonStallPrabhari = requireAdminRole(
   "tax_daroga",
   "mutation_nodal_clerk",
@@ -284,7 +335,14 @@ adminRouter.patch("/accounts/:id/active", requireAdminRole("commissioner"), setA
 adminRouter.get("/change-requests", requireMutationChainRole, getChangeRequests);
 adminRouter.get("/change-requests/:id", requireMutationChainRole, getChangeRequestById);
 // Mutation audit trail and the per-desk pending summary - the chain, plus the City Manager who oversees it.
-const requireMutationViewRole = requireAdminRole("tax_daroga", "tax_surveyor", "mutation_nodal_clerk", "deputy_commissioner", "commissioner", "city_manager");
+const requireMutationViewRole = requireAdminRole(
+  "tax_daroga",
+  "tax_surveyor",
+  "mutation_nodal_clerk",
+  "deputy_commissioner",
+  "commissioner",
+  "city_manager",
+);
 adminRouter.get("/field-report-photos/:photoId", requireMutationViewRole, getFieldReportPhoto);
 adminRouter.get("/change-requests/:id/timeline", requireMutationViewRole, getChangeRequestTimeline);
 adminRouter.get("/mutation-applications/:id/timeline", requireMutationViewRole, getApplicationTimeline);
@@ -311,7 +369,16 @@ adminRouter.post("/property-discrepancy-requests/:id/resubmit", requireAdminRole
 // Field verification photo retrieval - viewable by the two roles who capture them plus the oversight chain.
 adminRouter.get(
   "/field-verifications/:id/photo/:kind",
-  requireAdminRole("tax_collector", "tax_surveyor", "tax_daroga", "city_manager", "deputy_commissioner", "commissioner", "agency_team_leader", "agency_project_manager"),
+  requireAdminRole(
+    "tax_collector",
+    "tax_surveyor",
+    "tax_daroga",
+    "city_manager",
+    "deputy_commissioner",
+    "commissioner",
+    "agency_team_leader",
+    "agency_project_manager",
+  ),
   getFieldVerificationPhoto,
 );
 adminRouter.get(
@@ -351,7 +418,17 @@ adminRouter.get("/entry-revert-events/export", requireAdminRole("commissioner"),
 // asset management (attendance) login - see streetlightCommissioner.controller.ts
 // and streetlight.routes.ts - and are no longer duplicated here.
 // See streetlightAdmin.controller.ts.
-const requireStreetlightReporterRole = requireAdminRole("tax_daroga", "tax_surveyor", "tax_collector", "stall_prabhari", "je_mechanical", "ae_mechanical", "commissioner", "deputy_commissioner", "city_manager");
+const requireStreetlightReporterRole = requireAdminRole(
+  "tax_daroga",
+  "tax_surveyor",
+  "tax_collector",
+  "stall_prabhari",
+  "je_mechanical",
+  "ae_mechanical",
+  "commissioner",
+  "deputy_commissioner",
+  "city_manager",
+);
 adminRouter.get("/street-segments", listStreetSegmentsHandler);
 adminRouter.get("/street-segments/:id/lights", requireStreetlightReporterRole, listLightsForSegmentHandler);
 adminRouter.post("/streetlight-faults", requireStreetlightReporterRole, reportStreetlightFaultHandler);
@@ -433,7 +510,12 @@ adminRouter.post("/property-imports/:id/residential-solid-waste", requireAdminRo
 // log + discrepancy flags + resurvey flags + surveyor field
 // verifications for one holding. See propertyReport.controller.ts.
 const requirePropertyReportRole = requireAdminRole(
-  "commissioner", "deputy_commissioner", "city_manager", "tax_daroga", "agency_team_leader", "agency_project_manager",
+  "commissioner",
+  "deputy_commissioner",
+  "city_manager",
+  "tax_daroga",
+  "agency_team_leader",
+  "agency_project_manager",
 );
 // Holdings whose tax was collected on a given day (list + Excel).
 adminRouter.get("/reports/collected-holdings", requirePropertyReportRole, getCollectedHoldingsHandler);
@@ -489,7 +571,11 @@ adminRouter.get("/migrated-holdings/pending-assignment", listPendingAssignmentHa
 adminRouter.get("/tax-darogas", listTaxDarogasHandler);
 adminRouter.get("/tax-surveyors", listTaxSurveyorsHandler);
 // Tax Daroga: which Tax Surveyor handles each new holding request / mutation / remeasurement request.
-adminRouter.get("/surveyor-work", requireAdminRole("tax_daroga", "tax_surveyor", "city_manager", "deputy_commissioner", "commissioner"), getSurveyorWorkHandler);
+adminRouter.get(
+  "/surveyor-work",
+  requireAdminRole("tax_daroga", "tax_surveyor", "city_manager", "deputy_commissioner", "commissioner"),
+  getSurveyorWorkHandler,
+);
 adminRouter.post("/surveyor-work/reassign-by-ward", requireAdminRole("commissioner", "tax_daroga"), reassignByWardHandler);
 adminRouter.post("/surveyor-work/:type/:id/assign", requireAdminRole("tax_daroga"), assignSurveyorHandler);
 // Municipal Commissioner: which wards each Tax Surveyor covers (work in those wards is assigned to them automatically).
@@ -503,7 +589,15 @@ adminRouter.post("/tax-collectors/:username/assign-city-manager", requireAdminRo
 adminRouter.post("/tax-collectors/:username/wards", requireAdminRole("commissioner"), setTaxCollectorWardsHandler);
 // Agency logins (migration 114). The Project Manager (and senior officers) read collection / distribution / field
 // reports; the Team Leader prints ward-wise demand notices for holdings with dues pending.
-const requireAgencyReportRole = requireAdminRole("agency_project_manager", "commissioner", "deputy_commissioner", "city_manager", "tax_daroga", "tax_collector", "agency_operator");
+const requireAgencyReportRole = requireAdminRole(
+  "agency_project_manager",
+  "commissioner",
+  "deputy_commissioner",
+  "city_manager",
+  "tax_daroga",
+  "tax_collector",
+  "agency_operator",
+);
 adminRouter.get("/agency/report-filters", requireAgencyReportRole, getReportFilterOptionsHandler);
 adminRouter.get("/agency/reports", requireAgencyReportRole, getAgencyReportHandler);
 adminRouter.get("/agency/reports/export", requireAgencyReportRole, exportAgencyReportHandler);
@@ -518,10 +612,26 @@ adminRouter.post("/agency/notice-print-positions", requireAdminRole("agency_team
 adminRouter.post("/agency-operator/notice-print-positions", requireAdminRole("agency_operator"), recordPrintPositionsHandler);
 adminRouter.get(
   "/properties/:holdingNo/notice-print-positions",
-  requireAdminRole("tax_collector", "tax_daroga", "agency_operator", "agency_team_leader", "city_manager", "deputy_commissioner", "commissioner"),
+  requireAdminRole(
+    "tax_collector",
+    "tax_daroga",
+    "agency_operator",
+    "agency_team_leader",
+    "city_manager",
+    "deputy_commissioner",
+    "commissioner",
+  ),
   getPrintPositionsHandler,
 );
-const requireDuesReportRole = requireAdminRole("agency_operator", "agency_team_leader", "agency_project_manager", "tax_daroga", "city_manager", "deputy_commissioner", "commissioner");
+const requireDuesReportRole = requireAdminRole(
+  "agency_operator",
+  "agency_team_leader",
+  "agency_project_manager",
+  "tax_daroga",
+  "city_manager",
+  "deputy_commissioner",
+  "commissioner",
+);
 adminRouter.get("/agency-operator/dues-report/wards", requireDuesReportRole, listDuesReportWardsHandler);
 adminRouter.get("/agency-operator/dues-report.xlsx", requireDuesReportRole, exportDuesReportHandler);
 
@@ -540,7 +650,15 @@ adminRouter.post("/receiving-copies/notices/:demandNo", requireAdminRole("tax_co
 adminRouter.get("/receiving-copies", requireFieldViewRole, listReceivingCopiesHandler);
 adminRouter.get(
   "/receiving-copies/:id/photo",
-  requireAdminRole("tax_collector", "tax_daroga", "city_manager", "deputy_commissioner", "commissioner", "agency_team_leader", "agency_project_manager"),
+  requireAdminRole(
+    "tax_collector",
+    "tax_daroga",
+    "city_manager",
+    "deputy_commissioner",
+    "commissioner",
+    "agency_team_leader",
+    "agency_project_manager",
+  ),
   getReceivingCopyPhotoHandler,
 );
 adminRouter.post("/migrated-holdings/:holdingNo/assign", assignToSurveyorHandler);
@@ -564,6 +682,19 @@ adminRouter.get("/property-resurvey-flags", requireResurveyFlagReviewRole, listR
 
 // Collection issues oversight - same reviewer roles as resurvey flags.
 adminRouter.get("/solid-waste-requests", requireAdminRole("tax_daroga", "city_manager"), listMySolidWasteRequests);
+adminRouter.get(
+  "/solid-waste-requests/:id/photo",
+  requireAdminRole(
+    "tax_collector",
+    "tax_daroga",
+    "city_manager",
+    "deputy_commissioner",
+    "commissioner",
+    "agency_team_leader",
+    "agency_project_manager",
+  ),
+  getSolidWasteRequestPhoto,
+);
 adminRouter.post("/solid-waste-requests/:id/approve", requireAdminRole("tax_daroga", "city_manager"), postApproveSolidWasteRequest);
 adminRouter.post("/solid-waste-requests/:id/reject", requireAdminRole("tax_daroga", "city_manager"), postRejectSolidWasteRequest);
 // Field collection: the Tax Daroga prints the day's receipts collector-wise; cheque/DD receipts are reconciled by the
@@ -571,10 +702,18 @@ adminRouter.post("/solid-waste-requests/:id/reject", requireAdminRole("tax_darog
 const requireBulkReceiptRole = requireAdminRole("tax_daroga", "commissioner", "deputy_commissioner", "city_manager");
 adminRouter.get("/bulk-receipts/collectors", requireBulkReceiptRole, getBulkReceiptCollectors);
 adminRouter.get("/bulk-receipts", requireBulkReceiptRole, getBulkReceipts);
-adminRouter.get("/instrument-reconciliation", requireAdminRole("agency_project_manager", "tax_daroga", "commissioner", "deputy_commissioner", "city_manager"), getInstruments);
+adminRouter.get(
+  "/instrument-reconciliation",
+  requireAdminRole("agency_project_manager", "tax_daroga", "commissioner", "deputy_commissioner", "city_manager"),
+  getInstruments,
+);
 adminRouter.post("/instrument-reconciliation/:receiptNo/pm-verify", requireAdminRole("agency_project_manager"), postPmVerifyInstrument);
 adminRouter.post("/instrument-reconciliation/:receiptNo/reconcile", requireAdminRole("tax_daroga"), postReconcileInstrument);
-adminRouter.post("/instrument-reconciliation/:receiptNo/bounce", requireAdminRole("agency_project_manager", "tax_daroga"), postBounceInstrument);
+adminRouter.post(
+  "/instrument-reconciliation/:receiptNo/bounce",
+  requireAdminRole("agency_project_manager", "tax_daroga"),
+  postBounceInstrument,
+);
 
 // Khatian scans: the Abhilekh Prabhari uploads, the Deputy Municipal Commissioner reviews; senior officers can view.
 const requireKhatianViewRole = requireAdminRole("abhilekh_prabhari", "deputy_commissioner", "commissioner", "city_manager");
@@ -586,19 +725,37 @@ adminRouter.post("/khatian/:id/review", requireAdminRole("deputy_commissioner"),
 
 // Online mutation applications: everyone in the mutation chain can open one (and its documents); the Tax Daroga links
 // a manually entered one to its holding (or turns it down).
-const requireMutationApplicationRole = requireAdminRole("tax_daroga", "tax_surveyor", "mutation_nodal_clerk", "deputy_commissioner", "commissioner", "city_manager");
+const requireMutationApplicationRole = requireAdminRole(
+  "tax_daroga",
+  "tax_surveyor",
+  "mutation_nodal_clerk",
+  "deputy_commissioner",
+  "commissioner",
+  "city_manager",
+);
 adminRouter.get("/mutation-applications", requireMutationApplicationRole, getMutationApplications);
 adminRouter.get("/mutation-applications/:id", requireMutationApplicationRole, getMutationApplication);
 adminRouter.get("/mutation-applications/:id/documents/:docId/file", requireMutationApplicationRole, getMutationApplicationDocument);
 adminRouter.post("/mutation-applications/:id/link", requireAdminRole("tax_daroga"), postLinkMutationApplication);
 adminRouter.post("/mutation-applications/:id/reject", requireAdminRole("tax_daroga"), postRejectMutationApplication);
 adminRouter.post("/mutation-applications/:id/return", requireAdminRole("tax_daroga"), postReturnToApplicant);
-adminRouter.get("/holdings/:holdingNo/lineage", requireAdminRole("tax_daroga", "mutation_nodal_clerk", "deputy_commissioner", "commissioner", "city_manager"), getHoldingLineage);
+adminRouter.get(
+  "/holdings/:holdingNo/lineage",
+  requireAdminRole("tax_daroga", "mutation_nodal_clerk", "deputy_commissioner", "commissioner", "city_manager"),
+  getHoldingLineage,
+);
 
 // Online requests for a new holding (property never assessed): Tax Daroga (demand register no. + surveyor) -> Tax
 // Surveyor (field report) -> Tax Daroga (comments) -> DMC -> Commissioner (approves; the MMC- holding is created).
 // Each step checks the officer's role and the request's status in the service; a Tax Surveyor sees only his own.
-const requireNewHoldingRole = requireAdminRole("tax_daroga", "tax_surveyor", "mutation_nodal_clerk", "deputy_commissioner", "commissioner", "city_manager");
+const requireNewHoldingRole = requireAdminRole(
+  "tax_daroga",
+  "tax_surveyor",
+  "mutation_nodal_clerk",
+  "deputy_commissioner",
+  "commissioner",
+  "city_manager",
+);
 adminRouter.get("/new-holding-requests", requireNewHoldingRole, getNewHoldingRequests);
 adminRouter.get("/new-holding-requests/pending-count", requireNewHoldingRole, getNewHoldingPendingCount);
 adminRouter.get("/new-holding-requests/:id", requireNewHoldingRole, getNewHoldingRequest);
@@ -610,12 +767,23 @@ adminRouter.post("/new-holding-requests/:id/dmc-forward", requireAdminRole("depu
 adminRouter.post("/new-holding-requests/:id/send-back", requireAdminRole("deputy_commissioner", "commissioner"), postNewHoldingSendBack);
 adminRouter.post("/new-holding-requests/:id/approve", requireAdminRole("commissioner"), postNewHoldingApprove);
 adminRouter.post("/new-holding-requests/:id/return", requireAdminRole("tax_daroga"), postNewHoldingReturn);
-adminRouter.post("/new-holding-requests/:id/reject", requireAdminRole("tax_daroga", "deputy_commissioner", "commissioner"), postNewHoldingReject);
+adminRouter.post(
+  "/new-holding-requests/:id/reject",
+  requireAdminRole("tax_daroga", "deputy_commissioner", "commissioner"),
+  postNewHoldingReject,
+);
 
 // Trade licence field survey: the Tax Collector records visits and prints the notices; the City Manager (who signs them)
 // and senior officers see every business and its notice status.
 // (GET routes only - the Agency Operator may view, never act.)
-const requireTlViewRole = requireAdminRole("tax_collector", "city_manager", "deputy_commissioner", "commissioner", "trade_license_nodal", "agency_operator");
+const requireTlViewRole = requireAdminRole(
+  "tax_collector",
+  "city_manager",
+  "deputy_commissioner",
+  "commissioner",
+  "trade_license_nodal",
+  "agency_operator",
+);
 adminRouter.post("/tl-survey", requireAdminRole("tax_collector"), postTlSurvey);
 adminRouter.get("/tl-surveys", requireTlViewRole, getTlSurveys);
 adminRouter.get("/tl-surveys/:id/file/:which", requireTlViewRole, getTlSurveyFile);
@@ -627,11 +795,18 @@ adminRouter.get("/tl-notices/:id", requireTlViewRole, getTlNotice);
 adminRouter.get("/collection-issues/mine", requireAdminRole("tax_collector"), listMyCollectionIssues);
 adminRouter.get("/collection-issues", requireAdminRole("tax_daroga", "commissioner", "city_manager"), listAllCollectionIssues);
 adminRouter.post("/collection-issues/:id/generate-notice", requireAdminRole("city_manager"), postGenerateCollectionIssueNotice);
-adminRouter.get("/collection-issues/:id/notices", requireAdminRole("tax_daroga", "commissioner", "city_manager"), getCollectionIssueNotices);
-adminRouter.get("/collection-issue-notices/:id/reprint", requireAdminRole("tax_collector", "tax_daroga", "commissioner", "deputy_commissioner", "city_manager"), getReprintCollectionIssueNotice);
+adminRouter.get(
+  "/collection-issues/:id/notices",
+  requireAdminRole("tax_daroga", "commissioner", "city_manager"),
+  getCollectionIssueNotices,
+);
+adminRouter.get(
+  "/collection-issue-notices/:id/reprint",
+  requireAdminRole("tax_collector", "tax_daroga", "commissioner", "deputy_commissioner", "city_manager"),
+  getReprintCollectionIssueNotice,
+);
 adminRouter.post("/property-resurvey-flags/:id/review", requireResurveyFlagReviewRole, reviewResurveyFlagHandler);
 adminRouter.get("/property-resurvey-flags/export", requireAdminRole("commissioner"), exportResurveyFlagsHandler);
-
 
 // Demand notice cancel/supersede and receipt cancel - a separate,
 // FIXED 2-stage chain (Stall Prabhari, then City Manager only - no
@@ -665,7 +840,15 @@ adminRouter.post("/shop-rental-preferences/:id/reject", postRejectRentalPreferen
 // Restricted from Stall Prabhari - trade licenses aren't part of the
 // shop/rental workflow that role is scoped to.
 // The Agency Operator may read the list and the details (ID numbers masked) - not the documents, not approve/reject.
-const requireTlApplicationRead = requireAdminRole("tax_daroga", "mutation_nodal_clerk", "deputy_commissioner", "commissioner", "city_manager", "trade_license_nodal", "agency_operator");
+const requireTlApplicationRead = requireAdminRole(
+  "tax_daroga",
+  "mutation_nodal_clerk",
+  "deputy_commissioner",
+  "commissioner",
+  "city_manager",
+  "trade_license_nodal",
+  "agency_operator",
+);
 adminRouter.get("/trade-license-applications/stats", requireTlApplicationRead, getTradeLicenseStats);
 adminRouter.get("/trade-license-applications", requireTlApplicationRead, getTradeLicenseApplications);
 adminRouter.get("/trade-license-applications/:id", requireTlApplicationRead, getTradeLicenseApplicationById);
@@ -693,7 +876,6 @@ adminRouter.post("/tax-history/bulk-regenerate", requireSeniorAdmin, postBulkReg
 // Data export - GET /api/v1/admin/export?dataset=properties|payments|notices|changes|all
 adminRouter.get("/export", requireSeniorAdmin, getDataExport);
 
-
 // Assistant Town Planning Supervisor (ATPS) and Commissioner
 // capture/edit coordinates and manage KML imports. Assistant
 // Architect is view-only (the GIS map) - added to search/view/export
@@ -718,7 +900,14 @@ adminRouter.get("/geo/export", requireGeoViewRole, exportGeoData);
 // Building plan permits (migration 150) - the Map Section Nodal Clerk takes each application through every office
 // stage; Commissioner / DMC / City Manager / town planning staff can view.
 const requireBpClerk = requireAdminRole("map_section_nodal_clerk");
-const requireBpView = requireAdminRole("map_section_nodal_clerk", "commissioner", "deputy_commissioner", "city_manager", "assistant_town_planning_supervisor", "assistant_architect");
+const requireBpView = requireAdminRole(
+  "map_section_nodal_clerk",
+  "commissioner",
+  "deputy_commissioner",
+  "city_manager",
+  "assistant_town_planning_supervisor",
+  "assistant_architect",
+);
 adminRouter.get("/building-permits", requireBpView, bpc.getOfficeList);
 adminRouter.get("/building-permits/:id", requireBpView, bpc.getOfficeDetail);
 adminRouter.get("/building-permits/:id/documents/:docId/file", requireBpView, bpc.getOfficeFile);

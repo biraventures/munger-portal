@@ -6,6 +6,8 @@ export interface PropertyFieldVerificationRow {
   holding_photo_path: string | null;
   aadhaar_number: string | null;
   aadhaar_photo_path: string | null;
+  /** Recorded on this visit: the holding's original owner has died, so no Aadhaar can be collected. */
+  owner_deceased: boolean;
   previous_receipt_photo_path: string | null;
   land_document_photo_path: string | null;
   register_photo_path: string | null;

@@ -10,10 +10,22 @@ import { useAdminGuard } from "@/lib/use-admin-guard";
 import { fetchFullPropertyAdmin, reportPropertyDiscrepancy } from "@/lib/admin-api";
 import { fetchFormOptions, type FormOptions } from "@/lib/operator-api";
 import { searchMigratedHoldings, type MigHoldingHit } from "@/lib/collector-field-api";
-import { AdminPropertyDetailsForm, blankAdminPropertyForm, propertyFormFromExisting, propertyFormToPayload, type AdminPropertyFormState } from "@/components/admin/property-details-form";
-import { DiscrepancyCaptureSection, blankCaptureState, fileToBase64, type CaptureState } from "@/components/admin/discrepancy-capture-section";
+import {
+  AdminPropertyDetailsForm,
+  blankAdminPropertyForm,
+  propertyFormFromExisting,
+  propertyFormToPayload,
+  type AdminPropertyFormState,
+} from "@/components/admin/property-details-form";
+import {
+  DiscrepancyCaptureSection,
+  blankCaptureState,
+  fileToBase64,
+  type CaptureState,
+} from "@/components/admin/discrepancy-capture-section";
 
-const inputClass = "w-full rounded-md border border-slate-300 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-nnm-blue focus:ring-offset-1";
+const inputClass =
+  "w-full rounded-md border border-slate-300 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-nnm-blue focus:ring-offset-1";
 
 export default function ReportPropertyDiscrepancyPage() {
   return (
@@ -46,7 +58,9 @@ function ReportPropertyDiscrepancyContent() {
   const [migResults, setMigResults] = useState<MigHoldingHit[] | null>(null);
 
   useEffect(() => {
-    fetchFormOptions().then(setFormOptions).catch(() => setFormOptions(null));
+    fetchFormOptions()
+      .then(setFormOptions)
+      .catch(() => setFormOptions(null));
   }, []);
 
   async function runSearch(value: string) {
@@ -97,8 +111,8 @@ function ReportPropertyDiscrepancyContent() {
       setSubmitError("Describe what you found that doesn't match the records.");
       return;
     }
-    if (!form.aadhaarNumber.trim()) {
-      setSubmitError("The holding owner's Aadhaar number is required.");
+    if (!form.aadhaarNumber.trim() && !form.ownerDeceased && !form.aadhaarRefused) {
+      setSubmitError("The holding owner's Aadhaar number is required (or tick that the owner has died / does not agree to give Aadhaar).");
       return;
     }
     setSubmitting(true);
@@ -107,7 +121,7 @@ function ReportPropertyDiscrepancyContent() {
       const [photoBase64Data, previousReceiptPhotoBase64Data, aadhaarPhotoBase64Data] = await Promise.all([
         capture.photoFile ? fileToBase64(capture.photoFile) : undefined,
         capture.previousReceiptFile ? fileToBase64(capture.previousReceiptFile) : undefined,
-        capture.aadhaarFile ? fileToBase64(capture.aadhaarFile) : undefined,
+        capture.aadhaarFile && !form.ownerDeceased && !form.aadhaarRefused ? fileToBase64(capture.aadhaarFile) : undefined,
       ]);
       await reportPropertyDiscrepancy(holdingNo.trim(), {
         discrepancyNotes: discrepancyNotes.trim(),
@@ -161,12 +175,15 @@ function ReportPropertyDiscrepancyContent() {
           Report Property Discrepancy
         </h1>
         <p className="mb-6 text-sm text-slate-500">
-          Found something during collection that doesn&apos;t match the records? Search the holding, enter the complete corrected details, and it will go
-          through Tax Surveyor, Tax Daroga, City Manager, and DMC review before anything changes.
+          Found something during collection that doesn&apos;t match the records? Search the holding, enter the complete corrected details,
+          and it will go through Tax Surveyor, Tax Daroga, City Manager, and DMC review before anything changes.
         </p>
 
         {success && (
-          <div role="status" className="mb-5 flex items-center gap-2 rounded-md border border-green-200 bg-green-50 p-4 text-sm text-green-800">
+          <div
+            role="status"
+            className="mb-5 flex items-center gap-2 rounded-md border border-green-200 bg-green-50 p-4 text-sm text-green-800"
+          >
             <CheckCircle2 className="h-4 w-4 shrink-0" />
             Submitted for review. Nothing changes on the record until all four stages approve it.
           </div>
@@ -200,13 +217,19 @@ function ReportPropertyDiscrepancyContent() {
           {migOpen && (
             <div className="mt-3 space-y-3">
               <p className="text-xs text-slate-500">
-                Search the old-record (MUNG-MIG-) holdings by owner name, address, old holding number or MUNG-MIG number. Pick the match, enter the real details, and it goes
-                through the same four-stage review. When fully approved the house becomes a regular holding.
+                Search the old-record (MUNG-MIG-) holdings by owner name, address, old holding number or MUNG-MIG number. Pick the match,
+                enter the real details, and it goes through the same four-stage review. When fully approved the house becomes a regular
+                holding.
               </p>
               <div className="flex flex-wrap items-end gap-2">
                 <div className="min-w-48 flex-1">
                   <label className="mb-1 block text-xs font-medium text-slate-500">Owner name / address / number (3+ letters)</label>
-                  <input value={migQuery} onChange={(e) => setMigQuery(e.target.value)} onKeyDown={(e) => e.key === "Enter" && migQuery.trim().length >= 3 && runMigSearch()} className={inputClass} />
+                  <input
+                    value={migQuery}
+                    onChange={(e) => setMigQuery(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && migQuery.trim().length >= 3 && runMigSearch()}
+                    className={inputClass}
+                  />
                 </div>
                 <div className="w-24">
                   <label className="mb-1 block text-xs font-medium text-slate-500">Ward</label>
@@ -225,7 +248,11 @@ function ReportPropertyDiscrepancyContent() {
               {migError && <p className="text-sm text-red-600">{migError}</p>}
               {migResults && migResults.length === 0 && (
                 <p className="text-sm text-slate-600">
-                  Nothing found. If the house is in neither database, <Link href="/admin/unsurveyed-house-entry" className="font-semibold text-nnm-blue underline">record it as a house not in records</Link>.
+                  Nothing found. If the house is in neither database,{" "}
+                  <Link href="/admin/unsurveyed-house-entry" className="font-semibold text-nnm-blue underline">
+                    record it as a house not in records
+                  </Link>
+                  .
                 </p>
               )}
               {migResults && migResults.length > 0 && (
@@ -257,7 +284,11 @@ function ReportPropertyDiscrepancyContent() {
                 </ul>
               )}
               <p className="text-xs text-slate-500">
-                Not in the MUNG-MIG data either? <Link href="/admin/unsurveyed-house-entry" className="font-semibold text-nnm-blue underline">Record a house not in records</Link>.
+                Not in the MUNG-MIG data either?{" "}
+                <Link href="/admin/unsurveyed-house-entry" className="font-semibold text-nnm-blue underline">
+                  Record a house not in records
+                </Link>
+                .
               </p>
             </div>
           )}
@@ -274,7 +305,8 @@ function ReportPropertyDiscrepancyContent() {
           <div className="space-y-6">
             <div className="rounded-xl border border-slate-200 bg-white p-6">
               <p className="mb-4 text-sm text-slate-600">
-                On record: <span className="font-semibold text-slate-800">{ownerOnRecord}</span>. Correct the fields below to match what you actually found.
+                On record: <span className="font-semibold text-slate-800">{ownerOnRecord}</span>. Correct the fields below to match what you
+                actually found.
               </p>
               <label className="mb-1 block text-xs font-medium text-slate-600">What doesn&apos;t match? (required)</label>
               <textarea
@@ -288,10 +320,15 @@ function ReportPropertyDiscrepancyContent() {
 
             <div className="rounded-xl border border-slate-200 bg-white p-6">
               <h2 className="mb-4 text-sm font-semibold text-slate-800">Complete corrected details</h2>
-              <AdminPropertyDetailsForm form={form} onChange={setForm} usageTypes={formOptions?.usageTypes ?? []} solidWasteChargeTypes={formOptions?.solidWasteChargeTypes ?? []} />
+              <AdminPropertyDetailsForm
+                form={form}
+                onChange={setForm}
+                usageTypes={formOptions?.usageTypes ?? []}
+                solidWasteChargeTypes={formOptions?.solidWasteChargeTypes ?? []}
+              />
             </div>
 
-            <DiscrepancyCaptureSection state={capture} onChange={setCapture} />
+            <DiscrepancyCaptureSection state={capture} onChange={setCapture} hideAadhaar={form.ownerDeceased || form.aadhaarRefused} />
 
             {submitError && (
               <div role="alert" className="flex items-center gap-2 rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-700">

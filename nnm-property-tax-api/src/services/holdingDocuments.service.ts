@@ -11,7 +11,7 @@ import { ApiError } from "../utils/ApiError";
  */
 export const HOLDING_DOCUMENT_LABELS = {
   gps: "GPS location of the holding",
-  aadhaar: "Owner's Aadhaar number",
+  aadhaar: "Owner's Aadhaar number (or original owner marked as deceased)",
   holdingPhoto: "Photo of the holding",
   previousReceipt: "Previous year's holding tax receipt",
   landDocument: "Land ownership document",
@@ -32,12 +32,22 @@ export interface HoldingDocumentStatus {
   /** Everything the Tax Collector needs before collecting is on file (includes the demand register photo). */
   collectionComplete: boolean;
   missingForCollection: string[];
+  /** A field visit recorded that the original owner has died: the Aadhaar requirement is waived. */
+  ownerDeceased: boolean;
+  /** Who recorded it and when (latest such visit). */
+  ownerDeceasedBy: string | null;
+  ownerDeceasedAt: Date | null;
 }
 
 export async function getHoldingDocumentStatus(holdingNo: string): Promise<HoldingDocumentStatus> {
-  const { rows } = await pool.query<Record<HoldingDocumentKey, boolean | null>>(
+  const { rows } = await pool.query<
+    Record<HoldingDocumentKey, boolean | null> & { deceased: boolean | null; deceased_by: string | null; deceased_at: Date | null }
+  >(
     `SELECT bool_or(gps_lat IS NOT NULL AND gps_lng IS NOT NULL) AS "gps",
-            bool_or(aadhaar_number IS NOT NULL) AS "aadhaar",
+            bool_or(aadhaar_number IS NOT NULL OR owner_deceased) AS "aadhaar",
+            bool_or(owner_deceased) AS deceased,
+            (array_agg(captured_by_display_name ORDER BY captured_at DESC) FILTER (WHERE owner_deceased))[1] AS deceased_by,
+            max(captured_at) FILTER (WHERE owner_deceased) AS deceased_at,
             bool_or(holding_photo_path IS NOT NULL) AS "holdingPhoto",
             bool_or(previous_receipt_photo_path IS NOT NULL) AS "previousReceipt",
             bool_or(land_document_photo_path IS NOT NULL) AS "landDocument",
@@ -45,11 +55,23 @@ export async function getHoldingDocumentStatus(holdingNo: string): Promise<Holdi
        FROM property_field_verifications WHERE holding_no = $1`,
     [holdingNo],
   );
-  const r = rows[0] ?? ({} as Record<HoldingDocumentKey, boolean | null>);
-  const onFile = Object.fromEntries((Object.keys(HOLDING_DOCUMENT_LABELS) as HoldingDocumentKey[]).map((k) => [k, !!r[k]])) as Record<HoldingDocumentKey, boolean>;
+  const r = rows[0] ?? ({} as (typeof rows)[number]);
+  const onFile = Object.fromEntries((Object.keys(HOLDING_DOCUMENT_LABELS) as HoldingDocumentKey[]).map((k) => [k, !!r[k]])) as Record<
+    HoldingDocumentKey,
+    boolean
+  >;
   const missing = ONLINE_DOCUMENT_KEYS.filter((k) => !onFile[k]).map((k) => HOLDING_DOCUMENT_LABELS[k]);
   const missingForCollection = COLLECTION_DOCUMENT_KEYS.filter((k) => !onFile[k]).map((k) => HOLDING_DOCUMENT_LABELS[k]);
-  return { complete: missing.length === 0, onFile, missing, collectionComplete: missingForCollection.length === 0, missingForCollection };
+  return {
+    complete: missing.length === 0,
+    onFile,
+    missing,
+    collectionComplete: missingForCollection.length === 0,
+    missingForCollection,
+    ownerDeceased: !!r.deceased,
+    ownerDeceasedBy: r.deceased_by ?? null,
+    ownerDeceasedAt: r.deceased_at ?? null,
+  };
 }
 
 /** The message shown to a citizen whose holding cannot be paid online yet. */
@@ -80,17 +102,32 @@ export async function assertDocumentsForCollection(holdingNo: string): Promise<v
 export function isValidAadhaar(n: string): boolean {
   if (!/^[2-9]\d{11}$/.test(n)) return false;
   const d = [
-    [0, 1, 2, 3, 4, 5, 6, 7, 8, 9], [1, 2, 3, 4, 0, 6, 7, 8, 9, 5], [2, 3, 4, 0, 1, 7, 8, 9, 5, 6], [3, 4, 0, 1, 2, 8, 9, 5, 6, 7],
-    [4, 0, 1, 2, 3, 9, 5, 6, 7, 8], [5, 9, 8, 7, 6, 0, 4, 3, 2, 1], [6, 5, 9, 8, 7, 1, 0, 4, 3, 2], [7, 6, 5, 9, 8, 2, 1, 0, 4, 3],
-    [8, 7, 6, 5, 9, 3, 2, 1, 0, 4], [9, 8, 7, 6, 5, 4, 3, 2, 1, 0],
+    [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+    [1, 2, 3, 4, 0, 6, 7, 8, 9, 5],
+    [2, 3, 4, 0, 1, 7, 8, 9, 5, 6],
+    [3, 4, 0, 1, 2, 8, 9, 5, 6, 7],
+    [4, 0, 1, 2, 3, 9, 5, 6, 7, 8],
+    [5, 9, 8, 7, 6, 0, 4, 3, 2, 1],
+    [6, 5, 9, 8, 7, 1, 0, 4, 3, 2],
+    [7, 6, 5, 9, 8, 2, 1, 0, 4, 3],
+    [8, 7, 6, 5, 9, 3, 2, 1, 0, 4],
+    [9, 8, 7, 6, 5, 4, 3, 2, 1, 0],
   ];
   const p = [
-    [0, 1, 2, 3, 4, 5, 6, 7, 8, 9], [1, 5, 7, 6, 2, 8, 3, 0, 9, 4], [5, 8, 0, 3, 7, 9, 6, 1, 4, 2], [8, 9, 1, 6, 0, 4, 3, 5, 2, 7],
-    [9, 4, 5, 3, 1, 2, 6, 8, 7, 0], [4, 2, 8, 6, 5, 7, 3, 9, 0, 1], [2, 7, 9, 3, 8, 0, 6, 4, 1, 5], [7, 0, 4, 6, 9, 1, 3, 2, 5, 8],
+    [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+    [1, 5, 7, 6, 2, 8, 3, 0, 9, 4],
+    [5, 8, 0, 3, 7, 9, 6, 1, 4, 2],
+    [8, 9, 1, 6, 0, 4, 3, 5, 2, 7],
+    [9, 4, 5, 3, 1, 2, 6, 8, 7, 0],
+    [4, 2, 8, 6, 5, 7, 3, 9, 0, 1],
+    [2, 7, 9, 3, 8, 0, 6, 4, 1, 5],
+    [7, 0, 4, 6, 9, 1, 3, 2, 5, 8],
   ];
   let c = 0;
-  n.split("").reverse().forEach((ch, i) => {
-    c = d[c]![p[i % 8]![Number(ch)]!]!;
-  });
+  n.split("")
+    .reverse()
+    .forEach((ch, i) => {
+      c = d[c]![p[i % 8]![Number(ch)]!]!;
+    });
   return c === 0;
 }

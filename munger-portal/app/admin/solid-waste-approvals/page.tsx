@@ -5,6 +5,7 @@ import { AlertCircle, CheckCircle2, Trash2 } from "lucide-react";
 import { ReviewSections } from "@/components/admin/change-review";
 import { AdminHeader } from "@/components/admin-header";
 import { useAdminGuard } from "@/lib/use-admin-guard";
+import { AuthPhoto } from "@/components/admin/field-verification-photos";
 import { decideSolidWasteRequest, fetchSolidWasteRequestsToApprove, type SolidWasteRequestForApproval } from "@/lib/admin-api";
 
 export default function SolidWasteApprovalsPage() {
@@ -98,25 +99,51 @@ export default function SolidWasteApprovalsPage() {
                 </p>
                 <p className="mt-1 text-xs text-slate-500">entered by {r.requested_by_display_name}</p>
                 <div className="mt-2">
+                  {r.facility_photo_path ? (
+                    <AuthPhoto
+                      path={`/admin/solid-waste-requests/${r.id}/photo`}
+                      label="Facility photo by the Tax Collector (tap to open full size)"
+                      large
+                    />
+                  ) : (
+                    <p className="text-xs text-slate-400">No facility photo (entered before photos were required).</p>
+                  )}
+                </div>
+                <div className="mt-2">
                   <ReviewSections
                     onlyChanged={false}
                     sections={[
                       {
                         title: "Holding",
                         rows: [
-                          { label: "Plot area", before: r.area_sqft ?? null, after: r.area_sqft ?? null, format: (v) => (v ? `${Number(v).toLocaleString("en-IN")} sq ft` : "—") },
+                          {
+                            label: "Plot area",
+                            before: r.area_sqft ?? null,
+                            after: r.area_sqft ?? null,
+                            format: (v) => (v ? `${Number(v).toLocaleString("en-IN")} sq ft` : "—"),
+                          },
                           { label: "Type of road", before: r.road_type ?? null, after: r.road_type ?? null },
                           {
                             label: "Floors (usage)",
-                            before: (r.floors ?? []).map((f) => `${f.floor}: ${f.sqft.toLocaleString("en-IN")} sq ft ${f.usage} (${f.occupancy})`).join("; ") || null,
-                            after: (r.floors ?? []).map((f) => `${f.floor}: ${f.sqft.toLocaleString("en-IN")} sq ft ${f.usage} (${f.occupancy})`).join("; ") || null,
+                            before:
+                              (r.floors ?? [])
+                                .map((f) => `${f.floor}: ${f.sqft.toLocaleString("en-IN")} sq ft ${f.usage} (${f.occupancy})`)
+                                .join("; ") || null,
+                            after:
+                              (r.floors ?? [])
+                                .map((f) => `${f.floor}: ${f.sqft.toLocaleString("en-IN")} sq ft ${f.usage} (${f.occupancy})`)
+                                .join("; ") || null,
                           },
                         ],
                       },
                       {
                         title: "Solid waste user charge",
                         rows: [
-                          { label: "User type", before: r.is_bwg ? "Bulk waste generator (no charge)" : r.current_type, after: r.requested_type },
+                          {
+                            label: "User type",
+                            before: r.is_bwg ? "Bulk waste generator (no charge)" : r.current_type,
+                            after: r.requested_type,
+                          },
                           {
                             label: "Yearly charge",
                             before: r.current_charge ?? null,
@@ -137,7 +164,11 @@ export default function SolidWasteApprovalsPage() {
                       placeholder="Reason for rejecting"
                       className="flex-1 rounded-md border border-slate-300 px-3 py-2 text-sm"
                     />
-                    <button onClick={() => decide(r.id, "reject")} disabled={busyId === r.id} className="rounded-md bg-red-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-60">
+                    <button
+                      onClick={() => decide(r.id, "reject")}
+                      disabled={busyId === r.id}
+                      className="rounded-md bg-red-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-60"
+                    >
                       Confirm reject
                     </button>
                     <button onClick={() => setRejectingId(null)} className="rounded-md border border-slate-300 px-3 py-2 text-xs">
@@ -146,10 +177,20 @@ export default function SolidWasteApprovalsPage() {
                   </div>
                 ) : (
                   <div className="mt-3 flex gap-2">
-                    <button onClick={() => decide(r.id, "approve")} disabled={busyId === r.id} className="rounded-md bg-nnm-blue px-4 py-2 text-xs font-semibold text-white hover:bg-nnm-blue-dark disabled:opacity-60">
+                    <button
+                      onClick={() => decide(r.id, "approve")}
+                      disabled={busyId === r.id}
+                      className="rounded-md bg-nnm-blue px-4 py-2 text-xs font-semibold text-white hover:bg-nnm-blue-dark disabled:opacity-60"
+                    >
                       Approve
                     </button>
-                    <button onClick={() => { setRejectingId(r.id); setReason(""); }} className="rounded-md border border-red-300 px-4 py-2 text-xs font-semibold text-red-700 hover:bg-red-50">
+                    <button
+                      onClick={() => {
+                        setRejectingId(r.id);
+                        setReason("");
+                      }}
+                      className="rounded-md border border-red-300 px-4 py-2 text-xs font-semibold text-red-700 hover:bg-red-50"
+                    >
                       Reject
                     </button>
                   </div>

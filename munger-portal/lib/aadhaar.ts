@@ -41,4 +41,8 @@ export interface HoldingDocumentStatus {
   /** All that the Tax Collector needs before collecting (adds the offline demand register photo). */
   collectionComplete: boolean;
   missingForCollection: string[];
+  /** A field visit recorded that the original owner has died: the Aadhaar requirement is waived. */
+  ownerDeceased?: boolean;
+  ownerDeceasedBy?: string | null;
+  ownerDeceasedAt?: string | null;
 }

@@ -4,8 +4,7 @@ import type { DemandNoticeReprintData } from "./demand-notice-api";
 import type { ReceiptData } from "./payment-api";
 import type { PrintableReceiptHistory as OperatorPrintableReceipt } from "./operator-api";
 
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_PROPERTY_TAX_API_URL || "http://localhost:4000/api/v1";
+const API_BASE_URL = process.env.NEXT_PUBLIC_PROPERTY_TAX_API_URL || "http://localhost:4000/api/v1";
 
 function authHeaders(): HeadersInit {
   const token = getAdminToken();
@@ -158,7 +157,15 @@ export interface ChangeRequestDetail {
     /** Floor-wise mutation: floors being transferred; null = every floor. */
     mutateFloors?: string[] | null;
   } | null;
-  lineage?: { parent_holding_no: string; child_holding_no: string; area_sqft: string; parent_area_before: string; parent_area_after: string; created_at: string; floors?: string[] | null }[];
+  lineage?: {
+    parent_holding_no: string;
+    child_holding_no: string;
+    area_sqft: string;
+    parent_area_before: string;
+    parent_area_after: string;
+    created_at: string;
+    floors?: string[] | null;
+  }[];
   fieldReports?: FieldReport[];
 }
 
@@ -596,8 +603,7 @@ export async function fetchHoldingWardsAdmin(): Promise<string[]> {
 }
 export const fetchDashboardPropertyChangesAdmin = (page: number, pageSize: number) =>
   fetchDashboardListAdmin<PropertyChangeListItem>("property-changes", page, pageSize);
-export const fetchDashboardShopsAdmin = (page: number, pageSize: number) =>
-  fetchDashboardListAdmin<ShopListItem>("shops", page, pageSize);
+export const fetchDashboardShopsAdmin = (page: number, pageSize: number) => fetchDashboardListAdmin<ShopListItem>("shops", page, pageSize);
 export const fetchDashboardShopApplicationsAdmin = (page: number, pageSize: number) =>
   fetchDashboardListAdmin<ShopApplicationListItem>("shop-applications", page, pageSize);
 export const fetchDashboardTradeLicenseApplicationsAdmin = (page: number, pageSize: number) =>
@@ -756,9 +762,12 @@ export interface PropertyBulkImportResult {
 
 /** Plain-language reason when the server's reply carries no message (e.g. a proxy rejecting the request). */
 function uploadFailureMessage(status: number): string {
-  if (status === 413) return "The file is too large for the server to accept (error 413). Ask the administrator to raise the upload size limit on the web server, or upload a smaller file.";
-  if (status === 502 || status === 503 || status === 504) return `The server did not respond in time (error ${status}). Please wait a minute and try again; if it keeps happening, tell the administrator.`;
-  if (status === 401 || status === 403) return `You are not allowed to do this, or your login has expired (error ${status}). Please sign in again.`;
+  if (status === 413)
+    return "The file is too large for the server to accept (error 413). Ask the administrator to raise the upload size limit on the web server, or upload a smaller file.";
+  if (status === 502 || status === 503 || status === 504)
+    return `The server did not respond in time (error ${status}). Please wait a minute and try again; if it keeps happening, tell the administrator.`;
+  if (status === 401 || status === 403)
+    return `You are not allowed to do this, or your login has expired (error ${status}). Please sign in again.`;
   return `Could not upload this file (error ${status}).`;
 }
 
@@ -766,7 +775,11 @@ function uploadFailureMessage(status: number): string {
  * Commissioner / Tax Daroga / City Manager. fileDataBase64 is the raw base64 content of the .xlsx file (no data-URL prefix).
  * The file is NOT imported - it is parked for review by Tax Daroga / City Manager.
  */
-export async function uploadPropertiesXlsx(fileDataBase64: string, dataSourceName: string, fileName?: string): Promise<PropertyBulkImportResult> {
+export async function uploadPropertiesXlsx(
+  fileDataBase64: string,
+  dataSourceName: string,
+  fileName?: string,
+): Promise<PropertyBulkImportResult> {
   const res = await fetch(`${API_BASE_URL}/admin/properties/bulk-upload`, {
     method: "POST",
     headers: authHeaders(),
@@ -974,7 +987,10 @@ export interface TaxSurveyorOption {
 
 /** The surveyor covering a ward (wards compared without leading zeros), or undefined. */
 export function surveyorOfWard<T extends { wards?: string[] }>(list: T[], ward: string | null | undefined): T | undefined {
-  const w = String(ward ?? "").trim().toUpperCase().replace(/^0+(?=.)/, "");
+  const w = String(ward ?? "")
+    .trim()
+    .toUpperCase()
+    .replace(/^0+(?=.)/, "");
   return w ? list.find((s) => (s.wards ?? []).includes(w)) : undefined;
 }
 
@@ -1030,7 +1046,14 @@ export interface MigratedHoldingFloorInput {
 /** Tax Surveyor submits the real, surveyed floor-wise details - optionally including a corrected owner name, since many resurvey holdings need one against what the old paper record had. */
 export async function submitTaxSurveyorEntry(
   holdingNo: string,
-  input: { ownerName?: string; address: string; zone?: string | null; pincode?: string | null; roadType: "PMR" | "MR" | "OR"; floors: MigratedHoldingFloorInput[] },
+  input: {
+    ownerName?: string;
+    address: string;
+    zone?: string | null;
+    pincode?: string | null;
+    roadType: "PMR" | "MR" | "OR";
+    floors: MigratedHoldingFloorInput[];
+  },
 ): Promise<MigratedHoldingSurvey> {
   const res = await fetch(`${API_BASE_URL}/admin/migrated-holdings/${encodeURIComponent(holdingNo)}/submit-survey`, {
     method: "POST",
@@ -1046,7 +1069,11 @@ export async function submitTaxSurveyorEntry(
 }
 
 /** Tax Daroga sends a submitted survey back for correction - to the same surveyor (omit taxSurveyorUsername) or a different one. */
-export async function revertMigratedHoldingToSurveyor(holdingNo: string, reason: string, taxSurveyorUsername?: string): Promise<MigratedHoldingSurvey> {
+export async function revertMigratedHoldingToSurveyor(
+  holdingNo: string,
+  reason: string,
+  taxSurveyorUsername?: string,
+): Promise<MigratedHoldingSurvey> {
   const res = await fetch(`${API_BASE_URL}/admin/migrated-holdings/${encodeURIComponent(holdingNo)}/revert`, {
     method: "POST",
     headers: authHeaders(),
@@ -1157,7 +1184,14 @@ export const WATER_CONNECTION_LABELS: Record<WaterConnectionStatus, string> = {
 /** Tax Collector records the mandatory field details (solid waste user type when missing, tap water connection). */
 export async function saveCollectorDetails(
   holdingNo: string,
-  input: { solidWasteChargeType?: string; waterConnectionStatus?: WaterConnectionStatus; waterConnectionCount?: number },
+  input: {
+    solidWasteChargeType?: string;
+    waterConnectionStatus?: WaterConnectionStatus;
+    waterConnectionCount?: number;
+    /** Required with solidWasteChargeType: a photo of the facility for the Tax Daroga. */
+    facilityPhotoBase64Data?: string;
+    facilityPhotoMimeType?: string;
+  },
 ): Promise<void> {
   const res = await fetch(`${API_BASE_URL}/properties/${encodeURIComponent(holdingNo)}/collector-details`, {
     method: "PUT",
@@ -1181,6 +1215,7 @@ export interface SolidWasteRequest {
   city_manager_by: string | null;
   rejected_by: string | null;
   reject_reason: string | null;
+  facility_photo_path?: string | null;
 }
 
 export interface SolidWasteRequestForApproval extends SolidWasteRequest {
@@ -1228,8 +1263,12 @@ export interface UnsettledDemandNoticeAdmin {
   totalAmountDemanded: string;
 }
 
-export async function fetchUnsettledDemandNoticesAdmin(holdingNo: string): Promise<UnsettledDemandNoticeAdmin[] & { paymentHold?: string | null }> {
-  const res = await fetch(`${API_BASE_URL}/properties/${encodeURIComponent(holdingNo)}/demand-notices/unsettled`, { headers: authHeaders() });
+export async function fetchUnsettledDemandNoticesAdmin(
+  holdingNo: string,
+): Promise<UnsettledDemandNoticeAdmin[] & { paymentHold?: string | null }> {
+  const res = await fetch(`${API_BASE_URL}/properties/${encodeURIComponent(holdingNo)}/demand-notices/unsettled`, {
+    headers: authHeaders(),
+  });
   if (!res.ok) throw new Error("Could not load demand notices.");
   const data: { notices: UnsettledDemandNoticeAdmin[]; paymentHold?: string | null } = await res.json();
   return Object.assign(data.notices, { paymentHold: data.paymentHold ?? null });
@@ -1308,7 +1347,11 @@ export async function fetchResurveyFlags(): Promise<PropertyResurveyFlag[]> {
   return data.flags;
 }
 
-export async function reviewResurveyFlag(id: number, status: "reviewed" | "dismissed", reviewNotes: string | null): Promise<PropertyResurveyFlag> {
+export async function reviewResurveyFlag(
+  id: number,
+  status: "reviewed" | "dismissed",
+  reviewNotes: string | null,
+): Promise<PropertyResurveyFlag> {
   const res = await fetch(`${API_BASE_URL}/admin/property-resurvey-flags/${id}/review`, {
     method: "POST",
     headers: authHeaders(),
@@ -1340,7 +1383,11 @@ export async function downloadResurveyFlagsExport(): Promise<void> {
 }
 
 /** Tax Collector requests cancellation of a demand notice or receipt they issued by mistake - routes through Tax Daroga, then their assigned City Manager. See cancellationRequest.controller.ts. */
-export async function requestCancellationAdmin(requestType: "demand_notice" | "receipt", targetId: string, reason: string): Promise<CancellationRequestSummary> {
+export async function requestCancellationAdmin(
+  requestType: "demand_notice" | "receipt",
+  targetId: string,
+  reason: string,
+): Promise<CancellationRequestSummary> {
   const res = await fetch(`${API_BASE_URL}/properties/cancellation-requests`, {
     method: "POST",
     headers: authHeaders(),
@@ -1396,7 +1443,10 @@ export async function fetchCityManagers(): Promise<CityManagerOption[]> {
   return data.cityManagers;
 }
 
-export async function assignTaxCollectorCityManager(taxCollectorUsername: string, cityManagerUsername: string): Promise<TaxCollectorWithAssignment> {
+export async function assignTaxCollectorCityManager(
+  taxCollectorUsername: string,
+  cityManagerUsername: string,
+): Promise<TaxCollectorWithAssignment> {
   const res = await fetch(`${API_BASE_URL}/admin/tax-collectors/${encodeURIComponent(taxCollectorUsername)}/assign-city-manager`, {
     method: "POST",
     headers: authHeaders(),
@@ -1555,7 +1605,14 @@ export async function fetchStreetlightFaults(status?: "open" | "repaired"): Prom
 // employee.controller.ts.
 // ---------------------------------------------------------------------------
 
-export type ReservationCategory = "scheduled_caste" | "scheduled_tribe" | "other_backward_class" | "extremely_backward_class" | "backward_class_women" | "divyang" | "general";
+export type ReservationCategory =
+  | "scheduled_caste"
+  | "scheduled_tribe"
+  | "other_backward_class"
+  | "extremely_backward_class"
+  | "backward_class_women"
+  | "divyang"
+  | "general";
 export type EducationalQualification = "no_formal_education" | "below_matric" | "matriculation" | "intermediate" | "diploma_degree";
 export type AppointingAuthority = "government_of_bihar" | "munger_municipal_corporation";
 export type EmploymentType = "permanent" | "contractual" | "daily_wage";
@@ -1656,7 +1713,9 @@ export async function createEmployee(input: CreateEmployeeInput): Promise<Employ
 
 /** Fetches a record for correction/addition/deletion by Aadhaar number - null (not an error) when nothing matches yet. */
 export async function searchEmployeeByAadhaar(aadhaarNumber: string): Promise<Employee | null> {
-  const res = await fetch(`${API_BASE_URL}/admin/employees/search?aadhaar=${encodeURIComponent(aadhaarNumber)}`, { headers: authHeaders() });
+  const res = await fetch(`${API_BASE_URL}/admin/employees/search?aadhaar=${encodeURIComponent(aadhaarNumber)}`, {
+    headers: authHeaders(),
+  });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     throw new Error(body.error || "Could not search for this Aadhaar number.");
@@ -1879,7 +1938,10 @@ export async function reportPropertyDiscrepancy(holdingNo: string, input: Report
   return data.request;
 }
 
-export async function fetchDiscrepancyRequests(filters: { status?: "pending" | "approved" | "rejected" | "reverted"; myStage?: boolean }): Promise<{ requests: PropertyDiscrepancyRequest[]; myRole: AdminRole }> {
+export async function fetchDiscrepancyRequests(filters: {
+  status?: "pending" | "approved" | "rejected" | "reverted";
+  myStage?: boolean;
+}): Promise<{ requests: PropertyDiscrepancyRequest[]; myRole: AdminRole }> {
   const params = new URLSearchParams();
   if (filters.status) params.set("status", filters.status);
   if (filters.myStage) params.set("myStage", "true");
@@ -1930,7 +1992,11 @@ export async function fetchDiscrepancyRequestDetail(id: number): Promise<{
 }
 
 /** If editedData is given, this stage is correcting the entries before forwarding rather than approving as-is. */
-export async function approveDiscrepancyRequest(id: number, notes?: string, editedData?: Record<string, unknown>): Promise<PropertyDiscrepancyRequest> {
+export async function approveDiscrepancyRequest(
+  id: number,
+  notes?: string,
+  editedData?: Record<string, unknown>,
+): Promise<PropertyDiscrepancyRequest> {
   const res = await fetch(`${API_BASE_URL}/admin/property-discrepancy-requests/${id}/approve`, {
     method: "POST",
     headers: authHeaders(),
@@ -1993,7 +2059,13 @@ export async function resubmitDiscrepancyRequest(id: number, input: ReportDiscre
 // problem during collection (refusing to pay, disputing an amount, etc).
 // ---------------------------------------------------------------------------
 
-export type CollectionIssueType = "refused_to_pay" | "disputes_tax_amount" | "disputes_solid_waste_amount" | "absent_door_locked" | "under_construction" | "disputes_measurement";
+export type CollectionIssueType =
+  | "refused_to_pay"
+  | "disputes_tax_amount"
+  | "disputes_solid_waste_amount"
+  | "absent_door_locked"
+  | "under_construction"
+  | "disputes_measurement";
 
 export const COLLECTION_ISSUE_TYPE_LABELS: Record<CollectionIssueType, string> = {
   refused_to_pay: "Taxpayer refused to pay",
@@ -2074,6 +2146,7 @@ export interface PropertyFieldVerification {
   aadhaar_photo_path: string | null;
   previous_receipt_photo_path: string | null;
   land_document_photo_path: string | null;
+  owner_deceased?: boolean;
   captured_by_username: string;
   captured_by_display_name: string;
   captured_by_role: string;
@@ -2096,6 +2169,8 @@ export interface RecordFieldVerificationInput {
   registerPhotoMimeType?: string;
   waterConnectionStatus?: WaterConnectionStatus;
   waterConnectionCount?: number;
+  /** The original owner has died: the Aadhaar number is not required. */
+  ownerDeceased?: boolean;
 }
 
 export async function recordFieldVerification(holdingNo: string, input: RecordFieldVerificationInput): Promise<PropertyFieldVerification> {
@@ -2178,7 +2253,10 @@ export async function reprintCollectionIssueNotice(noticeId: number): Promise<Ge
   return res.json();
 }
 
-export async function generateCollectionIssueNotice(collectionIssueId: number, language: NoticeLanguage = "en"): Promise<GeneratedCollectionIssueNotice> {
+export async function generateCollectionIssueNotice(
+  collectionIssueId: number,
+  language: NoticeLanguage = "en",
+): Promise<GeneratedCollectionIssueNotice> {
   const res = await fetch(`${API_BASE_URL}/admin/collection-issues/${collectionIssueId}/generate-notice`, {
     method: "POST",
     headers: authHeaders(),
@@ -2197,7 +2275,6 @@ export async function fetchCollectionIssueNotices(collectionIssueId: number): Pr
   const data: { notices: CollectionIssueNotice[] } = await res.json();
   return data.notices;
 }
-
 
 // ---- Disputed holdings (Tax Daroga / City Manager / Commissioner) ----
 export interface DisputeStatus {
@@ -2315,7 +2392,12 @@ export interface InstrumentRow {
   remarks: string | null;
 }
 
-export async function fetchInstruments(status: "open" | "closed" | "all", mode?: string, from?: string, to?: string): Promise<InstrumentRow[]> {
+export async function fetchInstruments(
+  status: "open" | "closed" | "all",
+  mode?: string,
+  from?: string,
+  to?: string,
+): Promise<InstrumentRow[]> {
   const q = new URLSearchParams({ status, ...(mode ? { mode } : {}), ...(from ? { from } : {}), ...(to ? { to } : {}) });
   const res = await fetch(`${API_BASE_URL}/admin/instrument-reconciliation?${q}`, { headers: authHeaders() });
   const body = await res.json().catch(() => ({}));
@@ -2382,7 +2464,12 @@ export async function fetchSurveyorWork(): Promise<SurveyorWorkItem[]> {
   return body.items;
 }
 
-export async function assignSurveyorToWork(type: SurveyorWorkType, id: string, surveyorUsername: string, remarks?: string): Promise<{ surveyor: string }> {
+export async function assignSurveyorToWork(
+  type: SurveyorWorkType,
+  id: string,
+  surveyorUsername: string,
+  remarks?: string,
+): Promise<{ surveyor: string }> {
   const res = await fetch(`${API_BASE_URL}/admin/surveyor-work/${type}/${encodeURIComponent(id)}/assign`, {
     method: "POST",
     headers: authHeaders(),

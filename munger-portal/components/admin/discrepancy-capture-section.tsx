@@ -43,7 +43,9 @@ function PhotoSlot({
   const inputId = `photo-slot-${label.replace(/\s+/g, "-").toLowerCase()}`;
 
   return (
-    <div className={`rounded-lg border-2 border-dashed p-4 text-center ${file ? "border-green-300 bg-green-50" : "border-nnm-blue/40 bg-blue-50/50"}`}>
+    <div
+      className={`rounded-lg border-2 border-dashed p-4 text-center ${file ? "border-green-300 bg-green-50" : "border-nnm-blue/40 bg-blue-50/50"}`}
+    >
       <label htmlFor={inputId} className="flex cursor-pointer flex-col items-center gap-2">
         {previewUrl ? (
           // eslint-disable-next-line @next/next/no-img-element -- local file preview, not a static asset
@@ -55,7 +57,9 @@ function PhotoSlot({
           {label}
           {required && <span className="text-red-500"> *</span>}
         </span>
-        <span className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold ${file ? "bg-green-600 text-white" : "bg-nnm-blue text-white"}`}>
+        <span
+          className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold ${file ? "bg-green-600 text-white" : "bg-nnm-blue text-white"}`}
+        >
           {file ? (
             <>
               <CheckCircle2 className="h-3.5 w-3.5" />
@@ -74,7 +78,10 @@ function PhotoSlot({
         type="file"
         accept="image/jpeg,image/png"
         capture="environment"
-        onChange={async (e) => { const f = e.target.files?.[0]; onChange(f ? await shrinkPhotoFile(f) : null); }}
+        onChange={async (e) => {
+          const f = e.target.files?.[0];
+          onChange(f ? await shrinkPhotoFile(f) : null);
+        }}
         className="hidden"
       />
     </div>
@@ -82,7 +89,16 @@ function PhotoSlot({
 }
 
 /** Prominent photo + GPS capture block for a discrepancy submission - this was previously a plain file input and small text note, hard to notice; now large, clearly-labeled buttons with visible captured/not-captured state. */
-export function DiscrepancyCaptureSection({ state, onChange }: { state: CaptureState; onChange: (next: CaptureState) => void }) {
+export function DiscrepancyCaptureSection({
+  state,
+  onChange,
+  hideAadhaar,
+}: {
+  state: CaptureState;
+  onChange: (next: CaptureState) => void;
+  /** Owner died or refused Aadhaar: no Aadhaar card photo is taken. */
+  hideAadhaar?: boolean;
+}) {
   const [capturingGps, setCapturingGps] = useState(false);
   const [gpsError, setGpsError] = useState<string | null>(null);
 
@@ -141,14 +157,26 @@ export function DiscrepancyCaptureSection({ state, onChange }: { state: CaptureS
       </div>
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <PhotoSlot label="Holding Photo" icon={<Camera className="h-5 w-5" />} file={state.photoFile} onChange={(f) => onChange({ ...state, photoFile: f })} />
+        <PhotoSlot
+          label="Holding Photo"
+          icon={<Camera className="h-5 w-5" />}
+          file={state.photoFile}
+          onChange={(f) => onChange({ ...state, photoFile: f })}
+        />
         <PhotoSlot
           label="Previous Year's Tax Receipt"
           icon={<FileText className="h-5 w-5" />}
           file={state.previousReceiptFile}
           onChange={(f) => onChange({ ...state, previousReceiptFile: f })}
         />
-        <PhotoSlot label="Owner's Aadhaar Card" icon={<CreditCard className="h-5 w-5" />} file={state.aadhaarFile} onChange={(f) => onChange({ ...state, aadhaarFile: f })} />
+        {!hideAadhaar && (
+          <PhotoSlot
+            label="Owner's Aadhaar Card"
+            icon={<CreditCard className="h-5 w-5" />}
+            file={state.aadhaarFile}
+            onChange={(f) => onChange({ ...state, aadhaarFile: f })}
+          />
+        )}
       </div>
     </div>
   );

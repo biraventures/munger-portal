@@ -25,8 +25,12 @@ const SLOTS: { kind: PhotoKind; field: keyof FieldVerificationPhotoFlags; label:
   { kind: "register", field: "register_photo_path", label: "Demand register" },
 ];
 
-/** Photos are behind the admin login, so they are fetched with the token and shown from a blob URL. */
 function Photo({ id, kind, label }: { id: number; kind: PhotoKind; label: string }) {
+  return <AuthPhoto path={`/admin/field-verifications/${id}/photo/${kind}`} label={label} />;
+}
+
+/** Photos are behind the admin login, so they are fetched with the token and shown from a blob URL. `path` is under the API base. */
+export function AuthPhoto({ path, label, large }: { path: string; label: string; large?: boolean }) {
   const [url, setUrl] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
 
@@ -36,7 +40,7 @@ function Photo({ id, kind, label }: { id: number; kind: PhotoKind; label: string
     (async () => {
       try {
         const token = getAdminToken();
-        const res = await fetch(`${API_BASE_URL}/admin/field-verifications/${id}/photo/${kind}`, { headers: { Authorization: `Bearer ${token ?? ""}` } });
+        const res = await fetch(`${API_BASE_URL}${path}`, { headers: { Authorization: `Bearer ${token ?? ""}` } });
         if (!res.ok) throw new Error();
         objectUrl = URL.createObjectURL(await res.blob());
         if (!cancelled) setUrl(objectUrl);
@@ -48,11 +52,13 @@ function Photo({ id, kind, label }: { id: number; kind: PhotoKind; label: string
       cancelled = true;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [id, kind]);
+  }, [path]);
 
   return (
-    <figure className="w-36">
-      <div className="flex h-28 w-36 items-center justify-center overflow-hidden rounded-md border border-slate-200 bg-slate-50">
+    <figure className={large ? "w-56" : "w-36"}>
+      <div
+        className={`flex items-center justify-center overflow-hidden rounded-md border border-slate-200 bg-slate-50 ${large ? "h-44 w-56" : "h-28 w-36"}`}
+      >
         {failed ? (
           <ImageOff className="h-5 w-5 text-slate-300" />
         ) : !url ? (
@@ -60,7 +66,7 @@ function Photo({ id, kind, label }: { id: number; kind: PhotoKind; label: string
         ) : (
           <a href={url} target="_blank" rel="noreferrer" title="Open full size">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={url} alt={label} className="h-28 w-36 object-cover" />
+            <img src={url} alt={label} className={large ? "h-44 w-56 object-cover" : "h-28 w-36 object-cover"} />
           </a>
         )}
       </div>
