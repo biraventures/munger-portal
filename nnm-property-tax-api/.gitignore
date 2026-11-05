@@ -4,3 +4,4 @@ dist/
 service-account.json
 *.log
 *-credentials.csv
+uploads/

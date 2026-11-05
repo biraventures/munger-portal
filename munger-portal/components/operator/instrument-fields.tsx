@@ -48,11 +48,11 @@ function specFor(mode: string): ModeSpec {
     case "Demand Draft":
       return { bank: "required", branch: true, no: { label: "DD number", required: true }, date: { label: "DD date", required: true }, card: null };
     case "UPI":
-      return { bank: "optional", branch: false, no: { label: "UPI URN / UTR number", required: true }, date: null, card: null };
+      return { bank: "optional", branch: false, no: { label: "UPI URN / UTR number", required: false }, date: null, card: null };
     case "Online Banking":
       return { bank: "required", branch: false, no: { label: "Transaction reference (UTR)", required: true }, date: { label: "Transfer date", required: false }, card: null };
     case "Card":
-      return { bank: "optional", branch: false, no: { label: "Approval code / txn ID", required: false }, date: null, card: "required" };
+      return { bank: "optional", branch: false, no: { label: "Approval code / txn ID", required: false }, date: null, card: "optional" };
     case "Cash / Prepaid Card":
       return { bank: null, branch: false, no: null, date: null, card: "optional" };
     default:

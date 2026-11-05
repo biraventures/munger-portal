@@ -373,8 +373,25 @@ export default function TaxCollectorPage() {
   const swOpen = !!swRequest && (swRequest.stage === "tax_daroga" || swRequest.stage === "city_manager");
   const floors = result?.floors ?? [];
 
+  const intentValueAssigngment = (data: IntentResponse) => {
+    if (data.pm === 'CARD') {
+      setInstrument((prev) => ({
+        ...prev,
+        instrumentNo: data.receiptData.RRN,
+        cardLast4: data.receiptData.Last4Digit,
+        cardHolderName: data.receiptData.NameOnCard
+      }))
+    } else {
+      setInstrument((prev) => ({
+        ...prev,
+        instrumentNo: data.receiptData.RRN,
+      }))
+    }
+  }
+
   const handleIntentResponse = async (data: IntentResponse) => {
     if (data.ok && data.statusCode === '00') {
+      intentValueAssigngment(data)
       const { receiptData } = data;
       setIntentReceipt(receiptData);
       await executeCollectPayment(true)
@@ -383,6 +400,8 @@ export default function TaxCollectorPage() {
       console.warn(data.statusMsg);
     }
   };
+
+
 
   return (
     <div className="min-h-screen bg-slate-50">
