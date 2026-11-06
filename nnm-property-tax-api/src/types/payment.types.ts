@@ -65,6 +65,7 @@ export interface PaymentResult {
   demandNo: string;
   paidFrom?: string | null;
   paidUpto?: string | null;
+  noticeDate?: string | null;
   verificationUrl: string;
   taxCollectorCode: string | null;
   taxCollectorName: string | null;
