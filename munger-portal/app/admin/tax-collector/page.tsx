@@ -326,13 +326,14 @@ export default function TaxCollectorPage() {
         })
         setShowConfirmModal(false)
       } else {
-        console.log("Submitting payment with extraData:", {
+        alert(JSON.stringify({
           amount: Number(selected.totalAmountDemanded),
           paymentMode: paymentMode ?? "",
           demandNo: selectedDemandNo,
           ...instrumentPayload(paymentMode ?? "", instrument),
           ...extraData,
-        }); // Debugging line
+        })); // Debugging line
+
         const res = await submitPaymentAdmin(result.property.holding_no, {
           amount: Number(selected.totalAmountDemanded),
           paymentMode: paymentMode ?? "",
@@ -389,7 +390,9 @@ export default function TaxCollectorPage() {
   const property = result?.property;
   const floors = result?.floors ?? [];
 
-  const handleIntentResponse = async (data: IntentResponse) => {
+  const handleIntentResponse = async (rawData: IntentResponse | string) => {
+    const data: IntentResponse = typeof rawData === "string" ? JSON.parse(rawData) : rawData;
+
     if (data.ok && data.statusCode === '00') {
 
       let extraDataToSend: Record<string, unknown> = {};
