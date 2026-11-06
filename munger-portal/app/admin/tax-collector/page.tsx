@@ -391,34 +391,46 @@ export default function TaxCollectorPage() {
   const floors = result?.floors ?? [];
 
   const handleIntentResponse = async (rawData: IntentResponse | string) => {
-    const data: IntentResponse = typeof rawData === "string" ? JSON.parse(rawData) : rawData;
+    try {
+      const data: IntentResponse =
+        typeof rawData === "string" ? JSON.parse(rawData) : rawData;
 
-    alert(JSON.stringify(data, null, 2)); // Debugging line
+      alert(JSON.stringify(data, null, 2));
 
-    if (data.ok && data.statusCode === '00') {
+      if (data.ok && data.statusCode === '00') {
 
-      let extraDataToSend: Record<string, unknown> = {};
+        const receiptData =
+          typeof data.receiptData === 'string'
+            ? JSON.parse(data.receiptData)
+            : data.receiptData;
 
-      if (data.pm === 'CARD') {
-        extraDataToSend = {
-          instrumentNo: data.receiptData.RRN,
-          cardLast4: data.receiptData.Last4Digit,
-          cardHolderName: data.receiptData.NameOnCard
+        let extraDataToSend: Record<string, unknown> = {};
+
+        if (data.pm === 'CARD') {
+          extraDataToSend = {
+            instrumentNo: receiptData.RRN,
+            cardLast4: receiptData.Last4Digit,
+            cardHolderName: receiptData.NameOnCard
+          };
+        } else {
+          extraDataToSend = {
+            instrumentNo: receiptData.RRN,
+          };
         }
+
+        alert(JSON.stringify(extraDataToSend, null, 2));
+
+        setIntentReceipt(receiptData);
+
+        await executeCollectPayment(true, extraDataToSend);
+
+        cleanQueryParams();
+
       } else {
-        extraDataToSend = {
-          instrumentNo: data.receiptData.RRN,
-        }
+        console.warn(data.statusMsg);
       }
-
-      alert(JSON.stringify(extraDataToSend, null, 2)); // Debugging line
-
-      const { receiptData } = data;
-      setIntentReceipt(receiptData);
-      await executeCollectPayment(true, extraDataToSend);
-      cleanQueryParams()
-    } else {
-      console.warn(data.statusMsg);
+    } catch (error) {
+      console.error('Error processing POS response:', error);
     }
   };
 
