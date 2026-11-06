@@ -409,7 +409,7 @@ export default function TaxCollectorPage() {
         if (data.pm === 'CARD') {
           extraDataToSend = {
             instrumentNo: receiptData.RRN,
-            cardLast4: receiptData.Last4Digit,
+            cardLast4: receiptData.Last4Digit?.slice(-4) ?? '',
             cardHolderName: receiptData.NameOnCard
           };
         } else {
