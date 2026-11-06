@@ -409,6 +409,8 @@ export default function TaxCollectorPage() {
         }
       }
 
+      alert(JSON.stringify(extraDataToSend, null, 2)); // Debugging line
+
       const { receiptData } = data;
       setIntentReceipt(receiptData);
       await executeCollectPayment(true, extraDataToSend);
