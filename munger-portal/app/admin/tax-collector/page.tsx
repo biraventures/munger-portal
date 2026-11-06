@@ -326,14 +326,6 @@ export default function TaxCollectorPage() {
         })
         setShowConfirmModal(false)
       } else {
-        alert(JSON.stringify({
-          amount: Number(selected.totalAmountDemanded),
-          paymentMode: paymentMode ?? "",
-          demandNo: selectedDemandNo,
-          ...instrumentPayload(paymentMode ?? "", instrument),
-          ...extraData,
-        })); // Debugging line
-
         const res = await submitPaymentAdmin(result.property.holding_no, {
           amount: Number(selected.totalAmountDemanded),
           paymentMode: paymentMode ?? "",
@@ -395,8 +387,6 @@ export default function TaxCollectorPage() {
       const data: IntentResponse =
         typeof rawData === "string" ? JSON.parse(rawData) : rawData;
 
-      alert(JSON.stringify(data, null, 2));
-
       if (data.ok && data.statusCode === '00') {
 
         const receiptData =
@@ -417,8 +407,6 @@ export default function TaxCollectorPage() {
             instrumentNo: receiptData.RRN,
           };
         }
-
-        alert(JSON.stringify(extraDataToSend, null, 2));
 
         setIntentReceipt(receiptData);
 
