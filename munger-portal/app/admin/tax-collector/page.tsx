@@ -393,6 +393,8 @@ export default function TaxCollectorPage() {
   const handleIntentResponse = async (rawData: IntentResponse | string) => {
     const data: IntentResponse = typeof rawData === "string" ? JSON.parse(rawData) : rawData;
 
+    alert(JSON.stringify(data, null, 2)); // Debugging line
+
     if (data.ok && data.statusCode === '00') {
 
       let extraDataToSend: Record<string, unknown> = {};
