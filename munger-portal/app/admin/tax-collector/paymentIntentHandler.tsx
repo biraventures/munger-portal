@@ -151,7 +151,7 @@ const IntentHandler = ({ handler }: { handler: (data: IntentResponse) => void })
                     background: "#f5f5f5",
                     color: "#222",
                     overflowX: "auto",
-                    // display: 'none'
+                    display: 'none'
                 }}
             >
                 <h3>Intent Debugger</h3>
