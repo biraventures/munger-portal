@@ -745,6 +745,11 @@ export async function submitPayment(
         ? calculateRebateOrLateFee(netCurrentBeforeTiming, currentYearStartNum, now)
         : { rebate: 0, lateFee: 0, net: netCurrentBeforeTiming };
 
+    const demandData = await demandNoticeRepository.findByDemandNo(input.demandNo);
+    if (!demandData) {
+      throw ApiError.notFound(`Demand notice ${input.demandNo} not found for this holding.`);
+    }
+
     const result: PaymentResult = {
       receiptNo,
       formattedReceiptNo,
@@ -754,6 +759,8 @@ export async function submitPayment(
       amountInWords: amountInWords(amountReceived),
       collectedBy,
       demandNo: input.demandNo,
+      paidFrom:demandData?.demand_from_year,
+      paidUpto:demandData?.demand_upto_year,
       verificationUrl: buildVerificationUrl("receipt", receiptNo),
       taxCollectorCode: taxCollector?.code ?? null,
       taxCollectorName: taxCollector?.name ?? null,

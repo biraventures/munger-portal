@@ -63,6 +63,8 @@ export interface PaymentResult {
   amountInWords: string;
   collectedBy: string;
   demandNo: string;
+  paidFrom?: string | null;
+  paidUpto?: string | null;
   verificationUrl: string;
   taxCollectorCode: string | null;
   taxCollectorName: string | null;
