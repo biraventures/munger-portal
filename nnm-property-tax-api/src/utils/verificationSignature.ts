@@ -8,7 +8,8 @@ export type VerifiableDocType =
   | "shop-demand"
   | "violation-notice"
   | "agreement"
-  | "tl-notice";
+  | "tl-notice"
+  | "garden-ticket";
 
 /**
  * Signs (docType, docNo) into a short hex signature. Document/receipt

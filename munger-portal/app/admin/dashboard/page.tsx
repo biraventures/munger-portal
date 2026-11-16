@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Users, FileClock, FileWarning, LayoutGrid, ShoppingBag, Store, BarChart3, Award, Archive, Download, XCircle, ShieldCheck, Trash2, RefreshCw, Upload, MapPin, Map as MapIcon, ClipboardCheck, UserCheck, ClipboardList, Receipt, RotateCcw, AlertTriangle, List, Flag, Home, FileText, Printer, Landmark, FileSpreadsheet, CalendarDays, History } from "lucide-react";
+import { Users, FileClock, FileWarning, LayoutGrid, ShoppingBag, Store, BarChart3, Award, Archive, Download, XCircle, ShieldCheck, Trash2, RefreshCw, Upload, MapPin, Map as MapIcon, ClipboardCheck, UserCheck, ClipboardList, Receipt, RotateCcw, AlertTriangle, List, Flag, Home, FileText, Printer, Landmark, FileSpreadsheet, CalendarDays, History, Trees } from "lucide-react";
 import { AdminHeader } from "@/components/admin-header";
 import { MapSectionDashboard } from "@/components/building-permit/map-section-dashboard";
 import { AgencyOperatorDashboard } from "@/components/agency/agency-operator-dashboard";
@@ -42,7 +42,7 @@ export default function AdminDashboardPage() {
 
   useEffect(() => {
     // The Agency Operator has its own small dashboard and none of these desks.
-    if (!admin || admin.role === "agency_operator") return;
+    if (!admin || admin.role === "agency_operator" || admin.role === "garden_counter") return;
     fetchChangeRequests({ status: "pending", myStage: true })
       .then((r) => setMyStagePendingCount(r.requests.length))
       .catch(() => setMyStagePendingCount(null));
@@ -81,6 +81,8 @@ export default function AdminDashboardPage() {
 
   // The private agency's counter login: only its own cards (see components/agency/agency-operator-dashboard.tsx).
   if (admin.role === "agency_operator") return <AgencyOperatorDashboard admin={admin} />;
+  // Garden Counter: the ticket counter is its only screen.
+  if (admin.role === "garden_counter") return <GardenCounterRedirect />;
   // Map Section Nodal Clerk: building plan permits only.
   if (admin.role === "map_section_nodal_clerk") return <MapSectionDashboard admin={admin} />;
 
@@ -227,7 +229,8 @@ export default function AdminDashboardPage() {
   const showBuildingMapApproval = isAssistantArchitect || isAtps || isCommissioner || admin.role === "deputy_commissioner" || admin.role === "city_manager";
   // Who's Who: City Manager verifies, Deputy Commissioner (DMC) publishes, Commissioner views.
   const showWhosWho = admin.role === "city_manager" || admin.role === "deputy_commissioner" || isCommissioner;
-  const miscGroupVisible = showPublicDocuments || showRevertAuditTrail || showOperators || showManageLogins || showDocumentArchive || showAttendanceReport || showAssignCoordinates || showGisMap || showBuildingMapApproval || showWhosWho;
+  const showGardens = ["commissioner", "deputy_commissioner", "city_manager"].includes(admin.role);
+  const miscGroupVisible = showGardens || showPublicDocuments || showRevertAuditTrail || showOperators || showManageLogins || showDocumentArchive || showAttendanceReport || showAssignCoordinates || showGisMap || showBuildingMapApproval || showWhosWho;
   const employeeDatabaseGroupVisible = showEmployeeDatabaseEntry || showEmployeeDatabaseList || showEmployeeDatabaseVerify || showEmployeeDatabaseProgress;
   const streetlightGroupVisible = isStreetlightReporterRole;
 
@@ -1035,7 +1038,16 @@ export default function AdminDashboardPage() {
           <>
             <h2 className={groupHeadingClass}>Administration &amp; Maps</h2>
             <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
-              <DashboardGroup id="administration" title="Administration" description="Logins, operators, document archive, website documents and Who&apos;s Who, attendance report and revert audit trail." icon={<ShieldCheck className="h-6 w-6" strokeWidth={1.8} />} highlight={false}>
+              <DashboardGroup id="administration" title="Administration" description="Garden entry tickets, logins, operators, document archive, website documents and Who&apos;s Who, attendance report and revert audit trail." icon={<ShieldCheck className="h-6 w-6" strokeWidth={1.8} />} highlight={false}>
+                {showGardens && (
+                  <Link href="/admin/gardens" className={cardClass}>
+                    <span className={iconWrapClass}>
+                      <Trees className="h-6 w-6" strokeWidth={1.8} />
+                    </span>
+                    <h3 className="mb-1.5 text-base font-semibold text-slate-900">Garden Entry Tickets</h3>
+                    <p className="text-sm text-slate-500">Gardens and entry fee, counter logins, QR poster, and the daily ticket collection report.</p>
+                  </Link>
+                )}
                 {showManageLogins && (
                   <Link href="/admin/manage-logins" className={cardClass}>
                     <span className={iconWrapClass}>
@@ -1142,4 +1154,12 @@ export default function AdminDashboardPage() {
       </main>
     </div>
   );
+}
+
+/** A Garden Counter login has only the ticket counter. */
+function GardenCounterRedirect() {
+  useEffect(() => {
+    window.location.replace("/admin/garden-counter");
+  }, []);
+  return <div className="flex min-h-screen items-center justify-center text-sm text-slate-400">Opening the garden counter…</div>;
 }

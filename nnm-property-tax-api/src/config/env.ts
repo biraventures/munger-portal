@@ -45,6 +45,9 @@ const envSchema = z.object({
   // Face-verified attendance (CompreFace, self-hosted on the APP server). Off until CompreFace is installed.
   // Collection staff (Tax Collector, Team Leader, Project Manager, Agency Operator) can sign in only after their
   // identity documents are approved by the City Manager and DMC. Off until switched on (staffKyc.service.ts).
+  // Public online purchase of garden entry tickets - through the garden's own payment gateway (not the agency's).
+  // Stays off until that gateway is integrated (gardenGateway.ts).
+  GARDEN_ONLINE_PAYMENT_ENABLED: z.preprocess((v) => (typeof v === "string" ? ["true", "1", "yes"].includes(v.trim().toLowerCase()) : v), z.boolean().default(false)),
   STAFF_KYC_REQUIRED: z.preprocess((v) => (typeof v === "string" ? ["true", "1", "yes"].includes(v.trim().toLowerCase()) : v), z.boolean().default(false)),
   FACE_ATTENDANCE_ENABLED: z.preprocess((v) => (typeof v === "string" ? ["true", "1", "yes"].includes(v.trim().toLowerCase()) : v), z.boolean().default(false)),
   COMPREFACE_URL: z.string().default("http://127.0.0.1:8000"),

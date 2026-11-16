@@ -1,6 +1,8 @@
 import { Router } from "express";
 import { agencyOperatorScope } from "../middleware/agencyOperatorScope";
 import { staffKycGate } from "../middleware/staffKycGate";
+import { gardenCounterScope } from "../middleware/gardenCounterScope";
+import { gardenRouter, publicGardenRouter } from "./garden.routes";
 import { propertyRouter } from "./property.routes";
 import { operatorRouter } from "./operator.routes";
 import { shopRouter } from "./shop.routes";
@@ -34,6 +36,8 @@ export const apiRouter = Router();
 
 // The Agency Operator login (a private agency) may only reach an allowlist of routes - checked here, before every route.
 apiRouter.use(agencyOperatorScope);
+// Garden Counter logins: garden tickets only.
+apiRouter.use(gardenCounterScope);
 // Collection staff whose identity documents are not approved yet (only with STAFF_KYC_REQUIRED on).
 apiRouter.use(staffKycGate);
 
@@ -89,6 +93,9 @@ apiRouter.use("/public/building-permit", publicBuildingPermitRouter);
 apiRouter.use("/public/new-holding", publicNewHoldingRouter);
 apiRouter.use("/public/streetlights", publicStreetlightRouter);
 apiRouter.use("/public/submersibles", publicSubmersibleRouter);
+// Garden entry tickets: counter, gate, officers; public garden page and e-ticket.
+apiRouter.use("/garden", gardenRouter);
+apiRouter.use("/public/gardens", publicGardenRouter);
 // The City Manager verifies those public complaints before they go to the contractor (attendance login).
 apiRouter.use("/public-reports", publicReportVerificationRouter);
 
