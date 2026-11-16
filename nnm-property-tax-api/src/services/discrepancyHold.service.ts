@@ -1,5 +1,6 @@
 import { pool } from "../config/db";
 import { ApiError } from "../utils/ApiError";
+import { settlementHold } from "./historicalPayment.service";
 
 /**
  * A property discrepancy reported on a holding (the recorded floors / area / use / owner do not match what is on the
@@ -50,10 +51,13 @@ export function discrepancyMessage(d: OpenDiscrepancy): string {
   return `A property discrepancy (report no. ${d.id}, by ${d.reportedBy} on ${d.reportedOn}) is pending on this holding - ${where}. Tax cannot be collected until it is resolved (approved or rejected).`;
 }
 
-/** The reason no tax can be collected now, or null. */
+/**
+ * The reason no tax can be collected now, or null: an unresolved property discrepancy, or old part payments awaiting
+ * the City Manager's approval (historicalPayment.service - collecting meanwhile would move "tax paid till" under it).
+ */
 export async function discrepancyHold(holdingNo: string): Promise<string | null> {
   const d = await openDiscrepancy(holdingNo);
-  return d ? discrepancyMessage(d) : null;
+  return d ? discrepancyMessage(d) : await settlementHold(holdingNo);
 }
 
 export async function assertNoDiscrepancyPending(holdingNo: string): Promise<void> {

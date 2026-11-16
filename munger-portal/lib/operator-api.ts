@@ -310,6 +310,8 @@ export interface PaymentHistoryEntry {
   cancelled: boolean;
   cancelledReason: string | null;
   cancellationPending: boolean;
+  /** An old part payment settled through "Historical Part Payments" - no receipt of this system to view. */
+  historical?: boolean;
 }
 
 export async function fetchPaymentHistory(holdingNo: string): Promise<PaymentHistoryEntry[]> {

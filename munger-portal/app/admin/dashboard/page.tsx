@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Users, FileClock, FileWarning, LayoutGrid, ShoppingBag, Store, BarChart3, Award, Archive, Download, XCircle, ShieldCheck, Trash2, RefreshCw, Upload, MapPin, Map as MapIcon, ClipboardCheck, UserCheck, ClipboardList, Receipt, RotateCcw, AlertTriangle, List, Flag, Home, FileText, Printer, Landmark, FileSpreadsheet, CalendarDays } from "lucide-react";
+import { Users, FileClock, FileWarning, LayoutGrid, ShoppingBag, Store, BarChart3, Award, Archive, Download, XCircle, ShieldCheck, Trash2, RefreshCw, Upload, MapPin, Map as MapIcon, ClipboardCheck, UserCheck, ClipboardList, Receipt, RotateCcw, AlertTriangle, List, Flag, Home, FileText, Printer, Landmark, FileSpreadsheet, CalendarDays, History } from "lucide-react";
 import { AdminHeader } from "@/components/admin-header";
 import { MapSectionDashboard } from "@/components/building-permit/map-section-dashboard";
 import { AgencyOperatorDashboard } from "@/components/agency/agency-operator-dashboard";
@@ -26,6 +26,7 @@ import { fetchShopAgreementRequests, fetchRentalApplications } from "@/lib/admin
 import { fetchTradeLicenseApplications } from "@/lib/admin-trade-license-api";
 import { ADMIN_ROLE_LABELS } from "@/lib/admin-auth";
 import { fetchKycPending } from "@/lib/staff-kyc-api";
+import { fetchSettlementPendingCount } from "@/lib/historical-payment-api";
 import { fetchPendingCount as fetchNewHoldingPending, type PendingCount as NewHoldingPending } from "@/lib/new-holding-api";
 
 export default function AdminDashboardPage() {
@@ -37,6 +38,7 @@ export default function AdminDashboardPage() {
   const [myTradeLicensePendingCount, setMyTradeLicensePendingCount] = useState<number | null>(null);
   const [newHoldingPending, setNewHoldingPending] = useState<NewHoldingPending | null>(null);
   const [kycPending, setKycPending] = useState<number | null>(null);
+  const [historicalPending, setHistoricalPending] = useState<number | null>(null);
 
   useEffect(() => {
     // The Agency Operator has its own small dashboard and none of these desks.
@@ -56,6 +58,11 @@ export default function AdminDashboardPage() {
     fetchTradeLicenseApplications({ status: "pending", myStage: true })
       .then((r) => setMyTradeLicensePendingCount(r.applications.length))
       .catch(() => setMyTradeLicensePendingCount(null));
+    if (admin.role === "city_manager") {
+      fetchSettlementPendingCount()
+        .then(setHistoricalPending)
+        .catch(() => setHistoricalPending(null));
+    }
     if (["tax_daroga", "city_manager", "deputy_commissioner"].includes(admin.role)) {
       fetchKycPending()
         .then(setKycPending)
@@ -142,6 +149,8 @@ export default function AdminDashboardPage() {
   // Collection staff identity documents (KYC): Tax Daroga uploads, City Manager + DMC review, Commissioner views, staff see own.
   const isKycStaff = ["tax_collector", "agency_team_leader", "agency_project_manager"].includes(admin.role);
   const showStaffKyc = isKycStaff || ["tax_daroga", "city_manager", "deputy_commissioner", "commissioner"].includes(admin.role);
+  // Old part payments on old holdings, settled year by year (Tax Daroga enters, City Manager approves).
+  const showHistoricalPayments = ["tax_daroga", "city_manager", "deputy_commissioner", "commissioner"].includes(admin.role);
   const showSurveyorAssignments = ["tax_daroga", "city_manager", "deputy_commissioner", "commissioner"].includes(admin.role);
   const showCollectionIssues = admin.role === "tax_daroga" || admin.role === "commissioner" || admin.role === "city_manager";
   const showTaxCollectorAssignments = isCommissioner;
@@ -175,7 +184,7 @@ export default function AdminDashboardPage() {
     showMigratedHoldingsBulkUpload || showMigratedHoldingsAssign || showMigratedHoldingsSurveyor || showMigratedHoldingsMySurveys || showInitiateSurvey || showTaxCollectorPage ||
     showAgencyReports || showAgencyNotices || showReportPropertyDiscrepancy || showMyDiscrepancyReports || showUnsurveyedHouseEntry || showNoticeReceivingUpload || showUnsurveyedHouses || showNoticeReceivingCopies || showPropertyDiscrepancyRequests || showResurveyFlags || showCollectionIssues || showSolidWasteApprovals || showTaxCollectorAssignments || showRevertAuditTrail ||
     showPropertyWiseReport || showDisputedHoldings || showHoldingImportReview || showBulkReceipts || showInstrumentReconciliation ||
-    showAgencyPropertyReports || showCollectedHoldings || showDuesReport || showSurveyorAssignments || showStaffKyc;
+    showAgencyPropertyReports || showCollectedHoldings || showDuesReport || showSurveyorAssignments || showStaffKyc || showHistoricalPayments;
 
   const showShopAgreementApprovals = !isTradeLicenseNodal && !isGisOnlyRole && !isNarrowlyScopedRole;
   const showShopRentalApplications = !isTradeLicenseNodal && !isGisOnlyRole && !isNarrowlyScopedRole;
@@ -335,6 +344,21 @@ export default function AdminDashboardPage() {
                   </span>
                   <h3 className="mb-1.5 text-base font-semibold text-slate-900">Tax Collection</h3>
                   <p className="text-sm text-slate-500">Search a holding, view pendency, collect tax, issue a receipt.</p>
+                </Link>
+              )}
+
+              {showHistoricalPayments && (
+                <Link href="/admin/historical-payments" className={deskCardClass(historicalPending)}>
+                  <span className={deskIconWrapClass(historicalPending)}>
+                    <History className="h-6 w-6" strokeWidth={1.8} />
+                  </span>
+                  <h3 className="mb-1.5 text-base font-semibold text-slate-900">
+                    Historical Part Payments
+                    {historicalPending ? <span className="ml-2 rounded-full bg-red-600 px-2 py-0.5 text-xs text-white">{historicalPending}</span> : null}
+                  </h3>
+                  <p className="text-sm text-slate-500">
+                    Old holdings paid in parts over the years: record the old payments and settle them year by year from the earliest pending year.
+                  </p>
                 </Link>
               )}
 

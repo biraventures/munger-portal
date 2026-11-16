@@ -46,7 +46,7 @@ import type { ArrearsSummary, PropertyRow, TaxHistoryStageRow } from "../types/p
  * that year (migration 118: exempt from the order's year onward; earlier years
  * stay payable). Every arrears figure below goes through this.
  */
-function yearTax(property: PropertyRow, stage: TaxHistoryStageRow, yearStartNum: number): number {
+export function yearTax(property: PropertyRow, stage: TaxHistoryStageRow, yearStartNum: number): number {
   return isTaxExemptForYear(property, yearStartNum) ? 0 : num(stage.annual_tax_amount);
 }
 

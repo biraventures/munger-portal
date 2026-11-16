@@ -1,4 +1,5 @@
 import { assertNoDiscrepancyPending } from "./discrepancyHold.service";
+import { approvedPaymentsFor } from "./historicalPayment.service";
 import { pool } from "../config/db";
 import { assertSolidWasteReady } from "./solidWasteGuard.service";
 import { assertDocumentsForCollection } from "./holdingDocuments.service";
@@ -429,6 +430,8 @@ export interface PaymentHistoryEntry {
   cancelledReason: string | null;
   /** A cancellation request for this receipt is awaiting approval. */
   cancellationPending: boolean;
+  /** An old part payment recorded through a historical payment settlement - no receipt of this system to reprint. */
+  historical?: boolean;
 }
 
 /** Every payment ever collected for a holding, most recent first — the read-only document history list. */
@@ -436,7 +439,20 @@ export async function listPaymentHistory(holdingNo: string): Promise<PaymentHist
   const txns = await paymentRepository.findAllForHolding(holdingNo);
   const pending = await cancellationRequestRepository.listPendingTargetsForHolding(holdingNo);
   const pendingReceipts = new Set(pending.filter((p) => p.request_type === "receipt").map((p) => p.target_id));
-  return txns.map((t) => ({
+  const dmy = (d: Date) => `${String(d.getDate()).padStart(2, "0")}-${String(d.getMonth() + 1).padStart(2, "0")}-${d.getFullYear()}`;
+  // Old part payments settled through a historical payment settlement (approved), after this system's receipts.
+  const old: PaymentHistoryEntry[] = (await approvedPaymentsFor(holdingNo)).map((h) => ({
+    receiptNo: `HIST-${h.id}`,
+    formattedReceiptNo: h.reference,
+    date: dmy(h.paid_on),
+    amountReceived: h.amount,
+    paymentMode: `Old part payment (settlement no. ${h.settlement_id})`,
+    cancelled: false,
+    cancelledReason: null,
+    cancellationPending: false,
+    historical: true,
+  }));
+  return [...txns.map((t) => ({
     cancelled: t.cancelled,
     cancelledReason: t.cancelled_reason,
     cancellationPending: !t.cancelled && pendingReceipts.has(t.receipt_no),
@@ -445,7 +461,7 @@ export async function listPaymentHistory(holdingNo: string): Promise<PaymentHist
     date: `${String(t.txn_date.getDate()).padStart(2, "0")}-${String(t.txn_date.getMonth() + 1).padStart(2, "0")}-${t.txn_date.getFullYear()}`,
     amountReceived: t.amount_received,
     paymentMode: t.payment_mode,
-  }));
+  })), ...old];
 }
 
 export async function submitPayment(

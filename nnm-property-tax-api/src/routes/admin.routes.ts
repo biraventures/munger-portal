@@ -1,4 +1,15 @@
 import {
+  getHistoricalHolding,
+  getHistoricalPending,
+  getHistoricalPendingCount,
+  getHistoricalProof,
+  postHistoricalApprove,
+  postHistoricalPreview,
+  postHistoricalReturn,
+  postHistoricalSettlement,
+  putHistoricalProof,
+} from "../controllers/historicalPayment.controller";
+import {
   getStaffKycFile,
   getStaffKycList,
   getStaffKycOne,
@@ -906,6 +917,17 @@ adminRouter.post("/trade-license-applications/:id/reject", requireNonStallPrabha
 
 // Pre-2011 ARV from the old demand register (migration 146): Tax Daroga enters, City Manager approves.
 const requirePre2011View = requireAdminRole("tax_daroga", "city_manager", "deputy_commissioner", "commissioner");
+// Historical part payments on old holdings: Tax Daroga records, City Manager approves (historicalPayment.service.ts).
+const requireHistoricalView = requireAdminRole("tax_daroga", "city_manager", "deputy_commissioner", "commissioner");
+adminRouter.get("/historical-payments/holding/:holdingNo", requireHistoricalView, getHistoricalHolding);
+adminRouter.get("/historical-payments/pending", requireHistoricalView, getHistoricalPending);
+adminRouter.get("/historical-payments/pending-count", requireHistoricalView, getHistoricalPendingCount);
+adminRouter.get("/historical-payments/payment/:id/proof", requireHistoricalView, getHistoricalProof);
+adminRouter.post("/historical-payments/preview", requireAdminRole("tax_daroga"), postHistoricalPreview);
+adminRouter.post("/historical-payments", requireAdminRole("tax_daroga"), postHistoricalSettlement);
+adminRouter.put("/historical-payments/payment/:id/proof", requireAdminRole("tax_daroga"), putHistoricalProof);
+adminRouter.post("/historical-payments/:id/approve", requireAdminRole("city_manager"), postHistoricalApprove);
+adminRouter.post("/historical-payments/:id/return", requireAdminRole("city_manager"), postHistoricalReturn);
 adminRouter.get("/pre2011-arv/worklist", requirePre2011View, getPre2011Worklist);
 adminRouter.get("/pre2011-arv/holding/:holdingNo", requirePre2011View, getPre2011Holding);
 adminRouter.get("/pre2011-arv/entries", requirePre2011View, getPre2011Entries);

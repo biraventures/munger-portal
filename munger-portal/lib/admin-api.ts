@@ -420,6 +420,8 @@ export interface PaymentHistoryEntry {
   date: string;
   amountReceived: string;
   paymentMode: string;
+  /** An old part payment settled through "Historical Part Payments" - no receipt of this system to view. */
+  historical?: boolean;
 }
 
 export async function fetchPaymentHistoryAdmin(holdingNo: string): Promise<PaymentHistoryEntry[]> {
