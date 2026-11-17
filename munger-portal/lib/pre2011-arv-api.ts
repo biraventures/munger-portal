@@ -52,12 +52,17 @@ export interface Pre2011Entry {
   pendingTaxTotal: number;
   register_reference: string;
   remarks: string | null;
-  status: "pending" | "approved" | "rejected";
+  status: "pending" | "approved" | "rejected" | "reverted";
   entered_by_name: string;
   entered_at: string;
   decided_by_name: string | null;
   decided_at: string | null;
   decision_remarks: string | null;
+  reverted_from?: "pending" | "approved" | null;
+  reverted_by_name?: string | null;
+  reverted_by_role?: string | null;
+  reverted_at?: string | null;
+  revert_comment?: string | null;
 }
 
 export interface HoldingLookup {
@@ -74,7 +79,17 @@ export interface HoldingLookup {
   missingAfter2011: string | null;
   neededPeriods: NeededPeriod[];
   pending: { id: string; entered_at: string; entered_by_name: string } | null;
-  history: { id: string; entries: { period: string; arv: number }[]; register_reference: string; status: string; entered_by_name: string; entered_at: string; decided_by_name: string | null; decision_remarks: string | null }[];
+  history: ({
+    id: string;
+    entries: { period: string; arv: number }[];
+    register_reference: string;
+    remarks: string | null;
+    status: string;
+    entered_by_name: string;
+    entered_at: string;
+    decided_by_name: string | null;
+    decision_remarks: string | null;
+  } & Pick<Pre2011Entry, "reverted_from" | "reverted_by_name" | "reverted_by_role" | "reverted_at" | "revert_comment">)[];
 }
 
 export const fetchWorklist = (ward?: string) =>
@@ -86,4 +101,8 @@ export const fetchPendingCount = () => call<{ pending: number }>("/pending-count
 export const submitEntry = (body: { holdingNo: string; entries: { period: string; arv: number }[]; registerReference: string; remarks: string | null }) =>
   call<{ id: number }>("/entries", { method: "POST", body: JSON.stringify(body) }, "Could not save the entry.");
 export const approveEntry = (id: string, remarks: string | null) => call(`/entries/${id}/approve`, { method: "POST", body: JSON.stringify({ remarks }) }, "Could not approve.");
+/** Back to the Tax Daroga for correction: waiting entry (City Manager / DMC / MC) or approved entry (DMC / MC). */
+export const revertEntry = (id: string, comment: string) =>
+  call<{ reverted: boolean; from: string }>(`/entries/${id}/revert`, { method: "POST", body: JSON.stringify({ comment }) }, "Could not revert.");
+export const ROLE_NAME: Record<string, string> = { city_manager: "City Manager", deputy_commissioner: "DMC", commissioner: "Municipal Commissioner" };
 export const rejectEntry = (id: string, reason: string) => call(`/entries/${id}/reject`, { method: "POST", body: JSON.stringify({ reason }) }, "Could not reject.");

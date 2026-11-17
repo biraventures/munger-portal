@@ -232,6 +232,7 @@ import {
   postPre2011Approve,
   postPre2011Entry,
   postPre2011Reject,
+  postPre2011Revert,
 } from "../controllers/pre2011Arv.controller";
 import {
   searchMigratedHoldingsHandler,
@@ -935,6 +936,7 @@ adminRouter.get("/pre2011-arv/pending-count", requirePre2011View, getPre2011Pend
 adminRouter.post("/pre2011-arv/entries", requireAdminRole("tax_daroga"), postPre2011Entry);
 adminRouter.post("/pre2011-arv/entries/:id/approve", requireAdminRole("city_manager"), postPre2011Approve);
 adminRouter.post("/pre2011-arv/entries/:id/reject", requireAdminRole("city_manager"), postPre2011Reject);
+adminRouter.post("/pre2011-arv/entries/:id/revert", requireAdminRole("city_manager", "deputy_commissioner", "commissioner"), postPre2011Revert);
 
 // Bulk demand notice generation
 adminRouter.post("/demand-notices/bulk-generate", requireSeniorAdmin, postBulkGenerateDemandNotices);
