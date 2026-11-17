@@ -9,6 +9,7 @@ import {
   postHistoricalSettlement,
   putHistoricalProof,
 } from "../controllers/historicalPayment.controller";
+import { getHeldItem, getHeldItems, getResolutionsWaiting, postResolution, postResolutionDecision } from "../controllers/importResolution.controller";
 import {
   getStaffKycFile,
   getStaffKycList,
@@ -523,9 +524,17 @@ adminRouter.post("/properties/remove-duplicate-floors", requireAdminRole("commis
 // holdings (Tax Daroga can keep holdings out); the FINAL approval - integrating into the live data (all /
 // selected / all except some) or discarding - is the City Manager's alone. The Commissioner sees progress only.
 adminRouter.post("/properties/bulk-upload", requireAdminRole("commissioner", "tax_daroga", "city_manager"), uploadPropertiesXlsxHandler);
-adminRouter.get("/property-imports", requireAdminRole("tax_daroga", "city_manager", "commissioner"), listImportBatchesHandler);
-adminRouter.get("/property-imports/:id", requireAdminRole("tax_daroga", "city_manager", "commissioner"), getImportBatchHandler);
+adminRouter.get("/property-imports", requireAdminRole("tax_daroga", "city_manager", "deputy_commissioner", "commissioner"), listImportBatchesHandler);
+adminRouter.get("/property-imports/:id", requireAdminRole("tax_daroga", "city_manager", "deputy_commissioner", "commissioner"), getImportBatchHandler);
 adminRouter.get("/property-imports/:id/holdings/:holdingNo", requireAdminRole("tax_daroga", "city_manager"), getImportHoldingHandler);
+// Holdings of an upload that did not go live, and their resolution: Tax Daroga -> City Manager -> DMC -> Municipal
+// Commissioner (importResolution.service.ts; who may do what is checked there).
+const requireResolutionView = requireAdminRole("tax_daroga", "city_manager", "deputy_commissioner", "commissioner");
+adminRouter.get("/property-imports/:id/held", requireResolutionView, getHeldItems);
+adminRouter.get("/property-imports/:id/held/:ref", requireResolutionView, getHeldItem);
+adminRouter.post("/property-imports/:id/held/:ref/resolution", requireAdminRole("tax_daroga"), postResolution);
+adminRouter.post("/import-resolutions/:caseId/decide", requireAdminRole("city_manager", "deputy_commissioner", "commissioner"), postResolutionDecision);
+adminRouter.get("/import-resolutions/waiting", requireResolutionView, getResolutionsWaiting);
 adminRouter.post("/property-imports/:id/exclude", requireAdminRole("tax_daroga", "city_manager"), excludeImportHoldingsHandler);
 adminRouter.post("/property-imports/:id/restore", requireAdminRole("tax_daroga", "city_manager"), restoreImportHoldingsHandler);
 adminRouter.post("/property-imports/:id/review", requireAdminRole("tax_daroga"), reviewImportHoldingsHandler);

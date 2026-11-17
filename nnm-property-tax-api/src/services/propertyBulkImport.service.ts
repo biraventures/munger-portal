@@ -63,7 +63,7 @@ export function parseGps(latRaw: ExcelJS.CellValue, lngRaw: ExcelJS.CellValue): 
  * for Postgres, or null if genuinely unparseable - never throws, so
  * one bad date doesn't fail the whole row.
  */
-function parseFlexibleDateTime(value: ExcelJS.CellValue): string | null {
+export function parseFlexibleDateTime(value: ExcelJS.CellValue): string | null {
   if (value instanceof Date) return value.toISOString();
   const text = cellText(value);
   if (!text) return null;
@@ -90,7 +90,7 @@ function parseFlexibleDateTime(value: ExcelJS.CellValue): string | null {
 }
 
 /** "Yes"/"No" text -> boolean. Defaults to false for anything else, including blank. */
-function parseYesNo(value: ExcelJS.CellValue): boolean {
+export function parseYesNo(value: ExcelJS.CellValue): boolean {
   return cellText(value).trim().toLowerCase() === "yes";
 }
 

@@ -12,8 +12,8 @@ import { SOLID_WASTE_RATE } from "../constants/taxRates";
  * on a workbook rebuilt from the staged rows, so what goes live is exactly what the importer always did.
  */
 
-const CHILD_SHEETS = ["Floors", "Transactions", "DemandNotices", "TaxHistoryStages", "PropertyHistory"] as const;
-type PlainRow = Record<string, unknown>;
+export const CHILD_SHEETS = ["Floors", "Transactions", "DemandNotices", "TaxHistoryStages", "PropertyHistory"] as const;
+export type PlainRow = Record<string, unknown>;
 export interface StagedIssue {
   severity: "block" | "warn";
   message: string;
@@ -28,7 +28,7 @@ function plain(v: ExcelJS.CellValue): unknown {
   if (typeof v === "object") return cellText(v);
   return v;
 }
-function revive(v: unknown): ExcelJS.CellValue {
+export function revive(v: unknown): ExcelJS.CellValue {
   if (v && typeof v === "object" && "$date" in (v as Record<string, unknown>)) return new Date((v as { $date: string }).$date);
   return (v ?? null) as ExcelJS.CellValue;
 }
@@ -37,9 +37,9 @@ function plainRow(row: Record<string, ExcelJS.CellValue>): PlainRow {
   for (const [k, v] of Object.entries(row)) out[k] = plain(v);
   return out;
 }
-const text = (v: unknown): string => cellText(revive(v));
+export const text = (v: unknown): string => cellText(revive(v));
 
-function checkHolding(master: PlainRow, floorsCount: number, existsLive: boolean): StagedIssue[] {
+export function checkHolding(master: PlainRow, floorsCount: number, existsLive: boolean): StagedIssue[] {
   const issues: StagedIssue[] = [];
   const m = (k: string) => text(master[k]);
   const num = (k: string) => cellNumber(revive(master[k]));
@@ -65,16 +65,17 @@ export async function stagePropertiesXlsx(fileBuffer: Buffer, actor: { displayNa
   const workbook = new ExcelJS.Workbook();
   await workbook.xlsx.load(fileBuffer as unknown as ArrayBuffer);
 
-  const uploadErrors: { sheet: string; row: number; message: string }[] = [];
+  // The row itself is kept with the error so the row can be corrected and imported later (importResolution.service).
+  const uploadErrors: { sheet: string; row: number; message: string; data?: PlainRow }[] = [];
   const masters = new Map<string, { row: PlainRow; excelRow: number }>();
   for (const { row, excelRowNum } of readSheet(workbook.getWorksheet("Master"))) {
     const holdingNo = cellText(row.HoldingNo);
     if (!holdingNo) {
-      uploadErrors.push({ sheet: "Master", row: excelRowNum, message: "Missing HoldingNo" });
+      uploadErrors.push({ sheet: "Master", row: excelRowNum, message: "Missing HoldingNo", data: plainRow(row) });
       continue;
     }
     if (masters.has(holdingNo)) {
-      uploadErrors.push({ sheet: "Master", row: excelRowNum, message: `Holding "${holdingNo}" appears more than once in the file - only the first row was kept` });
+      uploadErrors.push({ sheet: "Master", row: excelRowNum, message: `Holding "${holdingNo}" appears more than once in the file - only the first row was kept`, data: plainRow(row) });
       continue;
     }
     masters.set(holdingNo, { row: plainRow(row), excelRow: excelRowNum });
@@ -86,7 +87,7 @@ export async function stagePropertiesXlsx(fileBuffer: Buffer, actor: { displayNa
     for (const { row, excelRowNum } of readSheet(workbook.getWorksheet(sheet))) {
       const holdingNo = cellText(row.HoldingNo);
       if (!holdingNo || !masters.has(holdingNo)) {
-        uploadErrors.push({ sheet, row: excelRowNum, message: holdingNo ? `Holding "${holdingNo}" has no row on the Master sheet - not staged` : "Missing HoldingNo" });
+        uploadErrors.push({ sheet, row: excelRowNum, message: holdingNo ? `Holding "${holdingNo}" has no row on the Master sheet - not staged` : "Missing HoldingNo", data: plainRow(row) });
         continue;
       }
       const entry = children.get(holdingNo) ?? {};
@@ -445,9 +446,26 @@ export async function startIntegration(batchId: number, mode: IntegrateMode, hol
   return { started: true, holdings: toDo.length };
 }
 
-async function runIntegration(batchId: number, dataSource: string, holdingNos: string[], actorName: string) {
-  const summary = { requested: holdingNos.length, integrated: 0, failed: 0, notes: [] as string[], finishedAt: "" };
-  try {
+/**
+ * Pushes the given staged holdings live through the normal importer and marks each integrated or failed. Awaitable -
+ * the caller holds the batch's integration lock (runIntegration / importResolution.service).
+ */
+export interface IntegrationSummary {
+  requested: number;
+  integrated: number;
+  failed: number;
+  notes: string[];
+  finishedAt: string;
+  errors: Record<string, string>;
+}
+export async function integrateStagedHoldings(
+  batchId: number,
+  dataSource: string,
+  holdingNos: string[],
+  actorName: string,
+  summary: IntegrationSummary = { requested: holdingNos.length, integrated: 0, failed: 0, notes: [], finishedAt: "", errors: {} },
+) {
+  {
     for (let i = 0; i < holdingNos.length; i += CHUNK_SIZE) {
       const part = holdingNos.slice(i, i + CHUNK_SIZE);
       const staged = await pool.query<{ holding_no: string; master: PlainRow; sheets: Record<string, PlainRow[]> }>(
@@ -488,15 +506,37 @@ async function runIntegration(batchId: number, dataSource: string, holdingNos: s
             [batchId, h, note ?? "Not imported - see the upload errors."],
           );
           summary.failed++;
+          summary.errors[h] = note ?? "Not imported - see the upload errors.";
         }
       }
     }
+  }
+  return summary;
+}
+
+/** Claims the batch's integration lock; false if a run is already in progress. */
+export async function claimBatchLock(batchId: number): Promise<boolean> {
+  const claim = await pool.query(
+    `UPDATE property_import_batches SET integrating_since = now()
+      WHERE id = $1 AND (integrating_since IS NULL OR integrating_since < now() - ($2 || ' minutes')::interval) RETURNING id`,
+    [batchId, String(STALE_RUN_MINUTES)],
+  );
+  return claim.rows.length > 0;
+}
+export async function releaseBatchLock(batchId: number): Promise<void> {
+  await pool.query(`UPDATE property_import_batches SET integrating_since = NULL WHERE id = $1`, [batchId]);
+}
+
+async function runIntegration(batchId: number, dataSource: string, holdingNos: string[], actorName: string) {
+  const summary: IntegrationSummary = { requested: holdingNos.length, integrated: 0, failed: 0, notes: [], finishedAt: "", errors: {} };
+  try {
+    await integrateStagedHoldings(batchId, dataSource, holdingNos, actorName, summary);
   } catch (err) {
     summary.notes.push(`Stopped early: ${err instanceof Error ? err.message : String(err)}`);
   } finally {
     summary.finishedAt = new Date().toISOString();
     await pool
-      .query(`UPDATE property_import_batches SET integrating_since = NULL, last_run_summary = $2, last_run_at = now() WHERE id = $1`, [batchId, JSON.stringify(summary)])
+      .query(`UPDATE property_import_batches SET integrating_since = NULL, last_run_summary = $2, last_run_at = now() WHERE id = $1`, [batchId, JSON.stringify({ ...summary, errors: undefined })])
       .catch((e) => console.error("Could not close integration run", e));
   }
 }

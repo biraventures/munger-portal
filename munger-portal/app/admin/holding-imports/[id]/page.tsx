@@ -7,6 +7,7 @@ import { AlertCircle, CheckCircle2, Loader2, X } from "lucide-react";
 import { AdminHeader } from "@/components/admin-header";
 import { ResidentialSolidWastePanel } from "@/components/admin/residential-solid-waste-panel";
 import { useAdminGuard } from "@/lib/use-admin-guard";
+import { HeldHoldings } from "@/components/admin/held-holdings";
 import {
   discardImport,
   excludeStaged,
@@ -61,10 +62,11 @@ export default function HoldingImportReviewPage() {
   const [reloadCount, setReloadCount] = useState(0);
   const wasIntegrating = useRef(false);
 
-  const allowed = admin && ["tax_daroga", "city_manager", "commissioner"].includes(admin.role);
+  const allowed = admin && ["tax_daroga", "city_manager", "deputy_commissioner", "commissioner"].includes(admin.role);
   const isCityManager = admin?.role === "city_manager";
   const isDaroga = admin?.role === "tax_daroga";
-  const isCommissioner = admin?.role === "commissioner";
+  // The DMC follows the upload like the Commissioner and takes part in resolving the held-back holdings.
+  const isCommissioner = admin?.role === "commissioner" || admin?.role === "deputy_commissioner";
 
   const load = useCallback(async () => {
     try {
@@ -243,6 +245,8 @@ export default function HoldingImportReviewPage() {
             </p>
           </div>
         )}
+
+        {admin && batch && <HeldHoldings key={`${batchId}-${c?.integrated ?? 0}`} batchId={batchId} role={admin.role} />}
 
         {isCommissioner && (
           <p className="rounded-md border border-slate-200 bg-white p-3 text-sm text-slate-600">

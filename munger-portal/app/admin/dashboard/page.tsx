@@ -27,6 +27,7 @@ import { fetchTradeLicenseApplications } from "@/lib/admin-trade-license-api";
 import { ADMIN_ROLE_LABELS } from "@/lib/admin-auth";
 import { fetchKycPending } from "@/lib/staff-kyc-api";
 import { fetchSettlementPendingCount } from "@/lib/historical-payment-api";
+import { fetchResolutionsWaiting } from "@/lib/holding-import-api";
 import { fetchPendingCount as fetchNewHoldingPending, type PendingCount as NewHoldingPending } from "@/lib/new-holding-api";
 
 export default function AdminDashboardPage() {
@@ -39,6 +40,7 @@ export default function AdminDashboardPage() {
   const [newHoldingPending, setNewHoldingPending] = useState<NewHoldingPending | null>(null);
   const [kycPending, setKycPending] = useState<number | null>(null);
   const [historicalPending, setHistoricalPending] = useState<number | null>(null);
+  const [resolutionsWaiting, setResolutionsWaiting] = useState<number | null>(null);
 
   useEffect(() => {
     // The Agency Operator has its own small dashboard and none of these desks.
@@ -58,6 +60,11 @@ export default function AdminDashboardPage() {
     fetchTradeLicenseApplications({ status: "pending", myStage: true })
       .then((r) => setMyTradeLicensePendingCount(r.applications.length))
       .catch(() => setMyTradeLicensePendingCount(null));
+    if (["tax_daroga", "city_manager", "deputy_commissioner", "commissioner"].includes(admin.role)) {
+      fetchResolutionsWaiting()
+        .then((w) => setResolutionsWaiting(w.total))
+        .catch(() => setResolutionsWaiting(null));
+    }
     if (admin.role === "city_manager") {
       fetchSettlementPendingCount()
         .then(setHistoricalPending)
@@ -126,7 +133,7 @@ export default function AdminDashboardPage() {
   const showAllPropertyChanges = isCommissioner;
   const showRenumberHolding = isCommissioner;
   const showBulkUploadProperties = isCommissioner || admin.role === "tax_daroga" || admin.role === "city_manager";
-  const showHoldingImportReview = admin.role === "tax_daroga" || admin.role === "city_manager" || admin.role === "commissioner";
+  const showHoldingImportReview = ["tax_daroga", "city_manager", "deputy_commissioner", "commissioner"].includes(admin.role);
   const showMigratedHoldingsBulkUpload = isCommissioner;
   const showMigratedHoldingsAssign = admin.role === "deputy_commissioner" || admin.role === "city_manager";
   const showMigratedHoldingsSurveyor = admin.role === "tax_daroga";
@@ -484,14 +491,17 @@ export default function AdminDashboardPage() {
                   </Link>
                 )}
                 {showHoldingImportReview && (
-                  <Link href="/admin/holding-imports" className={cardClass}>
-                    <span className={iconWrapClass}>
+                  <Link href="/admin/holding-imports" className={deskCardClass(resolutionsWaiting)}>
+                    <span className={deskIconWrapClass(resolutionsWaiting)}>
                       <ClipboardCheck className="h-6 w-6" strokeWidth={1.8} />
                     </span>
-                    <h3 className="mb-1.5 text-base font-semibold text-slate-900">{isCommissioner ? "Uploaded Holdings - Progress" : "Uploaded Holdings - Review"}</h3>
+                    <h3 className="mb-1.5 text-base font-semibold text-slate-900">
+                      {isCommissioner || admin.role === "deputy_commissioner" ? "Uploaded Holdings - Progress" : "Uploaded Holdings - Review"}
+                      {resolutionsWaiting ? <span className="ml-2 rounded-full bg-red-600 px-2 py-0.5 text-xs text-white">{resolutionsWaiting}</span> : null}
+                    </h3>
                     <p className="text-sm text-slate-500">
-                      {isCommissioner
-                        ? "Follow how much of each bulk upload has been integrated into the live data."
+                      {isCommissioner || admin.role === "deputy_commissioner"
+                        ? "Follow each bulk upload, and approve how held-back holdings are resolved - imported, merged into the live holding, or dropped."
                         : admin.role === "city_manager"
                           ? "Give final approval - integrate uploaded holdings into the live data: all, selected, or all except a few."
                           : "Review bulk-uploaded holdings and keep out any that should not go live. The City Manager gives final approval."}
