@@ -887,7 +887,12 @@ export interface MigratedHoldingImportResult {
   review?: { row: number; reason: string; kind: "needs_review" | "error" }[];
 }
 
-export async function uploadMigratedHoldingsXlsx(fileDataBase64: string, fileName?: string): Promise<MigratedHoldingImportResult> {
+export async function uploadMigratedHoldingsXlsx(
+  fileDataBase64: string,
+  fileName?: string,
+  onProgress?: (processed: number, total: number) => void,
+): Promise<MigratedHoldingImportResult> {
+  // The server imports in the background (a 14,000-row register takes minutes) - start it, then follow it.
   const res = await fetch(`${API_BASE_URL}/admin/migrated-holdings/bulk-upload`, {
     method: "POST",
     headers: authHeaders(),
@@ -897,7 +902,22 @@ export async function uploadMigratedHoldingsXlsx(fileDataBase64: string, fileNam
     const body = await res.json().catch(() => ({}));
     throw new Error(body.error || uploadFailureMessage(res.status));
   }
-  return res.json();
+  const { jobId } = (await res.json()) as { jobId: number };
+  let misses = 0;
+  for (;;) {
+    await new Promise((r) => setTimeout(r, 2000));
+    const st = await fetch(`${API_BASE_URL}/admin/migrated-holdings/bulk-upload/${jobId}`, { headers: authHeaders() }).catch(() => null);
+    if (!st || !st.ok) {
+      // A brief network hiccup should not lose the upload - give up only after about a minute of failures.
+      if (++misses > 30) throw new Error(`Lost contact with the server. The upload (no. ${jobId}) may still finish - refresh and check later.`);
+      continue;
+    }
+    misses = 0;
+    const job = (await st.json()) as { status: string; processed: number; total: number; result: MigratedHoldingImportResult | null; error: string | null };
+    onProgress?.(job.processed, job.total);
+    if (job.status === "done" && job.result) return job.result;
+    if (job.status === "failed") throw new Error(job.error || "The upload failed.");
+  }
 }
 
 export type MigratedHoldingSurveyStatus =

@@ -70,6 +70,24 @@ function cellText(value: ExcelJS.CellValue): string {
   return String(value).trim();
 }
 
+/**
+ * A year column (Last Payment Year / Holding creation year). Excel often turns what was typed as a year range into a
+ * date: "3-4" (meaning 2003-04) becomes 3 April of the current year, "9-10" becomes 9 October, "2003-04" becomes
+ * April 2003. Such a date is read back as the year range it was meant to be; any other date is kept as DD-MM-YYYY.
+ */
+export function yearCellText(value: ExcelJS.CellValue): string {
+  const v = value && typeof value === "object" && "result" in value ? (value.result as ExcelJS.CellValue) : value;
+  if (!(v instanceof Date)) return cellText(value);
+  const y = v.getUTCFullYear();
+  const m = v.getUTCMonth() + 1;
+  const d = v.getUTCDate();
+  const range = (start: number) => `${start}-${start + 1}`;
+  if (m === d + 1) return range(2000 + d); // "3-4" read day-month -> 3 April
+  if (d === m + 1) return range(2000 + m); // "3-4" read month-day -> 4 March
+  if (d === 1 && m === (y % 100) + 1) return range(y); // "2003-04" -> April 2003
+  return `${String(d).padStart(2, "0")}-${String(m).padStart(2, "0")}-${y}`;
+}
+
 function cellNumber(value: ExcelJS.CellValue): number | null {
   const text = cellText(value);
   if (!text) return null;
@@ -145,16 +163,35 @@ function headerColumns(row: ExcelJS.Row): Partial<Record<ColKey, number>> {
   return cols;
 }
 
-/** "2005-2006", "2005-06", "2005/06" or "2005" -> "2005-2006"; null if not a sensible year. */
+/**
+ * A financial year as the old registers write it -> "2005-2006"; null if not a sensible year. Accepted:
+ * "2005-2006", "2005-06", "2005-6", "2005/06", "2005", and two-digit "05-06" / "98-99" / "99-00" (the end must be the
+ * year after the start, so a typo is not taken as a year).
+ */
 export function creationYearLabel(v: string | null | undefined): string | null {
-  const m = String(v ?? "")
+  const s = String(v ?? "")
     .trim()
-    .match(/^(\d{4})(?:\s*[-/–]\s*(\d{2}|\d{4}))?(?:\.0+)?$/);
-  if (!m) return null;
-  const y = Number(m[1]);
+    .replace(/\.0+$/, "");
   const fy = new Date().getMonth() >= 3 ? new Date().getFullYear() : new Date().getFullYear() - 1;
-  if (y < 1900 || y > fy) return null;
-  return `${y}-${y + 1}`;
+  const ok = (y: number) => (y >= 1900 && y <= fy ? `${y}-${y + 1}` : null);
+  let m = s.match(/^(\d{4})(?:\s*[-/–]\s*(\d{1,4}))?$/);
+  if (m) {
+    const y = Number(m[1]);
+    if (m[2] !== undefined) {
+      const end = m[2];
+      const next = String(y + 1);
+      // the end is the following year, written in full, as two digits or as one digit
+      if (!(end === next || end === next.slice(-2) || end === next.slice(-1))) return null;
+    }
+    return ok(y);
+  }
+  m = s.match(/^(\d{2})\s*[-/–]\s*(\d{2})$/);
+  if (m) {
+    const a = Number(m[1]);
+    if ((a + 1) % 100 !== Number(m[2])) return null;
+    return ok(a >= 40 ? 1900 + a : 2000 + a);
+  }
+  return null;
 }
 
 /** Problems that stop a row being imported (empty = fine). */
@@ -177,7 +214,24 @@ export function migratedRowProblems(d: MigratedRowData): string[] {
   }
   if (d.holdingCreationYear && !creationYearLabel(d.holdingCreationYear))
     p.push(`Holding creation year '${d.holdingCreationYear}' is not a year (e.g. 2005-2006).`);
+  // A Last Payment Year that cannot be read would leave "tax paid till" blank - the holding would show tax due from
+  // its creation - so it is held for review instead of being imported with the wrong dues.
+  if (d.lastPaymentYear && !creationYearLabel(d.lastPaymentYear))
+    p.push(`Last Payment Year '${d.lastPaymentYear}' is not a year (e.g. 2005-06).`);
   return p;
+}
+
+/** A creation failure in words the office can act on (the database's own message otherwise). */
+async function createErrorText(err: unknown, d: MigratedRowData): Promise<string> {
+  const msg = err instanceof Error ? err.message : "Unknown error creating this holding.";
+  if (!msg.includes("idx_properties_old_pid")) return msg;
+  // Two rows (or a row and an existing holding) with the same Old PID - an old PID belongs to one holding only.
+  const { rows } = await pool.query<{ holding_no: string; owner_name: string }>(
+    `SELECT holding_no, owner_name FROM properties WHERE upper(btrim(old_pid)) = upper(btrim($1)) LIMIT 1`,
+    [d.oldPid ?? ""],
+  );
+  const on = rows[0] ? ` is already on holding ${rows[0].holding_no} (${rows[0].owner_name})` : " is already used by another holding";
+  return `Old PID '${d.oldPid ?? ""}'${on} - an old PID can belong to one holding only. Correct the Old PID of this row.`;
 }
 
 /**
@@ -345,6 +399,7 @@ export async function importMigratedHoldingsXlsx(
   fileBuffer: Buffer,
   actorDisplayName: string,
   fileName: string | null = null,
+  onProgress?: (processed: number, total: number) => Promise<void>,
 ): Promise<MigratedHoldingImportResult> {
   const workbook = new ExcelJS.Workbook();
   await workbook.xlsx.load(fileBuffer as unknown as ArrayBuffer);
@@ -364,9 +419,23 @@ export async function importMigratedHoldingsXlsx(
     return result;
   }
 
+  const total = Math.max(sheet.rowCount - 1, 0);
   for (let rowNo = 2; rowNo <= sheet.rowCount; rowNo++) {
-    const row = sheet.getRow(rowNo);
-    const t = (k: ColKey) => (cols[k] ? cellText(row.getCell(cols[k]!).value) : "");
+    if (onProgress && (rowNo - 1) % 250 === 0) await onProgress(rowNo - 1, total);
+    try {
+      await importOneRow(sheet.getRow(rowNo), rowNo);
+    } catch (err) {
+      // One row's unexpected problem never stops the rest of the sheet.
+      const reason = err instanceof Error ? err.message : "Unexpected error on this row.";
+      result.errors.push({ row: rowNo, message: reason });
+    }
+  }
+  if (onProgress) await onProgress(total, total);
+  return result;
+
+  async function importOneRow(row: ExcelJS.Row, rowNo: number): Promise<void> {
+    const t = (k: ColKey) =>
+      cols[k] ? (k === "lastPaymentYear" || k === "holdingCreationYear" ? yearCellText : cellText)(row.getCell(cols[k]!).value) : "";
     const n = (k: ColKey) => (cols[k] ? cellNumber(row.getCell(cols[k]!).value) : null);
     const d: MigratedRowData = {
       ward: t("ward"),
@@ -390,7 +459,7 @@ export async function importMigratedHoldingsXlsx(
     };
     const needsReview = t("needsReview") || null;
 
-    if (!d.ward && !d.ownerName) continue; // blank trailing row
+    if (!d.ward && !d.ownerName) return; // blank trailing row
 
     // A re-upload of the same sheet does not create a holding twice - but its old-record figures are refreshed (an
     // earlier upload may have read them from the wrong columns).
@@ -399,13 +468,13 @@ export async function importMigratedHoldingsXlsx(
       result.alreadyImported++;
       if (migratedRowProblems(d).length === 0) await refreshOldRecord(existing, d);
       await closeStaleReviewRows(d, existing, actorDisplayName);
-      continue;
+      return;
     }
     if (needsReview) {
       result.rowsSkipped++;
       result.review.push({ row: rowNo, reason: needsReview, kind: "needs_review" });
       await queueForReview(d, rowNo, "needs_review", needsReview, actorDisplayName, fileName);
-      continue;
+      return;
     }
     const problems = migratedRowProblems(d);
     if (problems.length) {
@@ -413,7 +482,7 @@ export async function importMigratedHoldingsXlsx(
       result.errors.push({ row: rowNo, message: reason });
       result.review.push({ row: rowNo, reason, kind: "error" });
       await queueForReview(d, rowNo, "error", reason, actorDisplayName, fileName);
-      continue;
+      return;
     }
 
     try {
@@ -421,14 +490,12 @@ export async function importMigratedHoldingsXlsx(
       await closeStaleReviewRows(d, created, actorDisplayName);
       result.holdingsCreated++;
     } catch (err) {
-      const reason = err instanceof Error ? err.message : "Unknown error creating this holding.";
+      const reason = await createErrorText(err, d);
       result.errors.push({ row: rowNo, message: reason });
       result.review.push({ row: rowNo, reason, kind: "error" });
       await queueForReview(d, rowNo, "error", reason, actorDisplayName, fileName);
     }
   }
-
-  return result;
 }
 
 // ---------------------------------------------------------------------------

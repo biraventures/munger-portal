@@ -23,6 +23,7 @@ export default function MigratedHoldingsBulkUploadPage() {
   const admin = useAdminGuard();
   const [fileName, setFileName] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [progress, setProgress] = useState<{ processed: number; total: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<MigratedHoldingImportResult | null>(null);
   const [exporting, setExporting] = useState(false);
@@ -47,9 +48,10 @@ export default function MigratedHoldingsBulkUploadPage() {
     setError(null);
     setResult(null);
     setUploading(true);
+    setProgress(null);
     try {
       const base64 = await fileToBase64(file);
-      const res = await uploadMigratedHoldingsXlsx(base64, file.name);
+      const res = await uploadMigratedHoldingsXlsx(base64, file.name, (processed, total) => setProgress({ processed, total }));
       setResult(res);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not upload this file.");
@@ -106,8 +108,22 @@ export default function MigratedHoldingsBulkUploadPage() {
             <div className="mt-4 flex items-center gap-2 text-sm text-slate-500">
               <Loader2 className="h-4 w-4 animate-spin" />
               Importing {fileName}…
+              {progress && progress.total > 0 && (
+                <span className="tabular-nums">
+                  {progress.processed.toLocaleString("en-IN")} of {progress.total.toLocaleString("en-IN")} rows
+                </span>
+              )}
             </div>
           )}
+          {uploading && progress && progress.total > 0 && (
+            <div className="mt-2 h-2 w-full overflow-hidden rounded bg-slate-200">
+              <div
+                className="h-full bg-nnm-blue transition-all"
+                style={{ width: `${Math.min(100, Math.round((progress.processed / progress.total) * 100))}%` }}
+              />
+            </div>
+          )}
+          {uploading && <p className="mt-2 text-xs text-slate-400">A large register takes a few minutes. Keep this page open.</p>}
 
           {error && (
             <div role="alert" className="mt-4 flex items-center gap-2 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
