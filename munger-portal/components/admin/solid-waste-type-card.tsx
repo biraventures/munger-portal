@@ -128,9 +128,10 @@ export function SolidWasteTypeCard({
             </select>
           </label>
           <LiveCameraCapture
-            label="Photo of the facility (shop, house, hotel, etc.) - taken with the camera at the holding"
+            label="Photo of the facility (shop, house, hotel, etc.) - take it at the holding, or attach a photo file"
             photo={photo}
             onChange={setPhoto}
+            allowFileAttach
           />
           {error && (
             <p role="alert" className="text-xs text-red-600">

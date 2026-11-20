@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Camera, CheckCircle2, Loader2, RefreshCw, SwitchCamera, X } from "lucide-react";
+import { Camera, CheckCircle2, Loader2, Paperclip, RefreshCw, SwitchCamera, X } from "lucide-react";
+import { shrinkPhoto } from "@/lib/upload-limits";
 
 export interface CapturedPhoto {
   /** JPEG, base64 without the data: prefix - ready for the API. */
@@ -44,18 +45,33 @@ function grab(video: HTMLVideoElement): CapturedPhoto {
   return { base64: dataUrl.replace(/^data:image\/jpeg;base64,/, ""), mimeType: "image/jpeg", dataUrl };
 }
 
+/** A photo file from the device as a CapturedPhoto - shrunk to fit the upload limit. */
+async function fromFile(file: File): Promise<CapturedPhoto> {
+  const blob = await shrinkPhoto(file);
+  const dataUrl = await new Promise<string>((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(String(r.result));
+    r.onerror = reject;
+    r.readAsDataURL(blob);
+  });
+  return { base64: dataUrl.replace(/^data:[^;]+;base64,/, ""), mimeType: "image/jpeg", dataUrl };
+}
+
 /**
- * Takes a photo with the device camera, live on the page - there is no option to pick an existing picture from the
- * gallery or files, so the photo is taken at the spot.
+ * Takes a photo with the device camera, live on the page. By default there is no option to pick an existing picture
+ * from the gallery or files, so the photo is taken at the spot (attendance, submersibles). Property tax screens pass
+ * allowFileAttach to also accept a photo file.
  */
 export function LiveCameraCapture({
   label,
   photo,
   onChange,
+  allowFileAttach,
 }: {
   label: string;
   photo: CapturedPhoto | null;
   onChange: (photo: CapturedPhoto | null) => void;
+  allowFileAttach?: boolean;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -110,6 +126,28 @@ export function LiveCameraCapture({
     setOpen(false);
   }
 
+  const attachButton = (
+    <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-nnm-blue bg-white px-3 py-2 text-xs font-semibold text-nnm-blue hover:bg-blue-50">
+      <Paperclip className="h-3.5 w-3.5" /> Attach file
+      <input
+        type="file"
+        accept="image/jpeg,image/png"
+        className="hidden"
+        onChange={async (e) => {
+          const f = e.target.files?.[0];
+          e.target.value = "";
+          if (!f) return;
+          try {
+            onChange(await fromFile(f));
+            setError(null);
+          } catch {
+            setError("Could not read that photo - try another one.");
+          }
+        }}
+      />
+    </label>
+  );
+
   return (
     <div>
       <p className="mb-1 text-xs font-medium text-slate-700">{label}</p>
@@ -129,6 +167,7 @@ export function LiveCameraCapture({
             >
               <RefreshCw className="h-3.5 w-3.5" /> Retake
             </button>
+            {allowFileAttach && attachButton}
           </div>
         </div>
       )}
@@ -142,6 +181,8 @@ export function LiveCameraCapture({
           <Camera className="h-4 w-4" /> Open camera
         </button>
       )}
+      {!photo && !open && allowFileAttach && <span className="ml-2">{attachButton}</span>}
+      {!open && error && <p className="mt-2 text-xs text-red-700">{error}</p>}
 
       {open && (
         <div className="rounded-lg border border-slate-300 bg-black p-2">

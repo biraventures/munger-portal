@@ -1,5 +1,6 @@
 "use client";
 
+import { PhotoSourceButtons } from "@/components/admin/photo-source-buttons";
 import { useEffect, useState } from "react";
 import {
   BookOpen,
@@ -71,7 +72,7 @@ function PhotoSlot({
     <div
       className={`rounded-lg border-2 border-dashed p-4 text-center ${file ? "border-green-300 bg-green-50" : "border-nnm-blue/40 bg-blue-50/50"}`}
     >
-      <label htmlFor={inputId} className="flex cursor-pointer flex-col items-center gap-2">
+      <div className="flex flex-col items-center gap-2">
         {previewUrl ? (
           // eslint-disable-next-line @next/next/no-img-element -- local file preview, not a static asset
           <img src={previewUrl} alt={label} className="h-24 w-24 rounded-md border border-slate-200 object-cover" />
@@ -79,33 +80,15 @@ function PhotoSlot({
           <span className="flex h-12 w-12 items-center justify-center rounded-full bg-white text-nnm-blue shadow-sm">{icon}</span>
         )}
         <span className="text-sm font-semibold text-slate-800">{label}</span>
-        <span
-          className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold ${file ? "bg-green-600 text-white" : "bg-nnm-blue text-white"}`}
-        >
-          {file ? (
-            <>
-              <CheckCircle2 className="h-3.5 w-3.5" />
-              Captured - tap to retake
-            </>
-          ) : (
-            <>
-              <Camera className="h-3.5 w-3.5" />
-              Take / Choose Photo
-            </>
-          )}
-        </span>
-      </label>
-      <input
-        id={inputId}
-        type="file"
-        accept="image/jpeg,image/png"
-        capture="environment"
-        onChange={async (e) => {
-          const f = e.target.files?.[0];
-          onChange(f ? await shrinkPhotoFile(f) : null);
-        }}
-        className="hidden"
-      />
+        <PhotoSourceButtons
+          idBase={inputId}
+          hasFile={!!file}
+          onFile={async (files) => {
+            const f = files?.[0];
+            onChange(f ? await shrinkPhotoFile(f) : null);
+          }}
+        />
+      </div>
     </div>
   );
 }
