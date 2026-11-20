@@ -537,6 +537,23 @@ async function pendingRow(id: number): Promise<MigratedReviewRow> {
   return r;
 }
 
+/**
+ * Clears the whole "to review" list in one go (e.g. issues of an older upload, before re-uploading the corrected sheet).
+ * The rows are kept as discarded with the reason - nothing is deleted - and a re-upload brings back any row still at fault.
+ */
+export async function discardAllReviewRows(note: string, by: string): Promise<number> {
+  const { rows: busy } = await pool.query(
+    `SELECT id FROM migrated_upload_jobs WHERE status = 'running' AND created_at > now() - interval '45 minutes' LIMIT 1`,
+  );
+  if (busy[0]) throw ApiError.badRequest("An upload is being processed - wait for it to finish before discarding the list.");
+  const { rowCount } = await pool.query(
+    `UPDATE migrated_import_review_rows SET status = 'discarded', resolved_by = $1, resolved_at = now(), resolution_note = $2
+      WHERE status = 'pending'`,
+    [by, `Discarded with all rows to review: ${note}`],
+  );
+  return rowCount ?? 0;
+}
+
 /** Corrected values -> a new MUNG-MIG holding. */
 export async function importReviewRow(
   id: number,

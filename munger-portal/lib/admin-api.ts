@@ -2572,6 +2572,18 @@ export async function importMigratedReviewRow(id: string, data: MigratedRowData,
   return body;
 }
 
+/** Commissioner: discard every row waiting for review (kept as discarded, with the reason). */
+export async function discardAllMigratedReviewRows(note: string): Promise<number> {
+  const res = await fetch(`${API_BASE_URL}/admin/migrated-holdings/review-rows/discard-all`, {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify({ note }),
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body.error || "Could not discard the rows.");
+  return body.discarded;
+}
+
 export async function discardMigratedReviewRow(id: string, note: string): Promise<void> {
   const res = await fetch(`${API_BASE_URL}/admin/migrated-holdings/review-rows/${id}/discard`, {
     method: "POST",

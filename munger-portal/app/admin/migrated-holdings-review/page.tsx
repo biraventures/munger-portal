@@ -5,6 +5,7 @@ import { AlertCircle, CheckCircle2, ClipboardCheck, Loader2 } from "lucide-react
 import { AdminHeader } from "@/components/admin-header";
 import { useAdminGuard } from "@/lib/use-admin-guard";
 import {
+  discardAllMigratedReviewRows,
   discardMigratedReviewRow,
   fetchMigratedReviewRows,
   importMigratedReviewRow,
@@ -94,6 +95,8 @@ export default function MigratedHoldingsReviewPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [bulkNote, setBulkNote] = useState("");
 
   async function load(s: Status = status) {
     setRows(null);
@@ -157,6 +160,25 @@ export default function MigratedHoldingsReviewPage() {
     }
   }
 
+  async function discardAll() {
+    if (bulkNote.trim().length < 3) return setError("Write why all rows are discarded.");
+    if (!window.confirm(`Discard all ${rows?.length ?? ""} rows waiting for review? They stay in the Discarded list.`)) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const n = await discardAllMigratedReviewRows(bulkNote.trim());
+      setDone(`${n.toLocaleString("en-IN")} rows discarded. Upload the sheet again to see only the issues that remain.`);
+      setBulkOpen(false);
+      setBulkNote("");
+      setOpen(null);
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not discard the rows.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <div className="min-h-screen bg-slate-50">
       <AdminHeader admin={admin} />
@@ -185,6 +207,58 @@ export default function MigratedHoldingsReviewPage() {
             </button>
           ))}
         </div>
+
+        {status === "pending" && admin.role === "commissioner" && rows && rows.length > 0 && (
+          <div className="mt-4 rounded-xl border border-red-200 bg-white p-3 text-sm">
+            {!bulkOpen ? (
+              <div className="flex flex-wrap items-center gap-3">
+                <span className="text-slate-600">
+                  {rows.length.toLocaleString("en-IN")} rows waiting. Clearing the old issues lets you re-upload the corrected sheet and see
+                  only what still needs fixing.
+                </span>
+                <button
+                  onClick={() => {
+                    setBulkOpen(true);
+                    setError(null);
+                  }}
+                  className="ml-auto rounded-md border border-red-300 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-50"
+                >
+                  Discard all
+                </button>
+              </div>
+            ) : (
+              <div>
+                <label className={label} htmlFor="bulk-note">
+                  Reason for discarding all {rows.length.toLocaleString("en-IN")} rows
+                </label>
+                <input
+                  id="bulk-note"
+                  value={bulkNote}
+                  onChange={(e) => setBulkNote(e.target.value)}
+                  maxLength={500}
+                  placeholder="e.g. Issues of the earlier upload - sheet corrected and re-uploaded"
+                  className={input}
+                />
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <button
+                    onClick={discardAll}
+                    disabled={busy}
+                    className="rounded-md bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-60"
+                  >
+                    {busy ? "Discarding…" : `Discard all ${rows.length.toLocaleString("en-IN")} rows`}
+                  </button>
+                  <button
+                    onClick={() => setBulkOpen(false)}
+                    disabled={busy}
+                    className="rounded-md border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-600"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {error && (
           <p role="alert" className="mt-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">

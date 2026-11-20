@@ -4,7 +4,7 @@ import { listSurveyorsWithWards } from "../services/surveyorWards.service";
 import { z } from "zod";
 import ExcelJS from "exceljs";
 import { holdingNoSchema } from "../utils/holdingNoSchema";
-import { importMigratedHoldingsXlsx, listReviewRows, importReviewRow, discardReviewRow } from "../services/migratedHoldingImport.service";
+import { importMigratedHoldingsXlsx, listReviewRows, importReviewRow, discardReviewRow, discardAllReviewRows } from "../services/migratedHoldingImport.service";
 import { applyPropertySave } from "../services/propertySave.service";
 import { renameHoldingTo } from "../services/propertyRenumber.service";
 import { getNextFinalizedMigratedHoldingNo } from "../services/holdingNumberSeries.service";
@@ -444,4 +444,12 @@ export const discardReviewRowHandler = asyncHandler(async (req: Request, res: Re
   if (!b.success) throw ApiError.badRequest(b.error.issues[0]?.message ?? "Invalid input");
   await discardReviewRow(id.data, b.data.note, req.admin!.displayName);
   res.status(200).json({ ok: true });
+});
+
+/** POST /api/v1/admin/migrated-holdings/review-rows/discard-all - Commissioner: clear the whole "to review" list. */
+export const discardAllReviewRowsHandler = asyncHandler(async (req: Request, res: Response) => {
+  const b = z.object({ note: z.string().trim().min(3, "Say why all rows are discarded").max(500) }).safeParse(req.body);
+  if (!b.success) throw ApiError.badRequest(b.error.issues[0]?.message ?? "Invalid input");
+  const discarded = await discardAllReviewRows(b.data.note, req.admin!.displayName);
+  res.status(200).json({ discarded });
 });

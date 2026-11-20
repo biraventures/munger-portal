@@ -139,6 +139,7 @@ import {
   listReviewRowsHandler,
   importReviewRowHandler,
   discardReviewRowHandler,
+  discardAllReviewRowsHandler,
   listPendingAssignmentHandler,
   listTaxDarogasHandler,
   listTaxSurveyorsHandler,
@@ -606,6 +607,7 @@ adminRouter.get("/migrated-holdings/bulk-upload/:jobId", requireAdminRole("commi
 const requireMigratedReviewRole = requireAdminRole("commissioner", "tax_daroga");
 adminRouter.get("/migrated-holdings/review-rows", requireMigratedReviewRole, listReviewRowsHandler);
 adminRouter.post("/migrated-holdings/review-rows/:id/import", requireMigratedReviewRole, importReviewRowHandler);
+adminRouter.post("/migrated-holdings/review-rows/discard-all", requireAdminRole("commissioner"), discardAllReviewRowsHandler);
 adminRouter.post("/migrated-holdings/review-rows/:id/discard", requireMigratedReviewRole, discardReviewRowHandler);
 adminRouter.get("/migrated-holdings/export", requireAdminRole("commissioner"), exportMigratedHoldingsHandler);
 adminRouter.get("/migrated-holdings/pending-assignment", listPendingAssignmentHandler);
