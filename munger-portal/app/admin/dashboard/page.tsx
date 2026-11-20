@@ -14,6 +14,7 @@ import { useAdminGuard } from "@/lib/use-admin-guard";
 import {
   fetchChangeRequests,
   fetchDiscrepancyRequests,
+  fetchSolidWasteRequestsToApprove,
   fetchDashboardSummaryAdmin,
   fetchDashboardHoldingsAdmin,
   fetchDashboardPropertyChangesAdmin,
@@ -34,6 +35,7 @@ export default function AdminDashboardPage() {
   const admin = useAdminGuard();
   const [myStagePendingCount, setMyStagePendingCount] = useState<number | null>(null);
   const [myDiscrepancyPendingCount, setMyDiscrepancyPendingCount] = useState<number | null>(null);
+  const [solidWastePendingCount, setSolidWastePendingCount] = useState<number | null>(null);
   const [myShopStagePendingCount, setMyShopStagePendingCount] = useState<number | null>(null);
   const [myRentalAppPendingCount, setMyRentalAppPendingCount] = useState<number | null>(null);
   const [myTradeLicensePendingCount, setMyTradeLicensePendingCount] = useState<number | null>(null);
@@ -51,6 +53,12 @@ export default function AdminDashboardPage() {
     fetchDiscrepancyRequests({ status: "pending", myStage: true })
       .then((r) => setMyDiscrepancyPendingCount(r.requests.length))
       .catch(() => setMyDiscrepancyPendingCount(null));
+    // Solid waste user types waiting with this Tax Daroga / City Manager.
+    if (admin.role === "tax_daroga" || admin.role === "city_manager") {
+      fetchSolidWasteRequestsToApprove()
+        .then((r) => setSolidWastePendingCount(r.length))
+        .catch(() => setSolidWastePendingCount(null));
+    }
     fetchShopAgreementRequests({ status: "pending", myStage: true })
       .then((r) => setMyShopStagePendingCount(r.requests.length))
       .catch(() => setMyShopStagePendingCount(null));
@@ -471,7 +479,7 @@ export default function AdminDashboardPage() {
                 )}
               </DashboardGroup>
 
-              <DashboardGroup id="property-records" title="Property Records" description="Property-wise report, uploaded holdings, disputed holdings, field survey flags, all property changes, old holding rows, pre-2011 ARV entry and discrepancy approvals." icon={<ClipboardCheck className="h-6 w-6" strokeWidth={1.8} />} highlight={(myDiscrepancyPendingCount ?? 0) > 0}>
+              <DashboardGroup id="property-records" title="Property Records" description="Property-wise report, uploaded holdings, disputed holdings, field survey flags, all property changes, old holding rows, pre-2011 ARV entry and discrepancy approvals." icon={<ClipboardCheck className="h-6 w-6" strokeWidth={1.8} />} highlight={(myDiscrepancyPendingCount ?? 0) > 0 || (solidWastePendingCount ?? 0) > 0}>
                 {showAgencyPropertyReports && (
                   <Link href="/admin/property-wise-report" className={cardClass}>
                     <span className={iconWrapClass}>
@@ -577,13 +585,17 @@ export default function AdminDashboardPage() {
                   </Link>
                 )}
                 {showSolidWasteApprovals && (
-                  <Link href="/admin/solid-waste-approvals" className={cardClass}>
-                    <span className={iconWrapClass}>
+                  <Link href="/admin/solid-waste-approvals" className={deskCardClass(solidWastePendingCount)}>
+                    <span className={deskIconWrapClass(solidWastePendingCount)}>
                       <ClipboardCheck className="h-6 w-6" strokeWidth={1.8} />
                     </span>
                     <h3 className="mb-1.5 text-base font-semibold text-slate-900">Solid Waste User Type Approvals</h3>
                     <p className="text-sm text-slate-500">
-                      {admin.role === "tax_daroga" ? "Approve solid waste user types entered by Tax Collectors (final)." : "Approve solid waste user types still waiting at your stage."}
+                      {solidWastePendingCount
+                        ? `${solidWastePendingCount} waiting on your desk.`
+                        : admin.role === "tax_daroga"
+                          ? "Approve solid waste user types entered by Tax Collectors (final)."
+                          : "Approve solid waste user types still waiting at your stage."}
                     </p>
                   </Link>
                 )}
