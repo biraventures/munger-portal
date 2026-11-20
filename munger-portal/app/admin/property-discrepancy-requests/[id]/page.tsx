@@ -296,8 +296,11 @@ export default function PropertyDiscrepancyRequestDetailPage() {
               <section className="rounded-xl border border-nnm-blue bg-blue-50 p-6">
                 <h2 className="mb-1 text-base font-semibold text-slate-900">Your decision</h2>
                 <p className="mb-4 text-xs text-slate-500">
-                  {detail.request.current_stage === "deputy_commissioner"
-                    ? "Approving applies this correction to the property record."
+                  {detail.request.current_stage ===
+                  (detail.request.holding_no.startsWith("MUNG-MIG") ? "commissioner" : "deputy_commissioner")
+                    ? detail.request.holding_no.startsWith("MUNG-MIG")
+                      ? "Approving applies these entries to the old holding and gives it its new regular holding number."
+                      : "Approving applies this correction to the property record."
                     : "Approving sends this to the next desk."}{" "}
                   If the entries are substantially wrong, revert it to the Tax Collector instead of correcting it yourself.
                 </p>

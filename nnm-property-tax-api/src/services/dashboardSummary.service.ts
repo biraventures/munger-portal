@@ -6,7 +6,7 @@ import { propertyDiscrepancyRepository } from "../repositories/propertyDiscrepan
 import { shopRentalApplicationRepository } from "../repositories/shopRentalApplication.repository";
 import { tradeLicenseApplicationRepository } from "../repositories/tradeLicenseApplication.repository";
 import { searchPropertyByHoldingNo } from "./property.service";
-import { PENDING_DESK_ORDER, PROPERTY_DISCREPANCY_APPROVAL_STAGE_ORDER, ADMIN_ROLE_LABELS } from "../types/admin.types";
+import { PENDING_DESK_ORDER, OLD_HOLDING_ENTRY_STAGE_ORDER, ADMIN_ROLE_LABELS } from "../types/admin.types";
 
 export interface DashboardSummary {
   holdings: { total: number };
@@ -55,7 +55,7 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
   // Same "always show every stage" rule as byStage above, for the
   // property discrepancy approval chain (Tax Surveyor → Tax Daroga →
   // City Manager → Deputy Commissioner).
-  const discrepancyByStage = PROPERTY_DISCREPANCY_APPROVAL_STAGE_ORDER.map((stage) => ({
+  const discrepancyByStage = OLD_HOLDING_ENTRY_STAGE_ORDER.map((stage) => ({
     stage,
     label: ADMIN_ROLE_LABELS[stage],
     count: discrepancyStageCounts[stage] ?? 0,

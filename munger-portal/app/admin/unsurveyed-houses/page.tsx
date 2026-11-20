@@ -38,7 +38,7 @@ export default function UnsurveyedHousesPage() {
     <div className="min-h-screen bg-slate-50">
       <AdminHeader admin={admin} />
       <main className="mx-auto max-w-5xl px-6 py-10">
-        <h1 className="mb-1 text-2xl font-semibold text-slate-900">Houses Not Yet Surveyed</h1>
+        <h1 className="mb-1 text-2xl font-semibold text-slate-900">Missing Houses List</h1>
         <p className="mb-5 text-sm text-slate-500">
           Houses found on the ground by Tax Collectors that are in neither the holding database nor the MUNG-MIG data - not in the demand register.
           {admin.role === "tax_collector" ? " You see the houses you recorded." : ""} This list is read-only.

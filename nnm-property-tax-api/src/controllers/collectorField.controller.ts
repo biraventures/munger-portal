@@ -20,6 +20,65 @@ const VIEW_ALL_ROLES = ["tax_daroga", "city_manager", "deputy_commissioner", "co
 
 const migSearchSchema = z.object({ q: z.string().trim().min(3, "Type at least 3 letters.").max(100), ward: z.string().trim().max(16).transform(normalizeWard).optional() });
 
+const oldHoldingListSchema = z.object({
+  q: z.string().trim().max(100).optional(),
+  ward: z.string().trim().max(16).transform(normalizeWard).optional(),
+  // open = still to be entered; mine = my entries (any state); all = everything in my wards
+  show: z.enum(["open", "mine", "all"]).default("open"),
+  page: z.coerce.number().int().min(1).max(10000).default(1),
+});
+const OLD_HOLDING_PAGE = 50;
+
+/**
+ * GET /api/v1/admin/old-holdings?q=&ward=&show=&page= - Tax Collector's "Old Holdings Survey" list: the old-record
+ * (MUNG-MIG-) holdings of their wards, searchable by old holding number, old PID, MUNG-MIG number or owner name, with
+ * where each one's entry stands. The entry itself is the property discrepancy report (Tax Surveyor -> Tax Daroga ->
+ * City Manager -> Deputy Commissioner -> Commissioner).
+ */
+export const listOldHoldingsForCollectorHandler = asyncHandler(async (req: Request, res: Response) => {
+  const parsed = oldHoldingListSchema.safeParse(req.query);
+  if (!parsed.success) throw ApiError.badRequest(parsed.error.issues[0]?.message ?? "Invalid search");
+  const { q, ward, show, page } = parsed.data;
+  const scope = (await collectorWardScope(req.admin)) ?? [];
+  if (ward && !wardAllowed(scope, ward)) throw new ApiError(403, "That ward is not assigned to you.");
+
+  const params: unknown[] = [`${MIGRATED_HOLDING_NO_PREFIX}%`, ward ? [ward] : scope, req.admin!.username];
+  const where = [`p.holding_no LIKE $1`, `p.ward = ANY($2::text[])`];
+  if (q) {
+    params.push(`%${q.replace(/[%_\\]/g, (c) => `\\${c}`)}%`);
+    const n = params.length;
+    where.push(`(p.holding_no ILIKE $${n} OR p.old_holding_no ILIKE $${n} OR p.old_pid ILIKE $${n} OR p.owner_name ILIKE $${n})`);
+  }
+  if (show === "open") where.push(`COALESCE(s.status, 'pending_assignment') = 'pending_assignment' AND e.id IS NULL`);
+  if (show === "mine") where.push(`e.reported_by_username = $3`);
+
+  const sql = `
+    FROM properties p
+    LEFT JOIN migrated_holding_surveys s ON s.holding_no = p.holding_no
+    LEFT JOIN LATERAL (
+      SELECT r.id, r.status, r.current_stage, r.reported_by_username, r.reported_by_display_name, r.revert_comment
+        FROM property_discrepancy_requests r
+       WHERE r.holding_no = p.holding_no AND r.status IN ('pending', 'reverted')
+       ORDER BY r.id DESC LIMIT 1) e ON true
+    WHERE ${where.join(" AND ")}`;
+  const [{ rows: count }, { rows }] = await Promise.all([
+    // $3 (the viewer) is used only by some filters - referenced here so the count takes the same parameters.
+    pool.query<{ n: number }>(`SELECT count(*)::int AS n, min($3::text) AS viewer ${sql}`, params),
+    pool.query(
+      `SELECT p.holding_no, p.old_holding_no, p.old_pid, p.owner_name, p.relation_type, p.relation_name, p.address, p.ward,
+              s.old_last_payment_year, s.old_tax_status, COALESCE(s.status, 'pending_assignment') AS survey_status,
+              s.assigned_to_tax_daroga_display_name, s.assigned_to_tax_surveyor_display_name,
+              e.id AS entry_id, e.status AS entry_status, e.current_stage AS entry_stage, e.reported_by_display_name AS entry_by,
+              (e.reported_by_username = $3) AS entry_is_mine, e.revert_comment AS entry_revert_comment
+         ${sql}
+        ORDER BY NULLIF(regexp_replace(p.ward, '[^0-9]', '', 'g'), '')::int NULLS LAST, p.ward, p.old_holding_no NULLS LAST, p.holding_no
+        LIMIT ${OLD_HOLDING_PAGE} OFFSET $${params.length + 1}`,
+      [...params, (page - 1) * OLD_HOLDING_PAGE],
+    ),
+  ]);
+  res.status(200).json({ holdings: rows, total: count[0]?.n ?? 0, page, pageSize: OLD_HOLDING_PAGE, wards: scope });
+});
+
 /**
  * GET /api/v1/admin/migrated-holdings/search?q=&ward= - Tax Collector.
  * Finds MUNG-MIG- holdings that have not been surveyed and finalized

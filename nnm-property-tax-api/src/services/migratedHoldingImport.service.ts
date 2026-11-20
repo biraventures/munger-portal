@@ -1,3 +1,4 @@
+import { MIGRATED_HOLDING_NO_PREFIX } from "../constants/taxRates";
 import { normalizeWard } from "../utils/ward";
 import ExcelJS from "exceljs";
 import crypto from "node:crypto";
@@ -240,6 +241,12 @@ async function createErrorText(err: unknown, d: MigratedRowData): Promise<string
  */
 export async function findExistingMigrated(d: MigratedRowData): Promise<string | null> {
   if (!d.ownerName.trim() || !d.ward.trim()) return null;
+  // First by the old record as it was uploaded - still found after a survey corrected the name or renumbered it.
+  const { rows: byKey } = await pool.query<{ holding_no: string }>(
+    `SELECT holding_no FROM migrated_holding_surveys WHERE import_key = migrated_import_key(normalize_ward($1), $2, $3, $4, $5) LIMIT 1`,
+    [d.ward, d.ownerName, d.oldHoldingNo, d.oldPid, d.relativeName],
+  );
+  if (byKey[0]) return byKey[0].holding_no;
   const { rows } = await pool.query<{ holding_no: string }>(
     `SELECT holding_no FROM properties
       WHERE ward = normalize_ward($1) AND upper(btrim(owner_name)) = upper(btrim($2))
@@ -254,6 +261,12 @@ export async function findExistingMigrated(d: MigratedRowData): Promise<string |
 
 /** The six-band ARV figures and creation year (reference only) on the holding's survey record. */
 async function saveArvBands(holdingNo: string, d: MigratedRowData): Promise<void> {
+  // Remember the old record as uploaded (kept once set - a later survey may correct the holding's own details).
+  await pool.query(
+    `UPDATE migrated_holding_surveys SET import_key = migrated_import_key(normalize_ward($2), $3, $4, $5, $6)
+      WHERE holding_no = $1 AND import_key IS NULL`,
+    [holdingNo, d.ward, d.ownerName, d.oldHoldingNo, d.oldPid, d.relativeName],
+  );
   await pool.query(
     `UPDATE migrated_holding_surveys SET old_arv_1997_2000 = $2, old_arv_2000_2011 = $3, old_arv_2011_2017 = $4, old_arv_2017_2021 = $5,
        old_arv_2021_onwards = $6, old_holding_creation_year = $7 WHERE holding_no = $1`,
@@ -339,12 +352,23 @@ export async function createMigratedHolding(
 }
 
 /** Old-record figures (reference only) and creation year of an already-imported holding, from a re-upload. */
-async function refreshOldRecord(holdingNo: string, d: MigratedRowData): Promise<void> {
-  await pool.query(
+async function refreshOldRecord(holdingNo: string, d: MigratedRowData, actorDisplayName: string): Promise<void> {
+  const { rowCount } = await pool.query(
     `UPDATE migrated_holding_surveys SET old_arv_pre_1996 = $2, old_arv_1997_2010 = $3, old_arv_2011_2020 = $4,
        old_last_payment_year = $5, old_tax_status = $6, old_remarks = $7 WHERE holding_no = $1`,
     [holdingNo, d.arvPre96, d.arv97to2010, d.arv2011to2020, d.lastPaymentYear, d.taxStatus, d.remarks],
   );
+  // A holding left without its survey record by an upload that failed part-way gets it now.
+  if (!rowCount && holdingNo.startsWith(MIGRATED_HOLDING_NO_PREFIX)) {
+    await migratedHoldingSurveyRepository.create(holdingNo, d.ward, actorDisplayName, {
+      oldArvPre1996: d.arvPre96,
+      oldArv1997to2010: d.arv97to2010,
+      oldArv2011to2020: d.arv2011to2020,
+      oldLastPaymentYear: d.lastPaymentYear,
+      oldTaxStatus: d.taxStatus,
+      oldRemarks: d.remarks,
+    });
+  }
   await saveArvBands(holdingNo, d);
   // A paid-till year still blank on the holding is taken from the sheet's Last Payment Year.
   const paidTill = creationYearLabel(d.lastPaymentYear);
@@ -466,7 +490,7 @@ export async function importMigratedHoldingsXlsx(
     const existing = await findExistingMigrated(d);
     if (existing) {
       result.alreadyImported++;
-      if (migratedRowProblems(d).length === 0) await refreshOldRecord(existing, d);
+      if (migratedRowProblems(d).length === 0) await refreshOldRecord(existing, d, actorDisplayName);
       await closeStaleReviewRows(d, existing, actorDisplayName);
       return;
     }

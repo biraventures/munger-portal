@@ -239,6 +239,7 @@ import {
 } from "../controllers/pre2011Arv.controller";
 import {
   searchMigratedHoldingsHandler,
+  listOldHoldingsForCollectorHandler,
   createUnsurveyedHouseHandler,
   listUnsurveyedHousesHandler,
   getUnsurveyedHousePhotoHandler,
@@ -707,6 +708,7 @@ adminRouter.get("/agency-operator/dues-report.xlsx", requireDuesReportRole, expo
 // Viewing is read-only; receiving copies can never be changed or removed.
 const requireFieldViewRole = requireAdminRole("tax_collector", "tax_daroga", "city_manager", "deputy_commissioner", "commissioner");
 adminRouter.get("/migrated-holdings/search", requireAdminRole("tax_collector"), searchMigratedHoldingsHandler);
+adminRouter.get("/old-holdings", requireAdminRole("tax_collector"), listOldHoldingsForCollectorHandler);
 adminRouter.post("/unsurveyed-houses", requireAdminRole("tax_collector"), createUnsurveyedHouseHandler);
 adminRouter.get("/unsurveyed-houses", requireFieldViewRole, listUnsurveyedHousesHandler);
 adminRouter.get("/unsurveyed-houses/:id/photo", requireFieldViewRole, getUnsurveyedHousePhotoHandler);

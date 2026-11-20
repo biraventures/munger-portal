@@ -685,7 +685,7 @@ export default function AdminDashboardPage() {
                 )}
               </DashboardGroup>
 
-              <DashboardGroup id="field-survey" title="Field Survey" description="Surveys, field work, houses not in records and houses not yet surveyed." icon={<MapPin className="h-6 w-6" strokeWidth={1.8} />} highlight={false}>
+              <DashboardGroup id="field-survey" title="Field Survey" description="Surveys, field work, old holdings survey and missing houses." icon={<MapPin className="h-6 w-6" strokeWidth={1.8} />} highlight={false}>
                 {admin.role === "tax_surveyor" && (
                   <Link href="/admin/my-field-work" className={cardClass}>
                     <span className={iconWrapClass}>
@@ -723,12 +723,21 @@ export default function AdminDashboardPage() {
                   </Link>
                 )}
                 {showUnsurveyedHouseEntry && (
+                  <Link href="/admin/old-holdings-survey" className={cardClass}>
+                    <span className={iconWrapClass}>
+                      <ClipboardList className="h-6 w-6" strokeWidth={1.8} />
+                    </span>
+                    <h3 className="mb-1.5 text-base font-semibold text-slate-900">Old Holdings Survey</h3>
+                    <p className="text-sm text-slate-500">Find old-record (MUNG-MIG) holdings by old holding number or owner name, or browse your wards, and enter their full details.</p>
+                  </Link>
+                )}
+                {showUnsurveyedHouseEntry && (
                   <Link href="/admin/unsurveyed-house-entry" className={cardClass}>
                     <span className={iconWrapClass}>
                       <Home className="h-6 w-6" strokeWidth={1.8} />
                     </span>
-                    <h3 className="mb-1.5 text-base font-semibold text-slate-900">House Not in Records</h3>
-                    <p className="text-sm text-slate-500">Record a house that is in neither the holding database nor the MUNG-MIG data - GPS, photo, ward, address, landmark.</p>
+                    <h3 className="mb-1.5 text-base font-semibold text-slate-900">Record Missing House</h3>
+                    <p className="text-sm text-slate-500">A house you found that is in neither the holding database nor the old MUNG-MIG data - GPS, photo, ward, address, landmark.</p>
                   </Link>
                 )}
                 {showUnsurveyedHouses && (
@@ -736,8 +745,8 @@ export default function AdminDashboardPage() {
                     <span className={iconWrapClass}>
                       <List className="h-6 w-6" strokeWidth={1.8} />
                     </span>
-                    <h3 className="mb-1.5 text-base font-semibold text-slate-900">Houses Not Yet Surveyed</h3>
-                    <p className="text-sm text-slate-500">Read-only list of houses found on the ground that are not in the demand register.</p>
+                    <h3 className="mb-1.5 text-base font-semibold text-slate-900">Missing Houses List</h3>
+                    <p className="text-sm text-slate-500">Houses recorded as missing - found on the ground but in no record. Read-only.</p>
                   </Link>
                 )}
               </DashboardGroup>

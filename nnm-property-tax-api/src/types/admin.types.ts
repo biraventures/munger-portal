@@ -129,9 +129,18 @@ export const PROPERTY_DISCREPANCY_APPROVAL_STAGE_ORDER: AdminRole[] = [
   "deputy_commissioner",
 ];
 
-export function nextPropertyDiscrepancyStage(stage: AdminRole): AdminRole | null {
-  const idx = PROPERTY_DISCREPANCY_APPROVAL_STAGE_ORDER.indexOf(stage);
-  return idx >= 0 && idx < PROPERTY_DISCREPANCY_APPROVAL_STAGE_ORDER.length - 1 ? PROPERTY_DISCREPANCY_APPROVAL_STAGE_ORDER[idx + 1]! : null;
+/** An old (MUNG-MIG-) holding entered by a Tax Collector also needs the Municipal Commissioner's approval, last. */
+export const OLD_HOLDING_ENTRY_STAGE_ORDER: AdminRole[] = [...PROPERTY_DISCREPANCY_APPROVAL_STAGE_ORDER, "commissioner"];
+
+/** The chain a discrepancy request walks - by its holding (old MUNG-MIG- holdings end with the Commissioner). */
+export function discrepancyStagesFor(holdingNo: string): AdminRole[] {
+  return holdingNo.startsWith("MUNG-MIG") ? OLD_HOLDING_ENTRY_STAGE_ORDER : PROPERTY_DISCREPANCY_APPROVAL_STAGE_ORDER;
+}
+
+export function nextPropertyDiscrepancyStage(stage: AdminRole, holdingNo = ""): AdminRole | null {
+  const order = discrepancyStagesFor(holdingNo);
+  const idx = order.indexOf(stage);
+  return idx >= 0 && idx < order.length - 1 ? order[idx + 1]! : null;
 }
 
 /**

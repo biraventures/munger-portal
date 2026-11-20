@@ -1,3 +1,4 @@
+import { pool } from "../config/db";
 import { taxEffect } from "./taxPreview.service";
 import type { PropertySaveInput as TaxEffectInput } from "../types/propertySave.types";
 import fs from "node:fs";
@@ -10,7 +11,7 @@ import { getNextFinalizedMigratedHoldingNo } from "./holdingNumberSeries.service
 import { migratedHoldingSurveyRepository } from "../repositories/migratedHoldingSurvey.repository";
 import { MIGRATED_HOLDING_NO_PREFIX } from "../constants/taxRates";
 import { entryRevertEventRepository } from "../repositories/entryRevertEvent.repository";
-import { nextPropertyDiscrepancyStage, PROPERTY_DISCREPANCY_APPROVAL_STAGE_ORDER } from "../types/admin.types";
+import { nextPropertyDiscrepancyStage, discrepancyStagesFor } from "../types/admin.types";
 import { env } from "../config/env";
 import { assertFloorChangeStated } from "./floorChange.service";
 import { ApiError } from "../utils/ApiError";
@@ -19,7 +20,11 @@ import type { PropertySaveInput } from "../types/propertySave.types";
 import type { AdminRole, AdminTokenPayload } from "../types/admin.types";
 import { MAX_PHOTO_BYTES, uploadLimitMessage } from "../utils/uploadLimits";
 
-const FINAL_STAGE: AdminRole = PROPERTY_DISCREPANCY_APPROVAL_STAGE_ORDER[PROPERTY_DISCREPANCY_APPROVAL_STAGE_ORDER.length - 1]!;
+/** The desk whose approval applies the request: the Deputy Commissioner, or the Commissioner for an old MUNG-MIG- holding. */
+function finalStageFor(holdingNo: string): AdminRole {
+  const order = discrepancyStagesFor(holdingNo);
+  return order[order.length - 1]!;
+}
 
 const ALLOWED_PHOTO_MIME_TO_EXT: Record<string, string> = {
   "image/jpeg": "jpg",
@@ -82,6 +87,25 @@ async function saveAllDiscrepancyPhotos(holdingNo: string, photos: DiscrepancyPh
  * submission itself becomes the first entry in the audit trail (see
  * propertyDiscrepancyRepository.create).
  */
+/**
+ * An old (MUNG-MIG-) holding can be entered by a Tax Collector only while nobody else is on it: not already surveyed,
+ * not handed out through the assignment route (City Manager / DMC -> Tax Daroga -> Tax Surveyor), and no entry of
+ * another collector sent back for correction.
+ */
+async function assertOldHoldingOpenForEntry(holdingNo: string): Promise<void> {
+  const survey = await migratedHoldingSurveyRepository.findByHoldingNo(holdingNo);
+  if (survey?.status === "finalized") throw ApiError.badRequest("This old holding has already been surveyed and approved.");
+  if (survey && survey.status !== "pending_assignment") {
+    const who = survey.assigned_to_tax_surveyor_display_name || survey.assigned_to_tax_daroga_display_name || "an officer";
+    throw ApiError.badRequest(`This old holding is already being surveyed through the assignment route (with ${who}).`);
+  }
+  const { rows } = await pool.query<{ reported_by_display_name: string }>(
+    `SELECT reported_by_display_name FROM property_discrepancy_requests WHERE holding_no = $1 AND status = 'reverted' LIMIT 1`,
+    [holdingNo],
+  );
+  if (rows[0]) throw ApiError.badRequest(`${rows[0].reported_by_display_name}'s entry for this holding was sent back for correction - it is being redone.`);
+}
+
 export async function reportPropertyDiscrepancy(
   holdingNo: string,
   admin: AdminTokenPayload,
@@ -99,6 +123,7 @@ export async function reportPropertyDiscrepancy(
 
   const existingPending = await propertyDiscrepancyRepository.findPendingForHolding(holdingNo);
   if (existingPending) throw ApiError.badRequest("This holding already has a discrepancy report pending review.");
+  if (holdingNo.startsWith(MIGRATED_HOLDING_NO_PREFIX)) await assertOldHoldingOpenForEntry(holdingNo);
 
   const savedPhotos = await saveAllDiscrepancyPhotos(holdingNo, photos);
 
@@ -190,10 +215,10 @@ export async function approveDiscrepancyAtCurrentStage(
     dataForwarded,
   );
 
-  const atFinalStage = request.current_stage === FINAL_STAGE;
+  const atFinalStage = request.current_stage === finalStageFor(request.holding_no);
 
   if (!atFinalStage) {
-    const next = nextPropertyDiscrepancyStage(request.current_stage);
+    const next = nextPropertyDiscrepancyStage(request.current_stage, request.holding_no);
     if (!next) {
       throw ApiError.badRequest("This request has no further stage to advance to - please contact support.");
     }
@@ -230,6 +255,7 @@ export async function approveDiscrepancyAtCurrentStage(
       admin.username,
       admin.displayName,
       request.reported_by_display_name,
+      admin.role,
     );
     if (survey) {
       const newHoldingNo = await getNextFinalizedMigratedHoldingNo();

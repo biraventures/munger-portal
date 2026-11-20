@@ -51,13 +51,15 @@ function ReportPropertyDiscrepancyContent() {
   const [capture, setCapture] = useState<CaptureState>(blankCaptureState());
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
+  const [success, setSuccess] = useState<false | "old" | "report">(false);
   const [migOpen, setMigOpen] = useState(false);
   const [migQuery, setMigQuery] = useState("");
   const [migWard, setMigWard] = useState("");
   const [migSearching, setMigSearching] = useState(false);
   const [migError, setMigError] = useState<string | null>(null);
   const [migResults, setMigResults] = useState<MigHoldingHit[] | null>(null);
+  // An old-record (MUNG-MIG-) holding: this is its survey entry, which also needs the Commissioner's approval.
+  const isOld = found && holdingNo.trim().toUpperCase().startsWith("MUNG-MIG");
 
   useEffect(() => {
     fetchFormOptions()
@@ -112,7 +114,9 @@ function ReportPropertyDiscrepancyContent() {
 
   async function handleSubmit() {
     if (!discrepancyNotes.trim()) {
-      setSubmitError("Describe what you found that doesn't match the records.");
+      setSubmitError(
+        isOld ? "Write your survey remarks - what you found at the house." : "Describe what you found that doesn't match the records.",
+      );
       return;
     }
     const floorProblem = floorChangeProblem(originalFloors, form.floors, form.floorChange);
@@ -144,7 +148,7 @@ function ReportPropertyDiscrepancyContent() {
         aadhaarPhotoBase64Data,
         aadhaarPhotoMimeType: capture.aadhaarFile?.type,
       });
-      setSuccess(true);
+      setSuccess(isOld ? "old" : "report");
       setFound(false);
       setHoldingNo("");
       setDiscrepancyNotes("");
@@ -181,11 +185,23 @@ function ReportPropertyDiscrepancyContent() {
       <main className="mx-auto max-w-3xl px-6 py-10">
         <h1 className="mb-1 flex items-center gap-2 text-2xl font-semibold text-slate-900">
           <AlertTriangle className="h-6 w-6" />
-          Report Property Discrepancy
+          {isOld ? "Old Holding Survey Entry" : "Report Property Discrepancy"}
         </h1>
         <p className="mb-6 text-sm text-slate-500">
-          Found something during collection that doesn&apos;t match the records? Search the holding, enter the complete corrected details,
-          and it will go through Tax Surveyor, Tax Daroga, City Manager, and DMC review before anything changes.
+          {isOld ? (
+            <>
+              Enter the full details of this old-record holding as you found it. It goes to the Tax Surveyor of the ward, Tax Daroga, City
+              Manager, DMC and Commissioner.{" "}
+              <Link href="/admin/old-holdings-survey" className="font-semibold text-nnm-blue underline">
+                Back to Old Holdings Survey
+              </Link>
+            </>
+          ) : (
+            <>
+              Found something during collection that doesn&apos;t match the records? Search the holding, enter the complete corrected
+              details, and it will go through Tax Surveyor, Tax Daroga, City Manager, and DMC review before anything changes.
+            </>
+          )}
         </p>
 
         {success && (
@@ -194,7 +210,17 @@ function ReportPropertyDiscrepancyContent() {
             className="mb-5 flex items-center gap-2 rounded-md border border-green-200 bg-green-50 p-4 text-sm text-green-800"
           >
             <CheckCircle2 className="h-4 w-4 shrink-0" />
-            Submitted for review. Nothing changes on the record until all four stages approve it.
+            {success === "old" ? (
+              <>
+                Old holding entry submitted. It goes to the Tax Surveyor of the ward, then the Tax Daroga, City Manager, DMC and
+                Commissioner.{" "}
+                <Link href="/admin/old-holdings-survey" className="font-semibold underline">
+                  Back to Old Holdings Survey
+                </Link>
+              </>
+            ) : (
+              "Submitted for review. Nothing changes on the record until all four stages approve it."
+            )}
           </div>
         )}
 
@@ -259,7 +285,7 @@ function ReportPropertyDiscrepancyContent() {
                 <p className="text-sm text-slate-600">
                   Nothing found. If the house is in neither database,{" "}
                   <Link href="/admin/unsurveyed-house-entry" className="font-semibold text-nnm-blue underline">
-                    record it as a house not in records
+                    record it as a missing house
                   </Link>
                   .
                 </p>
@@ -295,7 +321,7 @@ function ReportPropertyDiscrepancyContent() {
               <p className="text-xs text-slate-500">
                 Not in the MUNG-MIG data either?{" "}
                 <Link href="/admin/unsurveyed-house-entry" className="font-semibold text-nnm-blue underline">
-                  Record a house not in records
+                  Record Missing House
                 </Link>
                 .
               </p>
@@ -314,10 +340,14 @@ function ReportPropertyDiscrepancyContent() {
           <div className="space-y-6">
             <div className="rounded-xl border border-slate-200 bg-white p-6">
               <p className="mb-4 text-sm text-slate-600">
-                On record: <span className="font-semibold text-slate-800">{ownerOnRecord}</span>. Correct the fields below to match what you
-                actually found.
+                {isOld ? "Old record" : "On record"}: <span className="font-semibold text-slate-800">{ownerOnRecord}</span>.{" "}
+                {isOld
+                  ? "Enter the full details of the house as you found it - owner, address, every floor. It goes to the Tax Surveyor of the ward, Tax Daroga, City Manager, DMC and Commissioner."
+                  : "Correct the fields below to match what you actually found."}
               </p>
-              <label className="mb-1 block text-xs font-medium text-slate-600">What doesn&apos;t match? (required)</label>
+              <label className="mb-1 block text-xs font-medium text-slate-600">
+                {isOld ? "Survey remarks (required)" : "What doesn't match? (required)"}
+              </label>
               <textarea
                 value={discrepancyNotes}
                 onChange={(e) => setDiscrepancyNotes(e.target.value)}

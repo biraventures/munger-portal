@@ -87,12 +87,12 @@ export default function UnsurveyedHouseEntryPage() {
       <main className="mx-auto max-w-3xl px-6 py-10">
         <h1 className="mb-1 flex items-center gap-2 text-2xl font-semibold text-slate-900">
           <Home className="h-6 w-6" />
-          House Not in Records
+          Record Missing House
         </h1>
         <p className="mb-6 text-sm text-slate-500">
-          For a house that is in neither the holding tax database nor the MUNG-MIG data. It will be listed as <b>not yet surveyed / not in the demand register</b>.
+          For a house that is in neither the holding tax database nor the MUNG-MIG data. It goes on the <b>Missing Houses List</b>.
           First search for it: use <Link href="/admin/report-property-discrepancy" className="font-semibold text-nnm-blue underline">Report Property Discrepancy</Link> (holding number, or
-          &quot;Find in MUNG-MIG data&quot;).
+          &quot;Find in MUNG-MIG data&quot;) or <Link href="/admin/old-holdings-survey" className="font-semibold text-nnm-blue underline">Old Holdings Survey</Link>.
         </p>
 
         {saved && (
