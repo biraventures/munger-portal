@@ -1,6 +1,6 @@
 import { pool } from "../config/db";
 import { ApiError } from "../utils/ApiError";
-import { APPROVAL_STAGE_ORDER, nextApprovalStage, type AdminRole } from "../types/admin.types";
+import { PENDING_DESK_ORDER, nextApprovalStage, type AdminRole } from "../types/admin.types";
 
 /**
  * Audit trail of one mutation case, oldest first: submission, holding identification, every stage's decision with its
@@ -16,6 +16,7 @@ export const DESK_LABEL: Record<string, string> = {
   tax_daroga: "Tax Daroga",
   tax_surveyor: "Tax Surveyor (field report)",
   mutation_nodal_clerk: "Mutation Nodal Clerk",
+  city_manager: "City Manager",
   deputy_commissioner: "Deputy Municipal Commissioner",
   commissioner: "Municipal Commissioner",
   correction: "Sent back for correction",
@@ -332,7 +333,7 @@ export async function pendingSummary() {
   );
   const { rows: logins } = await pool.query<{ role: string; display_name: string; username: string }>(
     `SELECT role, display_name, username FROM admins WHERE active AND role = ANY($1::text[]) ORDER BY display_name`,
-    [APPROVAL_STAGE_ORDER],
+    [PENDING_DESK_ORDER],
   );
   const { rows: extra } = await pool.query<{ awaiting_holding: number; awaiting_since: Date | null; reverted_online: number; reverted_counter: number; reverted_since: Date | null }>(
     `SELECT (SELECT count(*)::int FROM mutation_applications WHERE status = 'awaiting_holding') AS awaiting_holding,
@@ -345,7 +346,7 @@ export async function pendingSummary() {
   const now = Date.now();
   const age = (d: Date | null) => (d ? Math.round((now - d.getTime()) / 60000) : null);
   return {
-    desks: APPROVAL_STAGE_ORDER.map((stage) => {
+    desks: PENDING_DESK_ORDER.map((stage) => {
       const r = rows.find((x) => x.current_stage === stage);
       return {
         stage,

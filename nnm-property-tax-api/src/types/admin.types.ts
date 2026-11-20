@@ -76,6 +76,9 @@ export const ADMIN_ROLE_LABELS: Record<AdminRole, string> = {
  * list.
  */
 export const APPROVAL_STAGE_ORDER: AdminRole[] = ["tax_daroga", "tax_surveyor", "mutation_nodal_clerk", "deputy_commissioner", "commissioner"];
+/** Every desk a property change can wait at, for the "pending at each desk" counts - the mutation chain plus the City
+ * Manager, who has changes of use / back-dated floor changes (USE_CHANGE_STAGE_ORDER). Display only, not routing. */
+export const PENDING_DESK_ORDER: AdminRole[] = ["tax_daroga", "tax_surveyor", "mutation_nodal_clerk", "city_manager", "deputy_commissioner", "commissioner"];
 
 /**
  * The next desk. The Tax Surveyor's field report is part of a MUTATION only (owner change, migration 140); every other
