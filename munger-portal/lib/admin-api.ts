@@ -1929,6 +1929,9 @@ export interface PropertyDiscrepancyRequest {
   gps_lat: string | null;
   gps_lng: string | null;
   photo_path: string | null;
+  previous_receipt_photo_path?: string | null;
+  aadhaar_photo_path?: string | null;
+  owner_photo_path?: string | null;
   reverted_by: string | null;
   reverted_by_role: string | null;
   reverted_from_stage: string | null;
@@ -1947,6 +1950,8 @@ export interface ReportDiscrepancyInput {
   previousReceiptPhotoMimeType?: string;
   aadhaarPhotoBase64Data?: string;
   aadhaarPhotoMimeType?: string;
+  ownerPhotoBase64Data?: string;
+  ownerPhotoMimeType?: string;
 }
 
 export async function reportPropertyDiscrepancy(holdingNo: string, input: ReportDiscrepancyInput): Promise<PropertyDiscrepancyRequest> {
@@ -1996,7 +2001,10 @@ export interface PropertyDiscrepancyApproval {
 }
 
 /** The holding photo the Tax Collector attached at submission. */
-export async function fetchDiscrepancyPhotoBlobUrl(id: number, kind: "holding" | "receipt" | "aadhaar" = "holding"): Promise<string> {
+export async function fetchDiscrepancyPhotoBlobUrl(
+  id: number,
+  kind: "holding" | "receipt" | "aadhaar" | "owner" = "holding",
+): Promise<string> {
   const res = await fetch(`${API_BASE_URL}/admin/property-discrepancy-requests/${id}/photo/${kind}`, { headers: authHeaders() });
   if (!res.ok) throw new Error("Could not load this photo.");
   const blob = await res.blob();

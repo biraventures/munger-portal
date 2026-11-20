@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { Camera, CheckCircle2, CreditCard, FileText, Loader2, MapPin, MapPinOff } from "lucide-react";
+import { Camera, CheckCircle2, CreditCard, FileText, Loader2, MapPin, MapPinOff, UserRound } from "lucide-react";
+import type { DiscrepancyPhotoNeeds } from "@/lib/discrepancy-photo-rules";
 import { getCurrentGpsPosition } from "@/lib/geolocation";
 import { shrinkPhotoFile } from "@/lib/upload-limits";
 
@@ -11,10 +12,11 @@ export interface CaptureState {
   photoFile: File | null;
   previousReceiptFile: File | null;
   aadhaarFile: File | null;
+  ownerFile: File | null;
 }
 
 export function blankCaptureState(): CaptureState {
-  return { gpsLat: null, gpsLng: null, photoFile: null, previousReceiptFile: null, aadhaarFile: null };
+  return { gpsLat: null, gpsLng: null, photoFile: null, previousReceiptFile: null, aadhaarFile: null, ownerFile: null };
 }
 
 export function fileToBase64(file: File): Promise<string> {
@@ -93,12 +95,20 @@ export function DiscrepancyCaptureSection({
   state,
   onChange,
   hideAadhaar,
+  needs,
+  onFile,
 }: {
   state: CaptureState;
   onChange: (next: CaptureState) => void;
   /** Owner died or refused Aadhaar: no Aadhaar card photo is taken. */
   hideAadhaar?: boolean;
+  /** Which photos the changes make required (lib/discrepancy-photo-rules). */
+  needs?: DiscrepancyPhotoNeeds;
+  /** Photos already on the request (a resubmission keeps them unless retaken). */
+  onFile?: { site: boolean; aadhaar: boolean; owner: boolean };
 }) {
+  const siteNeeded = !!needs?.site.length;
+  const nameChanged = !!needs?.nameChanged;
   const [capturingGps, setCapturingGps] = useState(false);
   const [gpsError, setGpsError] = useState<string | null>(null);
 
@@ -120,7 +130,16 @@ export function DiscrepancyCaptureSection({
   return (
     <div className="rounded-xl border-2 border-nnm-blue bg-white p-6">
       <h2 className="mb-1 text-base font-semibold text-slate-900">Photos &amp; Location</h2>
-      <p className="mb-4 text-sm text-slate-500">Required before you can submit.</p>
+      <p className="mb-4 text-sm text-slate-500">
+        Photo of the site is required when the area, floor area, usage type or solid waste user type changes; photos of the owner&apos;s
+        Aadhaar card and of the holding owner are required when the owner&apos;s name changes. Otherwise photos are optional.
+      </p>
+      {(siteNeeded || nameChanged) && (
+        <p className="mb-4 rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+          {siteNeeded && <>The {needs!.site.join(", ")} changes - a photo of the site is required. </>}
+          {nameChanged && <>The owner&apos;s name changes - photos of the Aadhaar card and of the holding owner are required.</>}
+        </p>
+      )}
 
       <div className="mb-4">
         <button
@@ -156,10 +175,11 @@ export function DiscrepancyCaptureSection({
         )}
       </div>
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <PhotoSlot
-          label="Holding Photo"
+          label={onFile?.site && !state.photoFile ? "Site Photo (on file)" : "Site Photo"}
           icon={<Camera className="h-5 w-5" />}
+          required={siteNeeded}
           file={state.photoFile}
           onChange={(f) => onChange({ ...state, photoFile: f })}
         />
@@ -171,12 +191,20 @@ export function DiscrepancyCaptureSection({
         />
         {!hideAadhaar && (
           <PhotoSlot
-            label="Owner's Aadhaar Card"
+            label={onFile?.aadhaar && !state.aadhaarFile ? "Owner's Aadhaar Card (on file)" : "Owner's Aadhaar Card"}
             icon={<CreditCard className="h-5 w-5" />}
+            required={nameChanged}
             file={state.aadhaarFile}
             onChange={(f) => onChange({ ...state, aadhaarFile: f })}
           />
         )}
+        <PhotoSlot
+          label={onFile?.owner && !state.ownerFile ? "Holding Owner's Photo (on file)" : "Holding Owner's Photo"}
+          icon={<UserRound className="h-5 w-5" />}
+          required={nameChanged}
+          file={state.ownerFile}
+          onChange={(f) => onChange({ ...state, ownerFile: f })}
+        />
       </div>
     </div>
   );

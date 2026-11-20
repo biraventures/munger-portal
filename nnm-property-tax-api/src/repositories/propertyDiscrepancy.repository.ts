@@ -17,6 +17,7 @@ export const propertyDiscrepancyRepository = {
     photoPath: string | null;
     previousReceiptPhotoPath: string | null;
     aadhaarPhotoPath: string | null;
+    ownerPhotoPath: string | null;
   }): Promise<PropertyDiscrepancyRequestRow> {
     const client = await pool.connect();
     try {
@@ -24,8 +25,8 @@ export const propertyDiscrepancyRepository = {
       const { rows } = await client.query<PropertyDiscrepancyRequestRow>(
         `INSERT INTO property_discrepancy_requests (
           holding_no, reported_by_username, reported_by_display_name, discrepancy_notes, proposed_data, current_stage,
-          gps_lat, gps_lng, photo_path, previous_receipt_photo_path, aadhaar_photo_path
-        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+          gps_lat, gps_lng, photo_path, previous_receipt_photo_path, aadhaar_photo_path, owner_photo_path
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
         RETURNING *`,
         [
           input.holdingNo,
@@ -39,6 +40,7 @@ export const propertyDiscrepancyRepository = {
           input.photoPath,
           input.previousReceiptPhotoPath,
           input.aadhaarPhotoPath,
+          input.ownerPhotoPath,
         ],
       );
       const request = rows[0]!;
@@ -92,7 +94,9 @@ export const propertyDiscrepancyRepository = {
     }
     if (filters.stage) {
       params.push(filters.stage);
-      conditions.push(`current_stage = $${params.length}`);
+      // The Tax Daroga holds concurrent power at the Tax Surveyor's stage (see propertyDiscrepancy.service).
+      conditions.push(filters.stage === "tax_daroga" ? `current_stage IN ('tax_daroga', 'tax_surveyor')` : `current_stage = $${params.length}`);
+      if (filters.stage === "tax_daroga") params.pop();
     }
     const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
     const { rows } = await pool.query<PropertyDiscrepancyRequestRow>(
@@ -222,12 +226,13 @@ export const propertyDiscrepancyRepository = {
       photoPath: string | null;
       previousReceiptPhotoPath: string | null;
       aadhaarPhotoPath: string | null;
+      ownerPhotoPath: string | null;
     },
   ): Promise<PropertyDiscrepancyRequestRow | null> {
     const { rows } = await pool.query<PropertyDiscrepancyRequestRow>(
       `UPDATE property_discrepancy_requests
        SET status = 'pending', current_stage = $3, discrepancy_notes = $2, proposed_data = $4, gps_lat = $5, gps_lng = $6, photo_path = $7,
-           previous_receipt_photo_path = $8, aadhaar_photo_path = $9,
+           previous_receipt_photo_path = $8, aadhaar_photo_path = $9, owner_photo_path = $10,
            reverted_by = NULL, reverted_by_role = NULL, reverted_from_stage = NULL, reverted_at = NULL, revert_comment = NULL
        WHERE id = $1 AND status = 'reverted'
        RETURNING *`,

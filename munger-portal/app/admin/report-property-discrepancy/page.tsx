@@ -1,5 +1,6 @@
 "use client";
 
+import { discrepancyPhotoNeeds, missingDiscrepancyPhotos } from "@/lib/discrepancy-photo-rules";
 import { Suspense, useEffect, useState } from "react";
 import { floorChangeProblem } from "@/components/floor-change-box";
 import Link from "next/link";
@@ -47,6 +48,8 @@ function ReportPropertyDiscrepancyContent() {
   const [formOptions, setFormOptions] = useState<FormOptions | null>(null);
   const [form, setForm] = useState<AdminPropertyFormState>(blankAdminPropertyForm());
   const [originalFloors, setOriginalFloors] = useState<AdminPropertyFormState["floors"]>([]);
+  // The holding as recorded - which photos the report needs depends on what it changes.
+  const [originalForm, setOriginalForm] = useState<AdminPropertyFormState | null>(null);
   const [discrepancyNotes, setDiscrepancyNotes] = useState("");
   const [capture, setCapture] = useState<CaptureState>(blankCaptureState());
   const [submitting, setSubmitting] = useState(false);
@@ -60,6 +63,7 @@ function ReportPropertyDiscrepancyContent() {
   const [migResults, setMigResults] = useState<MigHoldingHit[] | null>(null);
   // An old-record (MUNG-MIG-) holding: this is its survey entry, which also needs the Commissioner's approval.
   const isOld = found && holdingNo.trim().toUpperCase().startsWith("MUNG-MIG");
+  const photoNeeds = discrepancyPhotoNeeds(originalForm, form);
 
   useEffect(() => {
     fetchFormOptions()
@@ -83,6 +87,7 @@ function ReportPropertyDiscrepancyContent() {
       const loaded = propertyFormFromExisting(result.property, result.floors ?? []);
       setForm(loaded);
       setOriginalFloors(loaded.floors);
+      setOriginalForm(loaded);
       setFound(true);
     } catch (err) {
       setSearchError(err instanceof Error ? err.message : "Search failed.");
@@ -128,13 +133,23 @@ function ReportPropertyDiscrepancyContent() {
       setSubmitError("The holding owner's Aadhaar number is required (or tick that the owner has died / does not agree to give Aadhaar).");
       return;
     }
+    const photoProblem = missingDiscrepancyPhotos(
+      photoNeeds,
+      { site: !!capture.photoFile, aadhaar: !!capture.aadhaarFile, owner: !!capture.ownerFile },
+      form,
+    );
+    if (photoProblem) {
+      setSubmitError(photoProblem);
+      return;
+    }
     setSubmitting(true);
     setSubmitError(null);
     try {
-      const [photoBase64Data, previousReceiptPhotoBase64Data, aadhaarPhotoBase64Data] = await Promise.all([
+      const [photoBase64Data, previousReceiptPhotoBase64Data, aadhaarPhotoBase64Data, ownerPhotoBase64Data] = await Promise.all([
         capture.photoFile ? fileToBase64(capture.photoFile) : undefined,
         capture.previousReceiptFile ? fileToBase64(capture.previousReceiptFile) : undefined,
         capture.aadhaarFile && !form.ownerDeceased && !form.aadhaarRefused ? fileToBase64(capture.aadhaarFile) : undefined,
+        capture.ownerFile ? fileToBase64(capture.ownerFile) : undefined,
       ]);
       await reportPropertyDiscrepancy(holdingNo.trim(), {
         discrepancyNotes: discrepancyNotes.trim(),
@@ -147,6 +162,8 @@ function ReportPropertyDiscrepancyContent() {
         previousReceiptPhotoMimeType: capture.previousReceiptFile?.type,
         aadhaarPhotoBase64Data,
         aadhaarPhotoMimeType: capture.aadhaarFile?.type,
+        ownerPhotoBase64Data,
+        ownerPhotoMimeType: capture.ownerFile?.type,
       });
       setSuccess(isOld ? "old" : "report");
       setFound(false);
@@ -368,7 +385,12 @@ function ReportPropertyDiscrepancyContent() {
               />
             </div>
 
-            <DiscrepancyCaptureSection state={capture} onChange={setCapture} hideAadhaar={form.ownerDeceased || form.aadhaarRefused} />
+            <DiscrepancyCaptureSection
+              state={capture}
+              onChange={setCapture}
+              hideAadhaar={form.ownerDeceased || form.aadhaarRefused}
+              needs={photoNeeds}
+            />
 
             {submitError && (
               <div role="alert" className="flex items-center gap-2 rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-700">

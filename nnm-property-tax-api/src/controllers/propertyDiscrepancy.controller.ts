@@ -29,6 +29,8 @@ const gpsAndPhotoFields = {
   previousReceiptPhotoMimeType: z.string().min(1).optional(),
   aadhaarPhotoBase64Data: z.string().min(1).optional(),
   aadhaarPhotoMimeType: z.string().min(1).optional(),
+  ownerPhotoBase64Data: z.string().min(1).optional(),
+  ownerPhotoMimeType: z.string().min(1).optional(),
 };
 
 const reportDiscrepancySchema = z.object({
@@ -62,6 +64,8 @@ export const postReportPropertyDiscrepancy = asyncHandler(async (req: Request, r
     previousReceiptPhotoMimeType: bodyParsed.data.previousReceiptPhotoMimeType,
     aadhaarPhotoBase64Data: bodyParsed.data.aadhaarPhotoBase64Data,
     aadhaarPhotoMimeType: bodyParsed.data.aadhaarPhotoMimeType,
+    ownerPhotoBase64Data: bodyParsed.data.ownerPhotoBase64Data,
+    ownerPhotoMimeType: bodyParsed.data.ownerPhotoMimeType,
   });
   res.status(200).json({ request });
 });
@@ -178,12 +182,18 @@ export const postResubmitDiscrepancyRequest = asyncHandler(async (req: Request, 
     previousReceiptPhotoMimeType: bodyParsed.data.previousReceiptPhotoMimeType,
     aadhaarPhotoBase64Data: bodyParsed.data.aadhaarPhotoBase64Data,
     aadhaarPhotoMimeType: bodyParsed.data.aadhaarPhotoMimeType,
+    ownerPhotoBase64Data: bodyParsed.data.ownerPhotoBase64Data,
+    ownerPhotoMimeType: bodyParsed.data.ownerPhotoMimeType,
   });
   res.status(200).json({ request: result });
 });
 
-const photoKindParamSchema = z.object({ id: z.coerce.number().int().positive(), kind: z.enum(["holding", "receipt", "aadhaar"]) });
-const PHOTO_KIND_FIELD: Record<"holding" | "receipt" | "aadhaar", "photo_path" | "previous_receipt_photo_path" | "aadhaar_photo_path"> = {
+const photoKindParamSchema = z.object({ id: z.coerce.number().int().positive(), kind: z.enum(["holding", "receipt", "aadhaar", "owner"]) });
+const PHOTO_KIND_FIELD: Record<
+  "holding" | "receipt" | "aadhaar" | "owner",
+  "photo_path" | "previous_receipt_photo_path" | "aadhaar_photo_path" | "owner_photo_path"
+> = {
+  owner: "owner_photo_path",
   holding: "photo_path",
   receipt: "previous_receipt_photo_path",
   aadhaar: "aadhaar_photo_path",
