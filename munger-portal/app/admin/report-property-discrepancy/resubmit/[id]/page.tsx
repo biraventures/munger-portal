@@ -140,7 +140,7 @@ export default function ResubmitDiscrepancyPage() {
     return <div className="flex min-h-screen items-center justify-center text-sm text-slate-400">Loading…</div>;
   }
 
-  if (admin.role !== "tax_collector") {
+  if (!["tax_collector", "tax_surveyor", "tax_daroga", "commissioner"].includes(admin.role)) {
     return (
       <div className="min-h-screen bg-slate-50">
         <AdminHeader admin={admin} />

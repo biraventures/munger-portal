@@ -878,6 +878,16 @@ export async function removeDuplicateFloors(): Promise<DuplicateFloorsCleanupRes
 // ---------------------------------------------------------------------------
 
 export interface MigratedHoldingImportResult {
+  /** "records": the sheet was stored as old records (MIG stage) - see the fields below. */
+  kind?: "records";
+  rowsRead?: number;
+  newRecords?: number;
+  updated?: number;
+  unchanged?: number;
+  linkedToExisting?: number;
+  withBlocking?: number;
+  withWarnings?: number;
+  duplicateRows?: { row: number; sameAsRow: number }[];
   holdingsCreated: number;
   rowsSkipped: number;
   errors: { row: number; message: string }[];

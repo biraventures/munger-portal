@@ -84,11 +84,12 @@ export default function MigratedHoldingsBulkUploadPage() {
       <AdminHeader admin={admin} />
 
       <main className="mx-auto max-w-2xl px-6 py-10">
-        <h1 className="mb-1 text-2xl font-semibold text-slate-900">Bulk Upload Old Holdings (MUNG-MIG-)</h1>
+        <h1 className="mb-1 text-2xl font-semibold text-slate-900">Bulk Upload Old Holdings (MIG records)</h1>
         <p className="mb-6 text-sm text-slate-500">
           Upload the cleaned old-holdings spreadsheet (Sl. No., Ward No., Old Holding No., Old PID No., Holding Owner
-          Name, Relation, Relative Name, ARV columns, Last Payment Year, Tax Status, Remarks). Each row becomes a new
-          MUNG-MIG- holding awaiting survey. Rows still marked &quot;Needs Review&quot; are skipped, not imported.
+          Name, Relation, Relative Name, ARV columns, Last Payment Year, Tax Status, Remarks). Every row is kept
+          as an old record awaiting your approval - none is rejected; rows with a problem are flagged for you to correct. Approved
+          records get a MIG- number and are seen by the field staff. Uploading the same sheet again does not add rows twice.
         </p>
 
         <div className="rounded-xl border border-slate-200 bg-white p-6">
@@ -138,6 +139,41 @@ export default function MigratedHoldingsBulkUploadPage() {
                 <CheckCircle2 className="h-4 w-4 shrink-0" />
                 Import complete.
               </div>
+              {result.kind === "records" ? (
+                <div className="space-y-3">
+                  <div className="grid grid-cols-2 gap-2 rounded-md border border-slate-200 p-4 text-sm sm:grid-cols-3">
+                    {(
+                      [
+                        ["Rows read", result.rowsRead],
+                        ["New records (awaiting your approval)", result.newRecords],
+                        ["Refreshed (still awaiting approval)", result.updated],
+                        ["Already approved / taken up (unchanged)", result.unchanged],
+                        ["Linked to holdings made earlier", result.linkedToExisting],
+                        ["With a problem to correct before approval", result.withBlocking],
+                      ] as [string, number | undefined][]
+                    ).map(([k, v]) => (
+                      <div key={k}>
+                        <span className="block text-xs text-slate-400">{k}</span>
+                        <span className="font-semibold">{(v ?? 0).toLocaleString("en-IN")}</span>
+                      </div>
+                    ))}
+                  </div>
+                  {!!result.duplicateRows?.length && (
+                    <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900">
+                      <p className="font-semibold">{result.duplicateRows.length} row(s) repeat an earlier row of the sheet exactly - kept once:</p>
+                      <p className="mt-1">{result.duplicateRows.map((d) => `row ${d.row} = row ${d.sameAsRow}`).join(", ")}</p>
+                    </div>
+                  )}
+                  <p className="text-sm text-slate-600">
+                    Nothing is rejected - every row is kept as an old record. Approve them in{" "}
+                    <Link href="/admin/mig-records" className="font-semibold text-nnm-blue underline">
+                      Old Records (MIG) - Approvals
+                    </Link>
+                    ; approved records get their MIG- number and appear to the field staff.
+                  </p>
+                </div>
+              ) : (
+                <>
               <div className="grid grid-cols-2 gap-2 rounded-md border border-slate-200 p-4 text-sm">
                 <div>
                   <span className="block text-xs text-slate-400">Holdings Created</span>
@@ -169,6 +205,9 @@ export default function MigratedHoldingsBulkUploadPage() {
                     Open the review list
                   </Link>
                 </div>
+              )}
+
+                </>
               )}
 
               {result.errors.length > 0 && (

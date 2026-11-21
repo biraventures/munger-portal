@@ -287,11 +287,13 @@ export async function createMigratedHolding(
   d: MigratedRowData,
   actorDisplayName: string,
   source = "Migrated Holding Import",
+  /** The number to give it (an old record taken up keeps its MIG- number as MUNG-MIG-<number>); else the next one. */
+  holdingNoGiven?: string,
 ): Promise<string> {
   const relationRaw = (d.relation ?? "").toUpperCase();
   const relationType = VALID_RELATIONS.has(relationRaw) ? (relationRaw as "S/O" | "D/O" | "W/O" | "C/O") : null;
   const ward = d.ward.trim();
-  const holdingNo = await getNextMigratedHoldingNo();
+  const holdingNo = holdingNoGiven ?? (await getNextMigratedHoldingNo());
   const currentAssessmentYear = (() => {
     const now = new Date();
     const startYear = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1; // Indian FY starts in April
@@ -417,6 +419,63 @@ async function queueForReview(
        uploaded_by = EXCLUDED.uploaded_by, uploaded_at = now(), file_name = EXCLUDED.file_name`,
     [by, fileName, rowNo, kind, reason, JSON.stringify(d), hash],
   );
+}
+
+/** A row of the old-holdings sheet as read: its number, values and the sheet's own "needs review" note. */
+export interface MigratedSheetRow {
+  rowNo: number;
+  d: MigratedRowData;
+  needsReview: string | null;
+}
+
+/**
+ * Reads the old-holdings sheet (first worksheet; column names in the first row). Blank rows are left out. Returns the
+ * header problem instead of rows when the required columns are missing.
+ */
+export async function readMigratedSheet(fileBuffer: Buffer): Promise<{ headerError: string | null; total: number; rows: MigratedSheetRow[] }> {
+  const workbook = new ExcelJS.Workbook();
+  await workbook.xlsx.load(fileBuffer as unknown as ArrayBuffer);
+  const sheet = workbook.worksheets[0];
+  if (!sheet) return { headerError: "The workbook has no sheets.", total: 0, rows: [] };
+  const cols = headerColumns(sheet.getRow(1));
+  if (!cols.ward || !cols.ownerName)
+    return {
+      headerError: `The first row must hold the column names (Ward No., Holding Owner Name, ...). Found: ${headerTexts(sheet.getRow(1)).join(" | ")}`,
+      total: 0,
+      rows: [],
+    };
+  const rows: MigratedSheetRow[] = [];
+  for (let rowNo = 2; rowNo <= sheet.rowCount; rowNo++) {
+    const row = sheet.getRow(rowNo);
+    const t = (k: ColKey) =>
+      cols[k] ? (k === "lastPaymentYear" || k === "holdingCreationYear" ? yearCellText : cellText)(row.getCell(cols[k]!).value) : "";
+    const n = (k: ColKey) => (cols[k] ? cellNumber(row.getCell(cols[k]!).value) : null);
+    const d: MigratedRowData = {
+      ward: t("ward"),
+      oldHoldingNo: t("oldHoldingNo") || null,
+      oldPid: t("oldPid") || null,
+      ownerName: t("ownerName"),
+      relation: t("relation").toUpperCase() || null,
+      relativeName: t("relativeName") || null,
+      arvPre96: n("arvPre96"),
+      arv97to2010: n("arv97to2010"),
+      arv2011to2020: n("arv2011to2020"),
+      arv97to2000: n("arv97to2000"),
+      arv2000to2011: n("arv2000to2011"),
+      arv2011to2017: n("arv2011to2017"),
+      arv2017to2021: n("arv2017to2021"),
+      arv2021on: n("arv2021on"),
+      holdingCreationYear: t("holdingCreationYear") || null,
+      lastPaymentYear: t("lastPaymentYear") || null,
+      taxStatus: t("taxStatus") || null,
+      remarks: t("remarks") || null,
+    };
+    // A row with nothing in it at all is a blank line, not a record. (A row with only some details is kept.)
+    const anything = Object.values(d).some((v) => v !== null && v !== "");
+    if (!anything) continue;
+    rows.push({ rowNo, d, needsReview: t("needsReview") || null });
+  }
+  return { headerError: null, total: Math.max(sheet.rowCount - 1, 0), rows };
 }
 
 export async function importMigratedHoldingsXlsx(

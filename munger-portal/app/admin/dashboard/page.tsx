@@ -204,6 +204,8 @@ export default function AdminDashboardPage() {
   const showBulkReceipts = ["tax_daroga", "commissioner", "deputy_commissioner", "city_manager"].includes(admin.role);
   const showInstrumentReconciliation = ["agency_project_manager", "tax_daroga", "commissioner", "deputy_commissioner", "city_manager"].includes(admin.role);
   const showUnsurveyedHouseEntry = admin.role === "tax_collector";
+  // Old Records (MIG): field staff add details; City Manager and DMC view.
+  const showOldRecords = ["tax_collector", "tax_surveyor", "tax_daroga", "commissioner", "city_manager", "deputy_commissioner"].includes(admin.role);
   const showNoticeReceivingUpload = admin.role === "tax_collector";
   const showUnsurveyedHouses = ["tax_collector", "tax_daroga", "city_manager", "deputy_commissioner", "commissioner"].includes(admin.role);
   const showNoticeReceivingCopies = showUnsurveyedHouses;
@@ -731,7 +733,16 @@ export default function AdminDashboardPage() {
                       <Upload className="h-6 w-6" strokeWidth={1.8} />
                     </span>
                     <h3 className="mb-1.5 text-base font-semibold text-slate-900">Bulk Upload Old Holdings</h3>
-                    <p className="text-sm text-slate-500">Import old paper-record holdings (MUNG-MIG-) pending survey.</p>
+                    <p className="text-sm text-slate-500">Upload the old-holdings sheet - every row is kept as an old record awaiting your approval.</p>
+                  </Link>
+                )}
+                {showMigratedHoldingsBulkUpload && (
+                  <Link href="/admin/mig-records" className={cardClass}>
+                    <span className={iconWrapClass}>
+                      <ClipboardCheck className="h-6 w-6" strokeWidth={1.8} />
+                    </span>
+                    <h3 className="mb-1.5 text-base font-semibold text-slate-900">Old Records (MIG) - Approvals</h3>
+                    <p className="text-sm text-slate-500">All uploaded old records - awaiting approval, approved (MIG), being entered, final (MNN) - correct and approve.</p>
                   </Link>
                 )}
                 {showMigratedHoldingsAssign && (
@@ -745,7 +756,7 @@ export default function AdminDashboardPage() {
                 )}
               </DashboardGroup>
 
-              <DashboardGroup id="field-survey" title="Field Survey" description="Surveys, field work, old holdings survey and missing houses." icon={<MapPin className="h-6 w-6" strokeWidth={1.8} />} highlight={false}>
+              <DashboardGroup id="field-survey" title="Field Survey" description="Surveys, field work, old records (MIG) and missing houses." icon={<MapPin className="h-6 w-6" strokeWidth={1.8} />} highlight={false}>
                 {admin.role === "tax_surveyor" && (
                   <Link href="/admin/my-field-work" className={cardClass}>
                     <span className={iconWrapClass}>
@@ -782,13 +793,15 @@ export default function AdminDashboardPage() {
                     <p className="text-sm text-slate-500">Search any holding number to start its survey or resurvey directly.</p>
                   </Link>
                 )}
-                {showUnsurveyedHouseEntry && (
-                  <Link href="/admin/old-holdings-survey" className={cardClass}>
+                {showOldRecords && (
+                  <Link href="/admin/old-records" className={cardClass}>
                     <span className={iconWrapClass}>
                       <ClipboardList className="h-6 w-6" strokeWidth={1.8} />
                     </span>
-                    <h3 className="mb-1.5 text-base font-semibold text-slate-900">Old Holdings Survey</h3>
-                    <p className="text-sm text-slate-500">Find old-record (MUNG-MIG) holdings by old holding number or owner name, or browse your wards, and enter their full details.</p>
+                    <h3 className="mb-1.5 text-base font-semibold text-slate-900">Old Records (MIG)</h3>
+                    <p className="text-sm text-slate-500">
+                      Old houses with an old tax receipt but no MUNG id: find the old record ward-wise (old holding no., PID, owner) and add its full details.
+                    </p>
                   </Link>
                 )}
                 {showUnsurveyedHouseEntry && (

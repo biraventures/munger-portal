@@ -92,7 +92,7 @@ export default function UnsurveyedHouseEntryPage() {
         <p className="mb-6 text-sm text-slate-500">
           For a house that is in neither the holding tax database nor the MUNG-MIG data. It goes on the <b>Missing Houses List</b>.
           First search for it: use <Link href="/admin/report-property-discrepancy" className="font-semibold text-nnm-blue underline">Report Property Discrepancy</Link> (holding number, or
-          &quot;Find in MUNG-MIG data&quot;) or <Link href="/admin/old-holdings-survey" className="font-semibold text-nnm-blue underline">Old Holdings Survey</Link>.
+          &quot;Find in MUNG-MIG data&quot;) or <Link href="/admin/old-records" className="font-semibold text-nnm-blue underline">Old Records (MIG)</Link>.
         </p>
 
         {saved && (

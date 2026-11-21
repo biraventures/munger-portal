@@ -181,7 +181,9 @@ function ReportPropertyDiscrepancyContent() {
     return <div className="flex min-h-screen items-center justify-center text-sm text-slate-400">Loading…</div>;
   }
 
-  if (admin.role !== "tax_collector") {
+  // An old (MUNG-MIG) holding's details can also be entered by the Tax Surveyor, Tax Daroga or Commissioner.
+  const oldHoldingEntry = (searchParams.get("holding") ?? holdingNo).toUpperCase().startsWith("MUNG-MIG-");
+  if (admin.role !== "tax_collector" && !(oldHoldingEntry && ["tax_collector", "tax_surveyor", "tax_daroga", "commissioner"].includes(admin.role))) {
     return (
       <div className="min-h-screen bg-slate-50">
         <AdminHeader admin={admin} />
@@ -209,8 +211,8 @@ function ReportPropertyDiscrepancyContent() {
             <>
               Enter the full details of this old-record holding as you found it. It goes to the Tax Surveyor of the ward, Tax Daroga, City
               Manager, DMC and Commissioner.{" "}
-              <Link href="/admin/old-holdings-survey" className="font-semibold text-nnm-blue underline">
-                Back to Old Holdings Survey
+              <Link href="/admin/old-records" className="font-semibold text-nnm-blue underline">
+                Back to Old Records (MIG)
               </Link>
             </>
           ) : (
@@ -231,8 +233,8 @@ function ReportPropertyDiscrepancyContent() {
               <>
                 Old holding entry submitted. It goes to the Tax Surveyor of the ward, then the Tax Daroga, City Manager, DMC and
                 Commissioner.{" "}
-                <Link href="/admin/old-holdings-survey" className="font-semibold underline">
-                  Back to Old Holdings Survey
+                <Link href="/admin/old-records" className="font-semibold underline">
+                  Back to Old Records (MIG)
                 </Link>
               </>
             ) : (

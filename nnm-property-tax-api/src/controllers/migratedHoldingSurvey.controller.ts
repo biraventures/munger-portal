@@ -1,10 +1,11 @@
 import { pool } from "../config/db";
+import { uploadMigRecords } from "../services/migRecord.service";
 import type { Request, Response } from "express";
 import { listSurveyorsWithWards } from "../services/surveyorWards.service";
 import { z } from "zod";
 import ExcelJS from "exceljs";
 import { holdingNoSchema } from "../utils/holdingNoSchema";
-import { importMigratedHoldingsXlsx, listReviewRows, importReviewRow, discardReviewRow, discardAllReviewRows } from "../services/migratedHoldingImport.service";
+import { listReviewRows, importReviewRow, discardReviewRow, discardAllReviewRows } from "../services/migratedHoldingImport.service";
 import { applyPropertySave } from "../services/propertySave.service";
 import { renameHoldingTo } from "../services/propertyRenumber.service";
 import { getNextFinalizedMigratedHoldingNo } from "../services/holdingNumberSeries.service";
@@ -36,7 +37,7 @@ export const uploadMigratedHoldingsHandler = asyncHandler(async (req: Request, r
     `SELECT id FROM migrated_upload_jobs WHERE status = 'running' AND created_at > now() - interval '45 minutes' LIMIT 1`,
   );
   if (busy[0]) throw ApiError.badRequest(`An upload is already being processed (no. ${busy[0].id}) - wait for it to finish.`);
-  const { rows } = await pool.query<{ id: string }>(`INSERT INTO migrated_upload_jobs (file_name, created_by) VALUES ($1, $2) RETURNING id`, [
+  const { rows } = await pool.query<{ id: string }>(`INSERT INTO migrated_upload_jobs (file_name, created_by, kind) VALUES ($1, $2, 'records') RETURNING id`, [
     parsed.data.fileName ?? null,
     req.admin!.displayName,
   ]);
@@ -45,7 +46,8 @@ export const uploadMigratedHoldingsHandler = asyncHandler(async (req: Request, r
 
   void (async () => {
     try {
-      const result = await importMigratedHoldingsXlsx(fileBuffer, req.admin!.displayName, parsed.data.fileName ?? null, async (done, total) => {
+      // Every row becomes an old record (MIG stage) awaiting the Commissioner's approval - nothing is rejected.
+      const result = await uploadMigRecords(fileBuffer, req.admin!.displayName, parsed.data.fileName ?? null, jobId, async (done, total) => {
         await pool.query(`UPDATE migrated_upload_jobs SET processed = $2, total_rows = $3 WHERE id = $1`, [jobId, done, total]);
       });
       await pool.query(`UPDATE migrated_upload_jobs SET status = 'done', result = $2, finished_at = now() WHERE id = $1`, [jobId, JSON.stringify(result)]);

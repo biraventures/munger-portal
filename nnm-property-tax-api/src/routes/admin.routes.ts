@@ -1,4 +1,16 @@
 import {
+  getAllRecords,
+  getFieldRecords,
+  getLegacy,
+  getOneRecord,
+  postApprove as postApproveMigRecords,
+  postDeleteLegacy,
+  postRestore,
+  postSetAside,
+  postTakeUp,
+  putRecord,
+} from "../controllers/migRecord.controller";
+import {
   getHistoricalHolding,
   getHistoricalPending,
   getHistoricalPendingCount,
@@ -604,6 +616,17 @@ adminRouter.post("/shops/:shopNo/inspections", requireInspectionRole, postCreate
 // assigned. See migratedHoldingSurvey.controller.ts.
 adminRouter.post("/migrated-holdings/bulk-upload", requireAdminRole("commissioner"), uploadMigratedHoldingsHandler);
 adminRouter.get("/migrated-holdings/bulk-upload/:jobId", requireAdminRole("commissioner"), getMigratedUploadJobHandler);
+// Old records (MIG stage): the Commissioner's approval list, and the field staff's ward-wise list. Roles: migRecord.service.ts.
+adminRouter.get("/mig-records", getAllRecords);
+adminRouter.put("/mig-records/:id", putRecord);
+adminRouter.post("/mig-records/approve", postApproveMigRecords);
+adminRouter.post("/mig-records/:id/set-aside", postSetAside);
+adminRouter.post("/mig-records/:id/restore", postRestore);
+adminRouter.get("/mig-records/legacy", getLegacy);
+adminRouter.post("/mig-records/legacy/delete", postDeleteLegacy);
+adminRouter.get("/old-records", getFieldRecords);
+adminRouter.get("/old-records/:id", getOneRecord);
+adminRouter.post("/old-records/:id/take-up", postTakeUp);
 // Rows of the old-holding upload held back for review: correct and import, or discard, one by one.
 const requireMigratedReviewRole = requireAdminRole("commissioner", "tax_daroga");
 adminRouter.get("/migrated-holdings/review-rows", requireMigratedReviewRole, listReviewRowsHandler);

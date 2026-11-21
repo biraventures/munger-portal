@@ -187,6 +187,10 @@ function actingStage(request: PropertyDiscrepancyRequestRow, admin: AdminTokenPa
 }
 
 function assertActionable(request: PropertyDiscrepancyRequestRow, admin: AdminTokenPayload) {
+  // The first check (the Tax Surveyor's stage, where a Tax Daroga may also act) is by someone other than the officer who
+  // entered the details - an old holding's details can be entered by a Tax Surveyor or Tax Daroga too.
+  if (request.current_stage === "tax_surveyor" && request.reported_by_username === admin.username)
+    throw new ApiError(403, "You entered these details - another officer must do the first check.");
   if (request.status !== "pending") {
     throw ApiError.badRequest(`This request has already been ${request.status}.`);
   }

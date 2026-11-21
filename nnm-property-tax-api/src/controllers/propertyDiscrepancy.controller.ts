@@ -53,7 +53,12 @@ export const postReportPropertyDiscrepancy = asyncHandler(async (req: Request, r
   if (!paramsParsed.success) throw ApiError.badRequest("Invalid holding number");
   const bodyParsed = reportDiscrepancySchema.safeParse(req.body);
   if (!bodyParsed.success) throw ApiError.badRequest("Invalid input", bodyParsed.error.flatten().fieldErrors);
-  if (!req.admin || req.admin.role !== "tax_collector") throw new ApiError(403, "Only a Tax Collector can report a property discrepancy.");
+  // Old (MUNG-MIG-) holdings opened from an old record: the Tax Surveyor, Tax Daroga and Commissioner may enter the
+  // details too. Every other discrepancy report comes from a Tax Collector.
+  const oldHolding = String(req.params.holdingNo ?? "").toUpperCase().startsWith("MUNG-MIG-");
+  const allowed = oldHolding ? ["tax_collector", "tax_surveyor", "tax_daroga", "commissioner"] : ["tax_collector"];
+  if (!req.admin || !allowed.includes(req.admin.role))
+    throw new ApiError(403, oldHolding ? "Not allowed to enter this holding's details." : "Only a Tax Collector can report a property discrepancy.");
 
   const request = await reportPropertyDiscrepancy(paramsParsed.data.holdingNo, req.admin, bodyParsed.data.discrepancyNotes, bodyParsed.data.proposedData, {
     gpsLat: bodyParsed.data.gpsLat ?? null,
