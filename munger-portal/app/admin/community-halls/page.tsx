@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { AlertCircle, Building2, Loader2, Pencil, Plus, Search, X } from "lucide-react";
+import { AlertCircle, AlertTriangle, Building2, Loader2, Pencil, Plus, Search, Trash2, X } from "lucide-react";
 import { AdminHeader } from "@/components/admin-header";
 import { useAdminGuard } from "@/lib/use-admin-guard";
 import {
@@ -16,6 +16,7 @@ import {
   recordHallPayment,
   rejectBooking,
   rupees,
+  SLOT_LABEL,
   settleHallDeposit,
   updateHall,
   type BookingList,
@@ -156,8 +157,15 @@ export default function CommunityHallsOfficePage() {
                     >
                       <div className="min-w-0 flex-1">
                         <p className="text-sm font-semibold text-slate-900">
-                          {b.hallName} · {range(b.fromDate, b.toDate)}
+                          {b.hallName}
+                          {b.optionName ? ` - ${b.optionName}` : ""} · {range(b.fromDate, b.toDate)}
+                          {b.slot !== "full_day" ? ` (${b.slot})` : ""}
                         </p>
+                        {(b.overlapCount ?? 0) > 0 && (
+                          <p className="mt-0.5 inline-flex items-center gap-1 text-xs font-semibold text-amber-700">
+                            <AlertTriangle className="h-3.5 w-3.5" /> {b.overlapCount} other booking(s) of this hall on the same date / slot
+                          </p>
+                        )}
                         <p className="text-xs text-slate-500">
                           <span className="font-mono">{b.bookingNo}</span> · {b.applicantName} ({b.applicantPhone}) · {b.purpose} ·{" "}
                           {rupees(b.totalAmount)}
@@ -250,11 +258,18 @@ function BookingPanel({ id, onClose, onChanged }: { id: number; onClose: () => v
               {(
                 [
                   ["Hall", b.hallName],
-                  ["Dates", `${range(b.fromDate, b.toDate)} (${b.days} day${b.days > 1 ? "s" : ""})`],
+                  ["Option", `${b.optionName ?? "-"} - ${b.slotLabel}`],
+                  [
+                    "Dates",
+                    `${range(b.fromDate, b.toDate)} (${b.slot === "full_day" ? `${b.days} day${b.days > 1 ? "s" : ""}` : "half day"})`,
+                  ],
                   ["Applicant", `${b.applicantName}, ${b.applicantPhone}`],
                   ["Address", b.applicantAddress],
                   ["Purpose", `${b.purpose}${b.expectedGuests ? ` - about ${b.expectedGuests} guests` : ""}`],
-                  ["Amount", `Rent ${rupees(b.rentAmount)} + deposit ${rupees(b.depositAmount)} = ${rupees(b.totalAmount)}`],
+                  [
+                    "Amount",
+                    `Rent ${rupees(b.rentAmount)}${b.slot === "full_day" && b.days > 1 ? ` (${rupees(b.dailyRent)} x ${b.days})` : ""} + deposit ${rupees(b.depositAmount)} = ${rupees(b.totalAmount)}`,
+                  ],
                   ...(b.paymentDueDate && b.status === "approved" ? [["Pay by", dmy(b.paymentDueDate)]] : []),
                   ...(b.paidAt
                     ? [
@@ -282,13 +297,20 @@ function BookingPanel({ id, onClose, onChanged }: { id: number; onClose: () => v
             </dl>
 
             {d.overlapping.length > 0 && (
-              <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
-                <p className="font-semibold">Other bookings on these dates:</p>
+              <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900">
+                <p className="mb-1 flex items-center gap-1.5 font-semibold">
+                  <AlertTriangle className="h-4 w-4" /> Other bookings of this hall on the same date / slot - check they can run together:
+                </p>
                 {d.overlapping.map((o) => (
-                  <p key={o.booking_no}>
-                    {o.booking_no} - {o.applicant_name} ({range(o.from_date, o.to_date)}) - {o.status}
+                  <p key={o.booking_no} className={o.same_option ? "font-semibold text-red-700" : ""}>
+                    {o.booking_no} - {o.applicant_name} - {o.option_name ?? "-"} ({SLOT_LABEL[o.slot] ?? o.slot}),{" "}
+                    {range(o.from_date, o.to_date)} - {o.status}
+                    {o.same_option ? " - same option" : ""}
                   </p>
                 ))}
+                {b.status === "applied" && (
+                  <p className="mt-1">To approve, write a remark below (e.g. &quot;Garden and hall bookings can run together&quot;).</p>
+                )}
               </div>
             )}
 
@@ -451,24 +473,37 @@ function BookingPanel({ id, onClose, onChanged }: { id: number; onClose: () => v
   );
 }
 
+type OptionForm = { id?: number; name: string; nameHi: string; fullDayRent: string; halfDayRent: string; securityDeposit: string };
+const newOption = (name = ""): OptionForm => ({ name, nameHi: "", fullDayRent: "", halfDayRent: "", securityDeposit: "" });
+
 function HallsSection({ halls, canEdit, onSaved }: { halls: Hall[]; canEdit: boolean; onSaved: () => void }) {
-  const empty = { name: "", nameHi: "", address: "", capacity: "", facilities: "", dailyRent: "", securityDeposit: "", active: true };
-  const [edit, setEdit] = useState<{ id: number | null; f: typeof empty } | null>(null);
+  const empty = { name: "", nameHi: "", address: "", capacity: "", facilities: "", active: true };
+  const [edit, setEdit] = useState<{ id: number | null; f: typeof empty; options: OptionForm[] } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   async function save() {
     if (!edit) return;
     const f = edit.f;
-    if (!f.name.trim() || f.dailyRent === "" || f.securityDeposit === "")
-      return setError("Enter the name, daily rent and security deposit.");
+    if (!f.name.trim()) return setError("Enter the hall's name.");
+    if (edit.options.length === 0) return setError("Add at least one rate option.");
+    for (const o of edit.options) {
+      if (!o.name.trim() || o.fullDayRent === "" || o.securityDeposit === "")
+        return setError("Each rate option needs a name, the full-day rent and the security deposit (0 if none).");
+    }
     const body = {
       name: f.name,
       nameHi: f.nameHi || null,
       address: f.address || null,
       capacity: f.capacity ? Number(f.capacity) : null,
       facilities: f.facilities || null,
-      dailyRent: Number(f.dailyRent),
-      securityDeposit: Number(f.securityDeposit),
+      options: edit.options.map((o) => ({
+        id: o.id,
+        name: o.name,
+        nameHi: o.nameHi || null,
+        fullDayRent: Number(o.fullDayRent),
+        halfDayRent: o.halfDayRent.trim() === "" ? null : Number(o.halfDayRent),
+        securityDeposit: Number(o.securityDeposit),
+      })),
       active: f.active,
     };
     try {
@@ -483,21 +518,39 @@ function HallsSection({ halls, canEdit, onSaved }: { halls: Hall[]; canEdit: boo
   }
 
   const setF = (k: keyof typeof empty, v: string | boolean) => setEdit((e) => (e ? { ...e, f: { ...e.f, [k]: v } } : e));
+  const setO = (i: number, k: keyof OptionForm, v: string) =>
+    setEdit((e) => (e ? { ...e, options: e.options.map((o, j) => (j === i ? { ...o, [k]: v } : o)) } : e));
 
   return (
     <section className="space-y-3 rounded-xl border border-slate-200 bg-white p-4">
       {halls.length === 0 && <p className="text-sm text-slate-400">No hall added yet.</p>}
       {halls.map((h) => (
-        <div key={h.id} className="flex flex-wrap items-center gap-3 border-b border-slate-100 pb-3 text-sm">
+        <div key={h.id} className="flex flex-wrap items-start gap-3 border-b border-slate-100 pb-3 text-sm">
           <div className="min-w-0 flex-1">
             <p className="font-semibold text-slate-900">
               {h.name} {!h.active && <span className="text-xs font-normal text-red-600">(closed for booking)</span>}
             </p>
             <p className="text-xs text-slate-500">
-              Rent {rupees(h.daily_rent)}/day · Deposit {rupees(h.security_deposit)}
-              {h.capacity ? ` · ${h.capacity} guests` : ""}
-              {h.address ? ` · ${h.address}` : ""}
+              {h.capacity ? `${h.capacity} guests` : ""}
+              {h.capacity && h.address ? " · " : ""}
+              {h.address ?? ""}
             </p>
+            {h.options.length > 0 && (
+              <table className="mt-1.5 text-xs [&_td]:pr-4">
+                <tbody>
+                  {h.options.map((o) => (
+                    <tr key={o.id}>
+                      <td className="font-medium text-slate-700">{o.name}</td>
+                      <td>Full day {rupees(o.fullDayRent)}</td>
+                      <td>
+                        {o.halfDayRent !== null ? `Half day ${rupees(o.halfDayRent)}` : <span className="text-slate-400">No half day</span>}
+                      </td>
+                      <td>Deposit {rupees(o.securityDeposit)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
           </div>
           {canEdit && (
             <button
@@ -510,10 +563,16 @@ function HallsSection({ halls, canEdit, onSaved }: { halls: Hall[]; canEdit: boo
                     address: h.address ?? "",
                     capacity: h.capacity ? String(h.capacity) : "",
                     facilities: h.facilities ?? "",
-                    dailyRent: String(h.daily_rent),
-                    securityDeposit: String(h.security_deposit),
                     active: h.active,
                   },
+                  options: h.options.map((o) => ({
+                    id: o.id,
+                    name: o.name,
+                    nameHi: o.nameHi ?? "",
+                    fullDayRent: String(o.fullDayRent),
+                    halfDayRent: o.halfDayRent === null ? "" : String(o.halfDayRent),
+                    securityDeposit: String(o.securityDeposit),
+                  })),
                 })
               }
               className="inline-flex items-center gap-1 rounded-md border border-slate-300 px-2.5 py-1 text-xs font-semibold"
@@ -532,8 +591,6 @@ function HallsSection({ halls, canEdit, onSaved }: { halls: Hall[]; canEdit: boo
                 ["nameHi", "Name in Hindi"],
                 ["address", "Address"],
                 ["capacity", "Capacity (guests)"],
-                ["dailyRent", "Rent per day (₹) *"],
-                ["securityDeposit", "Security deposit (₹) *"],
                 ["facilities", "Facilities"],
               ] as [keyof typeof empty, string][]
             ).map(([k, l]) => (
@@ -542,6 +599,59 @@ function HallsSection({ halls, canEdit, onSaved }: { halls: Hall[]; canEdit: boo
                 <input value={String(edit.f[k])} onChange={(e) => setF(k, e.target.value)} className={input} />
               </div>
             ))}
+
+            <div className="sm:col-span-2">
+              <p className="mb-1 text-sm font-semibold text-slate-800">Rate options *</p>
+              <p className="mb-2 text-xs text-slate-500">
+                One line for each way the hall is let - e.g. Small hall, Big hall, Garden only, Hall + garden. Leave the half-day rent blank
+                if that option is let only for the full day. Half-day bookings are for a morning or an evening slot.
+              </p>
+              <div className="space-y-2">
+                {edit.options.map((o, i) => (
+                  <div
+                    key={o.id ?? `new-${i}`}
+                    className="grid grid-cols-2 gap-2 rounded-md bg-slate-50 p-2 sm:grid-cols-[1.4fr_1fr_1fr_1fr_1fr_auto]"
+                  >
+                    {(
+                      [
+                        ["name", "Option *", "e.g. Big hall"],
+                        ["nameHi", "In Hindi", ""],
+                        ["fullDayRent", "Full day (₹) *", ""],
+                        ["halfDayRent", "Half day (₹)", "blank = no"],
+                        ["securityDeposit", "Deposit (₹) *", ""],
+                      ] as [keyof OptionForm, string, string][]
+                    ).map(([k, l, ph]) => (
+                      <div key={k}>
+                        <label className={label}>{l}</label>
+                        <input
+                          value={String(o[k] ?? "")}
+                          placeholder={ph}
+                          inputMode={k === "name" || k === "nameHi" ? undefined : "decimal"}
+                          onChange={(e) => setO(i, k, e.target.value)}
+                          className={input}
+                          aria-label={`${l} - option ${i + 1}`}
+                        />
+                      </div>
+                    ))}
+                    <button
+                      onClick={() => setEdit((e) => (e ? { ...e, options: e.options.filter((_, j) => j !== i) } : e))}
+                      aria-label={`Remove option ${i + 1}`}
+                      title="Remove this option (bookings already made keep it)"
+                      className="self-end rounded-md p-2 text-red-600 hover:bg-red-50"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+              <button
+                onClick={() => setEdit((e) => (e ? { ...e, options: [...e.options, newOption()] } : e))}
+                className="mt-2 inline-flex items-center gap-1 rounded-md border border-slate-300 px-2.5 py-1 text-xs font-semibold"
+              >
+                <Plus className="h-3.5 w-3.5" /> Add rate option
+              </button>
+            </div>
+
             <label className="flex items-center gap-2 text-sm">
               <input type="checkbox" checked={edit.f.active} onChange={(e) => setF("active", e.target.checked)} /> Open for booking
             </label>
@@ -555,19 +665,20 @@ function HallsSection({ halls, canEdit, onSaved }: { halls: Hall[]; canEdit: boo
               </button>
             </div>
             <p className="text-xs text-slate-500 sm:col-span-2">
-              A change of rent applies to new applications; bookings already made keep their amounts.
+              A change of rent applies to new applications; bookings already made keep their option and amounts. Different options of the
+              hall can be booked on the same date - such bookings are flagged for the officer approving them.
             </p>
           </div>
         ) : (
           <button
-            onClick={() => setEdit({ id: null, f: empty })}
+            onClick={() => setEdit({ id: null, f: empty, options: [newOption("Full hall")] })}
             className="inline-flex items-center gap-1 rounded-md bg-nnm-blue px-3 py-2 text-sm font-semibold text-white"
           >
             <Plus className="h-4 w-4" /> Add hall
           </button>
         )
       ) : (
-        <p className="text-xs text-slate-400">The halls, rent and deposit are set by the Municipal Commissioner.</p>
+        <p className="text-xs text-slate-400">The halls, their rate options and deposits are set by the Municipal Commissioner.</p>
       )}
     </section>
   );

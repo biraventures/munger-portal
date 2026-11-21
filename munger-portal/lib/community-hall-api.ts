@@ -29,12 +29,26 @@ export interface Hall {
   address: string | null;
   capacity: number | null;
   facilities: string | null;
+  /** The lowest full-day rent and deposit among the options ("from"). */
   daily_rent: number;
   security_deposit: number;
   active: boolean;
+  options: RateOption[];
 }
+/** A way the hall is let (small hall, big hall, garden only, hall + garden ...) with its own rents and deposit. */
+export interface RateOption {
+  id: number;
+  name: string;
+  nameHi: string | null;
+  fullDayRent: number;
+  /** Null when not let for half a day. */
+  halfDayRent: number | null;
+  securityDeposit: number;
+}
+export type HallSlot = "full_day" | "morning" | "evening";
+export const SLOT_LABEL: Record<HallSlot, string> = { full_day: "Full day", morning: "Morning (half day)", evening: "Evening (half day)" };
 export interface PublicHall extends Hall {
-  taken: { from: string; to: string }[];
+  taken: { from: string; to: string; optionId: number | null; slot: HallSlot }[];
 }
 export interface PublicHalls {
   halls: PublicHall[];
@@ -51,6 +65,10 @@ export interface HallBooking {
   hallName: string;
   hallNameHi: string | null;
   hallAddress: string | null;
+  rateOptionId: number | null;
+  optionName: string | null;
+  slot: HallSlot;
+  slotLabel: string;
   fromDate: string;
   toDate: string;
   days: number;
@@ -85,6 +103,8 @@ export interface HallBooking {
   depositSettledAt: string | null;
   depositSettledBy: string | null;
   eventOver: boolean;
+  /** Other live bookings of the hall on an overlapping date and slot (office only). */
+  overlapCount?: number;
   events?: { at: string; action: string; by: string; role: string; note: string | null }[];
   appliedAt: string;
 }
@@ -97,6 +117,8 @@ export interface PublicBooking extends HallBooking {
 export const fetchPublicHalls = () => call<PublicHalls>("/public/community-halls", {}, false, "Could not load the halls");
 export interface HallApplicationInput {
   hallId: number;
+  rateOptionId: number;
+  slot: HallSlot;
   fromDate: string;
   toDate: string;
   applicantName: string;
@@ -136,8 +158,14 @@ export interface HallInput {
   address?: string | null;
   capacity?: number | null;
   facilities?: string | null;
-  dailyRent: number;
-  securityDeposit: number;
+  options: {
+    id?: number;
+    name: string;
+    nameHi?: string | null;
+    fullDayRent: number;
+    halfDayRent: number | null;
+    securityDeposit: number;
+  }[];
   active?: boolean;
 }
 export const createHall = (h: HallInput) =>
@@ -159,7 +187,16 @@ export function fetchBookings(f: { status?: string; hallId?: number; q?: string 
 export const fetchBooking = (id: number) =>
   call<{
     booking: HallBooking;
-    overlapping: { booking_no: string; applicant_name: string; status: string; from_date: string; to_date: string }[];
+    overlapping: {
+      booking_no: string;
+      applicant_name: string;
+      status: string;
+      from_date: string;
+      to_date: string;
+      option_name: string | null;
+      slot: HallSlot;
+      same_option: boolean;
+    }[];
     canDecide: boolean;
   }>(`/community-halls/bookings/${id}`);
 const post = (id: number, action: string, body: object) =>

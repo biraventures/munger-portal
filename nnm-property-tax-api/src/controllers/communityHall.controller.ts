@@ -38,8 +38,19 @@ const hallBody = z.object({
   address: z.string().trim().max(500).nullish(),
   capacity: z.coerce.number().int().positive().max(100000).nullish(),
   facilities: z.string().trim().max(1000).nullish(),
-  dailyRent: z.coerce.number().min(0).max(10000000),
-  securityDeposit: z.coerce.number().min(0).max(10000000),
+  options: z
+    .array(
+      z.object({
+        id: z.coerce.number().int().positive().optional(),
+        name: z.string().trim().min(2, "Enter the name of each rate option (e.g. Big hall, Garden only)").max(100),
+        nameHi: z.string().trim().max(100).nullish(),
+        fullDayRent: z.coerce.number().min(0).max(10000000),
+        halfDayRent: z.coerce.number().min(0).max(10000000).nullish(),
+        securityDeposit: z.coerce.number().min(0).max(10000000),
+      }),
+    )
+    .min(1, "Add at least one rate option")
+    .max(20),
   active: z.boolean().optional(),
 });
 
@@ -51,6 +62,8 @@ export const postApplication = asyncHandler(async (req: Request, res: Response) 
   const b = parse(
     z.object({
       hallId: z.coerce.number().int().positive(),
+      rateOptionId: z.coerce.number().int().positive({ message: "Choose a booking option" }),
+      slot: z.enum(["full_day", "morning", "evening"]).optional(),
       fromDate: day,
       toDate: day,
       applicantName: z.string().trim().min(2, "Enter your name").max(150),

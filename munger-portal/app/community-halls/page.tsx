@@ -5,18 +5,26 @@ import Link from "next/link";
 import { AlertCircle, Building2, CheckCircle2, ChevronLeft, ChevronRight, Loader2, Users } from "lucide-react";
 import { SiteHeader } from "@/components/site-header";
 import { SiteFooter } from "@/components/site-footer";
-import { applyForHall, dmy, fetchPublicHalls, rupees, type PublicHall, type PublicHalls } from "@/lib/community-hall-api";
+import { applyForHall, dmy, fetchPublicHalls, rupees, type HallSlot, type PublicHall, type PublicHalls } from "@/lib/community-hall-api";
 
 const input = "w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-nnm-blue focus:outline-none";
 const label = "mb-1 block text-xs font-medium text-slate-600";
 
 const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 const daysBetween = (a: string, b: string) => Math.round((Date.parse(b) - Date.parse(a)) / 86_400_000) + 1;
-const isTaken = (h: PublicHall, day: string) => h.taken.some((t) => t.from <= day && day <= t.to);
+const slotsOverlap = (a: HallSlot, b: HallSlot) => a === "full_day" || b === "full_day" || a === b;
+/** The chosen option is already held for this slot on the day. */
+const isTaken = (h: PublicHall, day: string, optionId: number | null, slot: HallSlot) =>
+  h.taken.some((t) => t.from <= day && day <= t.to && t.optionId === optionId && slotsOverlap(t.slot, slot));
+/** Another part of the hall (another option), or the other half of the day, is booked - still open, the office checks. */
+const isPartly = (h: PublicHall, day: string, optionId: number | null, slot: HallSlot) =>
+  !isTaken(h, day, optionId, slot) && h.taken.some((t) => t.from <= day && day <= t.to);
 
 /** Month calendar of one hall: booked days in red, days that cannot be booked greyed; a free day can be picked. */
 function HallCalendar({
   hall,
+  optionId,
+  slot,
   min,
   max,
   from,
@@ -24,6 +32,8 @@ function HallCalendar({
   onPick,
 }: {
   hall: PublicHall;
+  optionId: number | null;
+  slot: HallSlot;
   min: string;
   max: string;
   from: string;
@@ -75,7 +85,8 @@ function HallCalendar({
         {cells.map((day, i) => {
           if (!day) return <span key={i} />;
           const out = day < min || day > max;
-          const taken = isTaken(hall, day);
+          const taken = isTaken(hall, day, optionId, slot);
+          const partly = isPartly(hall, day, optionId, slot);
           const picked = !!from && (day === from || (!!to && from <= day && day <= to));
           return (
             <button
@@ -83,8 +94,16 @@ function HallCalendar({
               type="button"
               disabled={out || taken}
               onClick={() => onPick(day)}
-              title={taken ? "Booked" : out ? "Not open for booking" : "Available"}
-              className={`rounded py-1 ${taken ? "bg-red-100 font-semibold text-red-700" : out ? "text-slate-300" : picked ? "bg-nnm-blue font-semibold text-white" : "bg-green-50 text-green-800 hover:bg-green-200"}`}
+              title={
+                taken
+                  ? "Booked"
+                  : out
+                    ? "Not open for booking"
+                    : partly
+                      ? "Another part of the hall / half of the day is booked"
+                      : "Available"
+              }
+              className={`rounded py-1 ${taken ? "bg-red-100 font-semibold text-red-700" : out ? "text-slate-300" : picked ? "bg-nnm-blue font-semibold text-white" : partly ? "bg-amber-100 text-amber-800 hover:bg-amber-200" : "bg-green-50 text-green-800 hover:bg-green-200"}`}
             >
               {Number(day.slice(8))}
             </button>
@@ -100,6 +119,10 @@ function HallCalendar({
           <span className="mr-1 inline-block h-2.5 w-2.5 rounded bg-red-200 align-middle" />
           Booked
         </span>
+        <span>
+          <span className="mr-1 inline-block h-2.5 w-2.5 rounded bg-amber-200 align-middle" />
+          Partly booked
+        </span>
       </p>
     </div>
   );
@@ -113,6 +136,8 @@ export default function CommunityHallsPage() {
   const [data, setData] = useState<PublicHalls | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [hallId, setHallId] = useState<number | null>(null);
+  const [optionId, setOptionId] = useState<number | null>(null);
+  const [slot, setSlot] = useState<HallSlot>("full_day");
   const [form, setForm] = useState({
     fromDate: "",
     toDate: "",
@@ -129,18 +154,34 @@ export default function CommunityHallsPage() {
     fetchPublicHalls()
       .then((d) => {
         setData(d);
-        if (d.halls[0]) setHallId(d.halls[0].id);
+        if (d.halls[0]) {
+          setHallId(d.halls[0].id);
+          setOptionId(d.halls[0].options[0]?.id ?? null);
+        }
       })
       .catch((e) => setError(e instanceof Error ? e.message : "Could not load the halls."));
   }, []);
 
   const hall = data?.halls.find((h) => h.id === hallId) ?? null;
+  const option = hall?.options.find((o) => o.id === optionId) ?? null;
+  const halfDay = slot !== "full_day";
   const days = form.fromDate && form.toDate ? daysBetween(form.fromDate, form.toDate) : 0;
-  const clash = useMemo(() => {
-    if (!hall || days < 1) return false;
-    for (let d = new Date(form.fromDate); iso(d) <= form.toDate; d.setDate(d.getDate() + 1)) if (isTaken(hall, iso(d))) return true;
-    return false;
-  }, [hall, days, form.fromDate, form.toDate]);
+  const { clash, partly } = useMemo(() => {
+    const r = { clash: false, partly: false };
+    if (!hall || days < 1) return r;
+    for (let d = new Date(form.fromDate); iso(d) <= form.toDate; d.setDate(d.getDate() + 1)) {
+      if (isTaken(hall, iso(d), optionId, slot)) r.clash = true;
+      if (isPartly(hall, iso(d), optionId, slot)) r.partly = true;
+    }
+    return r;
+  }, [hall, days, form.fromDate, form.toDate, optionId, slot]);
+  const rent = option ? (halfDay ? (option.halfDayRent ?? 0) : option.fullDayRent * days) : 0;
+
+  function pickHall(h: PublicHall) {
+    setHallId(h.id);
+    setOptionId(h.options[0]?.id ?? null);
+    setSlot("full_day");
+  }
 
   const set = (k: keyof typeof form, v: string) => setForm((f) => ({ ...f, [k]: v }));
 
@@ -148,15 +189,19 @@ export default function CommunityHallsPage() {
     e.preventDefault();
     setError(null);
     if (!hall) return;
-    if (days < 1) return setError("Choose the first and last day.");
+    if (!option) return setError("Choose what you want to book (the option).");
+    if (days < 1) return setError(halfDay ? "Choose the date." : "Choose the first and last day.");
+    if (halfDay && days !== 1) return setError("A half-day booking is for one date only.");
     if (days > (data?.maxDays ?? 15)) return setError(`At most ${data?.maxDays} days in one booking.`);
-    if (clash) return setError("The hall is already booked on some of these dates - choose other dates.");
+    if (clash) return setError(`"${option.name}" is already booked on some of these dates - choose other dates or another option.`);
     if (!/^[6-9]\d{9}$/.test(form.applicantPhone)) return setError("Enter a valid 10-digit mobile number.");
     setBusy(true);
     try {
       setDone(
         await applyForHall({
           hallId: hall.id,
+          rateOptionId: option.id,
+          slot,
           fromDate: form.fromDate,
           toDate: form.toDate,
           applicantName: form.applicantName,
@@ -223,17 +268,38 @@ export default function CommunityHallsPage() {
                 <button
                   key={h.id}
                   type="button"
-                  onClick={() => setHallId(h.id)}
-                  className={`rounded-xl border bg-white p-4 text-left ${h.id === hallId ? "border-nnm-blue ring-2 ring-nnm-blue/30" : "border-slate-200"}`}
+                  onClick={() => pickHall(h)}
+                  className={`flex flex-col rounded-xl border bg-white p-4 text-left ${h.id === hallId ? "border-nnm-blue ring-2 ring-nnm-blue/30" : "border-slate-200"}`}
                 >
                   <p className="text-base font-semibold text-slate-900">
                     {h.name}
                     {h.name_hi && <span className="ml-2 text-sm font-normal text-slate-500">{h.name_hi}</span>}
                   </p>
                   {h.address && <p className="text-xs text-slate-500">{h.address}</p>}
-                  <p className="mt-2 text-sm text-slate-700">
-                    Rent <b>{rupees(h.daily_rent)}</b> per day · Security deposit <b>{rupees(h.security_deposit)}</b> (refundable)
-                  </p>
+                  <table className="mt-2 w-full text-xs text-slate-700 [&_td]:py-0.5 [&_td]:pr-3">
+                    <thead>
+                      <tr className="text-left text-slate-400">
+                        <td>Option</td>
+                        <td>Full day</td>
+                        <td>Half day</td>
+                        <td>Deposit*</td>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {h.options.map((o) => (
+                        <tr key={o.id}>
+                          <td className="font-medium">
+                            {o.name}
+                            {o.nameHi && <span className="ml-1 font-normal text-slate-500">{o.nameHi}</span>}
+                          </td>
+                          <td>{rupees(o.fullDayRent)}</td>
+                          <td>{o.halfDayRent !== null ? rupees(o.halfDayRent) : "-"}</td>
+                          <td>{rupees(o.securityDeposit)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <p className="mt-1 text-[11px] text-slate-400">* Security deposit is refundable after the function.</p>
                   {(h.capacity || h.facilities) && (
                     <p className="mt-1 flex items-center gap-1 text-xs text-slate-500">
                       {h.capacity && (
@@ -255,27 +321,92 @@ export default function CommunityHallsPage() {
                 className="grid gap-6 rounded-xl border border-slate-200 bg-white p-5 md:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)]"
               >
                 <div>
-                  <p className="mb-2 text-sm font-semibold text-slate-800">{hall.name} - availability</p>
+                  <p className="mb-2 text-sm font-semibold text-slate-800">
+                    {hall.name}
+                    {option ? ` - ${option.name}` : ""}
+                    {halfDay ? ` (${slot})` : ""} - availability
+                  </p>
                   <HallCalendar
                     key={hall.id}
                     hall={hall}
+                    optionId={optionId}
+                    slot={slot}
                     min={data.minDate}
                     max={data.maxDate}
                     from={form.fromDate}
                     to={form.toDate}
                     onPick={(day) =>
                       setForm((f) =>
-                        !f.fromDate || f.toDate || day < f.fromDate ? { ...f, fromDate: day, toDate: "" } : { ...f, toDate: day },
+                        halfDay
+                          ? { ...f, fromDate: day, toDate: day }
+                          : !f.fromDate || f.toDate || day < f.fromDate
+                            ? { ...f, fromDate: day, toDate: "" }
+                            : { ...f, toDate: day },
                       )
                     }
                   />
-                  <p className="mt-2 text-xs text-slate-500">Tap the first day, then the last day (same day again for one day).</p>
+                  <p className="mt-2 text-xs text-slate-500">
+                    {halfDay ? "Tap the date." : "Tap the first day, then the last day (same day again for one day)."}
+                  </p>
                 </div>
                 <div className="space-y-3">
-                  <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className={label} htmlFor="h-option">
+                      What do you want to book? *
+                    </label>
+                    <select
+                      id="h-option"
+                      value={optionId ?? ""}
+                      onChange={(e) => {
+                        const o = hall.options.find((x) => x.id === Number(e.target.value));
+                        setOptionId(o?.id ?? null);
+                        if (o && o.halfDayRent === null) setSlot("full_day");
+                      }}
+                      className={input}
+                    >
+                      {hall.options.map((o) => (
+                        <option key={o.id} value={o.id}>
+                          {o.name} - {rupees(o.fullDayRent)}/day{o.halfDayRent !== null ? `, half day ${rupees(o.halfDayRent)}` : ""}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  {option && option.halfDayRent !== null && (
+                    <fieldset>
+                      <legend className={label}>Duration *</legend>
+                      <div className="flex flex-wrap gap-2">
+                        {(
+                          [
+                            ["full_day", "Full day"],
+                            ["morning", "Half day - morning"],
+                            ["evening", "Half day - evening"],
+                          ] as [HallSlot, string][]
+                        ).map(([v, l]) => (
+                          <label
+                            key={v}
+                            className={`cursor-pointer rounded-md border px-3 py-1.5 text-sm ${slot === v ? "border-nnm-blue bg-blue-50 font-semibold text-nnm-blue" : "border-slate-300"}`}
+                          >
+                            <input
+                              type="radio"
+                              name="h-slot"
+                              value={v}
+                              checked={slot === v}
+                              onChange={() => {
+                                setSlot(v);
+                                if (v !== "full_day") setForm((f) => ({ ...f, toDate: f.fromDate }));
+                              }}
+                              className="sr-only"
+                            />
+                            {l}
+                          </label>
+                        ))}
+                      </div>
+                    </fieldset>
+                  )}
+                  <div className={`grid gap-3 ${halfDay ? "grid-cols-1" : "grid-cols-2"}`}>
                     <div>
                       <label className={label} htmlFor="h-from">
-                        First day *
+                        {halfDay ? "Date *" : "First day *"}
                       </label>
                       <input
                         id="h-from"
@@ -284,11 +415,15 @@ export default function CommunityHallsPage() {
                         min={data.minDate}
                         max={data.maxDate}
                         value={form.fromDate}
-                        onChange={(e) => set("fromDate", e.target.value)}
+                        onChange={(e) =>
+                          halfDay
+                            ? setForm((f) => ({ ...f, fromDate: e.target.value, toDate: e.target.value }))
+                            : set("fromDate", e.target.value)
+                        }
                         className={input}
                       />
                     </div>
-                    <div>
+                    <div className={halfDay ? "hidden" : ""}>
                       <label className={label} htmlFor="h-to">
                         Last day *
                       </label>
@@ -304,16 +439,24 @@ export default function CommunityHallsPage() {
                       />
                     </div>
                   </div>
-                  {days > 0 && (
+                  {days > 0 && option && (
                     <p className={`rounded-md p-2 text-sm ${clash ? "bg-red-50 text-red-700" : "bg-blue-50 text-slate-700"}`}>
                       {clash ? (
-                        "The hall is already booked on some of these dates."
+                        `"${option.name}" is already booked on some of these dates.`
                       ) : (
                         <>
-                          {days} day{days > 1 ? "s" : ""} ({dmy(form.fromDate)}
-                          {days > 1 ? ` to ${dmy(form.toDate)}` : ""}): rent {rupees(hall.daily_rent * days)} + deposit{" "}
-                          {rupees(hall.security_deposit)} = <b>{rupees(hall.daily_rent * days + hall.security_deposit)}</b>, payable after
-                          approval.
+                          {option.name},{" "}
+                          {halfDay
+                            ? `half day (${slot}) on ${dmy(form.fromDate)}`
+                            : `${days} day${days > 1 ? "s" : ""} (${dmy(form.fromDate)}${days > 1 ? ` to ${dmy(form.toDate)}` : ""})`}
+                          : rent {rupees(rent)} + deposit {rupees(option.securityDeposit)} = <b>{rupees(rent + option.securityDeposit)}</b>,
+                          payable after approval.
+                          {partly && (
+                            <span className="mt-1 block text-xs text-amber-800">
+                              Another part of the hall, or the other half of the day, is already booked on this date - the office will check
+                              that both can run together before approving.
+                            </span>
+                          )}
                         </>
                       )}
                     </p>
