@@ -124,8 +124,9 @@ export function DiscrepancyCaptureSection({
     <div className="rounded-xl border-2 border-nnm-blue bg-white p-6">
       <h2 className="mb-1 text-base font-semibold text-slate-900">Photos &amp; Location</h2>
       <p className="mb-4 text-sm text-slate-500">
-        Photo of the site is required when the area, floor area, usage type or solid waste user type changes; photos of the owner&apos;s
-        Aadhaar card and of the holding owner are required when the owner&apos;s name changes. Otherwise photos are optional.
+        Photo of the site is required when the area, floor area or solid waste user type changes (not for road type or usage type); photos
+        of the owner&apos;s Aadhaar card and of the holding owner are required when the owner&apos;s name changes. Otherwise photos are
+        optional.
       </p>
       {(siteNeeded || nameChanged) && (
         <p className="mb-4 rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">

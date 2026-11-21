@@ -3,7 +3,7 @@ import type { AdminPropertyFormState } from "@/components/admin/property-details
 /**
  * Which photos a property discrepancy report must carry - the same rules the API enforces
  * (nnm-property-tax-api/src/services/discrepancyPhotoRules.ts):
- *  - the site photo, when the area, a floor's area or usage, or the solid waste user type changes;
+ *  - the site photo, when the area, a floor's area, or the solid waste user type changes;
  *  - the Aadhaar card photo and a photo of the holding owner, when the owner's name changes.
  */
 export interface DiscrepancyPhotoNeeds {
@@ -32,13 +32,6 @@ export function discrepancyPhotoNeeds(before: AdminPropertyFormState | null, aft
     )
   )
     site.push("floor area");
-  if (
-    !same(
-      b.map((f) => `${norm(f.floorLabel)}|${norm(f.usageType)}`),
-      a.map((f) => `${norm(f.floorLabel)}|${norm(f.usageType)}`),
-    )
-  )
-    site.push("usage type");
   if (norm(before.solidWasteChargeType) !== norm(after.solidWasteChargeType)) site.push("solid waste user type");
   return { site, nameChanged: norm(before.ownerName) !== norm(after.ownerName) };
 }

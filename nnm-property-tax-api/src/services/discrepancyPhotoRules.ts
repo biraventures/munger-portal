@@ -3,8 +3,8 @@ import type { PropertySaveInput } from "../types/propertySave.types";
 
 /**
  * Which photos a Tax Collector's property discrepancy report must carry, from what it changes:
- *  - the site (holding) photo, when the total area, a floor's area, a floor's usage, or the solid waste user type changes
- *    (adding or closing a floor is a floor-area change);
+ *  - the site (holding) photo, when the total area, a floor's area, or the solid waste user type changes
+ *    (adding or closing a floor is a floor-area change). A change of road type or usage type alone does not need it;
  *  - the Aadhaar card photo and a photo of the holding owner, when the owner's name changes.
  * Anything else - the photos are optional. The portal form applies the same rules (lib/discrepancy-photo-rules.ts).
  */
@@ -24,7 +24,7 @@ export function discrepancyPhotoNeeds(property: PropertyRow, floors: FloorRow[],
   const site: string[] = [];
   if (num(property.area_sqft) !== num(proposed.areaSqft)) site.push("area");
 
-  // Floors still standing, as "label|area" and "label|usage", compared as sets (the order of entry doesn't matter).
+  // Floors still standing, as "label|area", compared as a set (the order of entry doesn't matter).
   const before = floors.filter((f) => !f.closing_year);
   const after = (proposed.floors ?? []).filter((f) => !f.closingYear);
   const key = (label: unknown, v: unknown) => `${norm(label)}|${v}`;
@@ -36,13 +36,6 @@ export function discrepancyPhotoNeeds(property: PropertyRow, floors: FloorRow[],
     )
   )
     site.push("floor area");
-  if (
-    !same(
-      before.map((f) => key(f.floor_label, norm(f.usage_type))),
-      after.map((f) => key(f.floorLabel, norm(f.usageType))),
-    )
-  )
-    site.push("usage type");
   if (norm(property.solid_waste_charge_type) !== norm(proposed.solidWasteChargeType)) site.push("solid waste user type");
 
   return { site, nameChanged: norm(property.owner_name) !== norm(proposed.ownerName) };
