@@ -18,7 +18,10 @@ export type AdminRole =
   | "abhilekh_prabhari"
   | "agency_operator"
   | "map_section_nodal_clerk"
-  | "garden_counter";
+  | "garden_counter"
+  | "crematorium_counter"
+  | "crematorium_prabhari"
+  | "community_hall_prabhari";
 
 export const ADMIN_ROLES: AdminRole[] = [
   "tax_daroga",
@@ -41,6 +44,9 @@ export const ADMIN_ROLES: AdminRole[] = [
   "agency_operator",
   "map_section_nodal_clerk",
   "garden_counter",
+  "crematorium_counter",
+  "crematorium_prabhari",
+  "community_hall_prabhari",
 ];
 
 export const ADMIN_ROLE_LABELS: Record<AdminRole, string> = {
@@ -64,6 +70,9 @@ export const ADMIN_ROLE_LABELS: Record<AdminRole, string> = {
   agency_operator: "Agency Operator",
   map_section_nodal_clerk: "Map Section Nodal Clerk",
   garden_counter: "Garden Counter",
+  crematorium_counter: "Crematorium Counter",
+  crematorium_prabhari: "Crematorium Prabhari",
+  community_hall_prabhari: "Community Hall Prabhari",
 };
 
 /**

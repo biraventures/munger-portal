@@ -47,6 +47,8 @@ const envSchema = z.object({
   // identity documents are approved by the City Manager and DMC. Off until switched on (staffKyc.service.ts).
   // Public online purchase of garden entry tickets - through the garden's own payment gateway (not the agency's).
   // Stays off until that gateway is integrated (gardenGateway.ts).
+  // Community hall online payment needs its own gateway (not the property tax one): off until it is integrated.
+  HALL_ONLINE_PAYMENT_ENABLED: z.preprocess((v) => (typeof v === "string" ? ["true", "1", "yes"].includes(v.trim().toLowerCase()) : v), z.boolean().default(false)),
   GARDEN_ONLINE_PAYMENT_ENABLED: z.preprocess((v) => (typeof v === "string" ? ["true", "1", "yes"].includes(v.trim().toLowerCase()) : v), z.boolean().default(false)),
   STAFF_KYC_REQUIRED: z.preprocess((v) => (typeof v === "string" ? ["true", "1", "yes"].includes(v.trim().toLowerCase()) : v), z.boolean().default(false)),
   FACE_ATTENDANCE_ENABLED: z.preprocess((v) => (typeof v === "string" ? ["true", "1", "yes"].includes(v.trim().toLowerCase()) : v), z.boolean().default(false)),

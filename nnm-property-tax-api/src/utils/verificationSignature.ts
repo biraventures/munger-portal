@@ -9,7 +9,9 @@ export type VerifiableDocType =
   | "violation-notice"
   | "agreement"
   | "tl-notice"
-  | "garden-ticket";
+  | "garden-ticket"
+  | "cremation-ticket"
+  | "hall-booking";
 
 /**
  * Signs (docType, docNo) into a short hex signature. Document/receipt

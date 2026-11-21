@@ -3,6 +3,9 @@ import { agencyOperatorScope } from "../middleware/agencyOperatorScope";
 import { staffKycGate } from "../middleware/staffKycGate";
 import { gardenCounterScope } from "../middleware/gardenCounterScope";
 import { gardenRouter, publicGardenRouter } from "./garden.routes";
+import { crematoriumRouter, publicCrematoriumRouter } from "./crematorium.routes";
+import { communityHallRouter, publicCommunityHallRouter } from "./communityHall.routes";
+import { crematoriumCounterScope } from "../middleware/crematoriumCounterScope";
 import { propertyRouter } from "./property.routes";
 import { operatorRouter } from "./operator.routes";
 import { shopRouter } from "./shop.routes";
@@ -38,6 +41,8 @@ export const apiRouter = Router();
 apiRouter.use(agencyOperatorScope);
 // Garden Counter logins: garden tickets only.
 apiRouter.use(gardenCounterScope);
+// Crematorium Counter logins: cremation tickets only.
+apiRouter.use(crematoriumCounterScope);
 // Collection staff whose identity documents are not approved yet (only with STAFF_KYC_REQUIRED on).
 apiRouter.use(staffKycGate);
 
@@ -96,6 +101,12 @@ apiRouter.use("/public/submersibles", publicSubmersibleRouter);
 // Garden entry tickets: counter, gate, officers; public garden page and e-ticket.
 apiRouter.use("/garden", gardenRouter);
 apiRouter.use("/public/gardens", publicGardenRouter);
+// Electric crematorium tickets; public check of a printed ticket.
+apiRouter.use("/crematorium", crematoriumRouter);
+apiRouter.use("/public/crematorium", publicCrematoriumRouter);
+// Community hall bookings: office, and public applications / booking status.
+apiRouter.use("/community-halls", communityHallRouter);
+apiRouter.use("/public/community-halls", publicCommunityHallRouter);
 // The City Manager verifies those public complaints before they go to the contractor (attendance login).
 apiRouter.use("/public-reports", publicReportVerificationRouter);
 

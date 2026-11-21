@@ -2,9 +2,46 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Users, FileClock, FileWarning, LayoutGrid, ShoppingBag, Store, BarChart3, Award, Archive, Download, XCircle, ShieldCheck, Trash2, RefreshCw, Upload, MapPin, Map as MapIcon, ClipboardCheck, UserCheck, ClipboardList, Receipt, RotateCcw, AlertTriangle, List, Flag, Home, FileText, Printer, Landmark, FileSpreadsheet, CalendarDays, History, Trees } from "lucide-react";
+import {
+  Users,
+  FileClock,
+  FileWarning,
+  LayoutGrid,
+  ShoppingBag,
+  Store,
+  BarChart3,
+  Award,
+  Archive,
+  Download,
+  XCircle,
+  ShieldCheck,
+  Trash2,
+  RefreshCw,
+  Upload,
+  MapPin,
+  Map as MapIcon,
+  ClipboardCheck,
+  UserCheck,
+  ClipboardList,
+  Receipt,
+  RotateCcw,
+  AlertTriangle,
+  List,
+  Flag,
+  Home,
+  FileText,
+  Printer,
+  Landmark,
+  FileSpreadsheet,
+  CalendarDays,
+  History,
+  Trees,
+  Flame,
+  Building2,
+} from "lucide-react";
 import { AdminHeader } from "@/components/admin-header";
 import { MapSectionDashboard } from "@/components/building-permit/map-section-dashboard";
+import { fetchBookings } from "@/lib/community-hall-api";
 import { AgencyOperatorDashboard } from "@/components/agency/agency-operator-dashboard";
 import { Pre2011ArvCard } from "@/components/admin/pre2011-arv-card";
 import { DashboardGroup } from "@/components/admin/dashboard-group";
@@ -36,6 +73,7 @@ export default function AdminDashboardPage() {
   const [myStagePendingCount, setMyStagePendingCount] = useState<number | null>(null);
   const [myDiscrepancyPendingCount, setMyDiscrepancyPendingCount] = useState<number | null>(null);
   const [solidWastePendingCount, setSolidWastePendingCount] = useState<number | null>(null);
+  const [hallApplications, setHallApplications] = useState<number | null>(null);
   const [myShopStagePendingCount, setMyShopStagePendingCount] = useState<number | null>(null);
   const [myRentalAppPendingCount, setMyRentalAppPendingCount] = useState<number | null>(null);
   const [myTradeLicensePendingCount, setMyTradeLicensePendingCount] = useState<number | null>(null);
@@ -46,7 +84,7 @@ export default function AdminDashboardPage() {
 
   useEffect(() => {
     // The Agency Operator has its own small dashboard and none of these desks.
-    if (!admin || admin.role === "agency_operator" || admin.role === "garden_counter") return;
+    if (!admin || ["agency_operator", "garden_counter", "crematorium_counter", "crematorium_prabhari", "community_hall_prabhari"].includes(admin.role)) return;
     fetchChangeRequests({ status: "pending", myStage: true })
       .then((r) => setMyStagePendingCount(r.requests.length))
       .catch(() => setMyStagePendingCount(null));
@@ -54,6 +92,12 @@ export default function AdminDashboardPage() {
       .then((r) => setMyDiscrepancyPendingCount(r.requests.length))
       .catch(() => setMyDiscrepancyPendingCount(null));
     // Solid waste user types waiting with this Tax Daroga / City Manager.
+    // Community hall applications waiting for the Commissioner's approval.
+    if (admin.role === "commissioner") {
+      fetchBookings({ status: "applied" })
+        .then((r) => setHallApplications(r.counts.applied))
+        .catch(() => setHallApplications(null));
+    }
     if (admin.role === "tax_daroga" || admin.role === "city_manager") {
       fetchSolidWasteRequestsToApprove()
         .then((r) => setSolidWastePendingCount(r.length))
@@ -98,6 +142,10 @@ export default function AdminDashboardPage() {
   if (admin.role === "agency_operator") return <AgencyOperatorDashboard admin={admin} />;
   // Garden Counter: the ticket counter is its only screen.
   if (admin.role === "garden_counter") return <GardenCounterRedirect />;
+  // Crematorium and community hall staff: their own screen is all they use.
+  if (admin.role === "crematorium_counter") return <OpenScreen href="/admin/crematorium-counter" label="the crematorium counter" />;
+  if (admin.role === "crematorium_prabhari") return <OpenScreen href="/admin/crematorium" label="the crematorium" />;
+  if (admin.role === "community_hall_prabhari") return <OpenScreen href="/admin/community-halls" label="the community hall bookings" />;
   // Map Section Nodal Clerk: building plan permits only.
   if (admin.role === "map_section_nodal_clerk") return <MapSectionDashboard admin={admin} />;
 
@@ -1069,7 +1117,29 @@ export default function AdminDashboardPage() {
           <>
             <h2 className={groupHeadingClass}>Administration &amp; Maps</h2>
             <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
-              <DashboardGroup id="administration" title="Administration" description="Garden entry tickets, logins, operators, document archive, website documents and Who&apos;s Who, attendance report and revert audit trail." icon={<ShieldCheck className="h-6 w-6" strokeWidth={1.8} />} highlight={false}>
+              <DashboardGroup id="administration" title="Administration" description="Crematorium, community halls, garden entry tickets, logins, operators, document archive, website documents and Who&apos;s Who, attendance report and revert audit trail." icon={<ShieldCheck className="h-6 w-6" strokeWidth={1.8} />} highlight={admin.role === "commissioner" && (hallApplications ?? 0) > 0}>
+                {showGardens && (
+                  <Link href="/admin/crematorium" className={cardClass}>
+                    <span className={iconWrapClass}>
+                      <Flame className="h-6 w-6" strokeWidth={1.8} />
+                    </span>
+                    <h3 className="mb-1.5 text-base font-semibold text-slate-900">Electric Crematorium</h3>
+                    <p className="text-sm text-slate-500">Cremation tickets cut at every counter, collection by counter and payment mode, and the cremation fee.</p>
+                  </Link>
+                )}
+                {showGardens && (
+                  <Link href="/admin/community-halls" className={deskCardClass(admin.role === "commissioner" ? hallApplications : null)}>
+                    <span className={deskIconWrapClass(admin.role === "commissioner" ? hallApplications : null)}>
+                      <Building2 className="h-6 w-6" strokeWidth={1.8} />
+                    </span>
+                    <h3 className="mb-1.5 text-base font-semibold text-slate-900">Community Hall Bookings</h3>
+                    <p className="text-sm text-slate-500">
+                      {admin.role === "commissioner" && hallApplications
+                        ? `${hallApplications} application${hallApplications > 1 ? "s" : ""} waiting for approval.`
+                        : "Halls, rent and deposit, applications, payments and deposit refunds."}
+                    </p>
+                  </Link>
+                )}
                 {showGardens && (
                   <Link href="/admin/gardens" className={cardClass}>
                     <span className={iconWrapClass}>
@@ -1188,6 +1258,13 @@ export default function AdminDashboardPage() {
 }
 
 /** A Garden Counter login has only the ticket counter. */
+function OpenScreen({ href, label }: { href: string; label: string }) {
+  useEffect(() => {
+    window.location.replace(href);
+  }, [href]);
+  return <div className="flex min-h-screen items-center justify-center text-sm text-slate-400">Opening {label}…</div>;
+}
+
 function GardenCounterRedirect() {
   useEffect(() => {
     window.location.replace("/admin/garden-counter");
