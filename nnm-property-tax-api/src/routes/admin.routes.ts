@@ -1,15 +1,4 @@
-import {
-  getAllRecords,
-  getFieldRecords,
-  getLegacy,
-  getOneRecord,
-  postApprove as postApproveMigRecords,
-  postDeleteLegacy,
-  postRestore,
-  postSetAside,
-  postTakeUp,
-  putRecord,
-} from "../controllers/migRecord.controller";
+import { getFieldRecords, getLegacy, getOneRecord, postDeleteLegacy, postTakeUp } from "../controllers/migRecord.controller";
 import {
   getHistoricalHolding,
   getHistoricalPending,
@@ -617,11 +606,6 @@ adminRouter.post("/shops/:shopNo/inspections", requireInspectionRole, postCreate
 adminRouter.post("/migrated-holdings/bulk-upload", requireAdminRole("commissioner"), uploadMigratedHoldingsHandler);
 adminRouter.get("/migrated-holdings/bulk-upload/:jobId", requireAdminRole("commissioner"), getMigratedUploadJobHandler);
 // Old records (MIG stage): the Commissioner's approval list, and the field staff's ward-wise list. Roles: migRecord.service.ts.
-adminRouter.get("/mig-records", getAllRecords);
-adminRouter.put("/mig-records/:id", putRecord);
-adminRouter.post("/mig-records/approve", postApproveMigRecords);
-adminRouter.post("/mig-records/:id/set-aside", postSetAside);
-adminRouter.post("/mig-records/:id/restore", postRestore);
 adminRouter.get("/mig-records/legacy", getLegacy);
 adminRouter.post("/mig-records/legacy/delete", postDeleteLegacy);
 adminRouter.get("/old-records", getFieldRecords);

@@ -1,11 +1,18 @@
 import { getAdminToken } from "./admin-auth";
+import { getOperatorToken } from "./auth";
 
 /** Old (offline) holdings records - the MIG stage (migRecord.service.ts). */
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_PROPERTY_TAX_API_URL || "http://localhost:4000/api/v1";
 
+/** Which login's token the approvals screen uses - the operator screen switches this to "operator". */
+let tokenSource: "admin" | "operator" = "admin";
+export const setMigOperatorLogin = (on: boolean) => {
+  tokenSource = on ? "operator" : "admin";
+};
+
 async function call<T>(path: string, init: RequestInit = {}, fallback = "Something went wrong."): Promise<T> {
-  const token = getAdminToken();
+  const token = tokenSource === "operator" ? getOperatorToken() : getAdminToken();
   if (!token) throw new Error("Not logged in - please log in again.");
   let res: Response;
   try {
@@ -21,6 +28,8 @@ async function call<T>(path: string, init: RequestInit = {}, fallback = "Somethi
   return body as T;
 }
 
+export type MigStage = "operator" | "tax_daroga" | "city_manager";
+export const MIG_STAGE_LABEL: Record<MigStage, string> = { operator: "Operator", tax_daroga: "Tax Daroga", city_manager: "City Manager" };
 export type MigStatus = "pending" | "approved" | "taken_up" | "finalized" | "set_aside";
 export const MIG_STATUS_LABEL: Record<MigStatus, string> = {
   pending: "Awaiting approval",
@@ -52,6 +61,10 @@ export interface MigRecord {
   blocking: boolean;
   pidShared: boolean;
   status: MigStatus;
+  /** Awaiting approval: the step it is at. */
+  stage: MigStage | null;
+  stageLabel: string | null;
+  sentBackNote: string | null;
   holdingNo: string | null;
   fileName: string | null;
   rowNo: number | null;
@@ -71,6 +84,12 @@ export interface MigTotals {
   pending: number;
   pending_blocking: number;
   pending_ready: number;
+  at_operator: number;
+  at_tax_daroga: number;
+  at_city_manager: number;
+  /** Awaiting this login's step (and of them, without a problem to correct). */
+  mine: number;
+  mine_ready: number;
   approved: number;
   taken_up: number;
   finalized: number;
@@ -83,9 +102,19 @@ const qs = (o: Record<string, string | number | undefined>) => {
   return p.toString();
 };
 
-// ---------- Commissioner ----------
-export const fetchAllMigRecords = (f: { status?: string; ward?: string; issues?: string; q?: string; page?: number }) =>
-  call<{ records: MigRecord[]; total: number; page: number; pageSize: number; totals: MigTotals }>(`/admin/mig-records?${qs(f)}`);
+// ---------- approvals: Operator verifies -> Tax Daroga forwards -> City Manager approves (MIG-); Commissioner any step ----------
+export interface MigList {
+  records: MigRecord[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totals: MigTotals;
+  myStage: MigStage | null;
+  isCommissioner: boolean;
+}
+export const fetchAllMigRecords = (f: { status?: string; stage?: string; ward?: string; issues?: string; q?: string; page?: number }) =>
+  call<MigList>(`/mig-records?${qs(f)}`);
+export const fetchMigMyCount = () => call<{ pending: number; stage: MigStage | null }>("/mig-records/my-count");
 export interface MigRecordEdit {
   ward: string;
   oldHoldingNo: string | null;
@@ -99,17 +128,19 @@ export interface MigRecordEdit {
   remarks: string | null;
 }
 export const editMigRecord = (id: number, e: MigRecordEdit) =>
-  call<{ ok: true }>(`/admin/mig-records/${id}`, { method: "PUT", body: JSON.stringify(e) }, "Could not save");
-export const approveMigRecords = (sel: { ids?: number[]; allPending?: { ward?: string } }) =>
-  call<{ approved: number; skippedBlocking: number }>(
-    "/admin/mig-records/approve",
+  call<{ ok: true }>(`/mig-records/${id}`, { method: "PUT", body: JSON.stringify(e) }, "Could not save");
+export const advanceMigRecords = (sel: { ids?: number[]; allMine?: { ward?: string } }) =>
+  call<{ forwarded: number; approved: number; skippedBlocking: number }>(
+    "/mig-records/advance",
     { method: "POST", body: JSON.stringify(sel) },
-    "Could not approve",
+    "Could not save",
   );
+export const sendBackMigRecord = (id: number, note: string) =>
+  call<{ to: MigStage }>(`/mig-records/${id}/send-back`, { method: "POST", body: JSON.stringify({ note }) }, "Could not send back");
 export const setAsideMigRecord = (id: number, reason: string) =>
-  call<{ ok: true }>(`/admin/mig-records/${id}/set-aside`, { method: "POST", body: JSON.stringify({ reason }) }, "Could not set aside");
+  call<{ ok: true }>(`/mig-records/${id}/set-aside`, { method: "POST", body: JSON.stringify({ reason }) }, "Could not set aside");
 export const restoreMigRecord = (id: number) =>
-  call<{ ok: true }>(`/admin/mig-records/${id}/restore`, { method: "POST", body: "{}" }, "Could not restore");
+  call<{ ok: true }>(`/mig-records/${id}/restore`, { method: "POST", body: "{}" }, "Could not restore");
 export const fetchLegacyPreview = () =>
   call<{ total: number; deletable: number; kept: { holding_no: string; owner_name: string; ward: string; why: string }[] }>(
     "/admin/mig-records/legacy",

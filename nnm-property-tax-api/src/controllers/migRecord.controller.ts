@@ -3,14 +3,17 @@ import { z } from "zod";
 import { asyncHandler } from "../middleware/asyncHandler";
 import { ApiError } from "../utils/ApiError";
 import {
-  approveRecords,
+  advanceRecords,
   deleteLegacy,
   editRecord,
   getRecord,
   legacyPreview,
   listAllRecords,
   listFieldRecords,
+  myPendingCount,
+  sendBack,
   setAside,
+  type MigActor,
   takeUp,
 } from "../services/migRecord.service";
 
@@ -22,11 +25,19 @@ function parse<S extends z.ZodTypeAny>(schema: S, data: unknown, msg?: string): 
 const id = (v: unknown) => parse(z.coerce.number().int().positive(), v, "Invalid record");
 const opt = z.string().trim().max(200).nullish();
 
-// ---------- Commissioner ----------
+/** The login acting on the approvals screen: an admin (its role) or a Nagar Nigam operator. */
+function actor(req: Request): MigActor {
+  if (req.admin) return { role: req.admin.role, name: req.admin.displayName };
+  if (req.operator) return { role: "operator", name: `${req.operator.displayName} (Operator)` };
+  throw new ApiError(401, "Please log in again.");
+}
+
+// ---------- approvals (Operator -> Tax Daroga -> City Manager; Commissioner any step; DMC views) ----------
 export const getAllRecords = asyncHandler(async (req: Request, res: Response) => {
   const q = parse(
     z.object({
       status: z.string().max(12).optional(),
+      stage: z.enum(["operator", "tax_daroga", "city_manager"]).optional(),
       ward: z.string().max(16).optional(),
       issues: z.enum(["blocking", "warning", "none", "any"]).optional(),
       q: z.string().max(100).optional(),
@@ -34,7 +45,7 @@ export const getAllRecords = asyncHandler(async (req: Request, res: Response) =>
     }),
     req.query,
   );
-  res.json(await listAllRecords(req.admin!, q));
+  res.json(await listAllRecords(actor(req), q));
 });
 export const putRecord = asyncHandler(async (req: Request, res: Response) => {
   const b = parse(
@@ -52,7 +63,7 @@ export const putRecord = asyncHandler(async (req: Request, res: Response) => {
     }),
     req.body,
   );
-  await editRecord(req.admin!, id(req.params.id), {
+  await editRecord(actor(req), id(req.params.id), {
     ward: b.ward,
     oldHoldingNo: b.oldHoldingNo ?? null,
     oldPid: b.oldPid ?? null,
@@ -66,23 +77,30 @@ export const putRecord = asyncHandler(async (req: Request, res: Response) => {
   });
   res.json({ ok: true });
 });
-export const postApprove = asyncHandler(async (req: Request, res: Response) => {
+export const getMyCount = asyncHandler(async (req: Request, res: Response) => {
+  res.json(await myPendingCount(actor(req)));
+});
+export const postAdvance = asyncHandler(async (req: Request, res: Response) => {
   const b = parse(
     z.object({
       ids: z.array(z.coerce.number().int().positive()).max(5000).optional(),
-      allPending: z.object({ ward: z.string().max(16).optional() }).optional(),
+      allMine: z.object({ ward: z.string().max(16).optional() }).optional(),
     }),
     req.body,
   );
-  res.json(await approveRecords(req.admin!, b));
+  res.json(await advanceRecords(actor(req), b));
+});
+export const postSendBack = asyncHandler(async (req: Request, res: Response) => {
+  const b = parse(z.object({ note: z.string().trim().min(3, "Write what is to be checked / corrected").max(500) }), req.body);
+  res.json(await sendBack(actor(req), id(req.params.id), b.note));
 });
 export const postSetAside = asyncHandler(async (req: Request, res: Response) => {
   const b = parse(z.object({ reason: z.string().trim().min(3, "Write the reason").max(500) }), req.body);
-  await setAside(req.admin!, id(req.params.id), b.reason);
+  await setAside(actor(req), id(req.params.id), b.reason);
   res.json({ ok: true });
 });
 export const postRestore = asyncHandler(async (req: Request, res: Response) => {
-  await setAside(req.admin!, id(req.params.id), null);
+  await setAside(actor(req), id(req.params.id), null);
   res.json({ ok: true });
 });
 export const getLegacy = asyncHandler(async (req: Request, res: Response) => {

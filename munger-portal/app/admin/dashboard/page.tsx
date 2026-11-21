@@ -66,6 +66,7 @@ import { ADMIN_ROLE_LABELS } from "@/lib/admin-auth";
 import { fetchKycPending } from "@/lib/staff-kyc-api";
 import { fetchSettlementPendingCount } from "@/lib/historical-payment-api";
 import { fetchResolutionsWaiting } from "@/lib/holding-import-api";
+import { fetchMigMyCount, setMigOperatorLogin } from "@/lib/mig-records-api";
 import { fetchPendingCount as fetchNewHoldingPending, type PendingCount as NewHoldingPending } from "@/lib/new-holding-api";
 
 export default function AdminDashboardPage() {
@@ -73,6 +74,7 @@ export default function AdminDashboardPage() {
   const [myStagePendingCount, setMyStagePendingCount] = useState<number | null>(null);
   const [myDiscrepancyPendingCount, setMyDiscrepancyPendingCount] = useState<number | null>(null);
   const [solidWastePendingCount, setSolidWastePendingCount] = useState<number | null>(null);
+  const [migPending, setMigPending] = useState<number | null>(null);
   const [hallApplications, setHallApplications] = useState<number | null>(null);
   const [myShopStagePendingCount, setMyShopStagePendingCount] = useState<number | null>(null);
   const [myRentalAppPendingCount, setMyRentalAppPendingCount] = useState<number | null>(null);
@@ -97,6 +99,12 @@ export default function AdminDashboardPage() {
       fetchBookings({ status: "applied" })
         .then((r) => setHallApplications(r.counts.applied))
         .catch(() => setHallApplications(null));
+    }
+    if (["tax_daroga", "city_manager", "commissioner", "deputy_commissioner"].includes(admin.role)) {
+      setMigOperatorLogin(false);
+      fetchMigMyCount()
+        .then((r) => setMigPending(r.pending))
+        .catch(() => setMigPending(null));
     }
     if (admin.role === "tax_daroga" || admin.role === "city_manager") {
       fetchSolidWasteRequestsToApprove()
@@ -204,6 +212,9 @@ export default function AdminDashboardPage() {
   const showBulkReceipts = ["tax_daroga", "commissioner", "deputy_commissioner", "city_manager"].includes(admin.role);
   const showInstrumentReconciliation = ["agency_project_manager", "tax_daroga", "commissioner", "deputy_commissioner", "city_manager"].includes(admin.role);
   const showUnsurveyedHouseEntry = admin.role === "tax_collector";
+  // Old Records (MIG) approvals: Tax Daroga / City Manager act at their step (red when records wait), Commissioner / DMC see all.
+  const showMigApprovals = ["tax_daroga", "city_manager", "commissioner", "deputy_commissioner"].includes(admin.role);
+  const migDesk = admin.role === "tax_daroga" || admin.role === "city_manager";
   // Old Records (MIG): field staff add details; City Manager and DMC view.
   const showOldRecords = ["tax_collector", "tax_surveyor", "tax_daroga", "commissioner", "city_manager", "deputy_commissioner"].includes(admin.role);
   const showNoticeReceivingUpload = admin.role === "tax_collector";
@@ -529,7 +540,7 @@ export default function AdminDashboardPage() {
                 )}
               </DashboardGroup>
 
-              <DashboardGroup id="property-records" title="Property Records" description="Property-wise report, uploaded holdings, disputed holdings, field survey flags, all property changes, old holding rows, pre-2011 ARV entry and discrepancy approvals." icon={<ClipboardCheck className="h-6 w-6" strokeWidth={1.8} />} highlight={(myDiscrepancyPendingCount ?? 0) > 0 || (solidWastePendingCount ?? 0) > 0}>
+              <DashboardGroup id="property-records" title="Property Records" description="Property-wise report, uploaded holdings, disputed holdings, field survey flags, all property changes, old holding rows, pre-2011 ARV entry and discrepancy approvals." icon={<ClipboardCheck className="h-6 w-6" strokeWidth={1.8} />} highlight={(myDiscrepancyPendingCount ?? 0) > 0 || (solidWastePendingCount ?? 0) > 0 || (migDesk && (migPending ?? 0) > 0)}>
                 {showAgencyPropertyReports && (
                   <Link href="/admin/property-wise-report" className={cardClass}>
                     <span className={iconWrapClass}>
@@ -634,6 +645,23 @@ export default function AdminDashboardPage() {
                     <p className="text-sm text-slate-500">See what you&apos;ve reported and its status - including any sent back for correction.</p>
                   </Link>
                 )}
+                {showMigApprovals && (
+                  <Link href="/admin/mig-records" className={migDesk ? deskCardClass(migPending) : cardClass}>
+                    <span className={migDesk ? deskIconWrapClass(migPending) : iconWrapClass}>
+                      <ClipboardCheck className="h-6 w-6" strokeWidth={1.8} />
+                    </span>
+                    <h3 className="mb-1.5 text-base font-semibold text-slate-900">Old Records (MIG) - Approvals</h3>
+                    <p className="text-sm text-slate-500">
+                      {migDesk && migPending
+                        ? `${migPending.toLocaleString("en-IN")} uploaded old record(s) waiting on your desk.`
+                        : admin.role === "tax_daroga"
+                          ? "Review the uploaded old records verified by the Operator and forward them to the City Manager."
+                          : admin.role === "city_manager"
+                            ? "Approve the uploaded old records forwarded by the Tax Daroga - each gets its MIG- number."
+                            : `Uploaded old records - Operator verifies, Tax Daroga forwards, City Manager approves (MIG-).${migPending ? ` ${migPending.toLocaleString("en-IN")} awaiting approval.` : ""}`}
+                    </p>
+                  </Link>
+                )}
                 {showSolidWasteApprovals && (
                   <Link href="/admin/solid-waste-approvals" className={deskCardClass(solidWastePendingCount)}>
                     <span className={deskIconWrapClass(solidWastePendingCount)}>
@@ -736,15 +764,7 @@ export default function AdminDashboardPage() {
                     <p className="text-sm text-slate-500">Upload the old-holdings sheet - every row is kept as an old record awaiting your approval.</p>
                   </Link>
                 )}
-                {showMigratedHoldingsBulkUpload && (
-                  <Link href="/admin/mig-records" className={cardClass}>
-                    <span className={iconWrapClass}>
-                      <ClipboardCheck className="h-6 w-6" strokeWidth={1.8} />
-                    </span>
-                    <h3 className="mb-1.5 text-base font-semibold text-slate-900">Old Records (MIG) - Approvals</h3>
-                    <p className="text-sm text-slate-500">All uploaded old records - awaiting approval, approved (MIG), being entered, final (MNN) - correct and approve.</p>
-                  </Link>
-                )}
+
                 {showMigratedHoldingsAssign && (
                   <Link href="/admin/migrated-holdings-assign" className={cardClass}>
                     <span className={iconWrapClass}>

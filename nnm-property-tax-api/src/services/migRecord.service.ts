@@ -24,6 +24,29 @@ const isIn = (roles: readonly string[], u: AdminTokenPayload) => roles.includes(
 export const migNo = (n: number | string) => `MIG-${String(n).padStart(MIGRATED_HOLDING_NO_DIGITS, "0")}`;
 const holdingFor = (n: number | string) => MIGRATED_HOLDING_NO_PREFIX + String(n).padStart(MIGRATED_HOLDING_NO_DIGITS, "0");
 
+/**
+ * Approval of uploaded records, in steps: the Operator verifies, the Tax Daroga reviews and forwards, the City Manager
+ * approves - the record then gets its MIG- number. The Tax Daroga / City Manager can send a record back a step with a
+ * note. The Municipal Commissioner sees every record and can act at any step (correct, send back, set aside, approve).
+ * The DMC views.
+ */
+export type MigStage = "operator" | "tax_daroga" | "city_manager";
+/** Who is acting: an admin login (its role) or a Nagar Nigam operator login (role "operator"). */
+export interface MigActor {
+  role: string;
+  name: string;
+}
+const STAGES: MigStage[] = ["operator", "tax_daroga", "city_manager"];
+export const STAGE_LABEL: Record<MigStage, string> = { operator: "Operator", tax_daroga: "Tax Daroga", city_manager: "City Manager" };
+const APPROVAL_VIEW_ROLES = ["operator", "tax_daroga", "city_manager", "commissioner", "deputy_commissioner"];
+/** The step this login works at (null: the Commissioner - any step - or view only). */
+const myStage = (a: MigActor): MigStage | null => ((STAGES as string[]).includes(a.role) ? (a.role as MigStage) : null);
+function assertApprovalView(a: MigActor) {
+  if (!APPROVAL_VIEW_ROLES.includes(a.role)) throw new ApiError(403, "Not allowed.");
+}
+/** May act on a pending record at `stage`: the login of that step, or the Commissioner. */
+const canActAt = (a: MigActor, stage: string) => a.role === "commissioner" || a.role === stage;
+
 function assertCommissioner(u: AdminTokenPayload) {
   if (u.role !== "commissioner") throw new ApiError(403, "Only the Municipal Commissioner can do this.");
 }
@@ -44,7 +67,8 @@ export function recordIssues(d: MigratedRowData, needsReview: string | null): Is
   return issues;
 }
 
-const event = (action: string, by: string, note?: string | null) => JSON.stringify([{ at: new Date().toISOString(), action, by, note: note ?? null }]);
+const event = (action: string, by: string, note?: string | null) =>
+  JSON.stringify([{ at: new Date().toISOString(), action, by, note: note ?? null }]);
 
 // ---------- upload ----------
 
@@ -133,7 +157,9 @@ export async function uploadMigRecords(
         d.relativeName,
       ]);
       const key = k[0]!.key;
-      const { rows: ex } = await pool.query<{ id: string; status: string }>(`SELECT id, status FROM mig_records WHERE import_key = $1`, [key]);
+      const { rows: ex } = await pool.query<{ id: string; status: string }>(`SELECT id, status FROM mig_records WHERE import_key = $1`, [
+        key,
+      ]);
       if (ex[0]) {
         const first = seen.get(ex[0].id);
         if (first) {
@@ -145,16 +171,23 @@ export async function uploadMigRecords(
           result.unchanged++;
           continue;
         }
+        // Changed in the sheet: verified again from the first step.
         await pool.query(
           `UPDATE mig_records SET (${COLS}) = ($2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21::jsonb),
-                  file_name = $22, row_no = $23, upload_job_id = $24, updated_at = now() WHERE id = $1`,
+                  file_name = $22, row_no = $23, upload_job_id = $24, updated_at = now(),
+                  stage = CASE WHEN (${COLS}) IS DISTINCT FROM ($2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21::jsonb)
+                               THEN 'operator' ELSE stage END
+            WHERE id = $1`,
           [ex[0].id, ...values(d, needsReview, issues), fileName, rowNo, jobId],
         );
         result.updated++;
         continue;
       }
       // Made into a holding by an earlier, direct upload? Then the record only points to it.
-      const { rows: h } = await pool.query<{ holding_no: string }>(`SELECT holding_no FROM migrated_holding_surveys WHERE import_key = $1 LIMIT 1`, [key]);
+      const { rows: h } = await pool.query<{ holding_no: string }>(
+        `SELECT holding_no FROM migrated_holding_surveys WHERE import_key = $1 LIMIT 1`,
+        [key],
+      );
       const linked = h[0]?.holding_no ?? null;
       const { rows: ins } = await pool.query<{ id: string }>(
         `INSERT INTO mig_records (import_key, ${COLS}, status, holding_no, file_name, row_no, upload_job_id, uploaded_by, events)
@@ -219,6 +252,8 @@ interface RecordRow {
   taken_up_at: Date | null;
   set_aside_reason: string | null;
   events: unknown[];
+  stage: MigStage;
+  sent_back_note: string | null;
   pid_shared: boolean;
   entry_status: string | null;
   entry_stage: string | null;
@@ -255,6 +290,9 @@ function view(r: RecordRow) {
     blocking: r.issues.some((i) => i.blocking),
     pidShared: r.pid_shared,
     status: r.status,
+    stage: r.status === "pending" ? r.stage : null,
+    stageLabel: r.status === "pending" ? STAGE_LABEL[r.stage] : null,
+    sentBackNote: r.status === "pending" ? r.sent_back_note : null,
     holdingNo: r.holding_no,
     fileName: r.file_name,
     rowNo: r.row_no,
@@ -297,14 +335,27 @@ function searchClause(params: unknown[], q: string | undefined): string | null {
   return `(r.old_holding_no ILIKE $${n} OR r.old_pid ILIKE $${n} OR r.owner_name ILIKE $${n} OR r.relative_name ILIKE $${n} OR r.holding_no ILIKE $${n})`;
 }
 
-/** Commissioner: every uploaded record, by status / ward / problems, with the totals. */
-export async function listAllRecords(u: AdminTokenPayload, f: { status?: string; ward?: string; issues?: string; q?: string; page?: number }) {
-  assertCommissioner(u);
+/** Approvals screen: every uploaded record, by status / step / ward / problems, with the totals. */
+export async function listAllRecords(
+  a: MigActor,
+  f: { status?: string; stage?: string; ward?: string; issues?: string; q?: string; page?: number },
+) {
+  assertApprovalView(a);
   const params: unknown[] = [];
   const where: string[] = [];
-  if (f.status && f.status !== "all") {
+  // "mine": awaiting approval at this login's step.
+  if (f.status === "mine") {
+    const st = myStage(a);
+    if (!st) throw ApiError.badRequest("Choose a step.");
+    params.push(st);
+    where.push(`r.status = 'pending' AND r.stage = $${params.length}`);
+  } else if (f.status && f.status !== "all") {
     params.push(f.status);
     where.push(`r.status = $${params.length}`);
+  }
+  if (f.stage && (STAGES as string[]).includes(f.stage) && f.status !== "mine") {
+    params.push(f.stage);
+    where.push(`r.status = 'pending' AND r.stage = $${params.length}`);
   }
   if (f.ward) {
     params.push(normalizeWard(f.ward));
@@ -325,21 +376,36 @@ export async function listAllRecords(u: AdminTokenPayload, f: { status?: string;
               count(*) FILTER (WHERE status = 'pending')::int AS pending,
               count(*) FILTER (WHERE status = 'pending' AND issues @> '[{"blocking": true}]')::int AS pending_blocking,
               count(*) FILTER (WHERE status = 'pending' AND NOT issues @> '[{"blocking": true}]')::int AS pending_ready,
+              count(*) FILTER (WHERE status = 'pending' AND stage = 'operator')::int AS at_operator,
+              count(*) FILTER (WHERE status = 'pending' AND stage = 'tax_daroga')::int AS at_tax_daroga,
+              count(*) FILTER (WHERE status = 'pending' AND stage = 'city_manager')::int AS at_city_manager,
+              count(*) FILTER (WHERE status = 'pending' AND stage = $1)::int AS mine,
+              count(*) FILTER (WHERE status = 'pending' AND stage = $1 AND NOT issues @> '[{"blocking": true}]')::int AS mine_ready,
               count(*) FILTER (WHERE status = 'approved')::int AS approved,
               count(*) FILTER (WHERE status = 'taken_up')::int AS taken_up,
               count(*) FILTER (WHERE status = 'finalized')::int AS finalized,
               count(*) FILTER (WHERE status = 'set_aside')::int AS set_aside
          FROM mig_records`,
+      [myStage(a) ?? ""],
     ),
   ]);
-  return { records: rows.map(view), total: count[0]?.n ?? 0, page, pageSize: PAGE, totals: totals[0] };
+  return {
+    records: rows.map(view),
+    total: count[0]?.n ?? 0,
+    page,
+    pageSize: PAGE,
+    totals: totals[0],
+    myStage: myStage(a),
+    isCommissioner: a.role === "commissioner",
+  };
 }
 
 export async function getRecord(u: AdminTokenPayload, id: number) {
-  if (!isIn(FIELD_VIEW_ROLES, u)) throw new ApiError(403, "Not allowed.");
+  if (!isIn(FIELD_VIEW_ROLES, u) && !APPROVAL_VIEW_ROLES.includes(u.role)) throw new ApiError(403, "Not allowed.");
   const { rows } = await pool.query<RecordRow>(`${SELECT} WHERE r.id = $1`, [id]);
   if (!rows[0]) throw ApiError.notFound("Record not found.");
-  if (u.role !== "commissioner" && !["approved", "taken_up", "finalized"].includes(rows[0].status)) throw ApiError.notFound("Record not found.");
+  if (!APPROVAL_VIEW_ROLES.includes(u.role) && !["approved", "taken_up", "finalized"].includes(rows[0].status))
+    throw ApiError.notFound("Record not found.");
   return view(rows[0]);
 }
 
@@ -356,13 +422,24 @@ export interface RecordEdit {
   remarks: string | null;
 }
 
-/** Commissioner: corrects a record not yet taken up (its problems are checked again). */
-export async function editRecord(u: AdminTokenPayload, id: number, e: RecordEdit) {
-  assertCommissioner(u);
+/**
+ * Corrects a record not yet taken up (its problems are checked again): awaiting approval - the login of its step or the
+ * Commissioner; approved - the City Manager or the Commissioner; set aside - the Commissioner.
+ */
+export async function editRecord(u: MigActor, id: number, e: RecordEdit) {
+  assertApprovalView(u);
   const { rows } = await pool.query<RecordRow>(`${SELECT} WHERE r.id = $1`, [id]);
   const r = rows[0];
   if (!r) throw ApiError.notFound("Record not found.");
-  if (!["pending", "approved", "set_aside"].includes(r.status)) throw ApiError.badRequest("This record is already a holding - correct the holding instead.");
+  if (!["pending", "approved", "set_aside"].includes(r.status))
+    throw ApiError.badRequest("This record is already a holding - correct the holding instead.");
+  const allowed =
+    u.role === "commissioner" || (r.status === "pending" && u.role === r.stage) || (r.status === "approved" && u.role === "city_manager");
+  if (!allowed)
+    throw new ApiError(
+      403,
+      r.status === "pending" ? `This record is with the ${STAGE_LABEL[r.stage]} - it can be corrected there.` : "Not allowed.",
+    );
   const d: MigratedRowData = {
     ward: e.ward,
     oldHoldingNo: e.oldHoldingNo,
@@ -403,65 +480,122 @@ export async function editRecord(u: AdminTokenPayload, id: number, e: RecordEdit
       e.taxStatus?.trim() || null,
       e.remarks?.trim() || null,
       JSON.stringify(issues),
-      event("corrected", u.displayName),
+      event("corrected", u.name),
     ],
   );
 }
 
 /**
- * Commissioner: approves records - the given ones, or every pending record matching the filter - each getting its
- * MIG- number. Records with a blocking problem are skipped (listed in the answer).
+ * Moves records on from the step they are at - the given ones, or every record awaiting this login's step (optionally of
+ * one ward): Operator -> Tax Daroga -> City Manager -> approved with its MIG- number. The Commissioner moves any record
+ * straight to approved. Records with a problem to correct first are skipped (counted in the answer).
  */
-export async function approveRecords(u: AdminTokenPayload, sel: { ids?: number[]; allPending?: { ward?: string } }) {
-  assertCommissioner(u);
+export async function advanceRecords(a: MigActor, sel: { ids?: number[]; allMine?: { ward?: string } }) {
+  assertApprovalView(a);
+  const st = myStage(a);
+  if (!st && a.role !== "commissioner") throw new ApiError(403, "Not allowed.");
   const params: unknown[] = [];
   let where = `status = 'pending'`;
+  if (st) {
+    params.push(st);
+    where += ` AND stage = $${params.length}`;
+  }
   if (sel.ids?.length) {
     params.push(sel.ids);
-    where += ` AND id = ANY($1::bigint[])`;
-  } else if (sel.allPending) {
-    if (sel.allPending.ward) {
-      params.push(normalizeWard(sel.allPending.ward));
-      where += ` AND normalize_ward(ward) = $1`;
+    where += ` AND id = ANY($${params.length}::bigint[])`;
+  } else if (sel.allMine) {
+    if (sel.allMine.ward) {
+      params.push(normalizeWard(sel.allMine.ward));
+      where += ` AND normalize_ward(ward) = $${params.length}`;
     }
-  } else throw ApiError.badRequest("Choose the records to approve.");
-  const { rows } = await pool.query<{ id: string; blocking: boolean }>(
-    `SELECT id, issues @> '[{"blocking": true}]' AS blocking FROM mig_records WHERE ${where} ORDER BY ${WARD_ORDER.replace(/r\./g, "")}`,
+  } else throw ApiError.badRequest("Choose the records.");
+  const { rows } = await pool.query<{ id: string; blocking: boolean; stage: MigStage }>(
+    `SELECT id, stage, issues @> '[{"blocking": true}]' AS blocking FROM mig_records WHERE ${where} ORDER BY ${WARD_ORDER.replace(/r\./g, "")}`,
     params,
   );
+  let moved = 0;
   let approved = 0;
-  const skipped: number[] = [];
+  let skipped = 0;
   for (const r of rows) {
     if (r.blocking) {
-      skipped.push(Number(r.id));
+      skipped++;
       continue;
     }
-    const n = await nextMigratedNumber();
-    const { rowCount } = await pool.query(
-      `UPDATE mig_records SET status = 'approved', mig_number = $2, approved_by = $3, approved_at = now(), updated_at = now(),
-              events = events || $4::jsonb WHERE id = $1 AND status = 'pending'`,
-      [r.id, n, u.displayName, event("approved", u.displayName, migNo(n))],
-    );
-    approved += rowCount ?? 0;
+    if (a.role === "commissioner" || r.stage === "city_manager") {
+      const n = await nextMigratedNumber();
+      const { rowCount } = await pool.query(
+        `UPDATE mig_records SET status = 'approved', mig_number = $2, approved_by = $3, approved_at = now(), sent_back_note = NULL, updated_at = now(),
+                events = events || $4::jsonb WHERE id = $1 AND status = 'pending' AND stage = $5`,
+        [r.id, n, a.name, event("approved", a.name, migNo(n)), r.stage],
+      );
+      approved += rowCount ?? 0;
+    } else {
+      const next: MigStage = r.stage === "operator" ? "tax_daroga" : "city_manager";
+      const { rowCount } = await pool.query(
+        `UPDATE mig_records SET stage = $2, sent_back_note = NULL, updated_at = now(), events = events || $3::jsonb
+          WHERE id = $1 AND status = 'pending' AND stage = $4`,
+        [r.id, next, event(r.stage === "operator" ? "verified" : "reviewed and forwarded", a.name, `to ${STAGE_LABEL[next]}`), r.stage],
+      );
+      moved += rowCount ?? 0;
+    }
   }
-  return { approved, skippedBlocking: skipped.length };
+  return { forwarded: moved, approved, skippedBlocking: skipped };
 }
 
-/** Commissioner: sets a record aside (e.g. a duplicate) with the reason - or brings it back to pending. */
-export async function setAside(u: AdminTokenPayload, id: number, reason: string | null) {
-  assertCommissioner(u);
+/** Records awaiting this login's step (for the dashboard badge); the Commissioner: all awaiting approval. */
+export async function myPendingCount(a: MigActor) {
+  assertApprovalView(a);
+  const st = myStage(a);
+  const { rows } = await pool.query<{ n: number }>(
+    `SELECT count(*)::int AS n FROM mig_records WHERE status = 'pending' AND ($1::text IS NULL OR stage = $1)`,
+    [st],
+  );
+  return { pending: rows[0]?.n ?? 0, stage: st };
+}
+
+/** Tax Daroga / City Manager (or the Commissioner): sends a record back a step (the Commissioner: to the Operator), with a note. */
+export async function sendBack(a: MigActor, id: number, note: string) {
+  assertApprovalView(a);
+  const { rows } = await pool.query<{ status: string; stage: MigStage }>(`SELECT status, stage FROM mig_records WHERE id = $1`, [id]);
+  const r = rows[0];
+  if (!r) throw ApiError.notFound("Record not found.");
+  if (r.status !== "pending" || r.stage === "operator") throw ApiError.badRequest("This record cannot be sent back.");
+  if (!canActAt(a, r.stage)) throw new ApiError(403, `This record is with the ${STAGE_LABEL[r.stage]}.`);
+  const to: MigStage = a.role === "commissioner" || r.stage === "tax_daroga" ? "operator" : "tax_daroga";
+  await pool.query(
+    `UPDATE mig_records SET stage = $2, sent_back_note = $3, updated_at = now(), events = events || $4::jsonb WHERE id = $1`,
+    [id, to, note.trim(), event("sent back", a.name, `to ${STAGE_LABEL[to]}: ${note.trim()}`)],
+  );
+  return { to };
+}
+
+/**
+ * Sets a record aside (e.g. a duplicate) with the reason - the Tax Daroga / City Manager at their step, or the
+ * Commissioner - or brings it back (City Manager / Commissioner) to the Operator step (or to approved, if it had a number).
+ */
+export async function setAside(u: MigActor, id: number, reason: string | null) {
+  assertApprovalView(u);
+  const { rows } = await pool.query<{ status: string; stage: MigStage }>(`SELECT status, stage FROM mig_records WHERE id = $1`, [id]);
+  const r = rows[0];
+  if (!r) throw ApiError.notFound("Record not found.");
   if (reason !== null) {
+    const allowed =
+      u.role === "commissioner" ||
+      (r.status === "pending" && ["tax_daroga", "city_manager"].includes(u.role) && u.role === r.stage) ||
+      (r.status === "approved" && u.role === "city_manager");
+    if (!allowed) throw new ApiError(403, "Not allowed to set this record aside.");
     const { rowCount } = await pool.query(
       `UPDATE mig_records SET status = 'set_aside', set_aside_reason = $2, updated_at = now(), events = events || $3::jsonb
         WHERE id = $1 AND status IN ('pending', 'approved')`,
-      [id, reason.trim(), event("set aside", u.displayName, reason)],
+      [id, reason.trim(), event("set aside", u.name, reason)],
     );
     if (!rowCount) throw ApiError.badRequest("Only a record that is not yet a holding can be set aside.");
   } else {
+    if (!["commissioner", "city_manager"].includes(u.role)) throw new ApiError(403, "Not allowed.");
     const { rowCount } = await pool.query(
-      `UPDATE mig_records SET status = CASE WHEN mig_number IS NULL THEN 'pending' ELSE 'approved' END, set_aside_reason = NULL, updated_at = now(),
-              events = events || $2::jsonb WHERE id = $1 AND status = 'set_aside'`,
-      [id, event("restored", u.displayName)],
+      `UPDATE mig_records SET status = CASE WHEN mig_number IS NULL THEN 'pending' ELSE 'approved' END, stage = 'operator', set_aside_reason = NULL,
+              updated_at = now(), events = events || $2::jsonb WHERE id = $1 AND status = 'set_aside'`,
+      [id, event("restored", u.name)],
     );
     if (!rowCount) throw ApiError.badRequest("This record is not set aside.");
   }
@@ -474,7 +608,9 @@ export async function listFieldRecords(u: AdminTokenPayload, f: { show?: string;
   if (!isIn(FIELD_VIEW_ROLES, u)) throw new ApiError(403, "Not allowed.");
   const scope = u.role === "tax_collector" ? ((await collectorWardScope(u)) ?? []) : null;
   const params: unknown[] = [];
-  const where = [f.show === "taken_up" ? `r.status = 'taken_up'` : f.show === "all" ? `r.status IN ('approved', 'taken_up')` : `r.status = 'approved'`];
+  const where = [
+    f.show === "taken_up" ? `r.status = 'taken_up'` : f.show === "all" ? `r.status IN ('approved', 'taken_up')` : `r.status = 'approved'`,
+  ];
   if (f.ward) {
     const w = normalizeWard(f.ward);
     if (scope && !scope.includes(w)) throw new ApiError(403, "That ward is not assigned to you.");
@@ -513,7 +649,8 @@ export async function listFieldRecords(u: AdminTokenPayload, f: { show?: string;
  * and the details entry opens on it - its approval chain then runs as for any old holding.
  */
 export async function takeUp(u: AdminTokenPayload, id: number): Promise<{ holdingNo: string }> {
-  if (!isIn(FIELD_ROLES, u)) throw new ApiError(403, "Only a Tax Collector, Tax Surveyor, Tax Daroga or the Municipal Commissioner can add the details.");
+  if (!isIn(FIELD_ROLES, u))
+    throw new ApiError(403, "Only a Tax Collector, Tax Surveyor, Tax Daroga or the Municipal Commissioner can add the details.");
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
@@ -557,7 +694,9 @@ export async function takeUp(u: AdminTokenPayload, id: number): Promise<{ holdin
       } catch (err) {
         const msg = err instanceof Error ? err.message : "";
         if (msg.includes("idx_properties_old_pid"))
-          throw ApiError.badRequest(`Old PID '${r.old_pid}' is already on another holding - ask the Municipal Commissioner to correct this record's Old PID.`);
+          throw ApiError.badRequest(
+            `Old PID '${r.old_pid}' is already on another holding - ask the Municipal Commissioner to correct this record's Old PID.`,
+          );
         throw err;
       }
     }

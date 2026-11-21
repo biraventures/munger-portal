@@ -7,6 +7,7 @@ import { crematoriumRouter, publicCrematoriumRouter } from "./crematorium.routes
 import { communityHallRouter, publicCommunityHallRouter } from "./communityHall.routes";
 import { crematoriumCounterScope } from "../middleware/crematoriumCounterScope";
 import { propertyRouter } from "./property.routes";
+import { migRecordRouter } from "./migRecord.routes";
 import { operatorRouter } from "./operator.routes";
 import { shopRouter } from "./shop.routes";
 import { shopRentalApplicationRouter } from "./shopRentalApplication.routes";
@@ -54,6 +55,8 @@ apiRouter.get("/form-options", getFormOptions);
 apiRouter.use("/auth", authRouter);
 apiRouter.use("/properties", propertyRouter);
 apiRouter.use("/operator", operatorRouter);
+// Old records (MIG) approvals - operator and admin logins (migration 189).
+apiRouter.use("/mig-records", migRecordRouter);
 apiRouter.use("/shops", shopRouter);
 apiRouter.use("/shop-rental-applications", shopRentalApplicationRouter);
 apiRouter.use("/shop-rental-preferences", shopRentalPreferenceRouter);
