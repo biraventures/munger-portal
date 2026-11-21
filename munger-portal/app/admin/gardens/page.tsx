@@ -275,7 +275,8 @@ export default function GardensPage() {
               <X className="h-4 w-4" /> Close
             </button>
           </div>
-          <div className="mx-auto flex max-w-[180mm] flex-col items-center px-6 py-6 text-center">
+          {/* printable-area: the site-wide print style prints only this (globals.css). */}
+          <div className="printable-area mx-auto flex max-w-[180mm] flex-col items-center px-6 py-6 text-center">
             <p className="text-lg font-semibold uppercase tracking-wider text-slate-600">Munger Nagar Nigam</p>
             <h1 className="mt-2 text-5xl font-bold text-slate-900">{poster.name}</h1>
             {poster.name_hi && <p className="mt-1 text-3xl font-semibold text-slate-800">{poster.name_hi}</p>}
