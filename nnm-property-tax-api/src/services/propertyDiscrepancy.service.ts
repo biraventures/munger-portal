@@ -19,7 +19,9 @@ import { ApiError } from "../utils/ApiError";
 import type { PropertyDiscrepancyRequestRow, PropertyDiscrepancyStatus } from "../types/propertyDiscrepancy.types";
 import type { PropertySaveInput } from "../types/propertySave.types";
 import type { AdminRole, AdminTokenPayload } from "../types/admin.types";
-import { MAX_PHOTO_BYTES, uploadLimitMessage } from "../utils/uploadLimits";
+import { photoOrDocumentExt } from "../utils/uploadLimits";
+
+const DOCUMENT_KINDS = new Set(["aadhaar", "receipt"]);
 
 /** The desk whose approval applies the request: the Deputy Commissioner, or the Commissioner for an old MUNG-MIG- holding. */
 function finalStageFor(holdingNo: string): AdminRole {
@@ -27,11 +29,6 @@ function finalStageFor(holdingNo: string): AdminRole {
   return order[order.length - 1]!;
 }
 
-const ALLOWED_PHOTO_MIME_TO_EXT: Record<string, string> = {
-  "image/jpeg": "jpg",
-  "image/jpg": "jpg",
-  "image/png": "png",
-};
 
 /** Saves a photo to PHOTO_UPLOAD_DIR (same shared storage as the Jamadar daily-photo flow), returns the relative path to store. Returns null when no photo was given. `kind` (holding/receipt/aadhaar) keeps the three photos on one request distinct on disk. */
 async function saveDiscrepancyPhoto(
@@ -41,12 +38,9 @@ async function saveDiscrepancyPhoto(
   mimeType: string | undefined,
 ): Promise<string | null> {
   if (!base64Data || !mimeType) return null;
-  const ext = ALLOWED_PHOTO_MIME_TO_EXT[mimeType];
-  if (!ext) throw ApiError.badRequest("Only JPEG or PNG photos are accepted.");
-
   const buffer = Buffer.from(base64Data, "base64");
-  if (buffer.length === 0) throw ApiError.badRequest("The photo is empty.");
-  if (buffer.length > MAX_PHOTO_BYTES) throw ApiError.badRequest(uploadLimitMessage("image/jpeg", buffer.length));
+  // Documents (Aadhaar, previous receipt, land papers, register page) may be a PDF; photos of the site may not.
+  const ext = photoOrDocumentExt(mimeType, buffer, DOCUMENT_KINDS.has(kind));
 
   const relativePath = path.join("discrepancy-photos", `${holdingNo}-${kind}-${Date.now()}.${ext}`);
   const fullPath = path.join(env.PHOTO_UPLOAD_DIR, relativePath);

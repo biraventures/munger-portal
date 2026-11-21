@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { surveyorOfWard } from "@/lib/admin-api";
-import { Camera, Loader2, MapPin, Trash2, Paperclip } from "lucide-react";
+import { Camera, Loader2, MapPin, Trash2 } from "lucide-react";
 import {
   fieldReportPhotoUrl,
   fetchSurveyors,
@@ -110,19 +110,6 @@ function ShotSlot({ label, shot, onTake, onClear }: { label: string; shot: Shot 
             type="file"
             accept="image/jpeg,image/png"
             capture="environment"
-            className="hidden"
-            onChange={(e) => {
-              const f = e.target.files?.[0];
-              if (f) onTake(f);
-              e.target.value = "";
-            }}
-          />
-        </label>
-        <label className="cursor-pointer text-xs font-semibold text-nnm-blue underline">
-          Attach file
-          <input
-            type="file"
-            accept="image/jpeg,image/png"
             className="hidden"
             onChange={(e) => {
               const f = e.target.files?.[0];
@@ -294,41 +281,23 @@ export function FieldReportForm({
           {value.gps ? `${value.gps.lat.toFixed(5)}, ${value.gps.lng.toFixed(5)}` : "Capture GPS at the site"}
         </button>
         {!newHolding && value.photos.length < MAX_REPORT_PHOTOS && (
-          <>
-            <label
-              className={`inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 ${busy ? "opacity-50" : ""}`}
-            >
-              {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Camera className="h-3.5 w-3.5" />}
-              Take site photo ({value.photos.length}/{MAX_REPORT_PHOTOS})
-              <input
-                type="file"
-                accept="image/jpeg,image/png"
-                capture="environment"
-                multiple
-                className="hidden"
-                onChange={(e) => {
-                  addPhotos(e.target.files);
-                  e.target.value = "";
-                }}
-              />
-            </label>
-            <label
-              className={`inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 ${busy ? "opacity-50" : ""}`}
-            >
-              <Paperclip className="h-3.5 w-3.5" />
-              Attach photo file
-              <input
-                type="file"
-                accept="image/jpeg,image/png"
-                multiple
-                className="hidden"
-                onChange={(e) => {
-                  addPhotos(e.target.files);
-                  e.target.value = "";
-                }}
-              />
-            </label>
-          </>
+          <label
+            className={`inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 ${busy ? "opacity-50" : ""}`}
+          >
+            {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Camera className="h-3.5 w-3.5" />}
+            Add site photo ({value.photos.length}/{MAX_REPORT_PHOTOS})
+            <input
+              type="file"
+              accept="image/jpeg,image/png"
+              capture="environment"
+              multiple
+              className="hidden"
+              onChange={(e) => {
+                addPhotos(e.target.files);
+                e.target.value = "";
+              }}
+            />
+          </label>
         )}
       </div>
       {value.photos.length > 0 && (

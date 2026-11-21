@@ -1,11 +1,11 @@
 "use client";
 
-import { PhotoSourceButtons } from "@/components/admin/photo-source-buttons";
+import { PhotoSourceButtons, PickedFilePreview } from "@/components/admin/photo-source-buttons";
 import { useState } from "react";
 import { Camera, CheckCircle2, CreditCard, FileText, Loader2, MapPin, MapPinOff, UserRound } from "lucide-react";
 import type { DiscrepancyPhotoNeeds } from "@/lib/discrepancy-photo-rules";
 import { getCurrentGpsPosition } from "@/lib/geolocation";
-import { shrinkPhotoFile } from "@/lib/upload-limits";
+import { prepareDocumentFile, shrinkPhotoFile } from "@/lib/upload-limits";
 
 export interface CaptureState {
   gpsLat: number | null;
@@ -35,14 +35,18 @@ function PhotoSlot({
   required,
   file,
   onChange,
+  document,
 }: {
   label: string;
   icon: React.ReactNode;
+  /** A document (Aadhaar, receipt, land papers...): may also be attached from the device as a photo or PDF. */
+  document?: boolean;
   required?: boolean;
   file: File | null;
   onChange: (file: File | null) => void;
 }) {
-  const previewUrl = file ? URL.createObjectURL(file) : null;
+  const previewUrl = file && file.type !== "application/pdf" ? URL.createObjectURL(file) : null;
+  const [pickError, setPickError] = useState<string | null>(null);
   const inputId = `photo-slot-${label.replace(/\s+/g, "-").toLowerCase()}`;
 
   return (
@@ -50,9 +54,8 @@ function PhotoSlot({
       className={`rounded-lg border-2 border-dashed p-4 text-center ${file ? "border-green-300 bg-green-50" : "border-nnm-blue/40 bg-blue-50/50"}`}
     >
       <div className="flex flex-col items-center gap-2">
-        {previewUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element -- local file preview, not a static asset
-          <img src={previewUrl} alt={label} className="h-24 w-24 rounded-md border border-slate-200 object-cover" />
+        {file ? (
+          <PickedFilePreview file={file} url={previewUrl} label={label} className="h-24 w-24" />
         ) : (
           <span className="flex h-12 w-12 items-center justify-center rounded-full bg-white text-nnm-blue shadow-sm">{icon}</span>
         )}
@@ -63,11 +66,18 @@ function PhotoSlot({
         <PhotoSourceButtons
           idBase={inputId}
           hasFile={!!file}
+          document={document}
           onFile={async (files) => {
             const f = files?.[0];
-            onChange(f ? await shrinkPhotoFile(f) : null);
+            setPickError(null);
+            try {
+              onChange(f ? await (document ? prepareDocumentFile(f) : shrinkPhotoFile(f)) : null);
+            } catch (e) {
+              setPickError(e instanceof Error ? e.message : "Could not use that file.");
+            }
           }}
         />
+        {pickError && <span className="text-xs text-red-600">{pickError}</span>}
       </div>
     </div>
   );
@@ -169,6 +179,7 @@ export function DiscrepancyCaptureSection({
         <PhotoSlot
           label="Previous Year's Tax Receipt"
           icon={<FileText className="h-5 w-5" />}
+          document
           file={state.previousReceiptFile}
           onChange={(f) => onChange({ ...state, previousReceiptFile: f })}
         />
@@ -177,6 +188,7 @@ export function DiscrepancyCaptureSection({
             label={onFile?.aadhaar && !state.aadhaarFile ? "Owner's Aadhaar Card (on file)" : "Owner's Aadhaar Card"}
             icon={<CreditCard className="h-5 w-5" />}
             required={nameChanged}
+            document
             file={state.aadhaarFile}
             onChange={(f) => onChange({ ...state, aadhaarFile: f })}
           />

@@ -35,3 +35,21 @@ export function assertUploadSize(mime: string, size: number): void {
   const limit = uploadLimitFor(mime);
   if (limit !== null && size > limit) throw new ApiError(413, uploadLimitMessage(mime, size));
 }
+
+/**
+ * File extension for an uploaded photo - or, where `allowPdf` (documents such as Aadhaar, PAN, previous receipts, land
+ * papers, a signed receiving slip), a PDF. Checks the type, the content (a PDF must start with %PDF) and the size limit.
+ */
+export function photoOrDocumentExt(mimeType: string, buffer: Buffer, allowPdf: boolean): string {
+  if (buffer.length === 0) throw ApiError.badRequest("The file is empty.");
+  if (mimeType === "application/pdf") {
+    if (!allowPdf) throw ApiError.badRequest("Only a JPEG or PNG photo is accepted here.");
+    if (buffer.subarray(0, 5).toString("latin1") !== "%PDF-") throw ApiError.badRequest("That file is not a valid PDF.");
+    if (buffer.length > MAX_PDF_BYTES) throw ApiError.badRequest(uploadLimitMessage(mimeType, buffer.length));
+    return "pdf";
+  }
+  const ext = mimeType === "image/png" ? "png" : mimeType === "image/jpeg" || mimeType === "image/jpg" ? "jpg" : null;
+  if (!ext) throw ApiError.badRequest(allowPdf ? "Only a JPEG / PNG photo or a PDF is accepted." : "Only JPEG or PNG photos are accepted.");
+  if (buffer.length > MAX_PHOTO_BYTES) throw ApiError.badRequest(uploadLimitMessage(mimeType, buffer.length));
+  return ext;
+}

@@ -4,6 +4,7 @@ import { PhotoSourceButtons } from "@/components/admin/photo-source-buttons";
 import { useEffect, useState } from "react";
 import { Camera, CheckCircle2, Loader2, MapPin, MapPinOff } from "lucide-react";
 import { getCurrentGpsPosition } from "@/lib/geolocation";
+import { blobUrlIsPdf } from "@/lib/upload-limits";
 
 export function GpsButton({
   lat,
@@ -107,6 +108,15 @@ export function PhotoPicker({ label, file, onChange, required }: { label: string
 
 /** Loads a photo through the authenticated API and shows it in a dialog. */
 export function PhotoDialog({ url, title, onClose }: { url: string; title: string; onClose: () => void }) {
+  // A document may have been attached as a PDF - shown embedded, with a link to open it on its own.
+  const [isPdf, setIsPdf] = useState(false);
+  useEffect(() => {
+    let live = true;
+    blobUrlIsPdf(url).then((pdf) => live && setIsPdf(pdf));
+    return () => {
+      live = false;
+    };
+  }, [url]);
   return (
     <div role="dialog" aria-label={title} className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={onClose}>
       <div className="max-h-full w-full max-w-3xl rounded-xl bg-white p-4" onClick={(e) => e.stopPropagation()}>
@@ -116,8 +126,17 @@ export function PhotoDialog({ url, title, onClose }: { url: string; title: strin
             Close
           </button>
         </div>
-        {/* eslint-disable-next-line @next/next/no-img-element -- blob URL from an authenticated fetch */}
-        <img src={url} alt={title} className="max-h-[75vh] w-full rounded-md object-contain" />
+        {isPdf ? (
+          <>
+            <iframe src={url} title={title} className="h-[70vh] w-full rounded-md border border-slate-200" />
+            <a href={url} target="_blank" rel="noreferrer" className="mt-2 inline-block text-sm font-semibold text-nnm-blue underline">
+              Open the PDF in a new tab
+            </a>
+          </>
+        ) : (
+          // eslint-disable-next-line @next/next/no-img-element -- blob URL from an authenticated fetch
+          <img src={url} alt={title} className="max-h-[75vh] w-full rounded-md object-contain" />
+        )}
       </div>
     </div>
   );

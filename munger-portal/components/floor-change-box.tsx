@@ -349,6 +349,7 @@ export function FloorChangeBox({
               <input
                 type="file"
                 accept="image/jpeg,image/png"
+                capture="environment"
                 onChange={(e) => onPhoto(e.target.files?.[0] ?? null)}
                 className="block w-full text-xs file:mr-3 file:rounded-md file:border-0 file:bg-nnm-blue file:px-3 file:py-2 file:text-xs file:font-semibold file:text-white"
               />

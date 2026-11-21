@@ -1,3 +1,4 @@
+import { photoOrDocumentExt } from "../utils/uploadLimits";
 import fs from "node:fs";
 import { propertyRepository } from "../repositories/property.repository";
 import path from "node:path";
@@ -6,23 +7,11 @@ import { demandNoticeRepository } from "../repositories/demandNotice.repository"
 import { env } from "../config/env";
 import { ApiError } from "../utils/ApiError";
 import type { AdminTokenPayload } from "../types/admin.types";
-import { MAX_PHOTO_BYTES as PHOTO_LIMIT, uploadLimitMessage } from "../utils/uploadLimits";
 
-const ALLOWED_PHOTO_MIME_TO_EXT: Record<string, string> = {
-  "image/jpeg": "jpg",
-  "image/jpg": "jpg",
-  "image/png": "png",
-};
-
-/** Photos: at most 750 KB (the page shrinks them to fit before sending). */
-const MAX_PHOTO_BYTES = PHOTO_LIMIT;
-
-async function savePhoto(folder: string, namePrefix: string, base64Data: string, mimeType: string): Promise<string> {
-  const ext = ALLOWED_PHOTO_MIME_TO_EXT[mimeType];
-  if (!ext) throw ApiError.badRequest("Only JPEG or PNG photos are accepted.");
+/** Photos at most 750 KB (the page shrinks them to fit before sending); a document may be a PDF of at most 2 MB. */
+async function savePhoto(folder: string, namePrefix: string, base64Data: string, mimeType: string, allowPdf = false): Promise<string> {
   const buffer = Buffer.from(base64Data, "base64");
-  if (buffer.length === 0) throw ApiError.badRequest("The photo is empty.");
-  if (buffer.length > MAX_PHOTO_BYTES) throw ApiError.badRequest(uploadLimitMessage("image/jpeg", buffer.length));
+  const ext = photoOrDocumentExt(mimeType, buffer, allowPdf);
   const relativePath = path.join(folder, `${namePrefix}-${Date.now()}-${Math.floor(Math.random() * 1e6)}.${ext}`);
   const fullPath = path.join(env.PHOTO_UPLOAD_DIR, relativePath);
   await fs.promises.mkdir(path.dirname(fullPath), { recursive: true });
@@ -97,7 +86,8 @@ export async function addReceivingCopy(demandNo: string, input: ReceivingCopyInp
   const existing = (await collectorFieldRepository.listReceivingCopies({ holdingNo: notice.holding_no })).filter((c) => c.demand_no === demandNo);
   if (existing.length >= 1) throw ApiError.badRequest("The receiving copy of this notice is already uploaded - only one is allowed, and it cannot be replaced.");
 
-  const photoPath = await savePhoto("notice-receiving-copies", demandNo.replace(/[^A-Za-z0-9-]/g, ""), input.photoBase64Data, input.photoMimeType);
+  // The signed receiving slip is a document - a photo of it, or a scanned PDF.
+  const photoPath = await savePhoto("notice-receiving-copies", demandNo.replace(/[^A-Za-z0-9-]/g, ""), input.photoBase64Data, input.photoMimeType, true);
   const row = await collectorFieldRepository.addReceivingCopy({
     demandNo,
     photoPath,

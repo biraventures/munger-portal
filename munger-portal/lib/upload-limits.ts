@@ -114,3 +114,24 @@ export async function shrinkPhotoFile(file: File): Promise<File> {
     return file;
   }
 }
+
+/**
+ * A document (Aadhaar, PAN, previous receipt, land papers, signed slip) picked for upload: a PDF is kept as it is
+ * (checked against 2 MB), a photo is shrunk to 750 KB. Throws a readable error for an oversized PDF.
+ */
+export async function prepareDocumentFile(file: File): Promise<File> {
+  if (isPdfFile(file)) {
+    assertPdfSize(file);
+    return file;
+  }
+  return shrinkPhotoFile(file);
+}
+
+/** Whether a (blob) URL holds a PDF - viewers open a PDF in a new tab instead of showing it as a picture. */
+export async function blobUrlIsPdf(url: string): Promise<boolean> {
+  try {
+    return (await (await fetch(url)).blob()).type === "application/pdf";
+  } catch {
+    return false;
+  }
+}

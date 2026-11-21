@@ -45,6 +45,7 @@ export function AuthPhoto({
 }) {
   const [url, setUrl] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
+  const [isPdf, setIsPdf] = useState(false);
 
   useEffect(() => {
     let objectUrl: string | null = null;
@@ -54,8 +55,12 @@ export function AuthPhoto({
         const token = portal === "attendance" ? getAttendanceToken() : getAdminToken();
         const res = await fetch(`${API_BASE_URL}${path}`, { headers: { Authorization: `Bearer ${token ?? ""}` } });
         if (!res.ok) throw new Error();
-        objectUrl = URL.createObjectURL(await res.blob());
-        if (!cancelled) setUrl(objectUrl);
+        const blob = await res.blob();
+        objectUrl = URL.createObjectURL(blob);
+        if (!cancelled) {
+          setIsPdf(blob.type === "application/pdf");
+          setUrl(objectUrl);
+        }
       } catch {
         if (!cancelled) setFailed(true);
       }
@@ -76,9 +81,17 @@ export function AuthPhoto({
         ) : !url ? (
           <Loader2 className="h-4 w-4 animate-spin text-slate-300" />
         ) : (
-          <a href={url} target="_blank" rel="noreferrer" title="Open full size">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={url} alt={label} className={large ? "h-44 w-56 object-cover" : "h-28 w-36 object-cover"} />
+          <a href={url} target="_blank" rel="noreferrer" title={isPdf ? "Open the PDF" : "Open full size"}>
+            {isPdf ? (
+              // A document attached as a PDF - opens in a new tab.
+              <span className="flex flex-col items-center gap-1 text-xs font-semibold text-nnm-blue">
+                <span className="rounded bg-red-600 px-2 py-0.5 text-[11px] font-bold text-white">PDF</span>
+                Open
+              </span>
+            ) : (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={url} alt={label} className={large ? "h-44 w-56 object-cover" : "h-28 w-36 object-cover"} />
+            )}
           </a>
         )}
       </div>

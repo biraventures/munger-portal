@@ -1,5 +1,6 @@
 "use client";
 
+import { PhotoDialog } from "@/components/admin/field-capture";
 import { useEffect, useState } from "react";
 import { FloorChangeSummary } from "@/components/admin/floor-change-summary";
 import { useParams, useRouter } from "next/navigation";
@@ -367,14 +368,7 @@ export default function PropertyDiscrepancyRequestDetailPage() {
         )}
       </main>
 
-      {photoUrl && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => setPhotoUrl(null)}>
-          <div className="max-h-[90vh] max-w-2xl overflow-y-auto rounded-xl bg-white p-4" onClick={(e) => e.stopPropagation()}>
-            {/* eslint-disable-next-line @next/next/no-img-element -- object URL from an authenticated fetch */}
-            <img src={photoUrl} alt="Photo attached to this report" className="max-h-[80vh] w-full rounded-md object-contain" />
-          </div>
-        </div>
-      )}
+      {photoUrl && <PhotoDialog url={photoUrl} title="Attached to this report" onClose={() => setPhotoUrl(null)} />}
     </div>
   );
 }
