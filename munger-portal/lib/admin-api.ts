@@ -2203,6 +2203,8 @@ export interface GeneratedCollectionIssueNotice {
   noticeDate: string;
   complianceDays: number;
   language: NoticeLanguage;
+  /** Who signs the notice (older notices: the City Manager). */
+  signatory?: "city_manager" | "tax_daroga";
   /** True when this is a reprint of a notice issued before copies were kept - rebuilt from current records, so property details may differ from the original. */
   reconstructed?: boolean;
 }

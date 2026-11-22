@@ -924,7 +924,7 @@ adminRouter.post(
   postCiRemovalRequest,
 );
 adminRouter.post("/collection-issue-notices/:id/receiving/remove-decision", requireAdminRole("deputy_commissioner"), postCiRemovalDecision);
-adminRouter.post("/collection-issues/:id/generate-notice", requireAdminRole("city_manager"), postGenerateCollectionIssueNotice);
+adminRouter.post("/collection-issues/:id/generate-notice", requireAdminRole("city_manager", "tax_daroga"), postGenerateCollectionIssueNotice);
 adminRouter.get(
   "/collection-issues/:id/notices",
   requireAdminRole("tax_daroga", "commissioner", "city_manager", "deputy_commissioner"),

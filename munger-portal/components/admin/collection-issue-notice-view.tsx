@@ -21,6 +21,7 @@ const CHROME_LABELS = {
     notYetGenerated: "Not yet generated",
     legalBasis: "Legal Basis:",
     cityManager: "City Manager",
+    taxDaroga: "Tax Daroga",
     demandNoticeAttached: "PROPERTY TAX - DEMAND NOTICE (ATTACHED)",
     particulars: "Particulars",
     amount: "Amount (₹)",
@@ -42,6 +43,7 @@ const CHROME_LABELS = {
     notYetGenerated: "अभी जारी नहीं की गई",
     legalBasis: "विधिक आधार:",
     cityManager: "नगर आयुक्त (सिटी मैनेजर)",
+    taxDaroga: "कर दारोगा",
     demandNoticeAttached: "संपत्ति कर - मांग सूचना (संलग्न)",
     particulars: "विवरण",
     amount: "राशि (₹)",
@@ -122,7 +124,7 @@ export function CollectionIssueNoticeView({ notice, onClose }: { notice: Generat
           <div className="text-center text-[11px]">
             <div className="mb-8">&nbsp;</div>
             <div className="border-t border-slate-400 pt-1">
-              {t.cityManager}
+              {notice.signatory === "tax_daroga" ? t.taxDaroga : t.cityManager}
               <br />
               {t.corporationName}
             </div>

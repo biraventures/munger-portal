@@ -11,7 +11,8 @@ const generateBodySchema = z.object({ language: z.enum(["en", "hi"]).optional() 
 export const postGenerateCollectionIssueNotice = asyncHandler(async (req: Request, res: Response) => {
   const parsed = idParamSchema.safeParse(req.params);
   if (!parsed.success) throw ApiError.badRequest("Invalid collection issue id");
-  if (!req.admin || req.admin.role !== "city_manager") throw new ApiError(403, "Only the City Manager can generate this notice.");
+  if (!req.admin || !["city_manager", "tax_daroga"].includes(req.admin.role))
+    throw new ApiError(403, "Only the City Manager or the Tax Daroga can generate this notice.");
   const bodyParsed = generateBodySchema.safeParse(req.body ?? {});
   if (!bodyParsed.success) throw ApiError.badRequest("Invalid request body", bodyParsed.error.flatten().fieldErrors);
 

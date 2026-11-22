@@ -243,8 +243,13 @@ export default function AdminDashboardPage() {
   const showHistoricalPayments = ["tax_daroga", "city_manager", "deputy_commissioner", "commissioner"].includes(admin.role);
   const showSurveyorAssignments = ["tax_daroga", "city_manager", "deputy_commissioner", "commissioner"].includes(admin.role);
   const showCollectionIssues = ["tax_daroga", "commissioner", "city_manager", "deputy_commissioner"].includes(admin.role);
-  // Red: open issues waiting for the City Manager's notice; receiving-copy removals waiting for the DMC.
-  const ciDesk = admin.role === "city_manager" ? (ciCounts?.open ?? null) : admin.role === "deputy_commissioner" ? (ciCounts?.removals ?? null) : null;
+  // Red: open issues waiting for a notice (City Manager / Tax Daroga issue it); receiving-copy removals waiting for the DMC.
+  const ciDesk =
+    admin.role === "city_manager" || admin.role === "tax_daroga"
+      ? (ciCounts?.open ?? null)
+      : admin.role === "deputy_commissioner"
+        ? (ciCounts?.removals ?? null)
+        : null;
   const showTaxCollectorAssignments = isCommissioner;
   const showDisputedHoldings = admin.role === "tax_daroga" || admin.role === "city_manager" || admin.role === "commissioner";
   const showRevertAuditTrail = isCommissioner;
@@ -534,12 +539,12 @@ export default function AdminDashboardPage() {
                     </span>
                     <h3 className="mb-1.5 text-base font-semibold text-slate-900">Collection Issues</h3>
                     <p className="text-sm text-slate-500">
-                      {admin.role === "city_manager" && ciCounts?.open
+                      {(admin.role === "city_manager" || admin.role === "tax_daroga") && ciCounts?.open
                         ? `${ciCounts.open} open issue(s) waiting for your notice.`
                         : admin.role === "deputy_commissioner" && ciCounts?.removals
                           ? `${ciCounts.removals} receiving cop${ciCounts.removals === 1 ? "y" : "ies"} - removal waiting for your approval.`
-                          : admin.role === "city_manager"
-                            ? "Issue the standard legal notice for reported collection issues and mark them resolved."
+                          : admin.role === "city_manager" || admin.role === "tax_daroga"
+                            ? "Issue the standard legal notice for reported collection issues."
                             : `Collection issues reported by Tax Collectors - open, notice issued, resolved.${ciCounts ? ` ${ciCounts.open} open, ${ciCounts.notice_issued} with notice.` : ""}`}
                     </p>
                   </Link>

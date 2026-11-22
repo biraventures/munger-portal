@@ -117,7 +117,8 @@ export default function CollectionIssuesPage() {
     );
   }
 
-  const canGenerate = admin.role === "city_manager";
+  // The City Manager or the Tax Daroga issues the notice (signed by whoever generates it).
+  const canGenerate = admin.role === "city_manager" || admin.role === "tax_daroga";
   const canResolve = admin.role === "city_manager" || admin.role === "commissioner";
 
   if (openNotice) {
@@ -143,7 +144,7 @@ export default function CollectionIssuesPage() {
           Collection Issues
         </h1>
         <p className="mb-5 text-sm text-slate-500">
-          Problems Tax Collectors have reported while collecting. The City Manager issues the standard legal notice; the issue is resolved automatically
+          Problems Tax Collectors have reported while collecting. The City Manager or the Tax Daroga issues the standard legal notice; the issue is resolved automatically
           when the holding&apos;s demand is paid, or by the City Manager with a note. Each notice&apos;s signed receiving copy is uploaded here - once
           uploaded it is removed only with the DMC&apos;s approval.
         </p>
