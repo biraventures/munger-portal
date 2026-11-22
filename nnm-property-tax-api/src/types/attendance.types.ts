@@ -131,6 +131,27 @@ export const CROSS_WARD_ROLES: AttendanceRole[] = [
 export const ENGINEER_ROLES = ["je_civil", "je_mechanical", "ae_civil", "ae_mechanical"] as const;
 export type EngineerRole = (typeof ENGINEER_ROLES)[number];
 
+/**
+ * The Mechanical JE / AE logins made before project monitoring carry their module's role - fleet (junior_engineer /
+ * assistant_engineer_mechanical), street lights (streetlight_je / _ae), pyau (pyau_je / _ae). In project monitoring
+ * they are the Mechanical JE / AE. (Only there: their ward scope in those modules is unchanged.)
+ */
+export const ENGINEER_ROLE_ALIASES: Partial<Record<AttendanceRole, EngineerRole>> = {
+  junior_engineer: "je_mechanical",
+  streetlight_je: "je_mechanical",
+  pyau_je: "je_mechanical",
+  assistant_engineer_mechanical: "ae_mechanical",
+  streetlight_ae: "ae_mechanical",
+  pyau_ae: "ae_mechanical",
+};
+/** Every login role that works as a project engineer. */
+export const ENGINEER_LOGIN_ROLES: AttendanceRole[] = [...ENGINEER_ROLES, ...(Object.keys(ENGINEER_ROLE_ALIASES) as AttendanceRole[])];
+/** The project engineer kind of a login role (null: not an engineer). */
+export const engineerKindOf = (role: string): EngineerRole | null =>
+  (ENGINEER_ROLES as readonly string[]).includes(role) ? (role as EngineerRole) : (ENGINEER_ROLE_ALIASES[role as AttendanceRole] ?? null);
+/** The login roles of one engineer kind. */
+export const loginRolesOf = (kind: EngineerRole): AttendanceRole[] => ENGINEER_LOGIN_ROLES.filter((r) => engineerKindOf(r) === kind);
+
 export interface AttendanceUserRow {
   id: number;
   username: string;

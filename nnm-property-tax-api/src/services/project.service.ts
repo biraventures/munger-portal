@@ -6,7 +6,14 @@ import { env } from "../config/env";
 import { ApiError } from "../utils/ApiError";
 import { MAX_PHOTO_BYTES, uploadLimitMessage } from "../utils/uploadLimits";
 import { stageFromFacts } from "./projectReportFormat";
-import { ENGINEER_ROLES, type AttendanceTokenPayload, type EngineerRole } from "../types/attendance.types";
+import {
+  ENGINEER_LOGIN_ROLES,
+  ENGINEER_ROLES,
+  engineerKindOf,
+  loginRolesOf,
+  type AttendanceTokenPayload,
+  type EngineerRole,
+} from "../types/attendance.types";
 import {
   MAX_PHOTOS_PER_MILESTONE,
   ONGOING_STAGES,
@@ -37,8 +44,8 @@ type Db = PoolClient | typeof pool;
 export const isProjectAdmin = (u: User) => PROJECT_ADMIN_ROLES.includes(u.role);
 export const canEnterProjects = (u: User) => PROJECT_ENTRY_ROLES.includes(u.role);
 export const seesAllProjects = (u: User) => PROJECT_VIEW_ALL_ROLES.includes(u.role);
-const engineerRole = (u: User): EngineerRole | null =>
-  (ENGINEER_ROLES as readonly string[]).includes(u.role) ? (u.role as EngineerRole) : null;
+// Older module logins (fleet / street light / pyau JE, AE) count as the Mechanical JE / AE.
+const engineerRole = (u: User): EngineerRole | null => engineerKindOf(u.role);
 
 /** SQL: the effective monitor of kind `r` of project `p` (the Commissioner's pick, else the ward's engineer). */
 const monitorSql = (r: EngineerRole) =>
@@ -678,23 +685,25 @@ export async function engineerSetup() {
   const [wards, engineers, assigned] = await Promise.all([
     pool.query(`SELECT id, ward_name FROM attendance_wards ORDER BY id`),
     pool.query(
-      `SELECT id, display_name, username, role FROM attendance_users
+      `SELECT id, display_name, username, role AS login_role FROM attendance_users
        WHERE role = ANY($1) AND active = TRUE AND deleted_at IS NULL ORDER BY role, display_name`,
-      [ENGINEER_ROLES],
+      [ENGINEER_LOGIN_ROLES],
     ),
     pool.query(
       `SELECT ew.ward_id, ew.role, ew.user_id, u.display_name, ew.assigned_by, ew.assigned_at
        FROM engineer_wards ew JOIN attendance_users u ON u.id = ew.user_id`,
     ),
   ]);
-  return { wards: wards.rows, engineers: engineers.rows, assignments: assigned.rows };
+  // role = the engineer kind (je_mechanical for a fleet / street light / pyau JE login); login_role = the login's own role.
+  const list = engineers.rows.map((e: { login_role: string }) => ({ ...e, role: engineerKindOf(e.login_role) }));
+  return { wards: wards.rows, engineers: list, assignments: assigned.rows };
 }
 
 async function assertEngineer(db: Db, userId: number, role: EngineerRole) {
-  const { rows } = await db.query(`SELECT 1 FROM attendance_users WHERE id = $1 AND role = $2 AND active = TRUE AND deleted_at IS NULL`, [
-    userId,
-    role,
-  ]);
+  const { rows } = await db.query(
+    `SELECT 1 FROM attendance_users WHERE id = $1 AND role = ANY($2) AND active = TRUE AND deleted_at IS NULL`,
+    [userId, loginRolesOf(role)],
+  );
   if (!rows[0]) throw ApiError.badRequest("Pick an active login of that kind.");
 }
 

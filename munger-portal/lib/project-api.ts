@@ -23,6 +23,16 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
 
 export const ENGINEER_ROLES = ["je_civil", "ae_civil", "je_mechanical", "ae_mechanical"] as const;
 export type EngineerRole = (typeof ENGINEER_ROLES)[number];
+/** Every login that works as a project engineer: also the older fleet / street light / pyau JE and AE logins (Mechanical). */
+export const ENGINEER_LOGIN_ROLES: string[] = [
+  ...ENGINEER_ROLES,
+  "junior_engineer",
+  "assistant_engineer_mechanical",
+  "streetlight_je",
+  "streetlight_ae",
+  "pyau_je",
+  "pyau_ae",
+];
 export const ENGINEER_LABELS: Record<EngineerRole, string> = {
   je_civil: "JE (Civil)",
   ae_civil: "AE (Civil)",

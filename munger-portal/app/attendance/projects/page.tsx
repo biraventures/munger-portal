@@ -9,7 +9,7 @@ import type { AttendanceRole } from "@/lib/attendance-auth";
 import { fetchAttendanceWards, type AttendanceWard } from "@/lib/attendance-api";
 import {
   DISCIPLINE_LABELS,
-  ENGINEER_ROLES,
+  ENGINEER_LOGIN_ROLES,
   ONGOING_STAGES,
   PAST_STAGES,
   PROJECT_ADMIN_ROLES,
@@ -54,7 +54,7 @@ const monitorsOf = (p: Project) =>
 
 export default function ProjectsPage() {
   const user = useAttendanceGuard(PROJECT_ROLES as AttendanceRole[]);
-  const isEngineer = !!user && (ENGINEER_ROLES as readonly string[]).includes(user.role);
+  const isEngineer = !!user && ENGINEER_LOGIN_ROLES.includes(user.role);
   const canEnter = !!user && PROJECT_ENTRY_ROLES.includes(user.role);
   const isAdmin = !!user && PROJECT_ADMIN_ROLES.includes(user.role);
 

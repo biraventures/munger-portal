@@ -23,14 +23,15 @@ import {
   wardReportHandler,
 } from "../controllers/project.controller";
 import { requireAttendanceRole } from "../middleware/requireAttendanceRole";
-import { ENGINEER_ROLES } from "../types/attendance.types";
+import { ENGINEER_LOGIN_ROLES } from "../types/attendance.types";
 import { PROJECT_ADMIN_ROLES, PROJECT_ENTRY_ROLES, PROJECT_VIEW_ALL_ROLES } from "../types/project.types";
 
 /** Project monitoring (Asset Management portal, attendance login) - see services/project.service.ts. */
 export const projectRouter = Router();
 
-const ANY = [...PROJECT_VIEW_ALL_ROLES, ...ENGINEER_ROLES];
-const WORK = [...PROJECT_ENTRY_ROLES, ...ENGINEER_ROLES];
+// Engineers include the older fleet / street light / pyau JE and AE logins (Mechanical).
+const ANY = [...PROJECT_VIEW_ALL_ROLES, ...ENGINEER_LOGIN_ROLES];
+const WORK = [...PROJECT_ENTRY_ROLES, ...ENGINEER_LOGIN_ROLES];
 
 projectRouter.get("/", requireAttendanceRole(ANY), listProjectsHandler);
 projectRouter.get("/ward-report", requireAttendanceRole(ANY), wardReportHandler);

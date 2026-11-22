@@ -126,7 +126,19 @@ const STRINGS = {
 
 const FACE_ROLES = ["sanitation_prabhari", "apswmo", "sanitation_officer", "attendance_admin"];
 
-const ENGINEER_PROJECT_ROLES = ["je_civil", "je_mechanical", "ae_civil", "ae_mechanical"];
+// Project engineers - also the older fleet / street light / pyau JE and AE logins (they are the Mechanical JE / AE there).
+const ENGINEER_PROJECT_ROLES = [
+  "je_civil",
+  "je_mechanical",
+  "ae_civil",
+  "ae_mechanical",
+  "junior_engineer",
+  "assistant_engineer_mechanical",
+  "streetlight_je",
+  "streetlight_ae",
+  "pyau_je",
+  "pyau_ae",
+];
 const PROJECT_ROLES = [...ENGINEER_PROJECT_ROLES, "municipal_commissioner", "deputy_municipal_commissioner", "yojana_prabhari", "attendance_admin"];
 // The submersible dashboard and street light reports (moved from the admin portal's JE / AE - Mechanical logins).
 const MECH_VIEW_ROLES = ["je_mechanical", "ae_mechanical", "municipal_commissioner", "deputy_municipal_commissioner", "city_manager", "attendance_admin"];
