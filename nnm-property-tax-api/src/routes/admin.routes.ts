@@ -167,7 +167,19 @@ import {
   postApproveSolidWasteRequest,
   postRejectSolidWasteRequest,
 } from "../controllers/solidWasteRequest.controller";
-import { listAllCollectionIssues, listMyCollectionIssues } from "../controllers/collectionIssue.controller";
+import {
+  getCiReceiving,
+  getCiReceivingLog,
+  getCiRemovedCopy,
+  getCollectionIssueCounts,
+  listAllCollectionIssues,
+  listMyCollectionIssues,
+  postCiReceiving,
+  postCiRemovalDecision,
+  postCiRemovalRequest,
+  postReopenCollectionIssue,
+  postResolveCollectionIssue,
+} from "../controllers/collectionIssue.controller";
 import {
   postGenerateCollectionIssueNotice,
   getCollectionIssueNotices,
@@ -897,11 +909,31 @@ adminRouter.post(
 adminRouter.post("/tl-notices/:id/receiving/remove-decision", requireAdminRole("deputy_commissioner"), postTlReceivingRemovalDecision);
 
 adminRouter.get("/collection-issues/mine", requireAdminRole("tax_collector"), listMyCollectionIssues);
-adminRouter.get("/collection-issues", requireAdminRole("tax_daroga", "commissioner", "city_manager"), listAllCollectionIssues);
+adminRouter.get("/collection-issues", requireAdminRole("tax_daroga", "commissioner", "city_manager", "deputy_commissioner"), listAllCollectionIssues);
+adminRouter.get(
+  "/collection-issues/counts",
+  requireAdminRole("tax_daroga", "commissioner", "city_manager", "deputy_commissioner"),
+  getCollectionIssueCounts,
+);
+adminRouter.post("/collection-issues/:id/resolve", requireAdminRole("city_manager", "commissioner"), postResolveCollectionIssue);
+adminRouter.post("/collection-issues/:id/reopen", requireAdminRole("city_manager", "commissioner"), postReopenCollectionIssue);
+// Receiving copies of collection issue notices: uploaded by the reporting Tax Collector, the Tax Daroga or the City
+// Manager; removed only with the DMC's approval (migration 191).
+const requireCiReceivingViewRole = requireAdminRole("tax_collector", "tax_daroga", "city_manager", "deputy_commissioner", "commissioner");
+adminRouter.get("/collection-issue-notices/receiving-removed/:logId", requireCiReceivingViewRole, getCiRemovedCopy);
+adminRouter.post("/collection-issue-notices/:id/receiving", requireAdminRole("tax_collector", "tax_daroga", "city_manager"), postCiReceiving);
+adminRouter.get("/collection-issue-notices/:id/receiving", requireCiReceivingViewRole, getCiReceiving);
+adminRouter.get("/collection-issue-notices/:id/receiving/log", requireCiReceivingViewRole, getCiReceivingLog);
+adminRouter.post(
+  "/collection-issue-notices/:id/receiving/remove-request",
+  requireAdminRole("tax_collector", "tax_daroga", "city_manager", "commissioner"),
+  postCiRemovalRequest,
+);
+adminRouter.post("/collection-issue-notices/:id/receiving/remove-decision", requireAdminRole("deputy_commissioner"), postCiRemovalDecision);
 adminRouter.post("/collection-issues/:id/generate-notice", requireAdminRole("city_manager"), postGenerateCollectionIssueNotice);
 adminRouter.get(
   "/collection-issues/:id/notices",
-  requireAdminRole("tax_daroga", "commissioner", "city_manager"),
+  requireAdminRole("tax_daroga", "commissioner", "city_manager", "deputy_commissioner"),
   getCollectionIssueNotices,
 );
 adminRouter.get(

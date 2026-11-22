@@ -2127,6 +2127,12 @@ export interface CollectionIssue {
   reported_by_username: string;
   reported_by_display_name: string;
   reported_at: string;
+  /** open -> notice_issued -> resolved (automatically when the demand is paid, or by the City Manager). */
+  status: "open" | "notice_issued" | "resolved";
+  resolved_how: "paid" | "manual" | null;
+  resolved_at: string | null;
+  resolved_by: string | null;
+  resolution_note: string | null;
 }
 
 /** One notice as listed under its collection issue - see CollectionIssueNotice for the full row. */
@@ -2137,6 +2143,13 @@ export interface CollectionIssueNoticeSummary {
   demand_no: string | null;
   generated_by_display_name: string;
   generated_at: string;
+  /** Receiving copy (signed by the taxpayer); removal only with the DMC's approval. */
+  receiving_uploaded_at: string | null;
+  receiving_by: string | null;
+  removal_requested_at: string | null;
+  removal_requested_by: string | null;
+  removal_reason: string | null;
+  removed_count: number;
 }
 
 export interface CollectionIssueWithNotices extends CollectionIssue {
@@ -2238,7 +2251,9 @@ export async function fetchFieldVerificationsForHolding(holdingNo: string): Prom
 }
 
 /** Oversight worklist - Tax Daroga, Commissioner, and City Manager (who also generates notices from here). */
-export async function fetchAllCollectionIssues(status?: "pending" | "noticed"): Promise<CollectionIssueWithNotices[]> {
+export async function fetchAllCollectionIssues(
+  status?: "pending" | "noticed" | "open" | "notice_issued" | "resolved" | "unresolved" | "receiving_missing" | "removal",
+): Promise<CollectionIssueWithNotices[]> {
   const qs = status ? `?status=${status}` : "";
   const res = await fetch(`${API_BASE_URL}/admin/collection-issues${qs}`, { headers: authHeaders() });
   if (!res.ok) throw new Error("Could not load collection issues.");

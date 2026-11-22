@@ -68,6 +68,7 @@ import { fetchSettlementPendingCount } from "@/lib/historical-payment-api";
 import { fetchResolutionsWaiting } from "@/lib/holding-import-api";
 import { fetchMigMyCount, setMigOperatorLogin } from "@/lib/mig-records-api";
 import { fetchTlRemovalCount } from "@/lib/tl-notice-api";
+import { fetchCollectionIssueCounts } from "@/lib/collection-issue-api";
 import { fetchPendingCount as fetchNewHoldingPending, type PendingCount as NewHoldingPending } from "@/lib/new-holding-api";
 
 export default function AdminDashboardPage() {
@@ -77,6 +78,7 @@ export default function AdminDashboardPage() {
   const [solidWastePendingCount, setSolidWastePendingCount] = useState<number | null>(null);
   const [migPending, setMigPending] = useState<number | null>(null);
   const [tlRemovals, setTlRemovals] = useState<number | null>(null);
+  const [ciCounts, setCiCounts] = useState<{ open: number; notice_issued: number; removals: number } | null>(null);
   const [hallApplications, setHallApplications] = useState<number | null>(null);
   const [myShopStagePendingCount, setMyShopStagePendingCount] = useState<number | null>(null);
   const [myRentalAppPendingCount, setMyRentalAppPendingCount] = useState<number | null>(null);
@@ -101,6 +103,11 @@ export default function AdminDashboardPage() {
       fetchBookings({ status: "applied" })
         .then((r) => setHallApplications(r.counts.applied))
         .catch(() => setHallApplications(null));
+    }
+    if (["tax_daroga", "city_manager", "commissioner", "deputy_commissioner"].includes(admin.role)) {
+      fetchCollectionIssueCounts()
+        .then(setCiCounts)
+        .catch(() => setCiCounts(null));
     }
     if (admin.role === "deputy_commissioner") {
       fetchTlRemovalCount()
@@ -237,7 +244,9 @@ export default function AdminDashboardPage() {
   // Old part payments on old holdings, settled year by year (Tax Daroga enters, City Manager approves).
   const showHistoricalPayments = ["tax_daroga", "city_manager", "deputy_commissioner", "commissioner"].includes(admin.role);
   const showSurveyorAssignments = ["tax_daroga", "city_manager", "deputy_commissioner", "commissioner"].includes(admin.role);
-  const showCollectionIssues = admin.role === "tax_daroga" || admin.role === "commissioner" || admin.role === "city_manager";
+  const showCollectionIssues = ["tax_daroga", "commissioner", "city_manager", "deputy_commissioner"].includes(admin.role);
+  // Red: open issues waiting for the City Manager's notice; receiving-copy removals waiting for the DMC.
+  const ciDesk = admin.role === "city_manager" ? (ciCounts?.open ?? null) : admin.role === "deputy_commissioner" ? (ciCounts?.removals ?? null) : null;
   const showTaxCollectorAssignments = isCommissioner;
   const showDisputedHoldings = admin.role === "tax_daroga" || admin.role === "city_manager" || admin.role === "commissioner";
   const showRevertAuditTrail = isCommissioner;
@@ -492,7 +501,7 @@ export default function AdminDashboardPage() {
                 )}
               </DashboardGroup>
 
-              <DashboardGroup id="collection" title="Collection" description="Field collection receipts, payment reconciliation, collection &amp; field reports, collection issues and holdings collected on a day." icon={<Landmark className="h-6 w-6" strokeWidth={1.8} />} highlight={false}>
+              <DashboardGroup id="collection" title="Collection" description="Field collection receipts, payment reconciliation, collection &amp; field reports, collection issues and holdings collected on a day." icon={<Landmark className="h-6 w-6" strokeWidth={1.8} />} highlight={showCollectionIssues && (ciDesk ?? 0) > 0}>
                 {showBulkReceipts && (
                   <Link href="/admin/bulk-receipts" className={cardClass}>
                     <span className={iconWrapClass}>
@@ -521,13 +530,19 @@ export default function AdminDashboardPage() {
                   </Link>
                 )}
                 {showCollectionIssues && (
-                  <Link href="/admin/collection-issues" className={cardClass}>
-                    <span className={iconWrapClass}>
+                  <Link href="/admin/collection-issues" className={deskCardClass(ciDesk)}>
+                    <span className={deskIconWrapClass(ciDesk)}>
                       <FileWarning className="h-6 w-6" strokeWidth={1.8} />
                     </span>
                     <h3 className="mb-1.5 text-base font-semibold text-slate-900">Collection Issues</h3>
                     <p className="text-sm text-slate-500">
-                      {admin.role === "city_manager" ? "Generate the standard legal notice for a reported collection issue." : "See what Tax Collectors have reported."}
+                      {admin.role === "city_manager" && ciCounts?.open
+                        ? `${ciCounts.open} open issue(s) waiting for your notice.`
+                        : admin.role === "deputy_commissioner" && ciCounts?.removals
+                          ? `${ciCounts.removals} receiving cop${ciCounts.removals === 1 ? "y" : "ies"} - removal waiting for your approval.`
+                          : admin.role === "city_manager"
+                            ? "Issue the standard legal notice for reported collection issues and mark them resolved."
+                            : `Collection issues reported by Tax Collectors - open, notice issued, resolved.${ciCounts ? ` ${ciCounts.open} open, ${ciCounts.notice_issued} with notice.` : ""}`}
                     </p>
                   </Link>
                 )}

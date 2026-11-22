@@ -1,3 +1,4 @@
+import { pool } from "../config/db";
 import { collectionIssueRepository } from "../repositories/collectionIssue.repository";
 import { collectionIssueNoticeRepository } from "../repositories/collectionIssueNotice.repository";
 import { demandNoticeRepository, type DemandNoticeRow } from "../repositories/demandNotice.repository";
@@ -113,6 +114,7 @@ export async function generateCollectionIssueNotice(
 ): Promise<GeneratedCollectionIssueNotice> {
   const issue = await collectionIssueRepository.findById(collectionIssueId);
   if (!issue) throw ApiError.notFound("Collection issue not found.");
+  if (issue.status === "resolved") throw ApiError.badRequest("This issue is resolved - reopen it first to issue a notice.");
 
   const property = await propertyRepository.findByHoldingNo(issue.holding_no);
   if (!property) throw ApiError.notFound("Holding not found.");
@@ -144,6 +146,8 @@ export async function generateCollectionIssueNotice(
     generatedByDisplayName: admin.displayName,
     snapshot,
   });
+
+  await pool.query(`UPDATE collection_issues SET status = 'notice_issued' WHERE id = $1 AND status = 'open'`, [collectionIssueId]);
 
   return { record, property, issue, demandNotice, ...content, language };
 }

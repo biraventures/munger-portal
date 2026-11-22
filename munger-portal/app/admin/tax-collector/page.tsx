@@ -739,7 +739,17 @@ export default function TaxCollectorPage() {
 
         <div className="mt-8 rounded-xl border border-slate-200 bg-white p-5">
           <h3 className="mb-3 text-sm font-semibold text-slate-700">Issues I have reported &amp; notices raised</h3>
-          <CollectionIssueList issues={myIssues} showHolding emptyText="You have not reported any collection issue yet." />
+          <CollectionIssueList
+            issues={myIssues}
+            showHolding
+            emptyText="You have not reported any collection issue yet."
+            viewer={admin ? { role: admin.role, username: admin.username } : undefined}
+            onChanged={() =>
+              fetchMyCollectionIssues()
+                .then(setMyIssues)
+                .catch(() => undefined)
+            }
+          />
         </div>
       </main>
 
