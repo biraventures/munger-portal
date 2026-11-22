@@ -104,7 +104,7 @@ export default function ProgressReportPage() {
       <div className="print:hidden">
         <AdminHeader admin={admin} />
       </div>
-      <main className="mx-auto max-w-6xl space-y-5 px-4 py-8 sm:px-6">
+      <main className="printable-flow mx-auto max-w-6xl space-y-5 px-4 py-8 sm:px-6 print:space-y-3 print:px-0 print:py-0">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
             <h1 className="flex items-center gap-2 text-2xl font-semibold text-slate-900">
