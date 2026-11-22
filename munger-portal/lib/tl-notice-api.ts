@@ -188,11 +188,17 @@ export interface TlSurvey {
         printedAt: string | null;
         receivingUploadedAt: string | null;
         receivingBy: string | null;
+        /** Removal of the receiving copy asked for - waiting for the DMC. */
+        removalRequestedAt: string | null;
+        removalRequestedBy: string | null;
+        removalReason: string | null;
+        /** Receiving copies of this notice removed earlier (with the DMC's approval). */
+        removedCount: number;
       }[]
     | null;
 }
 
-export async function fetchTlSurveys(filter: { status?: string; date?: string; q?: string }): Promise<TlSurvey[]> {
+export async function fetchTlSurveys(filter: { status?: string; date?: string; q?: string; receiving?: string }): Promise<TlSurvey[]> {
   const q = new URLSearchParams();
   for (const [k, v] of Object.entries(filter)) if (v) q.set(k, v);
   const res = await fetch(`${API_BASE_URL}/admin/tl-surveys?${q}`, {
@@ -233,7 +239,7 @@ export async function openTlSurveyFile(id: string, which: "license" | "complied"
   else window.location.href = url;
 }
 
-/** The signed receiving half of a printed notice, photographed with the camera. */
+/** The signed receiving half of a notice - a camera photo, or an attached photo / PDF. */
 export async function uploadTlReceivingCopy(
   noticeId: string,
   photo: FileUpload,
@@ -270,4 +276,50 @@ export async function readLicenceFile(file: File): Promise<FileUpload> {
   }
   const blob = await shrinkPhoto(file);
   return { base64: await blobToBase64(blob), mime: blob.type || "image/jpeg" };
+}
+
+async function post(path: string, body: unknown, fallback: string): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}${path}`, { method: "POST", headers: headers(), body: JSON.stringify(body) });
+  await json(res, fallback);
+}
+
+/** Asks the DMC to remove an uploaded receiving copy. */
+export const requestTlReceivingRemoval = (noticeId: string, reason: string) =>
+  post(`/admin/tl-notices/${noticeId}/receiving/remove-request`, { reason }, "Could not send the request");
+
+/** DMC: approves (copy removed, kept in the log) or rejects a requested removal. */
+export const decideTlReceivingRemoval = (noticeId: string, approve: boolean, remark: string | null) =>
+  post(`/admin/tl-notices/${noticeId}/receiving/remove-decision`, { approve, remark }, "Could not save");
+
+export interface TlReceivingLogEntry {
+  id: string;
+  action: "uploaded" | "removal_requested" | "removal_rejected" | "removed";
+  reason: string | null;
+  by_name: string | null;
+  at: string;
+  has_removed_copy: boolean;
+}
+export async function fetchTlReceivingLog(noticeId: string): Promise<TlReceivingLogEntry[]> {
+  const res = await fetch(`${API_BASE_URL}/admin/tl-notices/${noticeId}/receiving/log`, { headers: headers(), cache: "no-store" });
+  return (await json<{ log: TlReceivingLogEntry[] }>(res, "Could not load the history")).log;
+}
+
+/** Opens a removed receiving copy (from the history) in a new tab. */
+export async function openTlRemovedCopy(logId: string): Promise<void> {
+  const win = window.open("", "_blank");
+  const res = await fetch(`${API_BASE_URL}/admin/tl-notices/receiving-removed/${logId}`, { headers: headers(false) });
+  if (!res.ok) {
+    win?.close();
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || "Could not open the copy.");
+  }
+  const url = URL.createObjectURL(await res.blob());
+  if (win) win.location.href = url;
+  else window.location.href = url;
+}
+
+/** Receiving copy removals waiting for the DMC. */
+export async function fetchTlRemovalCount(): Promise<number> {
+  const res = await fetch(`${API_BASE_URL}/admin/tl-notices/receiving-removals/count`, { headers: headers(), cache: "no-store" });
+  return (await json<{ pending: number }>(res, "Could not load")).pending;
 }

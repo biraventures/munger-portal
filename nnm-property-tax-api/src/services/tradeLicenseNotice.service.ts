@@ -42,14 +42,14 @@ function addDays(isoDate: string, days: number): string {
 const FILE_TYPES: Record<string, string> = { "image/jpeg": "jpg", "image/jpg": "jpg", "image/png": "png", "application/pdf": "pdf" };
 const MAX_FILE_BYTES = 6 * 1024 * 1024;
 
-async function saveFile(base64: string, mime: string, prefix: string): Promise<string> {
+async function saveFile(base64: string, mime: string, prefix: string, what = "licence copy"): Promise<string> {
   const ext = FILE_TYPES[mime];
-  if (!ext) throw ApiError.badRequest("The licence copy must be a JPG/PNG photo or a PDF.");
+  if (!ext) throw ApiError.badRequest(`The ${what} must be a JPG/PNG photo or a PDF.`);
   const buf = Buffer.from(base64, "base64");
-  if (buf.length === 0 || buf.length > MAX_FILE_BYTES) throw ApiError.badRequest("The licence copy is empty or too large.");
+  if (buf.length === 0 || buf.length > MAX_FILE_BYTES) throw ApiError.badRequest(`The ${what} is empty or too large.`);
   assertUploadSize(mime, buf.length);
   const ok = ext === "pdf" ? buf.subarray(0, 5).toString("latin1") === "%PDF-" : ext === "jpg" ? buf[0] === 0xff && buf[1] === 0xd8 : buf[0] === 0x89 && buf[1] === 0x50;
-  if (!ok) throw ApiError.badRequest("The licence copy is not a valid JPG / PNG / PDF file.");
+  if (!ok) throw ApiError.badRequest(`The ${what} is not a valid JPG / PNG / PDF file.`);
   const rel = path.join("trade-license-survey", `${prefix}-${Date.now()}-${crypto.randomBytes(4).toString("hex")}.${ext}`);
   const full = path.join(env.PHOTO_UPLOAD_DIR, rel);
   await fs.promises.mkdir(path.dirname(full), { recursive: true });
@@ -305,7 +305,7 @@ export async function noticePrefill(noticeNo: string, sig: string) {
 }
 
 /** Survey list - a Tax Collector sees their own; the City Manager and senior officers see all (with who recorded it). */
-export async function listSurveys(filter: { status?: string; date?: string; recordedBy?: string; q?: string }) {
+export async function listSurveys(filter: { status?: string; date?: string; recordedBy?: string; q?: string; receiving?: string }) {
   await escalateOverdue();
   const params: unknown[] = [];
   const where: string[] = ["TRUE"];
@@ -317,12 +317,23 @@ export async function listSurveys(filter: { status?: string; date?: string; reco
   if (filter.date) add("(s.recorded_at AT TIME ZONE 'Asia/Kolkata')::date = ?::date", filter.date);
   if (filter.recordedBy) add("s.recorded_by_username = ?", filter.recordedBy);
   if (filter.q) add("(s.holding_no ILIKE ? OR s.business_name ILIKE ? OR s.person_name ILIKE ?)", `%${filter.q}%`);
+  // Notices whose receiving copy is not uploaded / uploaded / waiting for the DMC to approve its removal.
+  if (filter.receiving === "missing")
+    where.push("EXISTS (SELECT 1 FROM trade_license_notices n WHERE n.survey_id = s.id AND n.receiving_photo_path IS NULL)");
+  if (filter.receiving === "uploaded")
+    where.push("EXISTS (SELECT 1 FROM trade_license_notices n WHERE n.survey_id = s.id AND n.receiving_photo_path IS NOT NULL)");
+  if (filter.receiving === "removal")
+    where.push("EXISTS (SELECT 1 FROM trade_license_notices n WHERE n.survey_id = s.id AND n.receiving_removal_requested_at IS NOT NULL)");
   const { rows } = await pool.query(
     `SELECT s.id, s.holding_no, p.ward, s.financial_year, s.latitude, s.longitude, s.gps_accuracy_m, s.has_license, s.license_year, s.license_valid_till, s.license_no, s.is_nnm_shop, s.nnm_shop_no, s.person_name, s.business_name, s.address, s.phone,
             s.status, s.recorded_by_name, s.recorded_by_code, s.recorded_at, s.complied_at, s.complied_by, s.complied_license_year, s.complied_valid_till, s.complied_license_no,
             (s.license_photo_path IS NOT NULL) AS has_license_photo, (s.complied_photo_path IS NOT NULL) AS has_complied_photo,
             (SELECT json_agg(json_build_object('id', n.id, 'noticeNo', n.notice_no, 'level', n.level, 'issuedOn', n.issued_on, 'dueOn', n.due_on, 'printedAt', n.printed_at,
-                                      'receivingUploadedAt', n.receiving_uploaded_at, 'receivingBy', n.receiving_uploaded_by_name) ORDER BY n.level)
+                                      'receivingUploadedAt', n.receiving_uploaded_at, 'receivingBy', n.receiving_uploaded_by_name,
+                                      'removalRequestedAt', n.receiving_removal_requested_at, 'removalRequestedBy', n.receiving_removal_requested_by,
+                                      'removalReason', n.receiving_removal_reason,
+                                      'removedCount', (SELECT count(*) FROM trade_license_notice_receiving_log l WHERE l.notice_id = n.id AND l.action = 'removed'))
+                                      ORDER BY n.level)
                FROM trade_license_notices n WHERE n.survey_id = s.id) AS notices,
             -- The application this notice brought in (credited to the Tax Collector who issued it).
             app.application_number AS application_number, app.status AS application_status, app.requested_at AS application_received_at
@@ -371,36 +382,37 @@ export async function surveyFile(id: string, which: "license" | "complied", admi
 }
 
 /**
- * The signed receiving half of a printed notice, photographed by the Tax Collector who raised it (camera photo, JPG /
- * PNG). Allowed once the notice is printed; once uploaded it cannot be replaced.
+ * The signed receiving half of a notice - a photo or a PDF - uploaded by the Tax Collector who raised the notice, the
+ * Trade Licence Prabhari (nodal) or the City Manager. A notice not yet marked printed is marked printed by it. Once
+ * uploaded it stays: it is removed only with the DMC's approval (requestReceivingRemoval / decideReceivingRemoval).
  */
 export async function uploadReceivingCopy(
   noticeId: string,
   input: { photo: { base64: string; mime: string }; latitude?: number | null; longitude?: number | null },
   admin: AdminTokenPayload,
 ): Promise<void> {
-  if (!["image/jpeg", "image/jpg", "image/png"].includes(input.photo.mime)) throw ApiError.badRequest("Take a photo of the receiving copy (JPG / PNG).");
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
-    const { rows } = await client.query<{ recorded_by_username: string; printed_at: string | null; receiving_photo_path: string | null }>(
-      `SELECT s.recorded_by_username, n.printed_at, n.receiving_photo_path
+    const { rows } = await client.query<{ recorded_by_username: string; receiving_photo_path: string | null }>(
+      `SELECT s.recorded_by_username, n.receiving_photo_path
          FROM trade_license_notices n JOIN trade_license_surveys s ON s.id = n.survey_id
         WHERE n.id = $1 FOR UPDATE OF n`,
       [noticeId],
     );
     const n = rows[0];
     if (!n) throw ApiError.notFound("Notice not found.");
-    if (n.recorded_by_username !== admin.username) throw new ApiError(403, "Only the Tax Collector who raised the notice can upload its receiving copy.");
-    if (!n.printed_at) throw ApiError.badRequest("Print the notice first - the receiving copy is the bottom half of the printed sheet.");
-    if (n.receiving_photo_path) throw ApiError.badRequest("The receiving copy of this notice is already uploaded.");
-    const rel = await saveFile(input.photo.base64, input.photo.mime, `notice-receiving-${noticeId}`);
+    assertReceivingRole(admin, n.recorded_by_username, "upload the receiving copy");
+    if (n.receiving_photo_path) throw ApiError.badRequest("The receiving copy of this notice is already uploaded. It can be removed only with the DMC's approval.");
+    const rel = await saveFile(input.photo.base64, input.photo.mime, `notice-receiving-${noticeId}`, "receiving copy");
     await client.query(
       `UPDATE trade_license_notices SET receiving_photo_path = $2, receiving_latitude = $3, receiving_longitude = $4,
-              receiving_uploaded_by_username = $5, receiving_uploaded_by_name = $6, receiving_uploaded_at = now()
+              receiving_uploaded_by_username = $5, receiving_uploaded_by_name = $6, receiving_uploaded_at = now(),
+              printed_at = COALESCE(printed_at, now())
         WHERE id = $1`,
       [noticeId, rel, input.latitude ?? null, input.longitude ?? null, admin.username, admin.displayName],
     );
+    await logReceiving(client, noticeId, "uploaded", admin, rel, null);
     await client.query("COMMIT");
   } catch (e) {
     await client.query("ROLLBACK");
@@ -408,6 +420,122 @@ export async function uploadReceivingCopy(
   } finally {
     client.release();
   }
+}
+
+/** Upload / ask for removal: the Tax Collector who raised the notice, the Trade Licence Prabhari or the City Manager. */
+function assertReceivingRole(admin: AdminTokenPayload, raisedBy: string, what: string, alsoCommissioner = false) {
+  const ok =
+    (admin.role === "tax_collector" && admin.username === raisedBy) ||
+    admin.role === "trade_license_nodal" ||
+    admin.role === "city_manager" ||
+    (alsoCommissioner && admin.role === "commissioner");
+  if (!ok) throw new ApiError(403, `Only the Tax Collector who raised the notice, the Trade Licence Prabhari or the City Manager can ${what}.`);
+}
+
+async function logReceiving(
+  db: Pick<import("pg").PoolClient, "query">,
+  noticeId: string,
+  action: "uploaded" | "removal_requested" | "removal_rejected" | "removed",
+  admin: AdminTokenPayload,
+  photoPath: string | null,
+  reason: string | null,
+) {
+  await db.query(
+    `INSERT INTO trade_license_notice_receiving_log (notice_id, action, photo_path, reason, by_username, by_name) VALUES ($1,$2,$3,$4,$5,$6)`,
+    [noticeId, action, photoPath, reason, admin.username, admin.displayName],
+  );
+}
+
+/** Asks the DMC to remove an uploaded receiving copy (e.g. wrong notice's slip, unreadable), with the reason. */
+export async function requestReceivingRemoval(noticeId: string, reason: string, admin: AdminTokenPayload): Promise<void> {
+  const { rows } = await pool.query<{ recorded_by_username: string; receiving_photo_path: string | null; receiving_removal_requested_at: string | null }>(
+    `SELECT s.recorded_by_username, n.receiving_photo_path, n.receiving_removal_requested_at
+       FROM trade_license_notices n JOIN trade_license_surveys s ON s.id = n.survey_id WHERE n.id = $1`,
+    [noticeId],
+  );
+  const n = rows[0];
+  if (!n) throw ApiError.notFound("Notice not found.");
+  assertReceivingRole(admin, n.recorded_by_username, "ask for the receiving copy to be removed", true);
+  if (!n.receiving_photo_path) throw ApiError.badRequest("No receiving copy is uploaded for this notice.");
+  if (n.receiving_removal_requested_at) throw ApiError.badRequest("Removal of this receiving copy is already waiting for the DMC.");
+  await pool.query(
+    `UPDATE trade_license_notices SET receiving_removal_reason = $2, receiving_removal_requested_by = $3, receiving_removal_requested_at = now()
+      WHERE id = $1`,
+    [noticeId, reason.trim(), admin.displayName],
+  );
+  await logReceiving(pool, noticeId, "removal_requested", admin, n.receiving_photo_path, reason.trim());
+}
+
+/**
+ * DMC: approves a requested removal - the copy is taken off the notice (kept in the log, file kept) so a correct one can
+ * be uploaded - or rejects it (the copy stays).
+ */
+export async function decideReceivingRemoval(noticeId: string, approve: boolean, remark: string | null, admin: AdminTokenPayload): Promise<void> {
+  if (admin.role !== "deputy_commissioner") throw new ApiError(403, "Removal of a receiving copy is approved by the DMC.");
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const { rows } = await client.query<{ receiving_photo_path: string | null; receiving_removal_requested_at: string | null }>(
+      `SELECT receiving_photo_path, receiving_removal_requested_at FROM trade_license_notices WHERE id = $1 FOR UPDATE`,
+      [noticeId],
+    );
+    const n = rows[0];
+    if (!n) throw ApiError.notFound("Notice not found.");
+    if (!n.receiving_removal_requested_at || !n.receiving_photo_path) throw ApiError.badRequest("No removal is waiting for this notice.");
+    if (approve) {
+      await client.query(
+        `UPDATE trade_license_notices SET receiving_photo_path = NULL, receiving_latitude = NULL, receiving_longitude = NULL,
+                receiving_uploaded_by_username = NULL, receiving_uploaded_by_name = NULL, receiving_uploaded_at = NULL,
+                receiving_removal_reason = NULL, receiving_removal_requested_by = NULL, receiving_removal_requested_at = NULL
+          WHERE id = $1`,
+        [noticeId],
+      );
+    } else {
+      await client.query(
+        `UPDATE trade_license_notices SET receiving_removal_reason = NULL, receiving_removal_requested_by = NULL, receiving_removal_requested_at = NULL
+          WHERE id = $1`,
+        [noticeId],
+      );
+    }
+    await logReceiving(client, noticeId, approve ? "removed" : "removal_rejected", admin, n.receiving_photo_path, remark?.trim() || null);
+    await client.query("COMMIT");
+  } catch (e) {
+    await client.query("ROLLBACK");
+    throw e;
+  } finally {
+    client.release();
+  }
+}
+
+/** Receiving copy removals waiting for the DMC (dashboard badge). */
+export async function pendingRemovalCount(): Promise<number> {
+  const { rows } = await pool.query<{ n: number }>(
+    `SELECT count(*)::int AS n FROM trade_license_notices WHERE receiving_removal_requested_at IS NOT NULL`,
+  );
+  return rows[0]?.n ?? 0;
+}
+
+/** A notice's receiving-copy log (uploads, removal requests and decisions), newest first. */
+export async function receivingLog(noticeId: string) {
+  const { rows } = await pool.query(
+    `SELECT id, action, reason, by_name, at, (photo_path IS NOT NULL AND action = 'removed') AS has_removed_copy
+       FROM trade_license_notice_receiving_log WHERE notice_id = $1 ORDER BY at DESC, id DESC`,
+    [noticeId],
+  );
+  return rows;
+}
+
+/** A removed receiving copy (from the log) - for the officers who view receiving copies. */
+export async function removedCopyFile(logId: string): Promise<string> {
+  const { rows } = await pool.query<{ photo_path: string | null }>(
+    `SELECT photo_path FROM trade_license_notice_receiving_log WHERE id = $1 AND action = 'removed'`,
+    [logId],
+  );
+  if (!rows[0]?.photo_path) throw ApiError.notFound("Not found.");
+  const base = path.resolve(env.PHOTO_UPLOAD_DIR);
+  const full = path.resolve(base, rows[0].photo_path);
+  if (!full.startsWith(base + path.sep) || !fs.existsSync(full)) throw ApiError.notFound("The file is missing from storage.");
+  return full;
 }
 
 export async function receivingCopyFile(noticeId: string, admin: AdminTokenPayload): Promise<string> {

@@ -67,6 +67,7 @@ import { fetchKycPending } from "@/lib/staff-kyc-api";
 import { fetchSettlementPendingCount } from "@/lib/historical-payment-api";
 import { fetchResolutionsWaiting } from "@/lib/holding-import-api";
 import { fetchMigMyCount, setMigOperatorLogin } from "@/lib/mig-records-api";
+import { fetchTlRemovalCount } from "@/lib/tl-notice-api";
 import { fetchPendingCount as fetchNewHoldingPending, type PendingCount as NewHoldingPending } from "@/lib/new-holding-api";
 
 export default function AdminDashboardPage() {
@@ -75,6 +76,7 @@ export default function AdminDashboardPage() {
   const [myDiscrepancyPendingCount, setMyDiscrepancyPendingCount] = useState<number | null>(null);
   const [solidWastePendingCount, setSolidWastePendingCount] = useState<number | null>(null);
   const [migPending, setMigPending] = useState<number | null>(null);
+  const [tlRemovals, setTlRemovals] = useState<number | null>(null);
   const [hallApplications, setHallApplications] = useState<number | null>(null);
   const [myShopStagePendingCount, setMyShopStagePendingCount] = useState<number | null>(null);
   const [myRentalAppPendingCount, setMyRentalAppPendingCount] = useState<number | null>(null);
@@ -99,6 +101,11 @@ export default function AdminDashboardPage() {
       fetchBookings({ status: "applied" })
         .then((r) => setHallApplications(r.counts.applied))
         .catch(() => setHallApplications(null));
+    }
+    if (admin.role === "deputy_commissioner") {
+      fetchTlRemovalCount()
+        .then(setTlRemovals)
+        .catch(() => setTlRemovals(null));
     }
     if (["tax_daroga", "city_manager", "commissioner", "deputy_commissioner"].includes(admin.role)) {
       setMigOperatorLogin(false);
@@ -381,7 +388,7 @@ export default function AdminDashboardPage() {
           <>
             <h2 className={groupHeadingClass}>Trade Licence Field Check</h2>
             <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
-              <DashboardGroup id="tl-field" title="Trade Licence Field Check" description="Business visits, notice printing, and the notices issued with their status." icon={<ClipboardCheck className="h-6 w-6" strokeWidth={1.8} />} highlight={false}>
+              <DashboardGroup id="tl-field" title="Trade Licence Field Check" description="Business visits, notice printing, and the notices issued with their status." icon={<ClipboardCheck className="h-6 w-6" strokeWidth={1.8} />} highlight={(tlRemovals ?? 0) > 0}>
                 {showTlSurvey && (
                   <Link href="/admin/tl-survey" className={cardClass}>
                     <span className={iconWrapClass}>
@@ -400,12 +407,16 @@ export default function AdminDashboardPage() {
                     <p className="text-sm text-slate-500">End-of-day printing of today&apos;s notices and automatic second notices, for the City Manager&apos;s signature.</p>
                   </Link>
                 )}
-                <Link href="/admin/tl-notices" className={cardClass}>
-                  <span className={iconWrapClass}>
+                <Link href="/admin/tl-notices" className={deskCardClass(tlRemovals)}>
+                  <span className={deskIconWrapClass(tlRemovals)}>
                     <FileText className="h-6 w-6" strokeWidth={1.8} />
                   </span>
                   <h3 className="mb-1.5 text-base font-semibold text-slate-900">{showTlSurvey ? "My Trade Licence Visits" : "Trade Licence Notices"}</h3>
-                  <p className="text-sm text-slate-500">Businesses checked, notice status (1st, 2nd, legal action due) and licences obtained after notice.</p>
+                  <p className="text-sm text-slate-500">
+                    {tlRemovals
+                      ? `${tlRemovals} receiving cop${tlRemovals === 1 ? "y" : "ies"} - removal waiting for your approval.`
+                      : "Businesses checked, notice status (1st, 2nd, legal action due), receiving copies and licences obtained after notice."}
+                  </p>
                 </Link>
               </DashboardGroup>
             </div>

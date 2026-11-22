@@ -6,8 +6,13 @@ import { asyncHandler } from "../middleware/asyncHandler";
 import { ApiError } from "../utils/ApiError";
 import { holdingNoSchema } from "../utils/holdingNoSchema";
 import {
+  decideReceivingRemoval,
   getNotice,
   listSurveys,
+  pendingRemovalCount,
+  receivingLog,
+  removedCopyFile,
+  requestReceivingRemoval,
   markComplied,
   markPrinted,
   noticesToPrint,
@@ -50,6 +55,7 @@ const listQuery = z.object({
   status: z.enum(["licensed", "notice_1", "notice_2", "legal_action_due", "complied"]).optional(),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   q: z.string().trim().max(60).optional(),
+  receiving: z.enum(["missing", "uploaded", "removal"]).optional(),
 });
 
 /** GET /api/v1/admin/tl-surveys - own records for a Tax Collector; all for the City Manager and senior officers. */
@@ -110,7 +116,7 @@ export const postTlReceivingCopy = asyncHandler(async (req: Request, res: Respon
     .object({ photo: fileSchema, latitude: z.number().min(-90).max(90).nullish(), longitude: z.number().min(-180).max(180).nullish() })
     .safeParse(req.body);
   if (!id.success) throw ApiError.badRequest("Invalid id");
-  if (!b.success) throw ApiError.badRequest("Take a photo of the receiving copy.");
+  if (!b.success) throw ApiError.badRequest("Take a photo of the receiving copy or attach it (photo / PDF).");
   await uploadReceivingCopy(String(id.data), b.data, req.admin!);
   res.status(200).json({ ok: true });
 });
@@ -120,4 +126,41 @@ export const getTlReceivingCopy = asyncHandler(async (req: Request, res: Respons
   const id = z.coerce.number().int().positive().safeParse(req.params.id);
   if (!id.success) throw ApiError.badRequest("Invalid id");
   res.sendFile(await receivingCopyFile(String(id.data), req.admin!));
+});
+
+const noticeId = (v: unknown) => {
+  const id = z.coerce.number().int().positive().safeParse(v);
+  if (!id.success) throw ApiError.badRequest("Invalid id");
+  return String(id.data);
+};
+
+/** POST /api/v1/admin/tl-notices/:id/receiving/remove-request { reason } - ask the DMC to remove an uploaded receiving copy. */
+export const postTlReceivingRemovalRequest = asyncHandler(async (req: Request, res: Response) => {
+  const b = z.object({ reason: z.string().trim().min(5, "Write why the receiving copy should be removed").max(500) }).safeParse(req.body);
+  if (!b.success) throw ApiError.badRequest(b.error.issues[0]?.message ?? "Write the reason.");
+  await requestReceivingRemoval(noticeId(req.params.id), b.data.reason, req.admin!);
+  res.status(200).json({ ok: true });
+});
+
+/** POST /api/v1/admin/tl-notices/:id/receiving/remove-decision { approve, remark } - DMC. */
+export const postTlReceivingRemovalDecision = asyncHandler(async (req: Request, res: Response) => {
+  const b = z.object({ approve: z.boolean(), remark: z.string().trim().max(500).nullish() }).safeParse(req.body);
+  if (!b.success) throw ApiError.badRequest("Approve or reject.");
+  await decideReceivingRemoval(noticeId(req.params.id), b.data.approve, b.data.remark ?? null, req.admin!);
+  res.status(200).json({ ok: true });
+});
+
+/** GET /api/v1/admin/tl-notices/:id/receiving/log - uploads, removal requests and decisions. */
+export const getTlReceivingLog = asyncHandler(async (req: Request, res: Response) => {
+  res.status(200).json({ log: await receivingLog(noticeId(req.params.id)) });
+});
+
+/** GET /api/v1/admin/tl-notices/receiving-removed/:logId - a removed receiving copy. */
+export const getTlRemovedCopy = asyncHandler(async (req: Request, res: Response) => {
+  res.sendFile(await removedCopyFile(noticeId(req.params.logId)));
+});
+
+/** GET /api/v1/admin/tl-notices/receiving-removals/count - removals waiting for the DMC. */
+export const getTlRemovalCount = asyncHandler(async (_req: Request, res: Response) => {
+  res.status(200).json({ pending: await pendingRemovalCount() });
 });

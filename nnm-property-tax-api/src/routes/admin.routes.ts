@@ -303,6 +303,11 @@ import {
 import {
   getTlNotice,
   getTlReceivingCopy,
+  getTlReceivingLog,
+  getTlRemovalCount,
+  getTlRemovedCopy,
+  postTlReceivingRemovalDecision,
+  postTlReceivingRemovalRequest,
   postTlReceivingCopy,
   getTlPrintQueue,
   getTlSurveyFile,
@@ -867,12 +872,29 @@ adminRouter.post("/tl-surveys/:id/complied", requireAdminRole("tax_collector", "
 adminRouter.get("/tl-notices/print-queue", requireAdminRole("tax_collector"), getTlPrintQueue);
 adminRouter.post("/tl-notices/mark-printed", requireAdminRole("tax_collector"), postTlMarkPrinted);
 adminRouter.get("/tl-notices/:id", requireTlViewRole, getTlNotice);
-adminRouter.post("/tl-notices/:id/receiving", requireAdminRole("tax_collector"), postTlReceivingCopy);
-adminRouter.get(
-  "/tl-notices/:id/receiving",
-  requireAdminRole("tax_collector", "city_manager", "tax_daroga", "deputy_commissioner", "commissioner", "agency_team_leader", "agency_project_manager"),
-  getTlReceivingCopy,
+// Receiving copies: uploaded by the Tax Collector who raised the notice, the Trade Licence Prabhari or the City Manager;
+// removed only with the DMC's approval (migration 190).
+const requireTlReceivingViewRole = requireAdminRole(
+  "tax_collector",
+  "trade_license_nodal",
+  "city_manager",
+  "tax_daroga",
+  "deputy_commissioner",
+  "commissioner",
+  "agency_team_leader",
+  "agency_project_manager",
 );
+adminRouter.get("/tl-notices/receiving-removals/count", requireAdminRole("deputy_commissioner", "commissioner"), getTlRemovalCount);
+adminRouter.get("/tl-notices/receiving-removed/:logId", requireTlReceivingViewRole, getTlRemovedCopy);
+adminRouter.post("/tl-notices/:id/receiving", requireAdminRole("tax_collector", "trade_license_nodal", "city_manager"), postTlReceivingCopy);
+adminRouter.get("/tl-notices/:id/receiving", requireTlReceivingViewRole, getTlReceivingCopy);
+adminRouter.get("/tl-notices/:id/receiving/log", requireTlReceivingViewRole, getTlReceivingLog);
+adminRouter.post(
+  "/tl-notices/:id/receiving/remove-request",
+  requireAdminRole("tax_collector", "trade_license_nodal", "city_manager", "commissioner"),
+  postTlReceivingRemovalRequest,
+);
+adminRouter.post("/tl-notices/:id/receiving/remove-decision", requireAdminRole("deputy_commissioner"), postTlReceivingRemovalDecision);
 
 adminRouter.get("/collection-issues/mine", requireAdminRole("tax_collector"), listMyCollectionIssues);
 adminRouter.get("/collection-issues", requireAdminRole("tax_daroga", "commissioner", "city_manager"), listAllCollectionIssues);
