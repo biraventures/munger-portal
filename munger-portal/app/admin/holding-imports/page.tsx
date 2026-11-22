@@ -51,12 +51,9 @@ export default function HoldingImportsPage() {
             <p className="text-sm text-slate-500">
               {admin.role === "commissioner"
                 ? "Progress of bulk-uploaded holdings being integrated into the live data."
-                : "Bulk uploads wait here. Nothing goes live until the City Manager gives final approval and integrates it."}
+                : "Holdings uploaded earlier wait here. Nothing goes live until the City Manager gives final approval and integrates it."}
             </p>
           </div>
-          <Link href="/admin/properties-bulk-upload" className="rounded-md bg-nnm-blue px-4 py-2 text-sm font-semibold text-white hover:bg-nnm-blue-dark">
-            Upload a file
-          </Link>
         </div>
 
         {error && (

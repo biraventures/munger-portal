@@ -102,7 +102,6 @@ import {
   exportGeoData,
 } from "../controllers/geo.controller";
 import {
-  uploadPropertiesXlsxHandler,
   listImportBatchesHandler,
   getImportBatchHandler,
   getImportHoldingHandler,
@@ -135,8 +134,6 @@ import {
 } from "../controllers/shopAgreementDocument.controller";
 import { postCreateShopInspection, listShopInspectionsForShop, listAllShopInspections } from "../controllers/shopInspection.controller";
 import {
-  uploadMigratedHoldingsHandler,
-  getMigratedUploadJobHandler,
   listReviewRowsHandler,
   importReviewRowHandler,
   discardReviewRowHandler,
@@ -544,7 +541,6 @@ adminRouter.post("/properties/remove-duplicate-floors", requireAdminRole("commis
 // Bulk holding uploads are staged for review, not imported. Tax Daroga and City Manager review the staged
 // holdings (Tax Daroga can keep holdings out); the FINAL approval - integrating into the live data (all /
 // selected / all except some) or discarding - is the City Manager's alone. The Commissioner sees progress only.
-adminRouter.post("/properties/bulk-upload", requireAdminRole("commissioner", "tax_daroga", "city_manager"), uploadPropertiesXlsxHandler);
 adminRouter.get("/property-imports", requireAdminRole("tax_daroga", "city_manager", "deputy_commissioner", "commissioner"), listImportBatchesHandler);
 adminRouter.get("/property-imports/:id", requireAdminRole("tax_daroga", "city_manager", "deputy_commissioner", "commissioner"), getImportBatchHandler);
 adminRouter.get("/property-imports/:id/holdings/:holdingNo", requireAdminRole("tax_daroga", "city_manager"), getImportHoldingHandler);
@@ -620,8 +616,6 @@ adminRouter.post("/shops/:shopNo/inspections", requireInspectionRole, postCreate
 // ward parity: Deputy Commissioner handles odd wards, City Manager
 // handles even wards, and each verifies only what they themselves
 // assigned. See migratedHoldingSurvey.controller.ts.
-adminRouter.post("/migrated-holdings/bulk-upload", requireAdminRole("commissioner"), uploadMigratedHoldingsHandler);
-adminRouter.get("/migrated-holdings/bulk-upload/:jobId", requireAdminRole("commissioner"), getMigratedUploadJobHandler);
 // Old records (MIG stage): the Commissioner's approval list, and the field staff's ward-wise list. Roles: migRecord.service.ts.
 adminRouter.get("/mig-records/legacy", getLegacy);
 adminRouter.post("/mig-records/legacy/delete", postDeleteLegacy);

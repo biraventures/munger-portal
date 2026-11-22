@@ -756,47 +756,6 @@ export async function deletePropertyHolding(holdingNo: string, confirmationPhras
   }
 }
 
-export interface PropertyBulkImportResult {
-  batchId: number;
-  totalHoldings: number;
-  ready: number;
-  withWarnings: number;
-  withBlockers: number;
-  errors: { sheet: string; row: number; message: string }[];
-}
-
-/** Plain-language reason when the server's reply carries no message (e.g. a proxy rejecting the request). */
-function uploadFailureMessage(status: number): string {
-  if (status === 413)
-    return "The file is too large for the server to accept (error 413). Ask the administrator to raise the upload size limit on the web server, or upload a smaller file.";
-  if (status === 502 || status === 503 || status === 504)
-    return `The server did not respond in time (error ${status}). Please wait a minute and try again; if it keeps happening, tell the administrator.`;
-  if (status === 401 || status === 403)
-    return `You are not allowed to do this, or your login has expired (error ${status}). Please sign in again.`;
-  return `Could not upload this file (error ${status}).`;
-}
-
-/**
- * Commissioner / Tax Daroga / City Manager. fileDataBase64 is the raw base64 content of the .xlsx file (no data-URL prefix).
- * The file is NOT imported - it is parked for review by Tax Daroga / City Manager.
- */
-export async function uploadPropertiesXlsx(
-  fileDataBase64: string,
-  dataSourceName: string,
-  fileName?: string,
-): Promise<PropertyBulkImportResult> {
-  const res = await fetch(`${API_BASE_URL}/admin/properties/bulk-upload`, {
-    method: "POST",
-    headers: authHeaders(),
-    body: JSON.stringify({ fileDataBase64, dataSourceName, fileName }),
-  });
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body.error || uploadFailureMessage(res.status));
-  }
-  return res.json();
-}
-
 export interface SpaceRemovalResult {
   fixed: { from: string; to: string }[];
   skipped: { holdingNo: string; reason: string }[];
@@ -876,59 +835,6 @@ export async function removeDuplicateFloors(): Promise<DuplicateFloorsCleanupRes
 // floor-wise detail entry, then verifies, then the original assigner
 // gives final sign-off. See migratedHoldingSurvey.controller.ts.
 // ---------------------------------------------------------------------------
-
-export interface MigratedHoldingImportResult {
-  /** "records": the sheet was stored as old records (MIG stage) - see the fields below. */
-  kind?: "records";
-  rowsRead?: number;
-  newRecords?: number;
-  updated?: number;
-  unchanged?: number;
-  linkedToExisting?: number;
-  withBlocking?: number;
-  withWarnings?: number;
-  duplicateRows?: { row: number; sameAsRow: number }[];
-  holdingsCreated: number;
-  rowsSkipped: number;
-  errors: { row: number; message: string }[];
-  /** Rows already in the system - not created again. */
-  alreadyImported?: number;
-  /** Rows held back in the review list, with the reason. */
-  review?: { row: number; reason: string; kind: "needs_review" | "error" }[];
-}
-
-export async function uploadMigratedHoldingsXlsx(
-  fileDataBase64: string,
-  fileName?: string,
-  onProgress?: (processed: number, total: number) => void,
-): Promise<MigratedHoldingImportResult> {
-  // The server imports in the background (a 14,000-row register takes minutes) - start it, then follow it.
-  const res = await fetch(`${API_BASE_URL}/admin/migrated-holdings/bulk-upload`, {
-    method: "POST",
-    headers: authHeaders(),
-    body: JSON.stringify({ fileDataBase64, fileName }),
-  });
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body.error || uploadFailureMessage(res.status));
-  }
-  const { jobId } = (await res.json()) as { jobId: number };
-  let misses = 0;
-  for (;;) {
-    await new Promise((r) => setTimeout(r, 2000));
-    const st = await fetch(`${API_BASE_URL}/admin/migrated-holdings/bulk-upload/${jobId}`, { headers: authHeaders() }).catch(() => null);
-    if (!st || !st.ok) {
-      // A brief network hiccup should not lose the upload - give up only after about a minute of failures.
-      if (++misses > 30) throw new Error(`Lost contact with the server. The upload (no. ${jobId}) may still finish - refresh and check later.`);
-      continue;
-    }
-    misses = 0;
-    const job = (await st.json()) as { status: string; processed: number; total: number; result: MigratedHoldingImportResult | null; error: string | null };
-    onProgress?.(job.processed, job.total);
-    if (job.status === "done" && job.result) return job.result;
-    if (job.status === "failed") throw new Error(job.error || "The upload failed.");
-  }
-}
 
 export type MigratedHoldingSurveyStatus =
   | "pending_assignment"

@@ -1,5 +1,3 @@
-import { pool } from "../config/db";
-import { uploadMigRecords } from "../services/migRecord.service";
 import type { Request, Response } from "express";
 import { listSurveyorsWithWards } from "../services/surveyorWards.service";
 import { z } from "zod";
@@ -18,74 +16,6 @@ import { ApiError } from "../utils/ApiError";
 import type { PropertySaveInput, FloorInput } from "../types/propertySave.types";
 
 const holdingNoParamSchema = z.object({ holdingNo: holdingNoSchema });
-
-/** POST /api/v1/admin/migrated-holdings/bulk-upload - commissioner only, matching the existing bulk-upload pattern. */
-export const uploadMigratedHoldingsHandler = asyncHandler(async (req: Request, res: Response) => {
-  const parsed = z.object({ fileDataBase64: z.string().min(1), fileName: z.string().max(255).optional() }).safeParse(req.body);
-  if (!parsed.success) throw ApiError.badRequest("Invalid input", parsed.error.flatten().fieldErrors);
-  let fileBuffer: Buffer;
-  try {
-    fileBuffer = Buffer.from(parsed.data.fileDataBase64, "base64");
-  } catch {
-    throw ApiError.badRequest("Could not decode the uploaded file.");
-  }
-  if (fileBuffer.length === 0) throw ApiError.badRequest("The uploaded file is empty.");
-
-  // A register of 14,000+ rows takes longer than the web server waits, so the import runs in the background and the
-  // page follows it (GET .../bulk-upload/:jobId). One upload at a time.
-  const { rows: busy } = await pool.query(
-    `SELECT id FROM migrated_upload_jobs WHERE status = 'running' AND created_at > now() - interval '45 minutes' LIMIT 1`,
-  );
-  if (busy[0]) throw ApiError.badRequest(`An upload is already being processed (no. ${busy[0].id}) - wait for it to finish.`);
-  const { rows } = await pool.query<{ id: string }>(`INSERT INTO migrated_upload_jobs (file_name, created_by, kind) VALUES ($1, $2, 'records') RETURNING id`, [
-    parsed.data.fileName ?? null,
-    req.admin!.displayName,
-  ]);
-  const jobId = Number(rows[0]!.id);
-  res.status(202).json({ jobId });
-
-  void (async () => {
-    try {
-      // Every row becomes an old record (MIG stage) awaiting the Commissioner's approval - nothing is rejected.
-      const result = await uploadMigRecords(fileBuffer, req.admin!.displayName, parsed.data.fileName ?? null, jobId, async (done, total) => {
-        await pool.query(`UPDATE migrated_upload_jobs SET processed = $2, total_rows = $3 WHERE id = $1`, [jobId, done, total]);
-      });
-      await pool.query(`UPDATE migrated_upload_jobs SET status = 'done', result = $2, finished_at = now() WHERE id = $1`, [jobId, JSON.stringify(result)]);
-    } catch (err) {
-      console.error("Old-holdings upload failed", err);
-      await pool
-        .query(`UPDATE migrated_upload_jobs SET status = 'failed', error = $2, finished_at = now() WHERE id = $1`, [
-          jobId,
-          err instanceof Error ? err.message : "Unknown error",
-        ])
-        .catch(() => undefined);
-    }
-  })();
-});
-
-/** GET /api/v1/admin/migrated-holdings/bulk-upload/:jobId - progress, then the result, of a background upload. */
-export const getMigratedUploadJobHandler = asyncHandler(async (req: Request, res: Response) => {
-  const id = z.coerce.number().int().positive().safeParse(req.params.jobId);
-  if (!id.success) throw ApiError.badRequest("Invalid upload");
-  const { rows } = await pool.query(
-    `SELECT id, file_name, status, total_rows, processed, result, error, created_at, finished_at,
-            (status = 'running' AND created_at < now() - interval '45 minutes') AS stale
-       FROM migrated_upload_jobs WHERE id = $1`,
-    [id.data],
-  );
-  const j = rows[0];
-  if (!j) throw ApiError.notFound("Upload not found.");
-  res.json({
-    jobId: Number(j.id),
-    fileName: j.file_name,
-    // A run cut off by a server restart never finishes - shown as failed so the sheet can be uploaded again.
-    status: j.stale ? "failed" : j.status,
-    total: j.total_rows,
-    processed: j.processed,
-    result: j.result,
-    error: j.stale ? "The upload stopped part-way (the server restarted). Upload the sheet again - rows already imported are not created twice." : j.error,
-  });
-});
 
 function wardParityForRole(role: string): "odd" | "even" {
   return role === "deputy_commissioner" ? "odd" : "even";

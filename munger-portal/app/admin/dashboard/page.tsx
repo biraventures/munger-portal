@@ -210,9 +210,7 @@ export default function AdminDashboardPage() {
   const showBulkDemandNotices = !isRestrictedRole;
   const showAllPropertyChanges = isCommissioner;
   const showRenumberHolding = isCommissioner;
-  const showBulkUploadProperties = isCommissioner || admin.role === "tax_daroga" || admin.role === "city_manager";
   const showHoldingImportReview = ["tax_daroga", "city_manager", "deputy_commissioner", "commissioner"].includes(admin.role);
-  const showMigratedHoldingsBulkUpload = isCommissioner;
   const showMigratedHoldingsAssign = admin.role === "deputy_commissioner" || admin.role === "city_manager";
   const showMigratedHoldingsSurveyor = admin.role === "tax_daroga";
   const showMigratedHoldingsMySurveys = admin.role === "tax_surveyor";
@@ -274,8 +272,8 @@ export default function AdminDashboardPage() {
   const showAgencyPropertyReports = isAgencyRole;
   const showCollectedHoldings = ["agency_team_leader", "agency_project_manager", "tax_daroga", "city_manager", "deputy_commissioner", "commissioner"].includes(admin.role);
   const propertyGroupVisible =
-    showMutationApprovals || showCancellationRequests || showBulkDemandNotices || showAllPropertyChanges || showRenumberHolding || showBulkUploadProperties ||
-    showMigratedHoldingsBulkUpload || showMigratedHoldingsAssign || showMigratedHoldingsSurveyor || showMigratedHoldingsMySurveys || showInitiateSurvey || showTaxCollectorPage ||
+    showMutationApprovals || showCancellationRequests || showBulkDemandNotices || showAllPropertyChanges || showRenumberHolding ||
+    showMigratedHoldingsAssign || showMigratedHoldingsSurveyor || showMigratedHoldingsMySurveys || showInitiateSurvey || showTaxCollectorPage ||
     showAgencyReports || showAgencyNotices || showReportPropertyDiscrepancy || showMyDiscrepancyReports || showUnsurveyedHouseEntry || showNoticeReceivingUpload || showUnsurveyedHouses || showNoticeReceivingCopies || showPropertyDiscrepancyRequests || showResurveyFlags || showCollectionIssues || showSolidWasteApprovals || showTaxCollectorAssignments || showRevertAuditTrail ||
     showPropertyWiseReport || showDisputedHoldings || showHoldingImportReview || showBulkReceipts || showInstrumentReconciliation ||
     showAgencyPropertyReports || showCollectedHoldings || showDuesReport || showSurveyorAssignments || showStaffKyc || showHistoricalPayments;
@@ -566,7 +564,16 @@ export default function AdminDashboardPage() {
                 )}
               </DashboardGroup>
 
-              <DashboardGroup id="property-records" title="Property Records" description="Property-wise report, uploaded holdings, disputed holdings, field survey flags, all property changes, old holding rows, pre-2011 ARV entry and discrepancy approvals." icon={<ClipboardCheck className="h-6 w-6" strokeWidth={1.8} />} highlight={(myDiscrepancyPendingCount ?? 0) > 0 || (solidWastePendingCount ?? 0) > 0 || (migDesk && (migPending ?? 0) > 0)}>
+              <DashboardGroup id="property-records" title="Property Records" description="Manage properties, property-wise report, uploaded holdings, disputed holdings, field survey flags, all property changes, old holding rows, pre-2011 ARV entry and discrepancy approvals." icon={<ClipboardCheck className="h-6 w-6" strokeWidth={1.8} />} highlight={(myDiscrepancyPendingCount ?? 0) > 0 || (solidWastePendingCount ?? 0) > 0 || (migDesk && (migPending ?? 0) > 0)}>
+                {showRenumberHolding && (
+                  <Link href="/admin/properties-manage" className={cardClass}>
+                    <span className={iconWrapClass}>
+                      <RefreshCw className="h-6 w-6" strokeWidth={1.8} />
+                    </span>
+                    <h3 className="mb-1.5 text-base font-semibold text-slate-900">Manage Properties</h3>
+                    <p className="text-sm text-slate-500">Renumber, rename, delete, or bulk-clean up holding numbers.</p>
+                  </Link>
+                )}
                 {showAgencyPropertyReports && (
                   <Link href="/admin/property-wise-report" className={cardClass}>
                     <span className={iconWrapClass}>
@@ -762,34 +769,7 @@ export default function AdminDashboardPage() {
                 )}
               </DashboardGroup>
 
-              <DashboardGroup id="property-upload" title="Property Upload &amp; Maintenance" description="Manage properties, bulk upload of properties and old holdings, and migrated holding surveys." icon={<Upload className="h-6 w-6" strokeWidth={1.8} />} highlight={false}>
-                {showRenumberHolding && (
-                  <Link href="/admin/properties-manage" className={cardClass}>
-                    <span className={iconWrapClass}>
-                      <RefreshCw className="h-6 w-6" strokeWidth={1.8} />
-                    </span>
-                    <h3 className="mb-1.5 text-base font-semibold text-slate-900">Manage Properties</h3>
-                    <p className="text-sm text-slate-500">Renumber, rename, delete, or bulk-clean up holding numbers.</p>
-                  </Link>
-                )}
-                {showBulkUploadProperties && (
-                  <Link href="/admin/properties-bulk-upload" className={cardClass}>
-                    <span className={iconWrapClass}>
-                      <Upload className="h-6 w-6" strokeWidth={1.8} />
-                    </span>
-                    <h3 className="mb-1.5 text-base font-semibold text-slate-900">Bulk Upload Properties</h3>
-                    <p className="text-sm text-slate-500">Import holdings, floors, tax history, and payments from a backup file.</p>
-                  </Link>
-                )}
-                {showMigratedHoldingsBulkUpload && (
-                  <Link href="/admin/migrated-holdings-bulk-upload" className={cardClass}>
-                    <span className={iconWrapClass}>
-                      <Upload className="h-6 w-6" strokeWidth={1.8} />
-                    </span>
-                    <h3 className="mb-1.5 text-base font-semibold text-slate-900">Bulk Upload Old Holdings</h3>
-                    <p className="text-sm text-slate-500">Upload the old-holdings sheet - every row is kept as an old record awaiting your approval.</p>
-                  </Link>
-                )}
+              <DashboardGroup id="property-upload" title="Migrated Holding Surveys" description="Assigning old holdings for survey, the surveyor's work and final sign-off." icon={<Upload className="h-6 w-6" strokeWidth={1.8} />} highlight={false}>
 
                 {showMigratedHoldingsAssign && (
                   <Link href="/admin/migrated-holdings-assign" className={cardClass}>

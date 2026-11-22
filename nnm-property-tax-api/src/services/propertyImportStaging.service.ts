@@ -2,7 +2,7 @@ import { normalizeWard } from "../utils/ward";
 import ExcelJS from "exceljs";
 import { pool } from "../config/db";
 import { ApiError } from "../utils/ApiError";
-import { cellNumber, cellText, importPropertiesXlsx, parseGps, readSheet } from "./propertyBulkImport.service";
+import { cellNumber, cellText, importPropertiesXlsx, parseGps } from "./propertyBulkImport.service";
 import { SOLID_WASTE_RATE } from "../constants/taxRates";
 
 /**
@@ -21,21 +21,9 @@ export interface StagedIssue {
 const CHUNK_SIZE = 200;
 const STALE_RUN_MINUTES = 30;
 
-/** Makes a cell JSON-safe; dates keep their type via a tag so they can be restored exactly. */
-function plain(v: ExcelJS.CellValue): unknown {
-  if (v === null || v === undefined) return null;
-  if (v instanceof Date) return { $date: v.toISOString() };
-  if (typeof v === "object") return cellText(v);
-  return v;
-}
 export function revive(v: unknown): ExcelJS.CellValue {
   if (v && typeof v === "object" && "$date" in (v as Record<string, unknown>)) return new Date((v as { $date: string }).$date);
   return (v ?? null) as ExcelJS.CellValue;
-}
-function plainRow(row: Record<string, ExcelJS.CellValue>): PlainRow {
-  const out: PlainRow = {};
-  for (const [k, v] of Object.entries(row)) out[k] = plain(v);
-  return out;
 }
 export const text = (v: unknown): string => cellText(revive(v));
 
@@ -59,97 +47,6 @@ export function checkHolding(master: PlainRow, floorsCount: number, existsLive: 
     issues.push({ severity: "warn", message: "GPS coordinates are blank on one side or out of range - they will not be saved." });
   }
   return issues;
-}
-
-export async function stagePropertiesXlsx(fileBuffer: Buffer, actor: { displayName: string; role: string }, dataSourceName: string, fileName?: string) {
-  const workbook = new ExcelJS.Workbook();
-  await workbook.xlsx.load(fileBuffer as unknown as ArrayBuffer);
-
-  // The row itself is kept with the error so the row can be corrected and imported later (importResolution.service).
-  const uploadErrors: { sheet: string; row: number; message: string; data?: PlainRow }[] = [];
-  const masters = new Map<string, { row: PlainRow; excelRow: number }>();
-  for (const { row, excelRowNum } of readSheet(workbook.getWorksheet("Master"))) {
-    const holdingNo = cellText(row.HoldingNo);
-    if (!holdingNo) {
-      uploadErrors.push({ sheet: "Master", row: excelRowNum, message: "Missing HoldingNo", data: plainRow(row) });
-      continue;
-    }
-    if (masters.has(holdingNo)) {
-      uploadErrors.push({ sheet: "Master", row: excelRowNum, message: `Holding "${holdingNo}" appears more than once in the file - only the first row was kept`, data: plainRow(row) });
-      continue;
-    }
-    masters.set(holdingNo, { row: plainRow(row), excelRow: excelRowNum });
-  }
-  if (masters.size === 0) throw ApiError.badRequest("No holdings were found on the Master sheet of this file.");
-
-  const children = new Map<string, Record<string, PlainRow[]>>();
-  for (const sheet of CHILD_SHEETS) {
-    for (const { row, excelRowNum } of readSheet(workbook.getWorksheet(sheet))) {
-      const holdingNo = cellText(row.HoldingNo);
-      if (!holdingNo || !masters.has(holdingNo)) {
-        uploadErrors.push({ sheet, row: excelRowNum, message: holdingNo ? `Holding "${holdingNo}" has no row on the Master sheet - not staged` : "Missing HoldingNo", data: plainRow(row) });
-        continue;
-      }
-      const entry = children.get(holdingNo) ?? {};
-      (entry[sheet] ??= []).push(plainRow(row));
-      children.set(holdingNo, entry);
-    }
-  }
-
-  const holdingNos = [...masters.keys()];
-  const live = await pool.query<{ k: string }>(
-    `SELECT REPLACE(holding_no, ' ', '') AS k FROM properties WHERE REPLACE(holding_no, ' ', '') = ANY($1::text[])`,
-    [holdingNos.map((h) => h.replace(/ /g, ""))],
-  );
-  const liveSet = new Set(live.rows.map((r) => r.k));
-
-  const client = await pool.connect();
-  try {
-    await client.query("BEGIN");
-    const batch = await client.query<{ id: number }>(
-      `INSERT INTO property_import_batches (data_source_name, file_name, uploaded_by, uploaded_by_role, total_holdings, upload_errors)
-       VALUES ($1,$2,$3,$4,$5,$6) RETURNING id`,
-      [dataSourceName, fileName ?? null, actor.displayName, actor.role, masters.size, JSON.stringify(uploadErrors.slice(0, 1000))],
-    );
-    const batchId = batch.rows[0]!.id;
-    let withBlockers = 0;
-    let withWarnings = 0;
-    for (let i = 0; i < holdingNos.length; i += 500) {
-      const part = holdingNos.slice(i, i + 500);
-      const cols: unknown[][] = [[], [], [], [], [], [], [], [], [], []];
-      for (const h of part) {
-        const { row } = masters.get(h)!;
-        const sheets = children.get(h) ?? {};
-        const floorsCount = sheets.Floors?.length ?? 0;
-        const issues = checkHolding(row, floorsCount, liveSet.has(h.replace(/ /g, "")));
-        const blocker = issues.some((x) => x.severity === "block");
-        if (blocker) withBlockers++;
-        else if (issues.length) withWarnings++;
-        cols[0]!.push(h);
-        cols[1]!.push(text(row.OwnerName) || null);
-        cols[2]!.push(text(row.Ward) || null);
-        cols[3]!.push(cellNumber(revive(row.AreaSqft)) ?? 0);
-        cols[4]!.push(floorsCount);
-        cols[5]!.push(JSON.stringify(issues));
-        cols[6]!.push(blocker);
-        cols[7]!.push(JSON.stringify(row));
-        cols[8]!.push(JSON.stringify(sheets));
-        cols[9]!.push(batchId);
-      }
-      await client.query(
-        `INSERT INTO property_import_staging (holding_no, owner_name, ward, area_sqft, floors_count, issues, has_blocker, master, sheets, batch_id)
-         SELECT * FROM unnest($1::text[], $2::text[], $3::text[], $4::numeric[], $5::int[], $6::jsonb[], $7::boolean[], $8::jsonb[], $9::jsonb[], $10::int[])`,
-        cols,
-      );
-    }
-    await client.query("COMMIT");
-    return { batchId, totalHoldings: masters.size, withBlockers, withWarnings, ready: masters.size - withBlockers - withWarnings, errors: uploadErrors };
-  } catch (err) {
-    await client.query("ROLLBACK");
-    throw err;
-  } finally {
-    client.release();
-  }
 }
 
 // ---------- reading ----------

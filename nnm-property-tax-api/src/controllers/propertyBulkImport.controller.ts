@@ -13,32 +13,8 @@ import {
   previewResidentialSolidWaste,
   restoreHoldings,
   setReviewed,
-  stagePropertiesXlsx,
   startIntegration,
 } from "../services/propertyImportStaging.service";
-
-const uploadSchema = z.object({
-  fileDataBase64: z.string().min(1, "File data is required"),
-  // Name of the data set being uploaded - shown in each holding's audit trail as where it was created from.
-  dataSourceName: z.string().trim().min(3, "Enter the name of the data source (at least 3 characters).").max(200),
-  fileName: z.string().trim().max(255).optional(),
-});
-
-/**
- * POST /api/v1/admin/properties/bulk-upload - commissioner, tax daroga, city manager.
- * The workbook is NOT imported: it is checked and parked for review. Tax Daroga / City Manager
- * then integrate all of it, selected holdings, or all except some (see the property-imports routes).
- */
-export const uploadPropertiesXlsxHandler = asyncHandler(async (req: Request, res: Response) => {
-  const parsed = uploadSchema.safeParse(req.body);
-  if (!parsed.success) throw ApiError.badRequest("Invalid input", parsed.error.flatten().fieldErrors);
-
-  const fileBuffer = Buffer.from(parsed.data.fileDataBase64, "base64");
-  if (fileBuffer.length === 0) throw ApiError.badRequest("The uploaded file is empty.");
-
-  const result = await stagePropertiesXlsx(fileBuffer, { displayName: req.admin!.displayName, role: req.admin!.role }, parsed.data.dataSourceName, parsed.data.fileName);
-  res.status(200).json(result);
-});
 
 function batchId(req: Request): number {
   const id = Number(req.params.id);

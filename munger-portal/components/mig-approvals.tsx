@@ -1,8 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState, type ReactNode } from "react";
-import Link from "next/link";
-import { AlertCircle, AlertTriangle, ChevronLeft, ChevronRight, Loader2, Pencil, Search, Trash2, Upload, X } from "lucide-react";
+import { AlertCircle, AlertTriangle, ChevronLeft, ChevronRight, Download, Loader2, Pencil, Search, Trash2, X } from "lucide-react";
+import { downloadMigratedHoldingsExport } from "@/lib/admin-api";
 import {
   advanceMigRecords,
   deleteLegacyHoldings,
@@ -141,14 +141,7 @@ export function MigApprovals({ role, header }: { role: string; header: ReactNode
               the City Manager approves - it then gets its MIG- number and is shown to the field staff.
             </p>
           </div>
-          {isMC && (
-            <Link
-              href="/admin/migrated-holdings-bulk-upload"
-              className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700"
-            >
-              <Upload className="h-4 w-4" /> Upload sheet
-            </Link>
-          )}
+          {isMC && <DataTrailButton />}
         </div>
 
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-5">
@@ -728,5 +721,34 @@ function LegacyCleanup() {
         )}
       </div>
     </details>
+  );
+}
+
+/** Complete data trail: every migrated holding's current state and full event history, as a spreadsheet. */
+function DataTrailButton() {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  return (
+    <div className="text-right">
+      <button
+        onClick={async () => {
+          setBusy(true);
+          setError(null);
+          try {
+            await downloadMigratedHoldingsExport();
+          } catch (e) {
+            setError(e instanceof Error ? e.message : "Could not download the export.");
+          } finally {
+            setBusy(false);
+          }
+        }}
+        disabled={busy}
+        title="Every migrated holding's current state and its full event history (assignments, surveys, reverts, verifications, finalization)"
+        className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 disabled:opacity-60"
+      >
+        <Download className="h-4 w-4" /> {busy ? "Downloading…" : "Complete data trail (.xlsx)"}
+      </button>
+      {error && <p className="mt-1 text-xs text-red-700">{error}</p>}
+    </div>
   );
 }
