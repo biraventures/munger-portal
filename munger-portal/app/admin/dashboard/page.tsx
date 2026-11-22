@@ -69,6 +69,7 @@ import { fetchResolutionsWaiting } from "@/lib/holding-import-api";
 import { fetchMigMyCount, setMigOperatorLogin } from "@/lib/mig-records-api";
 import { fetchTlRemovalCount } from "@/lib/tl-notice-api";
 import { fetchCollectionIssueCounts } from "@/lib/collection-issue-api";
+import { ProgressReportCard } from "@/components/admin/progress-report-card";
 import { fetchPendingCount as fetchNewHoldingPending, type PendingCount as NewHoldingPending } from "@/lib/new-holding-api";
 
 export default function AdminDashboardPage() {
@@ -352,6 +353,8 @@ export default function AdminDashboardPage() {
       <main className="mx-auto max-w-5xl px-6 py-10">
         <h1 className="mb-1 text-2xl font-semibold text-slate-900">Welcome, {admin.displayName}</h1>
         <p className="mb-8 text-sm text-slate-500">Signed in as {ADMIN_ROLE_LABELS[admin.role]}.</p>
+
+        <ProgressReportCard role={admin.role} />
 
         {(isMutationChainRole || admin.role === "city_manager") && <MutationPendingSummary highlight={admin.role} />}
 

@@ -1,4 +1,5 @@
 import { getFieldRecords, getLegacy, getOneRecord, postDeleteLegacy, postTakeUp } from "../controllers/migRecord.controller";
+import { getProgressReport, getProgressReportOfficers } from "../controllers/progressReport.controller";
 import {
   getHistoricalHolding,
   getHistoricalPending,
@@ -619,6 +620,9 @@ adminRouter.post("/shops/:shopNo/inspections", requireInspectionRole, postCreate
 // Old records (MIG stage): the Commissioner's approval list, and the field staff's ward-wise list. Roles: migRecord.service.ts.
 adminRouter.get("/mig-records/legacy", getLegacy);
 adminRouter.post("/mig-records/legacy/delete", postDeleteLegacy);
+// Progress report: each officer's own work in a period; Commissioner / DMC / City Manager can open anyone's.
+adminRouter.get("/progress-report", getProgressReport);
+adminRouter.get("/progress-report/officers", requireAdminRole("commissioner", "deputy_commissioner", "city_manager"), getProgressReportOfficers);
 adminRouter.get("/old-records", getFieldRecords);
 adminRouter.get("/old-records/:id", getOneRecord);
 adminRouter.post("/old-records/:id/take-up", postTakeUp);

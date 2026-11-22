@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { BarChart3, Award, FileSpreadsheet, Printer, Receipt, ShieldCheck } from "lucide-react";
 import { AdminHeader } from "@/components/admin-header";
+import { ProgressReportCard } from "@/components/admin/progress-report-card";
 import type { AdminInfo } from "@/lib/admin-auth";
 
 const cardClass = "flex flex-col rounded-xl border border-slate-200 bg-white p-6 transition-shadow hover:shadow-md";
@@ -58,6 +59,8 @@ export function AgencyOperatorDashboard({ admin }: { admin: AdminInfo }) {
           Signed in as Agency Operator. You can search holdings, receive holding tax, print existing demand notices and view reports. Holding details cannot be
           changed from this login.
         </p>
+
+        <ProgressReportCard role={admin.role} />
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
           {cards.map((c) => (
             <Link key={c.href} href={c.href} className={cardClass}>

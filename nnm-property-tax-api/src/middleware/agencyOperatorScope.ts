@@ -58,6 +58,8 @@ const RULES: Rule[] = [
   { method: "GET", path: /^\/admin\/tl-notices\/\d+$/ },
   // Own identity documents (staff KYC) - view only.
   { method: "GET", path: /^\/admin\/staff-kyc\/me$/ },
+  // Own progress report.
+  { method: "GET", path: /^\/admin\/progress-report$/ },
   { method: "GET", path: new RegExp(`^/admin/staff-kyc/me/file/${seg}$`) },
 ];
 
