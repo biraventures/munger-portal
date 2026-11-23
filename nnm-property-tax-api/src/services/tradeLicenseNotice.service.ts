@@ -33,12 +33,6 @@ export function financialYearOf(isoDate: string): string {
   return `${start}-${start + 1}`;
 }
 
-function addDays(isoDate: string, days: number): string {
-  const d = new Date(`${isoDate}T00:00:00Z`);
-  d.setUTCDate(d.getUTCDate() + days);
-  return d.toISOString().slice(0, 10);
-}
-
 const FILE_TYPES: Record<string, string> = { "image/jpeg": "jpg", "image/jpg": "jpg", "image/png": "png", "application/pdf": "pdf" };
 const MAX_FILE_BYTES = 6 * 1024 * 1024;
 
@@ -150,7 +144,8 @@ export async function recordSurvey(input: SurveyInput, admin: AdminTokenPayload)
     let noticeNo: string | null = null;
     if (needsNotice) {
       noticeNo = await nextNoticeNo(client, fy);
-      await client.query(`INSERT INTO trade_license_notices (survey_id, notice_no, level, issued_on, due_on) VALUES ($1,$2,1,$3,$4)`, [surveyId, noticeNo, today, addDays(today, NOTICE_DAYS)]);
+      // No last date until it is served: the 14 days run from the date of service (set with its receiving copy).
+    await client.query(`INSERT INTO trade_license_notices (survey_id, notice_no, level, issued_on) VALUES ($1,$2,1,$3)`, [surveyId, noticeNo, today]);
     }
     await client.query("COMMIT");
     return { surveyId, status: needsNotice ? "notice_1" : "licensed", noticeNo };
@@ -164,8 +159,9 @@ export async function recordSurvey(input: SurveyInput, admin: AdminTokenPayload)
 }
 
 /**
- * Moves overdue businesses on: a first notice past its date (licence not produced) gets the second notice, dated
- * today with another 14 days; a second notice past its date marks the business for legal action. Idempotent.
+ * Moves overdue businesses on: a first notice SERVED more than 14 days ago (licence not produced) gets the second
+ * notice, dated today (its 14 days run from its own service); a served second notice past its 14 days marks the
+ * business for legal action. A notice not yet served never runs out. Idempotent.
  * Runs whenever a Tax Collector's print queue or a survey list is loaded - the only places these notices are seen - so a
  * second notice is dated the day it is first shown for printing.
  */
@@ -174,7 +170,7 @@ export async function escalateOverdue(): Promise<{ secondNotices: number; legalA
   let secondNotices = 0;
   const { rows: due1 } = await pool.query<{ id: string; financial_year: string }>(
     `SELECT s.id, s.financial_year FROM trade_license_surveys s JOIN trade_license_notices n ON n.survey_id = s.id AND n.level = 1
-      WHERE s.status = 'notice_1' AND n.due_on < $1::date`,
+      WHERE s.status = 'notice_1' AND n.superseded_at IS NULL AND n.due_on < $1::date`,
     [today],
   );
   for (const s of due1) {
@@ -184,7 +180,7 @@ export async function escalateOverdue(): Promise<{ secondNotices: number; legalA
       const upd = await client.query(`UPDATE trade_license_surveys SET status = 'notice_2' WHERE id = $1 AND status = 'notice_1'`, [s.id]);
       if (upd.rowCount) {
         const no = await nextNoticeNo(client, s.financial_year);
-        await client.query(`INSERT INTO trade_license_notices (survey_id, notice_no, level, issued_on, due_on) VALUES ($1,$2,2,$3,$4) ON CONFLICT DO NOTHING`, [s.id, no, today, addDays(today, NOTICE_DAYS)]);
+        await client.query(`INSERT INTO trade_license_notices (survey_id, notice_no, level, issued_on) VALUES ($1,$2,2,$3) ON CONFLICT DO NOTHING`, [s.id, no, today]);
         secondNotices++;
       }
       await client.query("COMMIT");
@@ -198,7 +194,7 @@ export async function escalateOverdue(): Promise<{ secondNotices: number; legalA
   const { rowCount } = await pool.query(
     `UPDATE trade_license_surveys s SET status = 'legal_action_due'
        FROM trade_license_notices n
-      WHERE n.survey_id = s.id AND n.level = 2 AND s.status = 'notice_2' AND n.due_on < $1::date`,
+      WHERE n.survey_id = s.id AND n.level = 2 AND n.superseded_at IS NULL AND s.status = 'notice_2' AND n.due_on < $1::date`,
     [today],
   );
   return { secondNotices, legalAction: rowCount ?? 0 };
@@ -209,7 +205,8 @@ export interface PrintableNotice {
   noticeNo: string;
   level: 1 | 2;
   issuedOn: string;
-  dueOn: string;
+  /** 14 days from the date of service; null until served. */
+  dueOn: string | null;
   financialYear: string;
   holdingNo: string;
   ward: string | null;
@@ -224,6 +221,9 @@ export interface PrintableNotice {
   printedAt: string | null;
   /** Role of the login that printed it - decides the signatory (Trade Licence Prabhari, else City Manager). */
   printedByRole: string | null;
+  /** Date of service (from the receiving copy); the 14 days run from it. */
+  servedOn: string | null;
+  supersededAt: string | null;
   receivingUploadedAt: string | null;
   /** The QR code's link: the public application form filled in from this notice (applications from it are credited to the Tax Collector). */
   applyUrl?: string;
@@ -236,11 +236,12 @@ const NOTICE_SELECT = `
          s.financial_year AS "financialYear", s.holding_no AS "holdingNo", p.ward, s.person_name AS "personName", s.business_name AS "businessName",
          s.address, s.phone, s.license_year AS "licenseYearShown", s.license_valid_till AS "licenseValidTill",
          f.notice_no AS "firstNoticeNo", to_char(f.issued_on, 'DD-MM-YYYY') AS "firstNoticeDate", n.printed_at AS "printedAt", n.printed_by_role AS "printedByRole",
+         to_char(n.served_on, 'DD-MM-YYYY') AS "servedOn", n.superseded_at AS "supersededAt",
          n.receiving_uploaded_at AS "receivingUploadedAt"
     FROM trade_license_notices n
     JOIN trade_license_surveys s ON s.id = n.survey_id
     JOIN properties p ON p.holding_no = s.holding_no
-    LEFT JOIN trade_license_notices f ON f.survey_id = s.id AND f.level = 1 AND n.level = 2`;
+    LEFT JOIN trade_license_notices f ON f.survey_id = s.id AND f.level = 1 AND f.superseded_at IS NULL AND n.level = 2`;
 
 /**
  * Notices to print: unprinted ones, or a given date's. A Tax Collector gets the notices of businesses they visited; the
@@ -258,12 +259,32 @@ export async function noticesToPrint(admin: AdminTokenPayload, opts: { date?: st
     params.push(opts.date);
     where += ` AND n.issued_on = $${params.length}::date`;
   }
+  where += ` AND n.superseded_at IS NULL`;
   if (!opts.includePrinted) where += ` AND n.printed_at IS NULL`;
   const { rows } = await pool.query<PrintableNotice>(`${NOTICE_SELECT} WHERE ${where} ORDER BY n.issued_on, n.notice_no`, params);
   return rows.map(withApplyUrl);
 }
 
 /** Marks notices printed - a Tax Collector only their own businesses'; the Prabhari / City Manager any. */
+/**
+ * Dashboard red count: notices waiting to be printed for this login (a Tax Collector: their businesses'; the Prabhari /
+ * City Manager: all), of them automatic second notices, and businesses due for legal action. Runs the escalation first,
+ * so a second notice is generated as soon as a served first notice's 14 days are over.
+ */
+export async function printCounts(admin: AdminTokenPayload): Promise<{ toPrint: number; secondNotices: number; legalActionDue: number }> {
+  await escalateOverdue();
+  const mine = admin.role === "tax_collector" ? admin.username : null;
+  const { rows } = await pool.query<{ to_print: number; second: number; legal: number }>(
+    `SELECT (SELECT count(*)::int FROM trade_license_notices n JOIN trade_license_surveys s ON s.id = n.survey_id
+              WHERE n.printed_at IS NULL AND n.superseded_at IS NULL AND ($1::text IS NULL OR s.recorded_by_username = $1)) AS to_print,
+            (SELECT count(*)::int FROM trade_license_notices n JOIN trade_license_surveys s ON s.id = n.survey_id
+              WHERE n.printed_at IS NULL AND n.superseded_at IS NULL AND n.level = 2 AND ($1::text IS NULL OR s.recorded_by_username = $1)) AS second,
+            (SELECT count(*)::int FROM trade_license_surveys s WHERE s.status = 'legal_action_due' AND ($1::text IS NULL OR s.recorded_by_username = $1)) AS legal`,
+    [mine],
+  );
+  return { toPrint: rows[0]!.to_print, secondNotices: rows[0]!.second, legalActionDue: rows[0]!.legal };
+}
+
 export async function markPrinted(ids: string[], admin: AdminTokenPayload): Promise<number> {
   const { rowCount } = await pool.query(
     `UPDATE trade_license_notices n SET printed_at = now(), printed_by = $3, printed_by_role = $4
@@ -350,7 +371,8 @@ export async function listSurveys(filter: {
     `SELECT s.id, s.holding_no, p.ward, s.financial_year, s.latitude, s.longitude, s.gps_accuracy_m, s.has_license, s.license_year, s.license_valid_till, s.license_no, s.is_nnm_shop, s.nnm_shop_no, s.person_name, s.business_name, s.address, s.phone,
             s.status, s.recorded_by_name, s.recorded_by_code, s.recorded_at, s.complied_at, s.complied_by, s.complied_license_year, s.complied_valid_till, s.complied_license_no,
             (s.license_photo_path IS NOT NULL) AS has_license_photo, (s.complied_photo_path IS NOT NULL) AS has_complied_photo,
-            (SELECT json_agg(json_build_object('id', n.id, 'noticeNo', n.notice_no, 'level', n.level, 'issuedOn', n.issued_on, 'dueOn', n.due_on, 'printedAt', n.printed_at,
+            (SELECT json_agg(json_build_object('id', n.id, 'noticeNo', n.notice_no, 'level', n.level, 'issuedOn', n.issued_on, 'dueOn', n.due_on, 'printedAt', n.printed_at, 'servedOn', n.served_on, 'supersededAt', n.superseded_at, 'supersededBy', n.superseded_by,
+                                      'reissueReason', n.reissue_reason,
                                       'receivingUploadedAt', n.receiving_uploaded_at, 'receivingBy', n.receiving_uploaded_by_name,
                                       'removalRequestedAt', n.receiving_removal_requested_at, 'removalRequestedBy', n.receiving_removal_requested_by,
                                       'removalReason', n.receiving_removal_reason,
@@ -404,20 +426,27 @@ export async function surveyFile(id: string, which: "license" | "complied", admi
 }
 
 /**
- * The signed receiving half of a notice - a photo or a PDF - uploaded by the Tax Collector who raised the notice, the
- * Trade Licence Prabhari (nodal) or the City Manager. A notice not yet marked printed is marked printed by it. Once
+ * The signed receiving half of a notice - a photo or a PDF - with the date it was served, uploaded by a Tax Collector of
+ * the ward, the Trade Licence Prabhari (nodal) or the City Manager. The notice's 14 days run from the date of service.
+ * A notice not yet marked printed is marked printed by it. Once
  * uploaded it stays: it is removed only with the DMC's approval (requestReceivingRemoval / decideReceivingRemoval).
  */
 export async function uploadReceivingCopy(
   noticeId: string,
-  input: { photo: { base64: string; mime: string }; latitude?: number | null; longitude?: number | null },
+  input: { photo: { base64: string; mime: string }; servedOn: string; latitude?: number | null; longitude?: number | null },
   admin: AdminTokenPayload,
 ): Promise<void> {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
-    const { rows } = await client.query<{ recorded_by_username: string; ward: string | null; receiving_photo_path: string | null }>(
-      `SELECT s.recorded_by_username, btrim(p.ward) AS ward, n.receiving_photo_path
+    const { rows } = await client.query<{
+      recorded_by_username: string;
+      ward: string | null;
+      receiving_photo_path: string | null;
+      issued_on: string;
+      superseded_at: string | null;
+    }>(
+      `SELECT s.recorded_by_username, btrim(p.ward) AS ward, n.receiving_photo_path, to_char(n.issued_on, 'YYYY-MM-DD') AS issued_on, n.superseded_at
          FROM trade_license_notices n JOIN trade_license_surveys s ON s.id = n.survey_id LEFT JOIN properties p ON p.holding_no = s.holding_no
         WHERE n.id = $1 FOR UPDATE OF n`,
       [noticeId],
@@ -425,14 +454,17 @@ export async function uploadReceivingCopy(
     const n = rows[0];
     if (!n) throw ApiError.notFound("Notice not found.");
     await assertReceivingRole(admin, n.recorded_by_username, n.ward, "upload the receiving copy");
+    if (n.superseded_at) throw ApiError.badRequest("This notice was reissued - upload the receiving copy of the new notice.");
     if (n.receiving_photo_path) throw ApiError.badRequest("The receiving copy of this notice is already uploaded. It can be removed only with the DMC's approval.");
+    if (input.servedOn < n.issued_on) throw ApiError.badRequest("The date of service cannot be before the notice date.");
+    if (input.servedOn > istToday()) throw ApiError.badRequest("The date of service cannot be in the future.");
     const rel = await saveFile(input.photo.base64, input.photo.mime, `notice-receiving-${noticeId}`, "receiving copy");
     await client.query(
       `UPDATE trade_license_notices SET receiving_photo_path = $2, receiving_latitude = $3, receiving_longitude = $4,
               receiving_uploaded_by_username = $5, receiving_uploaded_by_name = $6, receiving_uploaded_at = now(),
-              printed_at = COALESCE(printed_at, now())
+              printed_at = COALESCE(printed_at, now()), served_on = $7::date, due_on = $7::date + $8::int
         WHERE id = $1`,
-      [noticeId, rel, input.latitude ?? null, input.longitude ?? null, admin.username, admin.displayName],
+      [noticeId, rel, input.latitude ?? null, input.longitude ?? null, admin.username, admin.displayName, input.servedOn, NOTICE_DAYS],
     );
     await logReceiving(client, noticeId, "uploaded", admin, rel, null);
     await client.query("COMMIT");
@@ -474,6 +506,66 @@ async function logReceiving(
     `INSERT INTO trade_license_notice_receiving_log (notice_id, action, photo_path, reason, by_username, by_name) VALUES ($1,$2,$3,$4,$5,$6)`,
     [noticeId, action, photoPath, reason, admin.username, admin.displayName],
   );
+}
+
+/**
+ * Reissues a business's current first or second notice (e.g. not served, lost, or the business shut at the time): a
+ * fresh notice of the same level - new number, today's date, to be printed and served again - and the old one is kept,
+ * marked reissued. First notice: while the business is at the first-notice stage. Second notice: at the second-notice
+ * or legal-action-due stage (back to the second-notice stage). By a Tax Collector of the ward, the Trade Licence
+ * Prabhari or the City Manager.
+ */
+export async function reissueNotice(noticeId: string, reason: string, admin: AdminTokenPayload): Promise<{ noticeNo: string }> {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const { rows } = await client.query<{
+      survey_id: string;
+      level: 1 | 2;
+      superseded_at: string | null;
+      status: string;
+      financial_year: string;
+      recorded_by_username: string;
+      ward: string | null;
+    }>(
+      `SELECT n.survey_id, n.level, n.superseded_at, s.status, s.financial_year, s.recorded_by_username, btrim(p.ward) AS ward
+         FROM trade_license_notices n JOIN trade_license_surveys s ON s.id = n.survey_id LEFT JOIN properties p ON p.holding_no = s.holding_no
+        WHERE n.id = $1 FOR UPDATE OF n, s`,
+      [noticeId],
+    );
+    const n = rows[0];
+    if (!n) throw ApiError.notFound("Notice not found.");
+    await assertReceivingRole(admin, n.recorded_by_username, n.ward, "reissue a notice");
+    if (n.superseded_at) throw ApiError.badRequest("This notice was already reissued.");
+    const okStage = n.level === 1 ? n.status === "notice_1" : n.status === "notice_2" || n.status === "legal_action_due";
+    if (!okStage)
+      throw ApiError.badRequest(
+        n.level === 1
+          ? "The first notice can be reissued only while the business is at the first-notice stage."
+          : "The second notice can be reissued only at the second-notice or legal-action stage.",
+      );
+    await client.query(`UPDATE trade_license_notices SET superseded_at = now(), superseded_by = $2, reissue_reason = $3 WHERE id = $1`, [
+      noticeId,
+      admin.displayName,
+      reason.trim(),
+    ]);
+    const no = await nextNoticeNo(client, n.financial_year);
+    await client.query(`INSERT INTO trade_license_notices (survey_id, notice_no, level, issued_on, reissue_of) VALUES ($1,$2,$3,$4,$5)`, [
+      n.survey_id,
+      no,
+      n.level,
+      istToday(),
+      noticeId,
+    ]);
+    if (n.level === 2 && n.status === "legal_action_due") await client.query(`UPDATE trade_license_surveys SET status = 'notice_2' WHERE id = $1`, [n.survey_id]);
+    await client.query("COMMIT");
+    return { noticeNo: no };
+  } catch (e) {
+    await client.query("ROLLBACK");
+    throw e;
+  } finally {
+    client.release();
+  }
 }
 
 /** Asks the DMC to remove an uploaded receiving copy (e.g. wrong notice's slip, unreadable), with the reason. */
@@ -520,7 +612,9 @@ export async function decideReceivingRemoval(noticeId: string, approve: boolean,
     if (!n.receiving_removal_requested_at || !n.receiving_photo_path) throw ApiError.badRequest("No removal is waiting for this notice.");
     if (approve) {
       await client.query(
+        // The copy (the proof of service) goes, so the notice counts as not served again until a correct one is uploaded.
         `UPDATE trade_license_notices SET receiving_photo_path = NULL, receiving_latitude = NULL, receiving_longitude = NULL,
+                served_on = NULL, due_on = CASE WHEN superseded_at IS NULL THEN NULL ELSE due_on END,
                 receiving_uploaded_by_username = NULL, receiving_uploaded_by_name = NULL, receiving_uploaded_at = NULL,
                 receiving_removal_reason = NULL, receiving_removal_requested_by = NULL, receiving_removal_requested_at = NULL
           WHERE id = $1`,

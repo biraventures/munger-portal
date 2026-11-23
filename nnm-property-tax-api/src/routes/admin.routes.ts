@@ -318,6 +318,8 @@ import {
   getTlRemovedCopy,
   postTlReceivingRemovalDecision,
   postTlReceivingRemovalRequest,
+  postTlReissue,
+  getTlPrintCount,
   postTlReceivingCopy,
   getTlPrintQueue,
   getTlSurveyFile,
@@ -880,6 +882,7 @@ adminRouter.get("/tl-surveys", requireTlViewRole, getTlSurveys);
 adminRouter.get("/tl-surveys/:id/file/:which", requireTlViewRole, getTlSurveyFile);
 adminRouter.post("/tl-surveys/:id/complied", requireAdminRole("tax_collector", "city_manager"), postTlComplied);
 // Printing: the Tax Collector (own businesses), or the Trade Licence Prabhari / City Manager (every notice, signed by them).
+adminRouter.get("/tl-notices/print-queue/count", requireAdminRole("tax_collector", "trade_license_nodal", "city_manager"), getTlPrintCount);
 adminRouter.get("/tl-notices/print-queue", requireAdminRole("tax_collector", "trade_license_nodal", "city_manager"), getTlPrintQueue);
 adminRouter.post("/tl-notices/mark-printed", requireAdminRole("tax_collector", "trade_license_nodal", "city_manager"), postTlMarkPrinted);
 adminRouter.get("/tl-notices/:id", requireTlViewRole, getTlNotice);
@@ -897,6 +900,7 @@ const requireTlReceivingViewRole = requireAdminRole(
 );
 adminRouter.get("/tl-notices/receiving-removals/count", requireAdminRole("deputy_commissioner", "commissioner"), getTlRemovalCount);
 adminRouter.get("/tl-notices/receiving-removed/:logId", requireTlReceivingViewRole, getTlRemovedCopy);
+adminRouter.post("/tl-notices/:id/reissue", requireAdminRole("tax_collector", "trade_license_nodal", "city_manager"), postTlReissue);
 adminRouter.post("/tl-notices/:id/receiving", requireAdminRole("tax_collector", "trade_license_nodal", "city_manager"), postTlReceivingCopy);
 adminRouter.get("/tl-notices/:id/receiving", requireTlReceivingViewRole, getTlReceivingCopy);
 adminRouter.get("/tl-notices/:id/receiving/log", requireTlReceivingViewRole, getTlReceivingLog);

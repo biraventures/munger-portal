@@ -187,7 +187,7 @@ const TL_NOTICES: Spec = {
            JOIN trade_license_surveys s ON s.id = n.survey_id
            LEFT JOIN properties p ON p.holding_no = s.holding_no
            LEFT JOIN admins a ON a.username = s.recorded_by_username
-          WHERE n.issued_on BETWEEN $1::date AND $2::date`,
+          WHERE n.issued_on BETWEEN $1::date AND $2::date AND n.superseded_at IS NULL`,
   listCols: `day, ward, coll_user, coll_name, notice_id, receiving_uploaded_at, notice_no, level, issued_on, due_on, holding_no, business_name, person_name, phone, status, latitude, longitude`,
   listOrder: `issued_on DESC, notice_no DESC`,
 };

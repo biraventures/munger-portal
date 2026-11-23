@@ -99,7 +99,9 @@ export interface TlNotice {
   noticeNo: string;
   level: 1 | 2;
   issuedOn: string;
-  dueOn: string;
+  /** 14 days from the date of service; null until served. */
+  dueOn: string | null;
+  servedOn?: string | null;
   financialYear: string;
   holdingNo: string;
   ward: string | null;
@@ -186,8 +188,15 @@ export interface TlSurvey {
         noticeNo: string;
         level: number;
         issuedOn: string;
-        dueOn: string;
+        /** Last date - 14 days from the date of service; null until served. */
+        dueOn: string | null;
         printedAt: string | null;
+        /** Date of service (entered with the receiving copy). */
+        servedOn: string | null;
+        /** Reissued: a fresh notice replaced this one. */
+        supersededAt: string | null;
+        supersededBy: string | null;
+        reissueReason: string | null;
         receivingUploadedAt: string | null;
         receivingBy: string | null;
         /** Removal of the receiving copy asked for - waiting for the DMC. */
@@ -245,13 +254,14 @@ export async function openTlSurveyFile(id: string, which: "license" | "complied"
 export async function uploadTlReceivingCopy(
   noticeId: string,
   photo: FileUpload,
+  servedOn: string,
   latitude: number | null,
   longitude: number | null,
 ): Promise<void> {
   const res = await fetch(`${API_BASE_URL}/admin/tl-notices/${noticeId}/receiving`, {
     method: "POST",
     headers: headers(),
-    body: JSON.stringify({ photo, latitude, longitude }),
+    body: JSON.stringify({ photo, servedOn, latitude, longitude }),
   });
   await json(res, "Could not upload the receiving copy");
 }
@@ -324,4 +334,20 @@ export async function openTlRemovedCopy(logId: string): Promise<void> {
 export async function fetchTlRemovalCount(): Promise<number> {
   const res = await fetch(`${API_BASE_URL}/admin/tl-notices/receiving-removals/count`, { headers: headers(), cache: "no-store" });
   return (await json<{ pending: number }>(res, "Could not load")).pending;
+}
+
+/** Reissues a first / second notice: a fresh notice (new number, today's date) to be printed and served again. */
+export const reissueTlNotice = async (noticeId: string, reason: string): Promise<{ noticeNo: string }> => {
+  const res = await fetch(`${API_BASE_URL}/admin/tl-notices/${noticeId}/reissue`, {
+    method: "POST",
+    headers: headers(),
+    body: JSON.stringify({ reason }),
+  });
+  return json<{ noticeNo: string }>(res, "Could not reissue the notice");
+};
+
+/** Print card red count: notices to print (incl. automatic second notices) and businesses due for legal action. */
+export async function fetchTlPrintCount(): Promise<{ toPrint: number; secondNotices: number; legalActionDue: number }> {
+  const res = await fetch(`${API_BASE_URL}/admin/tl-notices/print-queue/count`, { headers: headers(), cache: "no-store" });
+  return json(res, "Could not load");
 }

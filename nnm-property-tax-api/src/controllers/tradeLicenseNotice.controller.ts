@@ -8,6 +8,8 @@ import { ApiError } from "../utils/ApiError";
 import { holdingNoSchema } from "../utils/holdingNoSchema";
 import {
   decideReceivingRemoval,
+  printCounts,
+  reissueNotice,
   getNotice,
   listSurveys,
   pendingRemovalCount,
@@ -116,10 +118,20 @@ export const getTlSurveyFile = asyncHandler(async (req: Request, res: Response) 
 export const postTlReceivingCopy = asyncHandler(async (req: Request, res: Response) => {
   const id = z.coerce.number().int().positive().safeParse(req.params.id);
   const b = z
-    .object({ photo: fileSchema, latitude: z.number().min(-90).max(90).nullish(), longitude: z.number().min(-180).max(180).nullish() })
+    .object({
+      photo: fileSchema,
+      servedOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Enter the date the notice was served."),
+      latitude: z.number().min(-90).max(90).nullish(),
+      longitude: z.number().min(-180).max(180).nullish(),
+    })
     .safeParse(req.body);
   if (!id.success) throw ApiError.badRequest("Invalid id");
-  if (!b.success) throw ApiError.badRequest("Take a photo of the receiving copy or attach it (photo / PDF).");
+  if (!b.success)
+    throw ApiError.badRequest(
+      b.error.issues.some((i) => i.path[0] === "servedOn")
+        ? "Enter the date the notice was served."
+        : "Take a photo of the receiving copy or attach it (photo / PDF).",
+    );
   await uploadReceivingCopy(String(id.data), b.data, req.admin!);
   res.status(200).json({ ok: true });
 });
@@ -166,4 +178,16 @@ export const getTlRemovedCopy = asyncHandler(async (req: Request, res: Response)
 /** GET /api/v1/admin/tl-notices/receiving-removals/count - removals waiting for the DMC. */
 export const getTlRemovalCount = asyncHandler(async (_req: Request, res: Response) => {
   res.status(200).json({ pending: await pendingRemovalCount() });
+});
+
+/** POST /api/v1/admin/tl-notices/:id/reissue { reason } - a fresh first / second notice in place of this one. */
+export const postTlReissue = asyncHandler(async (req: Request, res: Response) => {
+  const b = z.object({ reason: z.string().trim().min(3, "Write why the notice is reissued").max(500) }).safeParse(req.body);
+  if (!b.success) throw ApiError.badRequest(b.error.issues[0]?.message ?? "Write the reason.");
+  res.status(200).json(await reissueNotice(noticeId(req.params.id), b.data.reason, req.admin!));
+});
+
+/** GET /api/v1/admin/tl-notices/print-queue/count - red count for the print card (generates due second notices first). */
+export const getTlPrintCount = asyncHandler(async (req: Request, res: Response) => {
+  res.status(200).json(await printCounts(req.admin!));
 });

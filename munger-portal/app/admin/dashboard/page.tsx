@@ -67,7 +67,7 @@ import { fetchKycPending } from "@/lib/staff-kyc-api";
 import { fetchSettlementPendingCount } from "@/lib/historical-payment-api";
 import { fetchResolutionsWaiting } from "@/lib/holding-import-api";
 import { fetchMigMyCount, setMigOperatorLogin } from "@/lib/mig-records-api";
-import { fetchTlRemovalCount } from "@/lib/tl-notice-api";
+import { fetchTlPrintCount, fetchTlRemovalCount } from "@/lib/tl-notice-api";
 import { fetchCollectionIssueCounts } from "@/lib/collection-issue-api";
 import { ProgressReportCard } from "@/components/admin/progress-report-card";
 import { fetchPendingCount as fetchNewHoldingPending, type PendingCount as NewHoldingPending } from "@/lib/new-holding-api";
@@ -79,6 +79,7 @@ export default function AdminDashboardPage() {
   const [solidWastePendingCount, setSolidWastePendingCount] = useState<number | null>(null);
   const [migPending, setMigPending] = useState<number | null>(null);
   const [tlRemovals, setTlRemovals] = useState<number | null>(null);
+  const [tlPrint, setTlPrint] = useState<{ toPrint: number; secondNotices: number; legalActionDue: number } | null>(null);
   const [ciCounts, setCiCounts] = useState<{ open: number; notice_issued: number; removals: number } | null>(null);
   const [hallApplications, setHallApplications] = useState<number | null>(null);
   const [myShopStagePendingCount, setMyShopStagePendingCount] = useState<number | null>(null);
@@ -109,6 +110,12 @@ export default function AdminDashboardPage() {
       fetchCollectionIssueCounts()
         .then(setCiCounts)
         .catch(() => setCiCounts(null));
+    }
+    // Trade licence notices to print (second notices are generated here as soon as a served first notice's 14 days are over).
+    if (["tax_collector", "trade_license_nodal", "city_manager"].includes(admin.role)) {
+      fetchTlPrintCount()
+        .then(setTlPrint)
+        .catch(() => setTlPrint(null));
     }
     if (admin.role === "deputy_commissioner") {
       fetchTlRemovalCount()
@@ -403,7 +410,7 @@ export default function AdminDashboardPage() {
           <>
             <h2 className={groupHeadingClass}>Trade Licence Field Check</h2>
             <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
-              <DashboardGroup id="tl-field" title="Trade Licence Field Check" description="Business visits, notice printing, and the notices issued with their status." icon={<ClipboardCheck className="h-6 w-6" strokeWidth={1.8} />} highlight={(tlRemovals ?? 0) > 0}>
+              <DashboardGroup id="tl-field" title="Trade Licence Field Check" description="Business visits, notice printing, and the notices issued with their status." icon={<ClipboardCheck className="h-6 w-6" strokeWidth={1.8} />} highlight={(tlRemovals ?? 0) > 0 || (tlPrint?.toPrint ?? 0) > 0}>
                 {showTlSurvey && (
                   <Link href="/admin/tl-survey" className={cardClass}>
                     <span className={iconWrapClass}>
@@ -414,15 +421,18 @@ export default function AdminDashboardPage() {
                   </Link>
                 )}
                 {(showTlSurvey || admin.role === "trade_license_nodal" || admin.role === "city_manager") && (
-                  <Link href="/admin/tl-notices-print" className={cardClass}>
-                    <span className={iconWrapClass}>
+                  <Link href="/admin/tl-notices-print" className={deskCardClass(tlPrint?.toPrint ?? null)}>
+                    <span className={deskIconWrapClass(tlPrint?.toPrint ?? null)}>
                       <Printer className="h-6 w-6" strokeWidth={1.8} />
                     </span>
                     <h3 className="mb-1.5 text-base font-semibold text-slate-900">Print Trade Licence Notices</h3>
                     <p className="text-sm text-slate-500">
-                      {showTlSurvey
-                        ? "End-of-day printing of today's notices and automatic second notices, for signature."
-                        : "Print the Tax Collectors' notices and automatic second notices - signed by you."}
+                      {tlPrint?.toPrint
+                        ? `${tlPrint.toPrint} notice(s) to print${tlPrint.secondNotices ? `, incl. ${tlPrint.secondNotices} automatic second notice(s)` : ""}.`
+                        : showTlSurvey
+                          ? "End-of-day printing of today's notices and automatic second notices, for signature."
+                          : "Print the Tax Collectors' notices and automatic second notices - signed by you."}
+                      {tlPrint?.legalActionDue ? ` ${tlPrint.legalActionDue} business(es) due for legal action.` : ""}
                     </p>
                   </Link>
                 )}

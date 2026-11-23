@@ -70,7 +70,7 @@ export function TlNoticeSheet({ n, receiving = false, printerRole }: { n: TlNoti
             <td className={cell}>मोबाइल / Phone</td>
             <td className={`${cell} font-semibold`}>{n.phone}</td>
             <td className={cell}>अंतिम तिथि / Last date</td>
-            <td className={`${cell} font-bold`}>{n.dueOn}</td>
+            <td className={`${cell} font-bold`}>सूचना प्राप्ति से 14 दिन / 14 days from receipt</td>
           </tr>
         </tbody>
       </table>
@@ -81,13 +81,14 @@ export function TlNoticeSheet({ n, receiving = false, printerRole }: { n: TlNoti
             <p>
               इस कार्यालय की सूचना क्रमांक <b>{n.firstNoticeNo}</b> दिनांक <b>{n.firstNoticeDate}</b> द्वारा आपको वित्तीय वर्ष <b>{fy}</b> के लिए
               व्यापार अनुज्ञप्ति (ट्रेड लाइसेंस) 14 दिनों के भीतर प्राप्त करने का निर्देश दिया गया था, परंतु आपके द्वारा अनुज्ञप्ति प्राप्त नहीं की गई है। अंतिम अवसर
-              देते हुए निर्देश दिया जाता है कि दिनांक <b>{n.dueOn}</b> तक वित्तीय वर्ष {fy} की व्यापार अनुज्ञप्ति अवश्य प्राप्त कर लें, अन्यथा आपके विरुद्ध
-              नियमानुसार विधिक कार्रवाई की जाएगी, जिसकी समस्त जिम्मेदारी आपकी होगी।
+              देते हुए निर्देश दिया जाता है कि इस सूचना की प्राप्ति की तिथि से <b>14 दिनों के भीतर</b> वित्तीय वर्ष {fy} की व्यापार अनुज्ञप्ति अवश्य प्राप्त कर
+              लें, अन्यथा आपके विरुद्ध नियमानुसार विधिक कार्रवाई की जाएगी, जिसकी समस्त जिम्मेदारी आपकी होगी।
             </p>
             <p>
               By Notice No <b>{n.firstNoticeNo}</b> dated <b>{n.firstNoticeDate}</b> you were directed to obtain a trade licence for{" "}
-              <b>{fy}</b> within 14 days, which you have not done. As a final opportunity, obtain the trade licence for {fy} on or before{" "}
-              <b>{n.dueOn}</b>, failing which legal action will be taken against you as per law, for which you alone will be responsible.
+              <b>{fy}</b> within 14 days, which you have not done. As a final opportunity, obtain the trade licence for {fy}{" "}
+              <b>within 14 days of receipt of this notice</b>, failing which legal action will be taken against you as per law, for which
+              you alone will be responsible.
             </p>
           </>
         ) : (
@@ -95,15 +96,15 @@ export function TlNoticeSheet({ n, receiving = false, printerRole }: { n: TlNoti
             <p>
               नगर निगम के प्रतिनिधि द्वारा दिनांक <b>{n.issuedOn}</b> को निरीक्षण में पाया गया कि आपके प्रतिष्ठान द्वारा वित्तीय वर्ष <b>{fy}</b> के लिए
               वैध व्यापार अनुज्ञप्ति (ट्रेड लाइसेंस) प्राप्त नहीं की गई है
-              {n.licenseValidTill ? ` (प्रस्तुत अनुज्ञप्ति की वैधता वर्ष ${n.licenseValidTill} तक ही थी)` : ""}। अतः निर्देश दिया जाता है कि 14 दिनों के
-              भीतर, अर्थात दिनांक <b>{n.dueOn}</b> तक, नगर निगम से वित्तीय वर्ष {fy} की व्यापार अनुज्ञप्ति प्राप्त कर लें। निर्देश का पालन नहीं करने पर
+              {n.licenseValidTill ? ` (प्रस्तुत अनुज्ञप्ति की वैधता वर्ष ${n.licenseValidTill} तक ही थी)` : ""}। अतः निर्देश दिया जाता है कि इस सूचना की
+              प्राप्ति की तिथि से <b>14 दिनों के भीतर</b> नगर निगम से वित्तीय वर्ष {fy} की व्यापार अनुज्ञप्ति प्राप्त कर लें। निर्देश का पालन नहीं करने पर
               नियमानुसार विधिक कार्रवाई की जाएगी।
             </p>
             <p>
               On inspection on <b>{n.issuedOn}</b> by a representative of the Nagar Nigam, your business was found to be without a valid
               trade licence for <b>{fy}</b>
               {n.licenseValidTill ? ` (the licence shown was valid only till ${n.licenseValidTill})` : ""}. You are directed to obtain the
-              trade licence for {fy} from Munger Nagar Nigam within 14 days, i.e. on or before <b>{n.dueOn}</b>. Non-compliance will lead to
+              trade licence for {fy} from Munger Nagar Nigam <b>within 14 days of receipt of this notice</b>. Non-compliance will lead to
               legal consequences as per law.
             </p>
           </>

@@ -20,6 +20,7 @@ import {
   requestTlReceivingRemoval,
   uploadTlReceivingCopy,
   readLicenceFile,
+  reissueTlNotice,
   TL_STATUS,
   validTillOptions,
   type FileUpload,
@@ -76,6 +77,7 @@ export default function TlNoticesPage() {
     business: string | null;
   } | null>(null);
   const [rFile, setRFile] = useState<{ file: File; url: string | null } | null>(null);
+  const [servedOn, setServedOn] = useState("");
 
   function load() {
     setRows(null);
@@ -111,6 +113,7 @@ export default function TlNoticesPage() {
   // Prabhari or the City Manager upload; once uploaded only the DMC can approve its removal.
   const canUploadReceiving = isTc || admin.role === "trade_license_nodal" || admin.role === "city_manager";
   const canAskRemoval = canUploadReceiving || admin.role === "commissioner";
+  const canReissue = canUploadReceiving;
   const isDmc = admin.role === "deputy_commissioner";
 
   async function askRemoval(noticeId: string, noticeNo: string) {
@@ -163,6 +166,7 @@ export default function TlNoticesPage() {
 
   async function saveReceiving() {
     if (!receivingFor || !rFile) return;
+    if (!servedOn) return setError("Enter the date the notice was served (the date on the signed slip).");
     setBusy(true);
     setError(null);
     try {
@@ -170,7 +174,7 @@ export default function TlNoticesPage() {
       const pos = await new Promise<GeolocationPosition | null>((resolve) =>
         navigator.geolocation ? navigator.geolocation.getCurrentPosition(resolve, () => resolve(null), { timeout: 10000 }) : resolve(null),
       );
-      await uploadTlReceivingCopy(receivingFor.id, upload, pos?.coords.latitude ?? null, pos?.coords.longitude ?? null);
+      await uploadTlReceivingCopy(receivingFor.id, upload, servedOn, pos?.coords.latitude ?? null, pos?.coords.longitude ?? null);
       setReceivingFor(null);
       setRFile(null);
       load();
@@ -352,89 +356,130 @@ export default function TlNoticesPage() {
                           Application {r.application_number} received {fmt(r.application_received_at)} ({r.application_status})
                         </p>
                       )}
-                      {(r.notices ?? []).map((n) => (
-                        <div key={n.id} className="mb-1.5">
-                          <button
-                            onClick={() =>
-                              fetchTlNotice(n.id)
-                                .then(setReprint)
-                                .catch((e) => setError(e.message))
-                            }
-                            className="block text-left text-nnm-blue hover:underline"
-                            title="Print a copy"
-                          >
-                            <Printer className="mr-1 inline h-3 w-3" />
-                            {n.noticeNo} · due {fmt(n.dueOn)}
-                            {!n.printedAt && <span className="text-amber-700"> (not printed)</span>}
-                          </button>
-                          {n.receivingUploadedAt ? (
-                            <>
-                              <button
-                                onClick={() => openTlReceivingCopy(n.id).catch((e) => setError(e.message))}
-                                className="mt-0.5 flex items-center gap-1 text-left text-green-700 hover:underline"
-                              >
-                                <CheckCircle2 className="h-3 w-3 shrink-0" /> Receiving copy - {fmt(n.receivingUploadedAt)}
-                                {n.receivingBy ? `, ${n.receivingBy}` : ""}
-                              </button>
-                              {n.removalRequestedAt ? (
-                                <span className="mt-0.5 block max-w-64 whitespace-normal text-amber-800">
-                                  <AlertTriangle className="mr-0.5 inline h-3 w-3" />
-                                  Removal asked by {n.removalRequestedBy} ({fmt(n.removalRequestedAt)}): {n.removalReason} - waiting for DMC
-                                  {isDmc && (
-                                    <span className="mt-0.5 flex gap-2">
-                                      <button
-                                        onClick={() => decideRemoval(n.id, true)}
-                                        className="font-semibold text-red-700 hover:underline"
-                                      >
-                                        Approve removal
-                                      </button>
-                                      <button
-                                        onClick={() => decideRemoval(n.id, false)}
-                                        className="font-semibold text-slate-700 hover:underline"
-                                      >
-                                        Reject
-                                      </button>
-                                    </span>
-                                  )}
-                                </span>
+                      {(r.notices ?? []).map((n) =>
+                        n.supersededAt ? (
+                          <div key={n.id} className="mb-1.5 text-slate-400">
+                            <span className="line-through">{n.noticeNo}</span> - reissued {fmt(n.supersededAt)}
+                            {n.supersededBy ? ` by ${n.supersededBy}` : ""}
+                            {n.reissueReason ? `: ${n.reissueReason}` : ""}
+                          </div>
+                        ) : (
+                          <div key={n.id} className="mb-1.5">
+                            <button
+                              onClick={() =>
+                                fetchTlNotice(n.id)
+                                  .then(setReprint)
+                                  .catch((e) => setError(e.message))
+                              }
+                              className="block text-left text-nnm-blue hover:underline"
+                              title="Print a copy"
+                            >
+                              <Printer className="mr-1 inline h-3 w-3" />
+                              {n.noticeNo} · {n.level === 2 ? "2nd" : "1st"} notice
+                              {!n.printedAt && <span className="text-amber-700"> (not printed)</span>}
+                            </button>
+                            <span className="block text-slate-600">
+                              {n.servedOn ? (
+                                <>
+                                  Served {fmt(n.servedOn)} · last date <b>{fmt(n.dueOn)}</b>
+                                </>
                               ) : (
-                                canAskRemoval && (
-                                  <button
-                                    onClick={() => askRemoval(n.id, n.noticeNo)}
-                                    className="mt-0.5 block text-slate-500 hover:underline"
-                                  >
-                                    Ask DMC to remove
-                                  </button>
-                                )
+                                <span className="text-amber-700">Not served yet - 14 days start from the date of service</span>
                               )}
-                            </>
-                          ) : canUploadReceiving ? (
-                            <button
-                              onClick={() => {
-                                setRFile(null);
-                                setReceivingFor({
-                                  id: n.id,
-                                  noticeNo: n.noticeNo,
-                                  business: r.business_name,
-                                });
-                              }}
-                              className="mt-0.5 flex items-center gap-1 font-semibold text-amber-800 hover:underline"
-                            >
-                              <Upload className="h-3 w-3" /> Upload receiving copy
-                            </button>
-                          ) : (
-                            <span className="mt-0.5 block font-medium text-red-700">Receiving copy not uploaded</span>
-                          )}
-                          {(n.receivingUploadedAt || n.removedCount > 0) && (
-                            <button
-                              onClick={() => showLog(n.id, n.noticeNo)}
-                              className="mt-0.5 flex items-center gap-1 text-slate-500 hover:underline"
-                            >
-                              <History className="h-3 w-3" /> History{n.removedCount > 0 ? ` (${n.removedCount} removed)` : ""}
-                            </button>
-                          )}
-                        </div>
-                      ))}
+                            </span>
+                            {canReissue &&
+                              ((n.level === 1 && r.status === "notice_1") ||
+                                (n.level === 2 && (r.status === "notice_2" || r.status === "legal_action_due"))) && (
+                                <button
+                                  onClick={async () => {
+                                    const reason = window.prompt(
+                                      `Reissue the ${n.level === 2 ? "second" : "first"} notice ${n.noticeNo}? A fresh notice with a new number and today's date will be made, to be printed and served again. Reason (e.g. not served, business closed at the time):`,
+                                    );
+                                    if (!reason?.trim()) return;
+                                    try {
+                                      const out = await reissueTlNotice(n.id, reason.trim());
+                                      window.alert(`New notice ${out.noticeNo} made - it is in the print list.`);
+                                      load();
+                                    } catch (err) {
+                                      setError(err instanceof Error ? err.message : "Could not reissue.");
+                                    }
+                                  }}
+                                  className="mt-0.5 block font-semibold text-violet-700 hover:underline"
+                                >
+                                  Reissue {n.level === 2 ? "second" : "first"} notice
+                                </button>
+                              )}
+                            {n.receivingUploadedAt ? (
+                              <>
+                                <button
+                                  onClick={() => openTlReceivingCopy(n.id).catch((e) => setError(e.message))}
+                                  className="mt-0.5 flex items-center gap-1 text-left text-green-700 hover:underline"
+                                >
+                                  <CheckCircle2 className="h-3 w-3 shrink-0" /> Receiving copy - {fmt(n.receivingUploadedAt)}
+                                  {n.receivingBy ? `, ${n.receivingBy}` : ""}
+                                </button>
+                                {n.removalRequestedAt ? (
+                                  <span className="mt-0.5 block max-w-64 whitespace-normal text-amber-800">
+                                    <AlertTriangle className="mr-0.5 inline h-3 w-3" />
+                                    Removal asked by {n.removalRequestedBy} ({fmt(n.removalRequestedAt)}): {n.removalReason} - waiting for
+                                    DMC
+                                    {isDmc && (
+                                      <span className="mt-0.5 flex gap-2">
+                                        <button
+                                          onClick={() => decideRemoval(n.id, true)}
+                                          className="font-semibold text-red-700 hover:underline"
+                                        >
+                                          Approve removal
+                                        </button>
+                                        <button
+                                          onClick={() => decideRemoval(n.id, false)}
+                                          className="font-semibold text-slate-700 hover:underline"
+                                        >
+                                          Reject
+                                        </button>
+                                      </span>
+                                    )}
+                                  </span>
+                                ) : (
+                                  canAskRemoval && (
+                                    <button
+                                      onClick={() => askRemoval(n.id, n.noticeNo)}
+                                      className="mt-0.5 block text-slate-500 hover:underline"
+                                    >
+                                      Ask DMC to remove
+                                    </button>
+                                  )
+                                )}
+                              </>
+                            ) : canUploadReceiving ? (
+                              <button
+                                onClick={() => {
+                                  setRFile(null);
+                                  setServedOn("");
+                                  setReceivingFor({
+                                    id: n.id,
+                                    noticeNo: n.noticeNo,
+                                    business: r.business_name,
+                                  });
+                                }}
+                                className="mt-0.5 flex items-center gap-1 font-semibold text-amber-800 hover:underline"
+                              >
+                                <Upload className="h-3 w-3" /> Upload receiving copy
+                              </button>
+                            ) : (
+                              <span className="mt-0.5 block font-medium text-red-700">Receiving copy not uploaded</span>
+                            )}
+                            {(n.receivingUploadedAt || n.removedCount > 0) && (
+                              <button
+                                onClick={() => showLog(n.id, n.noticeNo)}
+                                className="mt-0.5 flex items-center gap-1 text-slate-500 hover:underline"
+                              >
+                                <History className="h-3 w-3" /> History{n.removedCount > 0 ? ` (${n.removedCount} removed)` : ""}
+                              </button>
+                            )}
+                          </div>
+                        ),
+                      )}
                     </td>
                     {!isTc && (
                       <td className="p-2 text-xs">
@@ -484,6 +529,20 @@ export default function TlNoticesPage() {
                 Take a photo of the bottom half of the notice signed by the business as received, or attach it (photo or PDF). Once uploaded
                 it can be removed only with the DMC&apos;s approval.
               </p>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-600" htmlFor="tl-served-on">
+                  Date of service * (the date the business received the notice)
+                </label>
+                <input
+                  id="tl-served-on"
+                  type="date"
+                  value={servedOn}
+                  max={new Date(Date.now() + 5.5 * 3600000).toISOString().slice(0, 10)}
+                  onChange={(e) => setServedOn(e.target.value)}
+                  className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                />
+                <p className="mt-1 text-xs text-slate-500">The 14 days to obtain the licence run from this date.</p>
+              </div>
               <div className="flex flex-col items-center gap-2 rounded-md border border-dashed border-slate-300 p-3">
                 {rFile && <PickedFilePreview file={rFile.file} url={rFile.url} label="Receiving copy" className="h-40 w-full max-w-xs" />}
                 <PhotoSourceButtons
@@ -502,7 +561,7 @@ export default function TlNoticesPage() {
                 </button>
                 <button
                   onClick={saveReceiving}
-                  disabled={busy || !rFile}
+                  disabled={busy || !rFile || !servedOn}
                   className="inline-flex items-center gap-1 rounded-md bg-nnm-blue px-3 py-1.5 font-semibold text-white disabled:opacity-60"
                 >
                   {busy && <Loader2 className="h-3 w-3 animate-spin" />}

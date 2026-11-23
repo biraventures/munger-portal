@@ -140,7 +140,7 @@ export default function TlNoticesPrintPage() {
                     <td className="p-2">{n.businessName}</td>
                     <td className="p-2">{n.holdingNo}</td>
                     <td className="p-2">{n.issuedOn}</td>
-                    <td className="p-2">{n.dueOn}</td>
+                    <td className="p-2">{n.servedOn ? `${n.dueOn} (served ${n.servedOn})` : "14 days from service"}</td>
                   </tr>
                 ))}
               </tbody>
