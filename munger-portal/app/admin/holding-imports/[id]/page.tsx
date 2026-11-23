@@ -20,6 +20,7 @@ import {
   type StagedHolding,
   type StagedHoldingDetail,
   type StagedHoldingList,
+  integrateWard,
 } from "@/lib/holding-import-api";
 
 const STATUS_LABEL: Record<string, string> = { pending: "Pending", excluded: "Kept out", integrated: "Integrated", failed: "Failed" };
@@ -271,6 +272,78 @@ export default function HoldingImportReviewPage() {
               void load();
             }}
           />
+        )}
+        {(list?.wardCounts?.length ?? 0) > 0 && (
+          <details className="mb-3 rounded-xl border border-slate-200 bg-white p-3" open>
+            <summary className="cursor-pointer text-sm font-semibold text-slate-800">Ward-wise - click a ward to work on it</summary>
+            <div className="mt-2 overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b text-right text-xs text-slate-500">
+                    <th className="px-2 py-1 text-left">Ward</th>
+                    <th className="px-2 py-1">Pending</th>
+                    <th className="px-2 py-1">To review</th>
+                    <th className="px-2 py-1">Reviewed</th>
+                    <th className="px-2 py-1">Cannot import</th>
+                    <th className="px-2 py-1">Kept out</th>
+                    <th className="px-2 py-1">Integrated</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {list!.wardCounts!.map((w) => (
+                    <tr
+                      key={w.ward}
+                      onClick={() => { setWard(w.ward); setPage(1); }}
+                      className={`cursor-pointer border-b border-slate-100 text-right hover:bg-blue-50 ${ward === w.ward ? "bg-blue-50 font-semibold" : ""}`}
+                    >
+                      <td className="px-2 py-1 text-left">Ward {w.ward}</td>
+                      <td className="px-2 py-1">{w.pending}</td>
+                      <td className={`px-2 py-1 ${w.ready ? "font-semibold text-amber-700" : "text-slate-400"}`}>{w.ready}</td>
+                      <td className="px-2 py-1">{w.reviewed}</td>
+                      <td className={`px-2 py-1 ${w.blocked ? "text-red-700" : "text-slate-400"}`}>{w.blocked}</td>
+                      <td className="px-2 py-1">{w.excluded}</td>
+                      <td className="px-2 py-1 text-green-700">{w.integrated}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {ward && (() => {
+              const w = list!.wardCounts!.find((x) => x.ward === ward);
+              return (
+                <div className="mt-2 flex flex-wrap items-center gap-2 rounded-md bg-blue-50 p-2 text-sm">
+                  <span className="font-semibold">Ward {ward}:</span>
+                  {isDaroga && (
+                    <button
+                      disabled={locked || !w?.ready}
+                      onClick={() => {
+                        if (window.confirm(`Tag all ${w?.ready} holding(s) of ward ${ward} that are ready (no blocking issue, not kept out) as reviewed by you?`))
+                          void run(() => markReviewed(batchId, true, { ward }), (r: { updated: number }) => `${r.updated} holding(s) of ward ${ward} tagged as reviewed.`);
+                      }}
+                      className="rounded-md bg-green-700 px-3 py-1.5 font-semibold text-white disabled:opacity-50"
+                    >
+                      Mark all ready in ward {ward} reviewed ({w?.ready ?? 0})
+                    </button>
+                  )}
+                  {isCityManager && (
+                    <button
+                      disabled={locked || !w?.reviewed}
+                      onClick={() => {
+                        if (window.confirm(`Integrate all ${w?.reviewed} reviewed holding(s) of ward ${ward}?\n\nThis is the final approval - they will go live straight away.`))
+                          void run(() => integrateWard(batchId, ward), (r: { holdings: number }) => `Integration started for ${r.holdings} holding(s) of ward ${ward}.`);
+                      }}
+                      className="rounded-md bg-nnm-blue px-3 py-1.5 font-semibold text-white disabled:opacity-50"
+                    >
+                      Integrate all reviewed in ward {ward} ({w?.reviewed ?? 0})
+                    </button>
+                  )}
+                  <button onClick={() => { setWard(""); setPage(1); }} className="text-xs font-semibold text-nnm-blue">
+                    Show all wards
+                  </button>
+                </div>
+              );
+            })()}
+          </details>
         )}
         <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white p-3">
           {isCityManager && (

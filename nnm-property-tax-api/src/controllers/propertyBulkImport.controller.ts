@@ -13,6 +13,7 @@ import {
   previewResidentialSolidWaste,
   restoreHoldings,
   setReviewed,
+  reviewedHoldingsOfWard,
   startIntegration,
 } from "../services/propertyImportStaging.service";
 
@@ -71,23 +72,34 @@ export const restoreImportHoldingsHandler = asyncHandler(async (req: Request, re
 const reviewSchema = z.object({
   holdingNos: z.array(z.string().min(1)).max(5000).optional(),
   all: z.boolean().optional(),
+  /** Every ready holding of this ward. */
+  ward: z.string().trim().max(16).optional(),
   reviewed: z.boolean(),
 });
 
 export const reviewImportHoldingsHandler = asyncHandler(async (req: Request, res: Response) => {
   const p = reviewSchema.safeParse(req.body);
   if (!p.success) throw ApiError.badRequest("Invalid input", p.error.flatten().fieldErrors);
-  res.json(await setReviewed(batchId(req), { holdingNos: p.data.holdingNos, all: p.data.all }, p.data.reviewed, req.admin!.displayName));
+  res.json(await setReviewed(batchId(req), { holdingNos: p.data.holdingNos, all: p.data.all, ward: p.data.ward }, p.data.reviewed, req.admin!.displayName));
 });
 
 const integrateSchema = z.object({
   mode: z.enum(["all", "selected", "all_except"]),
   holdingNos: z.array(z.string().min(1)).max(5000).optional(),
+  /** With mode "all": only this ward's reviewed holdings. */
+  ward: z.string().trim().max(16).optional(),
 });
 
 export const integrateImportHandler = asyncHandler(async (req: Request, res: Response) => {
   const p = integrateSchema.safeParse(req.body);
   if (!p.success) throw ApiError.badRequest("Invalid input", p.error.flatten().fieldErrors);
+  // A ward: its reviewed holdings, integrated as a selection.
+  if (p.data.ward && p.data.mode === "all") {
+    const list = await reviewedHoldingsOfWard(batchId(req), p.data.ward);
+    if (list.length === 0) throw ApiError.badRequest(`No reviewed holding of ward ${p.data.ward} is waiting to be integrated.`);
+    res.status(202).json(await startIntegration(batchId(req), "selected", list, req.admin!.displayName));
+    return;
+  }
   const result = await startIntegration(batchId(req), p.data.mode, p.data.holdingNos ?? [], req.admin!.displayName);
   res.status(202).json(result);
 });

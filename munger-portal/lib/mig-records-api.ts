@@ -103,6 +103,17 @@ const qs = (o: Record<string, string | number | undefined>) => {
 };
 
 // ---------- approvals: Operator verifies -> Tax Daroga forwards -> City Manager approves (MIG-); Commissioner any step ----------
+export interface MigWardCount {
+  ward: string;
+  mine: number;
+  at_operator: number;
+  at_tax_daroga: number;
+  at_city_manager: number;
+  blocking: number;
+  approved: number;
+  taken_up: number;
+  finalized: number;
+}
 export interface MigList {
   records: MigRecord[];
   total: number;
@@ -111,6 +122,8 @@ export interface MigList {
   totals: MigTotals;
   myStage: MigStage | null;
   isCommissioner: boolean;
+  /** Per ward: awaiting this login, with each step, to correct, approved, being entered, final. */
+  wardCounts: MigWardCount[];
 }
 export const fetchAllMigRecords = (f: { status?: string; stage?: string; ward?: string; issues?: string; q?: string; page?: number }) =>
   call<MigList>(`/mig-records?${qs(f)}`);

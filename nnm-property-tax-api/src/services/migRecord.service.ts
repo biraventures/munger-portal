@@ -246,12 +246,28 @@ export async function listAllRecords(
       [myStage(a) ?? ""],
     ),
   ]);
+  // Ward-wise counts (for working ward by ward), wards in number order.
+  const { rows: wardCounts } = await pool.query(
+    `SELECT normalize_ward(ward) AS ward,
+            count(*) FILTER (WHERE status = 'pending' AND stage = $1)::int AS mine,
+            count(*) FILTER (WHERE status = 'pending' AND stage = 'operator')::int AS at_operator,
+            count(*) FILTER (WHERE status = 'pending' AND stage = 'tax_daroga')::int AS at_tax_daroga,
+            count(*) FILTER (WHERE status = 'pending' AND stage = 'city_manager')::int AS at_city_manager,
+            count(*) FILTER (WHERE status = 'pending' AND issues @> '[{"blocking": true}]')::int AS blocking,
+            count(*) FILTER (WHERE status = 'approved')::int AS approved,
+            count(*) FILTER (WHERE status = 'taken_up')::int AS taken_up,
+            count(*) FILTER (WHERE status = 'finalized')::int AS finalized
+       FROM mig_records WHERE normalize_ward(ward) IS NOT NULL
+      GROUP BY 1 ORDER BY (substring(normalize_ward(ward) from '^[0-9]+'))::int NULLS LAST, 1`,
+    [myStage(a) ?? ""],
+  );
   return {
     records: rows.map(view),
     total: count[0]?.n ?? 0,
     page,
     pageSize: PAGE,
     totals: totals[0],
+    wardCounts,
     myStage: myStage(a),
     isCommissioner: a.role === "commissioner",
   };

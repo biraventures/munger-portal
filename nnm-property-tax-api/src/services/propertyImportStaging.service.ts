@@ -147,7 +147,19 @@ export async function listStagedHoldings(batchId: number, f: StagedListFilter) {
        FROM property_import_staging WHERE ${w} ORDER BY holding_no LIMIT ${pageSize} OFFSET ${(page - 1) * pageSize}`,
     params,
   );
-  const wards = await pool.query<{ ward: string }>(`SELECT DISTINCT ward FROM property_import_staging WHERE batch_id = $1 AND ward IS NOT NULL ORDER BY ward`, [batchId]);
+  // Ward-wise counts of the whole upload (for the staff working ward by ward), wards in number order.
+  const wards = await pool.query<{ ward: string; pending: number; ready: number; reviewed: number; blocked: number; excluded: number; integrated: number }>(
+    `SELECT ward,
+            count(*) FILTER (WHERE status IN ('pending','failed'))::int AS pending,
+            count(*) FILTER (WHERE status IN ('pending','failed') AND NOT has_blocker AND reviewed_at IS NULL)::int AS ready,
+            count(*) FILTER (WHERE status IN ('pending','failed') AND reviewed_at IS NOT NULL)::int AS reviewed,
+            count(*) FILTER (WHERE status IN ('pending','failed') AND has_blocker)::int AS blocked,
+            count(*) FILTER (WHERE status = 'excluded')::int AS excluded,
+            count(*) FILTER (WHERE status = 'integrated')::int AS integrated
+       FROM property_import_staging WHERE batch_id = $1 AND ward IS NOT NULL
+      GROUP BY ward ORDER BY (substring(ward from '^[0-9]+'))::int NULLS LAST, ward`,
+    [batchId],
+  );
   return {
     items: rows.rows.map((r) => ({
       holdingNo: r.holding_no as string, ownerName: r.owner_name as string | null, ward: r.ward as string | null, areaSqft: r.area_sqft as string | null,
@@ -155,7 +167,7 @@ export async function listStagedHoldings(batchId: number, f: StagedListFilter) {
       issues: r.issues as StagedIssue[], hasBlocker: r.has_blocker as boolean, error: r.error as string | null,
       reviewedBy: r.reviewed_by as string | null, reviewedAt: r.reviewed_at as string | null,
     })),
-    total, page, pageSize, wards: wards.rows.map((x) => x.ward),
+    total, page, pageSize, wards: wards.rows.map((x) => x.ward), wardCounts: wards.rows,
   };
 }
 
@@ -248,19 +260,28 @@ export async function excludeHoldings(batchId: number, holdingNos: string[], rea
 }
 
 /** Tax Daroga's "reviewed" tag. holdingNos = specific holdings; all = every pending holding without a blocking issue. */
-export async function setReviewed(batchId: number, target: { holdingNos?: string[]; all?: boolean }, reviewed: boolean, actorName: string) {
+export async function setReviewed(
+  batchId: number,
+  target: { holdingNos?: string[]; all?: boolean; ward?: string },
+  reviewed: boolean,
+  actorName: string,
+) {
   const b = await getBatchOrThrow(batchId);
   if (b.status !== "open") throw ApiError.badRequest("This upload has been discarded.");
   if (isIntegrating(b.integrating_since)) throw ApiError.badRequest("An integration is running - wait for it to finish.");
-  if (!target.all && !(target.holdingNos && target.holdingNos.length > 0)) throw ApiError.badRequest("Select at least one holding.");
+  if (!target.all && !target.ward && !(target.holdingNos && target.holdingNos.length > 0)) throw ApiError.badRequest("Select at least one holding.");
+  // A whole ward ("all ready in ward N") or the whole upload, or the listed holdings.
+  const ward = target.ward ? normalizeWard(target.ward) : null;
+  const list = target.all || ward ? null : target.holdingNos;
   const r = await pool.query(
     reviewed
       ? `UPDATE property_import_staging SET reviewed_by = $3, reviewed_at = now()
           WHERE batch_id = $1 AND status IN ('pending','failed') AND NOT has_blocker AND reviewed_at IS NULL
-            AND ($2::text[] IS NULL OR holding_no = ANY($2::text[]))`
+            AND ($2::text[] IS NULL OR holding_no = ANY($2::text[])) AND ($4::text IS NULL OR ward = $4)`
       : `UPDATE property_import_staging SET reviewed_by = NULL, reviewed_at = NULL
-          WHERE batch_id = $1 AND status IN ('pending','failed','excluded') AND reviewed_at IS NOT NULL AND ($2::text[] IS NULL OR holding_no = ANY($2::text[]))`,
-    reviewed ? [batchId, target.all ? null : target.holdingNos, actorName] : [batchId, target.all ? null : target.holdingNos],
+          WHERE batch_id = $1 AND status IN ('pending','failed','excluded') AND reviewed_at IS NOT NULL AND ($2::text[] IS NULL OR holding_no = ANY($2::text[]))
+            AND ($3::text IS NULL OR ward = $3)`,
+    reviewed ? [batchId, list, actorName, ward] : [batchId, list, ward],
   );
   return { updated: r.rowCount ?? 0 };
 }
@@ -311,6 +332,16 @@ async function pickHoldings(batchId: number, mode: IntegrateMode, holdingNos: st
 }
 
 /** Starts an integration run in the background and returns at once; the review page polls the batch for progress. */
+/** The reviewed, pending holdings of one ward of an upload - for "integrate all reviewed in ward N". */
+export async function reviewedHoldingsOfWard(batchId: number, ward: string): Promise<string[]> {
+  const r = await pool.query<{ holding_no: string }>(
+    `SELECT holding_no FROM property_import_staging
+      WHERE batch_id = $1 AND ward = $2 AND status IN ('pending','failed') AND NOT has_blocker AND reviewed_at IS NOT NULL ORDER BY holding_no`,
+    [batchId, normalizeWard(ward)],
+  );
+  return r.rows.map((x) => x.holding_no);
+}
+
 export async function startIntegration(batchId: number, mode: IntegrateMode, holdingNos: string[], actorName: string) {
   const b = await getBatchOrThrow(batchId);
   if (b.status !== "open") throw ApiError.badRequest("This upload has been discarded.");

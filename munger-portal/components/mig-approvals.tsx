@@ -75,7 +75,7 @@ export function MigApprovals({ role, header }: { role: string; header: ReactNode
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- filters apply on Show / tab change
-  }, [status, stage, page, issues]);
+  }, [status, stage, page, issues, ward]);
 
   const t = data?.totals;
   const pages = data ? Math.max(1, Math.ceil(data.total / data.pageSize)) : 1;
@@ -171,13 +171,84 @@ export function MigApprovals({ role, header }: { role: string; header: ReactNode
           </button>
         </div>
 
+        {data && data.wardCounts.length > 0 && (
+          <details className="rounded-xl border border-slate-200 bg-white p-4" open={stageLogin}>
+            <summary className="cursor-pointer text-sm font-semibold text-slate-800">Ward-wise - click a ward to work on it</summary>
+            <div className="mt-3 overflow-x-auto">
+              <table className="w-full text-sm [&_td]:px-2 [&_td]:py-1 [&_th]:px-2">
+                <thead>
+                  <tr className="border-b text-right text-xs text-slate-500 [&>th:first-child]:text-left">
+                    <th>Ward</th>
+                    {mine && <th className="text-red-700">Awaiting me</th>}
+                    <th>With Operator</th>
+                    <th>With Tax Daroga</th>
+                    <th>With City Manager</th>
+                    <th>To correct</th>
+                    <th>Approved (MIG)</th>
+                    <th>Being entered</th>
+                    <th>Final (MNN)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.wardCounts.map((w) => (
+                    <tr
+                      key={w.ward}
+                      onClick={() => {
+                        setWard(w.ward);
+                        setPage(1);
+                      }}
+                      className={`cursor-pointer border-b border-slate-100 text-right hover:bg-blue-50 ${ward === w.ward ? "bg-blue-50 font-semibold" : ""}`}
+                    >
+                      <td className="text-left">Ward {w.ward}</td>
+                      {mine && <td className={w.mine ? "font-semibold text-red-700" : "text-slate-400"}>{w.mine}</td>}
+                      <td>{w.at_operator}</td>
+                      <td>{w.at_tax_daroga}</td>
+                      <td>{w.at_city_manager}</td>
+                      <td className={w.blocking ? "text-red-700" : "text-slate-400"}>{w.blocking}</td>
+                      <td>{w.approved}</td>
+                      <td>{w.taken_up}</td>
+                      <td>{w.finalized}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {ward && (
+              <button
+                onClick={() => {
+                  setWard("");
+                  setPage(1);
+                }}
+                className="mt-2 text-xs font-semibold text-nnm-blue"
+              >
+                Show all wards
+              </button>
+            )}
+          </details>
+        )}
+
         <section className="rounded-xl border border-slate-200 bg-white p-4">
           <div className="mb-3 flex flex-wrap items-end gap-2">
             <div>
               <label className="mb-1 block text-xs text-slate-500" htmlFor="m-ward">
                 Ward
               </label>
-              <input id="m-ward" value={ward} onChange={(e) => setWard(e.target.value)} placeholder="All" className={`${input} w-20`} />
+              <select
+                id="m-ward"
+                value={ward}
+                onChange={(e) => {
+                  setWard(e.target.value);
+                  setPage(1);
+                }}
+                className={input}
+              >
+                <option value="">All wards</option>
+                {(data?.wardCounts ?? []).map((w) => (
+                  <option key={w.ward} value={w.ward}>
+                    Ward {w.ward}
+                  </option>
+                ))}
+              </select>
             </div>
             <div>
               <label className="mb-1 block text-xs text-slate-500" htmlFor="m-issues">

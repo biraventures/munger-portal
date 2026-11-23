@@ -71,6 +71,8 @@ export interface StagedHoldingList {
   page: number;
   pageSize: number;
   wards: string[];
+  /** Per ward of the whole upload: pending, ready to review, reviewed, cannot import, kept out, integrated. */
+  wardCounts?: { ward: string; pending: number; ready: number; reviewed: number; blocked: number; excluded: number; integrated: number }[];
 }
 
 export interface StagedHoldingDetail {
@@ -120,7 +122,7 @@ export const integrateStaged = (id: number, mode: IntegrateMode, holdingNos?: st
 export const discardImport = (id: number) => call<{ ok: boolean }>(`/admin/property-imports/${id}/discard`, { method: "POST", body: "{}" });
 
 /** Tax Daroga only: tag holdings as reviewed (or remove the tag). Pass all:true for every pending holding without a blocking issue. */
-export const markReviewed = (id: number, reviewed: boolean, target: { holdingNos?: string[]; all?: boolean }) =>
+export const markReviewed = (id: number, reviewed: boolean, target: { holdingNos?: string[]; all?: boolean; ward?: string }) =>
   call<{ updated: number }>(`/admin/property-imports/${id}/review`, { method: "POST", body: JSON.stringify({ reviewed, ...target }) });
 
 export interface ResidentialSolidWastePreview {
@@ -266,3 +268,7 @@ export const decideResolution = (caseId: number, decision: "forward" | "approve"
     body: JSON.stringify({ decision, comment }),
   });
 export const fetchResolutionsWaiting = () => call<{ total: number; byBatch: Record<string, number> }>("/admin/import-resolutions/waiting");
+
+/** City Manager only: integrate every reviewed holding of one ward of the upload. */
+export const integrateWard = (id: number, ward: string) =>
+  call<{ started: boolean; holdings: number }>(`/admin/property-imports/${id}/integrate`, { method: "POST", body: JSON.stringify({ mode: "all", ward }) });
