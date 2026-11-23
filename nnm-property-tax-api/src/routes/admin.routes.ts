@@ -879,8 +879,9 @@ adminRouter.post("/tl-survey", requireAdminRole("tax_collector"), postTlSurvey);
 adminRouter.get("/tl-surveys", requireTlViewRole, getTlSurveys);
 adminRouter.get("/tl-surveys/:id/file/:which", requireTlViewRole, getTlSurveyFile);
 adminRouter.post("/tl-surveys/:id/complied", requireAdminRole("tax_collector", "city_manager"), postTlComplied);
-adminRouter.get("/tl-notices/print-queue", requireAdminRole("tax_collector"), getTlPrintQueue);
-adminRouter.post("/tl-notices/mark-printed", requireAdminRole("tax_collector"), postTlMarkPrinted);
+// Printing: the Tax Collector (own businesses), or the Trade Licence Prabhari / City Manager (every notice, signed by them).
+adminRouter.get("/tl-notices/print-queue", requireAdminRole("tax_collector", "trade_license_nodal", "city_manager"), getTlPrintQueue);
+adminRouter.post("/tl-notices/mark-printed", requireAdminRole("tax_collector", "trade_license_nodal", "city_manager"), postTlMarkPrinted);
 adminRouter.get("/tl-notices/:id", requireTlViewRole, getTlNotice);
 // Receiving copies: uploaded by the Tax Collector who raised the notice, the Trade Licence Prabhari or the City Manager;
 // removed only with the DMC's approval (migration 190).

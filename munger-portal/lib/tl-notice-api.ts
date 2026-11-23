@@ -112,6 +112,8 @@ export interface TlNotice {
   firstNoticeNo: string | null;
   firstNoticeDate: string | null;
   printedAt: string | null;
+  /** Role of the login that printed it - Trade Licence Prabhari prints carry the Prabhari as signatory. */
+  printedByRole?: string | null;
   receivingUploadedAt: string | null;
   /** QR code link: the public application form filled in from this notice. */
   applyUrl?: string;

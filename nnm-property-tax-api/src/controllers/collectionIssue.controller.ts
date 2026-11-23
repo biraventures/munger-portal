@@ -5,6 +5,7 @@ import { collectionIssueRepository } from "../repositories/collectionIssue.repos
 import { propertyRepository } from "../repositories/property.repository";
 import { asyncHandler } from "../middleware/asyncHandler";
 import { ApiError } from "../utils/ApiError";
+import { collectorWardScope } from "../middleware/collectorWardGuard";
 import {
   decideRemoval,
   receivingFile,
@@ -77,7 +78,7 @@ export const listAllCollectionIssues = asyncHandler(async (req: Request, res: Re
 export const listMyCollectionIssues = asyncHandler(async (req: Request, res: Response) => {
   if (!req.admin) throw new ApiError(401, "Not signed in.");
   await autoResolvePaid();
-  const issues = await collectionIssueRepository.listForReporterWithNotices(req.admin.username);
+  const issues = await collectionIssueRepository.listForReporterWithNotices(req.admin.username, (await collectorWardScope(req.admin)) ?? []);
   res.status(200).json({ issues });
 });
 

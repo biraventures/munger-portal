@@ -413,13 +413,17 @@ export default function AdminDashboardPage() {
                     <p className="text-sm text-slate-500">Record a business visit - licence photo if it has one, otherwise a 14-day notice is generated.</p>
                   </Link>
                 )}
-                {showTlSurvey && (
+                {(showTlSurvey || admin.role === "trade_license_nodal" || admin.role === "city_manager") && (
                   <Link href="/admin/tl-notices-print" className={cardClass}>
                     <span className={iconWrapClass}>
                       <Printer className="h-6 w-6" strokeWidth={1.8} />
                     </span>
                     <h3 className="mb-1.5 text-base font-semibold text-slate-900">Print Trade Licence Notices</h3>
-                    <p className="text-sm text-slate-500">End-of-day printing of today&apos;s notices and automatic second notices, for the City Manager&apos;s signature.</p>
+                    <p className="text-sm text-slate-500">
+                      {showTlSurvey
+                        ? "End-of-day printing of today's notices and automatic second notices, for signature."
+                        : "Print the Tax Collectors' notices and automatic second notices - signed by you."}
+                    </p>
                   </Link>
                 )}
                 <Link href="/admin/tl-notices" className={deskCardClass(tlRemovals)}>

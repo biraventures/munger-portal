@@ -259,7 +259,7 @@ export default function CollectionIssuesPage() {
                         <div className="text-slate-600">
                           <span className="font-mono font-semibold text-slate-800">{n.notice_no}</span> · {NOTICE_LANGUAGE_LABELS[n.language]} ·{" "}
                           {new Date(n.generated_at).toLocaleDateString("en-IN")} by {n.generated_by_display_name}
-                          <CiReceiving notice={n} reportedBy={i.reported_by_username} role={admin.role} username={admin.username} onChanged={load} />
+                          <CiReceiving notice={n} role={admin.role} onChanged={load} />
                         </div>
                         <button
                           onClick={() => handleReprint(n.id)}

@@ -76,7 +76,7 @@ export function CollectionIssueList({
                     <span>
                       Notice <span className="font-mono font-semibold">{n.notice_no}</span> · {new Date(n.generated_at).toLocaleDateString("en-IN")} · {n.language === "hi" ? "हिन्दी" : "English"}
                       {viewer && (
-                        <CiReceiving notice={n} reportedBy={i.reported_by_username} role={viewer.role} username={viewer.username} onChanged={() => onChanged?.()} />
+                        <CiReceiving notice={n} role={viewer.role} onChanged={() => onChanged?.()} />
                       )}
                     </span>
                     <button

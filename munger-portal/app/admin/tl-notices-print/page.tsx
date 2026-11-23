@@ -9,6 +9,10 @@ import { useAdminGuard } from "@/lib/use-admin-guard";
 import { printElementInNewWindow } from "@/lib/print-in-new-window";
 import { fetchPrintQueue, markNoticesPrinted, type TlNotice } from "@/lib/tl-notice-api";
 
+// The Tax Collector prints their businesses' notices (for the City Manager's signature); the Trade Licence Prabhari and
+// the City Manager print every notice and sign it themselves.
+const PRINT_ROLES = ["tax_collector", "trade_license_nodal", "city_manager"];
+
 export default function TlNoticesPrintPage() {
   const admin = useAdminGuard();
   const [mode, setMode] = useState<"pending" | "date">("pending");
@@ -27,16 +31,16 @@ export default function TlNoticesPrintPage() {
   }
 
   useEffect(() => {
-    if (admin?.role === "tax_collector") load();
+    if (admin && PRINT_ROLES.includes(admin.role)) load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [admin, mode, date]);
 
   if (!admin) return <div className="flex min-h-screen items-center justify-center text-sm text-slate-400">Loading…</div>;
-  if (admin.role !== "tax_collector") {
+  if (!PRINT_ROLES.includes(admin.role)) {
     return (
       <div className="min-h-screen bg-slate-50">
         <AdminHeader admin={admin} />
-        <p className="p-10 text-sm text-slate-500">This page is for Tax Collectors.</p>
+        <p className="p-10 text-sm text-slate-500">This page is for Tax Collectors, the Trade Licence Prabhari and the City Manager.</p>
       </div>
     );
   }
@@ -143,7 +147,7 @@ export default function TlNoticesPrintPage() {
             </table>
             <div className="overflow-x-auto rounded-xl border border-slate-200 bg-slate-100 p-4">
               <div ref={sheetRef}>
-                <TlNoticePages notices={notices} />
+                <TlNoticePages notices={notices} printerRole={admin.role} />
               </div>
             </div>
           </>

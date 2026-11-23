@@ -7,7 +7,9 @@ import type { TlNotice } from "@/lib/tl-notice-api";
  * the business and kept by the Tax Collector, who photographs it and uploads it in the portal. Signed by the City
  * Manager; the Tax Collector who recorded the visit is deliberately not named on it.
  */
-export function TlNoticeSheet({ n, receiving = false }: { n: TlNotice; receiving?: boolean }) {
+export function TlNoticeSheet({ n, receiving = false, printerRole }: { n: TlNotice; receiving?: boolean; printerRole?: string }) {
+  // Signed by the Trade Licence Prabhari when they print it (kept on the notice for reprints), else by the City Manager.
+  const byPrabhari = (n.printedByRole ?? printerRole) === "trade_license_nodal";
   const second = n.level === 2;
   const fy = n.financialYear;
   const cell = "border border-black px-1.5 py-[1px]";
@@ -123,7 +125,7 @@ export function TlNoticeSheet({ n, receiving = false }: { n: TlNotice; receiving
           )}
         </div>
         <div className="text-center">
-          <p className="font-semibold">सिटी मैनेजर / City Manager</p>
+          <p className="font-semibold">{byPrabhari ? "अनुज्ञप्ति प्रभारी / Trade Licence Prabhari" : "सिटी मैनेजर / City Manager"}</p>
           <p>मुंगेर नगर निगम, मुंगेर</p>
         </div>
       </div>
@@ -135,7 +137,7 @@ export function TlNoticeSheet({ n, receiving = false }: { n: TlNotice; receiving
  * One A4 page per notice: the business copy on the top half and the receiving copy on the bottom half, with a cut line
  * between. Each half is 128 mm, so the pair fits A4 and Letter paper even with the printer's own margins.
  */
-export function TlNoticePages({ notices }: { notices: TlNotice[] }) {
+export function TlNoticePages({ notices, printerRole }: { notices: TlNotice[]; printerRole?: string }) {
   return (
     <>
       {/* The site-wide print CSS hides everything outside .printable-area (a single fixed-position sheet); these pages
@@ -156,13 +158,13 @@ export function TlNoticePages({ notices }: { notices: TlNotice[] }) {
             pageBreakAfter: i < notices.length - 1 ? "always" : "auto",
           }}
         >
-          <TlNoticeSheet n={n} />
+          <TlNoticeSheet n={n} printerRole={printerRole} />
           <div className="relative mx-auto border-t border-dashed border-slate-500" style={{ width: "190mm", margin: "2.5mm auto" }}>
             <span className="absolute -top-2 left-1/2 -translate-x-1/2 bg-white px-2 text-[8px] text-slate-600">
               ✂ यहाँ से काटें / cut here
             </span>
           </div>
-          <TlNoticeSheet n={n} receiving />
+          <TlNoticeSheet n={n} receiving printerRole={printerRole} />
         </div>
       ))}
     </>

@@ -3,6 +3,7 @@ import path from "node:path";
 import type { Request, Response } from "express";
 import { z } from "zod";
 import { asyncHandler } from "../middleware/asyncHandler";
+import { collectorWardScope } from "../middleware/collectorWardGuard";
 import { ApiError } from "../utils/ApiError";
 import { holdingNoSchema } from "../utils/holdingNoSchema";
 import {
@@ -62,22 +63,24 @@ const listQuery = z.object({
 export const getTlSurveys = asyncHandler(async (req: Request, res: Response) => {
   const q = listQuery.safeParse(req.query);
   if (!q.success) throw ApiError.badRequest("Invalid filters");
-  const mine = req.admin!.role === "tax_collector";
-  res.status(200).json({ surveys: await listSurveys({ ...q.data, q: q.data.q || undefined, recordedBy: mine ? req.admin!.username : undefined }) });
+  // A Tax Collector sees the businesses they visited and those in their wards (to upload receiving copies there too).
+  const collector =
+    req.admin!.role === "tax_collector" ? { username: req.admin!.username, wards: (await collectorWardScope(req.admin)) ?? [] } : undefined;
+  res.status(200).json({ surveys: await listSurveys({ ...q.data, q: q.data.q || undefined, collector }) });
 });
 
 /** GET /api/v1/admin/tl-notices/print-queue?date=&all=1 - Tax Collector's notices to print (unprinted by default). */
 export const getTlPrintQueue = asyncHandler(async (req: Request, res: Response) => {
   const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().safeParse(req.query.date || undefined);
   if (!date.success) throw ApiError.badRequest("Invalid date");
-  res.status(200).json({ notices: await noticesToPrint(req.admin!.username, { date: date.data, includePrinted: req.query.all === "1" }) });
+  res.status(200).json({ notices: await noticesToPrint(req.admin!, { date: date.data, includePrinted: req.query.all === "1" }) });
 });
 
 /** POST /api/v1/admin/tl-notices/mark-printed { ids } */
 export const postTlMarkPrinted = asyncHandler(async (req: Request, res: Response) => {
   const b = z.object({ ids: z.array(z.coerce.number().int().positive()).min(1).max(500) }).safeParse(req.body);
   if (!b.success) throw ApiError.badRequest("Invalid request");
-  res.status(200).json({ marked: await markPrinted(b.data.ids.map(String), req.admin!.username, req.admin!.displayName) });
+  res.status(200).json({ marked: await markPrinted(b.data.ids.map(String), req.admin!) });
 });
 
 /** GET /api/v1/admin/tl-notices/:id - one notice (reprint). */

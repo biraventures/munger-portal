@@ -99,10 +99,14 @@ export const collectionIssueRepository = {
   },
 
   /** Every issue one Tax Collector has reported, each with its notices - so they can see what came of them. */
-  async listForReporterWithNotices(username: string): Promise<CollectionIssueWithNotices[]> {
+  /** A Tax Collector's issues: those they reported, and those on holdings of their wards (to upload receiving copies there too). */
+  async listForReporterWithNotices(username: string, wards: string[] = []): Promise<CollectionIssueWithNotices[]> {
     const { rows } = await pool.query<CollectionIssueWithNotices>(
-      `${WITH_NOTICES_SELECT} WHERE ci.reported_by_username = $1 GROUP BY ci.id ORDER BY ci.reported_at DESC`,
-      [username],
+      `${WITH_NOTICES_SELECT}
+        WHERE ci.reported_by_username = $1
+           OR EXISTS (SELECT 1 FROM properties p WHERE p.holding_no = ci.holding_no AND btrim(p.ward) = ANY($2::text[]))
+        GROUP BY ci.id ORDER BY ci.reported_at DESC`,
+      [username, wards],
     );
     return rows;
   },

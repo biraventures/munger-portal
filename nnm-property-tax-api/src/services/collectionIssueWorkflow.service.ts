@@ -7,6 +7,7 @@ import { env } from "../config/env";
 import { ApiError } from "../utils/ApiError";
 import { photoOrDocumentExt } from "../utils/uploadLimits";
 import type { AdminTokenPayload } from "../types/admin.types";
+import { collectorWardScope } from "../middleware/collectorWardGuard";
 
 /**
  * Collection issues after they are reported (migration 191):
@@ -75,13 +76,15 @@ export async function workflowCounts() {
 
 interface NoticeOwner {
   reported_by_username: string;
+  ward: string | null;
   receiving_photo_path: string | null;
   receiving_removal_requested_at: string | null;
 }
 async function noticeOwner(db: Pick<PoolClient, "query">, noticeId: string, lock = false): Promise<NoticeOwner> {
   const { rows } = await db.query<NoticeOwner>(
-    `SELECT ci.reported_by_username, n.receiving_photo_path, n.receiving_removal_requested_at
+    `SELECT ci.reported_by_username, btrim(p.ward) AS ward, n.receiving_photo_path, n.receiving_removal_requested_at
        FROM collection_issue_notices n JOIN collection_issues ci ON ci.id = n.collection_issue_id
+       LEFT JOIN properties p ON p.holding_no = ci.holding_no
       WHERE n.id = $1 ${lock ? "FOR UPDATE OF n" : ""}`,
     [noticeId],
   );
@@ -89,14 +92,22 @@ async function noticeOwner(db: Pick<PoolClient, "query">, noticeId: string, lock
   return rows[0];
 }
 
-/** Upload / ask for removal: the Tax Collector who reported the issue, the Tax Daroga or the City Manager (removal: also the Commissioner). */
-function assertReceivingRole(admin: AdminTokenPayload, reportedBy: string, what: string, alsoCommissioner = false) {
+/** The Tax Collector who reported the issue, or a Tax Collector of the holding's ward. */
+async function isIssueCollector(admin: AdminTokenPayload, n: NoticeOwner): Promise<boolean> {
+  if (admin.role !== "tax_collector") return false;
+  if (admin.username === n.reported_by_username) return true;
+  const wards = (await collectorWardScope(admin)) ?? [];
+  return !!n.ward && wards.includes(n.ward);
+}
+
+/** Upload / ask for removal: a Tax Collector (reported it, or of the ward), the Tax Daroga or the City Manager (removal: also the Commissioner). */
+async function assertReceivingRole(admin: AdminTokenPayload, n: NoticeOwner, what: string, alsoCommissioner = false) {
   const ok =
-    (admin.role === "tax_collector" && admin.username === reportedBy) ||
+    (await isIssueCollector(admin, n)) ||
     admin.role === "tax_daroga" ||
     admin.role === "city_manager" ||
     (alsoCommissioner && admin.role === "commissioner");
-  if (!ok) throw new ApiError(403, `Only the Tax Collector who reported the issue, the Tax Daroga or the City Manager can ${what}.`);
+  if (!ok) throw new ApiError(403, `Only a Tax Collector of the ward, the Tax Daroga or the City Manager can ${what}.`);
 }
 
 async function log(
@@ -134,7 +145,7 @@ export async function uploadReceiving(noticeId: string, file: { base64: string; 
   const ext = photoOrDocumentExt(file.mime, buf, true);
   await tx(async (c) => {
     const n = await noticeOwner(c, noticeId, true);
-    assertReceivingRole(admin, n.reported_by_username, "upload the receiving copy");
+    await assertReceivingRole(admin, n, "upload the receiving copy");
     if (n.receiving_photo_path)
       throw ApiError.badRequest("The receiving copy of this notice is already uploaded. It can be removed only with the DMC's approval.");
     const rel = path.join(
@@ -155,7 +166,7 @@ export async function uploadReceiving(noticeId: string, file: { base64: string; 
 
 export async function requestRemoval(noticeId: string, reason: string, admin: AdminTokenPayload): Promise<void> {
   const n = await noticeOwner(pool, noticeId);
-  assertReceivingRole(admin, n.reported_by_username, "ask for the receiving copy to be removed", true);
+  await assertReceivingRole(admin, n, "ask for the receiving copy to be removed", true);
   if (!n.receiving_photo_path) throw ApiError.badRequest("No receiving copy is uploaded for this notice.");
   if (n.receiving_removal_requested_at) throw ApiError.badRequest("Removal of this receiving copy is already waiting for the DMC.");
   await pool.query(
@@ -205,7 +216,7 @@ function storedFile(rel: string | null): string {
 /** The current receiving copy - a Tax Collector only for issues they reported. */
 export async function receivingFile(noticeId: string, admin: AdminTokenPayload): Promise<string> {
   const n = await noticeOwner(pool, noticeId);
-  if (admin.role === "tax_collector" && n.reported_by_username !== admin.username) throw new ApiError(403, "Not your record.");
+  if (admin.role === "tax_collector" && !(await isIssueCollector(admin, n))) throw new ApiError(403, "Not your record.");
   return storedFile(n.receiving_photo_path);
 }
 

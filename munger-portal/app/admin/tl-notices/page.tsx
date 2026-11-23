@@ -622,7 +622,7 @@ export default function TlNoticesPage() {
         {reprint && (
           <div className="hidden">
             <div id="tl-reprint">
-              <TlNoticePages notices={[reprint]} />
+              <TlNoticePages notices={[reprint]} printerRole={admin.role} />
             </div>
           </div>
         )}

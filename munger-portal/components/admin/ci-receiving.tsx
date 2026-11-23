@@ -27,26 +27,15 @@ const fmt = (d: string | null) => (d ? new Date(d).toLocaleDateString("en-IN", {
  * Tax Daroga / City Manager upload it (photo or PDF), lets them or the Commissioner ask the DMC to remove it, lets the
  * DMC approve or reject, and shows its history.
  */
-export function CiReceiving({
-  notice,
-  reportedBy,
-  role,
-  username,
-  onChanged,
-}: {
-  notice: CollectionIssueNoticeSummary;
-  reportedBy: string;
-  role: string;
-  username: string;
-  onChanged: () => void;
-}) {
+export function CiReceiving({ notice, role, onChanged }: { notice: CollectionIssueNoticeSummary; role: string; onChanged: () => void }) {
   const [uploading, setUploading] = useState(false);
   const [file, setFile] = useState<{ file: File; url: string | null } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [log, setLog] = useState<CiReceivingLogEntry[] | null>(null);
 
-  const canUpload = (role === "tax_collector" && username === reportedBy) || role === "tax_daroga" || role === "city_manager";
+  // Any Tax Collector who sees the issue (reported it, or of the holding's ward - the server checks), the Tax Daroga or the City Manager.
+  const canUpload = role === "tax_collector" || role === "tax_daroga" || role === "city_manager";
   const canAsk = canUpload || role === "commissioner";
   const isDmc = role === "deputy_commissioner";
   const run = async (fn: () => Promise<unknown>) => {

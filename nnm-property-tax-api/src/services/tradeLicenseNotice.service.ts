@@ -6,7 +6,7 @@ import { pool } from "../config/db";
 import { env } from "../config/env";
 import { ApiError } from "../utils/ApiError";
 import { adminRepository } from "../repositories/admin.repository";
-import { assertCollectorMayAccessHolding } from "../middleware/collectorWardGuard";
+import { assertCollectorMayAccessHolding, collectorWardScope } from "../middleware/collectorWardGuard";
 import type { AdminTokenPayload } from "../types/admin.types";
 import { assertUploadSize } from "../utils/uploadLimits";
 
@@ -222,6 +222,8 @@ export interface PrintableNotice {
   firstNoticeNo: string | null;
   firstNoticeDate: string | null;
   printedAt: string | null;
+  /** Role of the login that printed it - decides the signatory (Trade Licence Prabhari, else City Manager). */
+  printedByRole: string | null;
   receivingUploadedAt: string | null;
   /** The QR code's link: the public application form filled in from this notice (applications from it are credited to the Tax Collector). */
   applyUrl?: string;
@@ -233,18 +235,25 @@ const NOTICE_SELECT = `
   SELECT n.id, n.notice_no AS "noticeNo", n.level, to_char(n.issued_on, 'DD-MM-YYYY') AS "issuedOn", to_char(n.due_on, 'DD-MM-YYYY') AS "dueOn",
          s.financial_year AS "financialYear", s.holding_no AS "holdingNo", p.ward, s.person_name AS "personName", s.business_name AS "businessName",
          s.address, s.phone, s.license_year AS "licenseYearShown", s.license_valid_till AS "licenseValidTill",
-         f.notice_no AS "firstNoticeNo", to_char(f.issued_on, 'DD-MM-YYYY') AS "firstNoticeDate", n.printed_at AS "printedAt",
+         f.notice_no AS "firstNoticeNo", to_char(f.issued_on, 'DD-MM-YYYY') AS "firstNoticeDate", n.printed_at AS "printedAt", n.printed_by_role AS "printedByRole",
          n.receiving_uploaded_at AS "receivingUploadedAt"
     FROM trade_license_notices n
     JOIN trade_license_surveys s ON s.id = n.survey_id
     JOIN properties p ON p.holding_no = s.holding_no
     LEFT JOIN trade_license_notices f ON f.survey_id = s.id AND f.level = 1 AND n.level = 2`;
 
-/** The Tax Collector's notices to print: unprinted ones (first notices they raised and second notices on their businesses), or a given date's. */
-export async function noticesToPrint(username: string, opts: { date?: string; includePrinted?: boolean }): Promise<PrintableNotice[]> {
+/**
+ * Notices to print: unprinted ones, or a given date's. A Tax Collector gets the notices of businesses they visited; the
+ * Trade Licence Prabhari and the City Manager get every notice (they print and sign them).
+ */
+export async function noticesToPrint(admin: AdminTokenPayload, opts: { date?: string; includePrinted?: boolean }): Promise<PrintableNotice[]> {
   await escalateOverdue();
-  const params: unknown[] = [username];
-  let where = `s.recorded_by_username = $1`;
+  const params: unknown[] = [];
+  let where = `TRUE`;
+  if (admin.role === "tax_collector") {
+    params.push(admin.username);
+    where = `s.recorded_by_username = $1`;
+  }
   if (opts.date) {
     params.push(opts.date);
     where += ` AND n.issued_on = $${params.length}::date`;
@@ -254,12 +263,13 @@ export async function noticesToPrint(username: string, opts: { date?: string; in
   return rows.map(withApplyUrl);
 }
 
-export async function markPrinted(ids: string[], username: string, by: string): Promise<number> {
+/** Marks notices printed - a Tax Collector only their own businesses'; the Prabhari / City Manager any. */
+export async function markPrinted(ids: string[], admin: AdminTokenPayload): Promise<number> {
   const { rowCount } = await pool.query(
-    `UPDATE trade_license_notices n SET printed_at = now(), printed_by = $3
+    `UPDATE trade_license_notices n SET printed_at = now(), printed_by = $3, printed_by_role = $4
        FROM trade_license_surveys s
-      WHERE n.survey_id = s.id AND n.id = ANY($1::bigint[]) AND s.recorded_by_username = $2 AND n.printed_at IS NULL`,
-    [ids, username, by],
+      WHERE n.survey_id = s.id AND n.id = ANY($1::bigint[]) AND ($2::text IS NULL OR s.recorded_by_username = $2) AND n.printed_at IS NULL`,
+    [ids, admin.role === "tax_collector" ? admin.username : null, admin.displayName, admin.role],
   );
   return rowCount ?? 0;
 }
@@ -305,7 +315,15 @@ export async function noticePrefill(noticeNo: string, sig: string) {
 }
 
 /** Survey list - a Tax Collector sees their own; the City Manager and senior officers see all (with who recorded it). */
-export async function listSurveys(filter: { status?: string; date?: string; recordedBy?: string; q?: string; receiving?: string }) {
+export async function listSurveys(filter: {
+  status?: string;
+  date?: string;
+  recordedBy?: string;
+  /** A Tax Collector: businesses they visited or in their wards. */
+  collector?: { username: string; wards: string[] };
+  q?: string;
+  receiving?: string;
+}) {
   await escalateOverdue();
   const params: unknown[] = [];
   const where: string[] = ["TRUE"];
@@ -316,6 +334,10 @@ export async function listSurveys(filter: { status?: string; date?: string; reco
   if (filter.status) add("s.status = ?", filter.status);
   if (filter.date) add("(s.recorded_at AT TIME ZONE 'Asia/Kolkata')::date = ?::date", filter.date);
   if (filter.recordedBy) add("s.recorded_by_username = ?", filter.recordedBy);
+  if (filter.collector) {
+    params.push(filter.collector.username, filter.collector.wards);
+    where.push(`(s.recorded_by_username = $${params.length - 1} OR btrim(p.ward) = ANY($${params.length}::text[]))`);
+  }
   if (filter.q) add("(s.holding_no ILIKE ? OR s.business_name ILIKE ? OR s.person_name ILIKE ?)", `%${filter.q}%`);
   // Notices whose receiving copy is not uploaded / uploaded / waiting for the DMC to approve its removal.
   if (filter.receiving === "missing")
@@ -394,15 +416,15 @@ export async function uploadReceivingCopy(
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
-    const { rows } = await client.query<{ recorded_by_username: string; receiving_photo_path: string | null }>(
-      `SELECT s.recorded_by_username, n.receiving_photo_path
-         FROM trade_license_notices n JOIN trade_license_surveys s ON s.id = n.survey_id
+    const { rows } = await client.query<{ recorded_by_username: string; ward: string | null; receiving_photo_path: string | null }>(
+      `SELECT s.recorded_by_username, btrim(p.ward) AS ward, n.receiving_photo_path
+         FROM trade_license_notices n JOIN trade_license_surveys s ON s.id = n.survey_id LEFT JOIN properties p ON p.holding_no = s.holding_no
         WHERE n.id = $1 FOR UPDATE OF n`,
       [noticeId],
     );
     const n = rows[0];
     if (!n) throw ApiError.notFound("Notice not found.");
-    assertReceivingRole(admin, n.recorded_by_username, "upload the receiving copy");
+    await assertReceivingRole(admin, n.recorded_by_username, n.ward, "upload the receiving copy");
     if (n.receiving_photo_path) throw ApiError.badRequest("The receiving copy of this notice is already uploaded. It can be removed only with the DMC's approval.");
     const rel = await saveFile(input.photo.base64, input.photo.mime, `notice-receiving-${noticeId}`, "receiving copy");
     await client.query(
@@ -422,14 +444,22 @@ export async function uploadReceivingCopy(
   }
 }
 
-/** Upload / ask for removal: the Tax Collector who raised the notice, the Trade Licence Prabhari or the City Manager. */
-function assertReceivingRole(admin: AdminTokenPayload, raisedBy: string, what: string, alsoCommissioner = false) {
+/** Tax Collector who raised the notice, or a Tax Collector of the holding's ward. */
+async function isNoticeCollector(admin: AdminTokenPayload, raisedBy: string, ward: string | null): Promise<boolean> {
+  if (admin.role !== "tax_collector") return false;
+  if (admin.username === raisedBy) return true;
+  const wards = (await collectorWardScope(admin)) ?? [];
+  return !!ward && wards.includes(ward);
+}
+
+/** Upload / ask for removal: a Tax Collector (raised it, or of the ward), the Trade Licence Prabhari or the City Manager. */
+async function assertReceivingRole(admin: AdminTokenPayload, raisedBy: string, ward: string | null, what: string, alsoCommissioner = false) {
   const ok =
-    (admin.role === "tax_collector" && admin.username === raisedBy) ||
+    (await isNoticeCollector(admin, raisedBy, ward)) ||
     admin.role === "trade_license_nodal" ||
     admin.role === "city_manager" ||
     (alsoCommissioner && admin.role === "commissioner");
-  if (!ok) throw new ApiError(403, `Only the Tax Collector who raised the notice, the Trade Licence Prabhari or the City Manager can ${what}.`);
+  if (!ok) throw new ApiError(403, `Only a Tax Collector of the ward, the Trade Licence Prabhari or the City Manager can ${what}.`);
 }
 
 async function logReceiving(
@@ -448,14 +478,20 @@ async function logReceiving(
 
 /** Asks the DMC to remove an uploaded receiving copy (e.g. wrong notice's slip, unreadable), with the reason. */
 export async function requestReceivingRemoval(noticeId: string, reason: string, admin: AdminTokenPayload): Promise<void> {
-  const { rows } = await pool.query<{ recorded_by_username: string; receiving_photo_path: string | null; receiving_removal_requested_at: string | null }>(
-    `SELECT s.recorded_by_username, n.receiving_photo_path, n.receiving_removal_requested_at
-       FROM trade_license_notices n JOIN trade_license_surveys s ON s.id = n.survey_id WHERE n.id = $1`,
+  const { rows } = await pool.query<{
+    recorded_by_username: string;
+    ward: string | null;
+    receiving_photo_path: string | null;
+    receiving_removal_requested_at: string | null;
+  }>(
+    `SELECT s.recorded_by_username, btrim(p.ward) AS ward, n.receiving_photo_path, n.receiving_removal_requested_at
+       FROM trade_license_notices n JOIN trade_license_surveys s ON s.id = n.survey_id LEFT JOIN properties p ON p.holding_no = s.holding_no
+      WHERE n.id = $1`,
     [noticeId],
   );
   const n = rows[0];
   if (!n) throw ApiError.notFound("Notice not found.");
-  assertReceivingRole(admin, n.recorded_by_username, "ask for the receiving copy to be removed", true);
+  await assertReceivingRole(admin, n.recorded_by_username, n.ward, "ask for the receiving copy to be removed", true);
   if (!n.receiving_photo_path) throw ApiError.badRequest("No receiving copy is uploaded for this notice.");
   if (n.receiving_removal_requested_at) throw ApiError.badRequest("Removal of this receiving copy is already waiting for the DMC.");
   await pool.query(
@@ -539,13 +575,15 @@ export async function removedCopyFile(logId: string): Promise<string> {
 }
 
 export async function receivingCopyFile(noticeId: string, admin: AdminTokenPayload): Promise<string> {
-  const { rows } = await pool.query<{ receiving_photo_path: string | null; recorded_by_username: string }>(
-    `SELECT n.receiving_photo_path, s.recorded_by_username FROM trade_license_notices n JOIN trade_license_surveys s ON s.id = n.survey_id WHERE n.id = $1`,
+  const { rows } = await pool.query<{ receiving_photo_path: string | null; recorded_by_username: string; ward: string | null }>(
+    `SELECT n.receiving_photo_path, s.recorded_by_username, btrim(p.ward) AS ward
+       FROM trade_license_notices n JOIN trade_license_surveys s ON s.id = n.survey_id LEFT JOIN properties p ON p.holding_no = s.holding_no
+      WHERE n.id = $1`,
     [noticeId],
   );
   const r = rows[0];
   if (!r) throw ApiError.notFound("Not found.");
-  if (admin.role === "tax_collector" && r.recorded_by_username !== admin.username) throw new ApiError(403, "Not your record.");
+  if (admin.role === "tax_collector" && !(await isNoticeCollector(admin, r.recorded_by_username, r.ward))) throw new ApiError(403, "Not your record.");
   if (!r.receiving_photo_path) throw ApiError.notFound("No receiving copy uploaded yet.");
   const base = path.resolve(env.PHOTO_UPLOAD_DIR);
   const full = path.resolve(base, r.receiving_photo_path);
