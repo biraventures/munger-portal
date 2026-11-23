@@ -54,7 +54,21 @@ function statusText(c: ResolutionCase | null) {
  * never staged - and their resolution: the Tax Daroga proposes (correct and import / import as it is / merge into the
  * live holding / drop), the City Manager and DMC recommend or revert, the Municipal Commissioner approves.
  */
-export function HeldHoldings({ batchId, role }: { batchId: number; role: string }) {
+/** "05", " 5 " -> "5": wards from the sheet are compared the way the staged holdings store them. */
+const normWard = (w: string | null | undefined) => (w ?? "").trim().replace(/^0+(?=\d)/, "");
+
+export function HeldHoldings({
+  batchId,
+  role,
+  ward = "",
+  onWardChange,
+}: {
+  batchId: number;
+  role: string;
+  /** The ward chosen on the page ("" = all) - shared with the holdings list below. */
+  ward?: string;
+  onWardChange?: (ward: string) => void;
+}) {
   const [data, setData] = useState<HeldList | null>(null);
   const [filter, setFilter] = useState<HeldCategory | "all" | "mine">("all");
   const [open, setOpen] = useState<HeldItem | null>(null);
@@ -67,20 +81,52 @@ export function HeldHoldings({ batchId, role }: { batchId: number; role: string 
   }, [batchId]);
   useEffect(load, [load]);
 
+  // Ward first, then the category chips count within that ward.
+  const inWard = useMemo(() => (data?.items ?? []).filter((i) => !ward || normWard(i.ward) === ward), [data, ward]);
   const items = useMemo(
-    () => (data?.items ?? []).filter((i) => filter === "all" || (filter === "mine" ? i.waitingForMe : i.category === filter)),
-    [data, filter],
+    () => inWard.filter((i) => filter === "all" || (filter === "mine" ? i.waitingForMe : i.category === filter)),
+    [inWard, filter],
   );
+  const wards = useMemo(() => {
+    const ws = [...new Set((data?.items ?? []).map((i) => normWard(i.ward)).filter(Boolean))];
+    return ws.sort((a, b) => (parseInt(a) || 9999) - (parseInt(b) || 9999) || a.localeCompare(b));
+  }, [data]);
   if (err) return <p className="mb-4 text-sm text-red-700">{err}</p>;
   if (!data) return null;
-  const c = data.counts;
+  const count = (cat: HeldCategory) => inWard.filter((i) => i.category === cat).length;
+  const c = ward
+    ? {
+        keptOut: count("kept_out"),
+        blocked: count("blocked"),
+        failed: count("failed"),
+        notStaged: count("not_staged"),
+        resolved: count("resolved"),
+        inProgress: inWard.filter((i) => i.case && !i.resolved).length,
+        waitingForMe: inWard.filter((i) => i.waitingForMe).length,
+      }
+    : data.counts;
   const total = c.keptOut + c.blocked + c.failed + c.notStaged;
   if (!data.items.length) return null;
 
   return (
     <section className="mb-5 rounded-xl border border-amber-200 bg-white p-4">
       <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
-        <h2 className="text-base font-semibold text-slate-900">Held back / not uploaded ({total})</h2>
+        <h2 className="flex flex-wrap items-center gap-2 text-base font-semibold text-slate-900">
+          Held back / not uploaded ({total})
+          <select
+            value={ward}
+            onChange={(e) => onWardChange?.(e.target.value)}
+            aria-label="Ward"
+            className="rounded-md border border-slate-300 px-2 py-1 text-sm font-normal"
+          >
+            <option value="">All wards</option>
+            {wards.map((w) => (
+              <option key={w} value={w}>
+                Ward {w}
+              </option>
+            ))}
+          </select>
+        </h2>
         <span className="text-xs text-slate-500">
           {c.resolved} resolved · {c.inProgress} in the approval chain
           {c.waitingForMe ? <b className="ml-1 text-amber-700">· {c.waitingForMe} waiting for you</b> : null}
@@ -94,13 +140,13 @@ export function HeldHoldings({ batchId, role }: { batchId: number; role: string 
       <div className="mb-3 flex flex-wrap gap-1.5">
         {(
           [
-            ["all", "All", data.items.length],
+            ["all", "All", inWard.length],
             ["mine", "Waiting for you", c.waitingForMe],
             ["kept_out", CAT.kept_out.label, c.keptOut],
             ["blocked", CAT.blocked.label, c.blocked],
             ["failed", CAT.failed.label, c.failed],
             ["not_staged", CAT.not_staged.label, c.notStaged],
-            ["resolved", CAT.resolved.label, data.items.filter((i) => i.category === "resolved").length],
+            ["resolved", CAT.resolved.label, inWard.filter((i) => i.category === "resolved").length],
           ] as const
         ).map(([k, l, n]) => (
           <button

@@ -247,7 +247,13 @@ export default function HoldingImportReviewPage() {
           </div>
         )}
 
-        {admin && batch && <HeldHoldings key={`${batchId}-${c?.integrated ?? 0}`} batchId={batchId} role={admin.role} />}
+        {admin && batch && <HeldHoldings
+            key={`${batchId}-${c?.integrated ?? 0}`}
+            batchId={batchId}
+            role={admin.role}
+            ward={ward}
+            onWardChange={(w) => { setWard(w); setPage(1); }}
+          />}
 
         {isCommissioner && (
           <p className="rounded-md border border-slate-200 bg-white p-3 text-sm text-slate-600">
