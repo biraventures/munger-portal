@@ -45,6 +45,8 @@ export const pyauRepository = {
     schemeName: string | null;
     overheadTankCount: number;
     housesServed: number | null;
+    waterTapCount?: number | null;
+    standpostCount?: number | null;
     structureType: "pcc_structure" | "iron_stand" | "nothing" | null;
     tankStandType: string | null;
     pumpDetails: string | null;
@@ -59,8 +61,9 @@ export const pyauRepository = {
     const { rows } = await pool.query<PyauRow>(
       `INSERT INTO pyaus
          (ward_id, serial_number, location_address, latitude, longitude, scheme_name, overhead_tank_count, houses_served, structure_type,
-          tank_stand_type, pump_details, boring_depth_feet, casing_details, installed_date, builder_name, builder_contact, remarks, functional_status)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,COALESCE($18,'functional')) RETURNING *`,
+          tank_stand_type, pump_details, boring_depth_feet, casing_details, installed_date, builder_name, builder_contact, remarks, functional_status,
+          water_tap_count, standpost_count)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,COALESCE($18,'functional'),$19,$20) RETURNING *`,
       [
         input.wardId,
         input.serialNumber,
@@ -80,6 +83,8 @@ export const pyauRepository = {
         input.builderContact,
         input.remarks,
         input.initialFunctionalStatus ?? null,
+        input.waterTapCount ?? null,
+        input.standpostCount ?? null,
       ],
     );
     return rows[0]!;
@@ -105,6 +110,8 @@ export const pyauRepository = {
       schemeName?: string | null;
       overheadTankCount?: number;
       housesServed?: number | null;
+      waterTapCount?: number | null;
+      standpostCount?: number | null;
       structureType?: "pcc_structure" | "iron_stand" | "nothing" | null;
       tankStandType?: string | null;
       pumpDetails?: string | null;
@@ -132,7 +139,9 @@ export const pyauRepository = {
          installed_date = COALESCE($13, installed_date),
          builder_name = COALESCE($14, builder_name),
          builder_contact = COALESCE($15, builder_contact),
-         remarks = COALESCE($16, remarks)
+         remarks = COALESCE($16, remarks),
+         water_tap_count = COALESCE($17, water_tap_count),
+         standpost_count = COALESCE($18, standpost_count)
        WHERE id = $1 RETURNING *`,
       [
         id,
@@ -151,6 +160,8 @@ export const pyauRepository = {
         input.builderName,
         input.builderContact,
         input.remarks,
+        input.waterTapCount,
+        input.standpostCount,
       ],
     );
     return rows[0] ?? null;

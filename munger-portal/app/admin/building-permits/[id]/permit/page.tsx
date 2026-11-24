@@ -24,7 +24,10 @@ export default function OfficePermitPage() {
           <Printer className="h-4 w-4" /> Print
         </button>
       </div>
-      <PermitLetterView p={p} />
+      {/* printable-flow: the site-wide print style prints only this, over as many pages as it needs (globals.css). */}
+      <div className="printable-flow">
+        <PermitLetterView p={p} />
+      </div>
     </div>
   );
 }

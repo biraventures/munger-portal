@@ -45,15 +45,19 @@ function Complaint({ c, canVerify, onDone }: { c: PublicComplaint; canVerify: bo
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  const name = `${KIND_LABEL[c.kind]} ${c.serial_number ?? ""}`.trim();
+  const [assetId, setAssetId] = useState("");
+  const needsAsset = c.status === "pending" && c.by_location && !c.light_id && !c.pyau_id;
+  const name = `${KIND_LABEL[c.kind] ?? "Asset"} ${c.serial_number ?? (c.by_location ? "(reported by location)" : "")}`.trim();
 
   async function act() {
     setErr(null);
     if (mode === "reject" && text.trim().length < 3) return setErr("Give the reason - the citizen will see it.");
+    if (mode === "approve" && needsAsset && !assetId.trim())
+      return setErr(c.nearby.length ? "Choose which registered asset this is before approving." : "Type the number written on the asset before approving.");
     setBusy(true);
     try {
       if (mode === "approve") {
-        const r = await approveComplaint(c.id, text.trim() || null);
+        const r = await approveComplaint(c.id, text.trim() || null, !needsAsset ? undefined : c.nearby.length ? { assetId: Number(assetId) } : { assetSerial: assetId.trim() });
         onDone(r.linkedToExisting ? `${name}: approved - it already had an open fault, so the complaint is linked to that one.` : `${name}: approved and sent to the contractor for repair.`);
       } else {
         await rejectComplaint(c.id, text.trim());
@@ -81,7 +85,7 @@ function Complaint({ c, canVerify, onDone }: { c: PublicComplaint; canVerify: bo
             {name} <span className="font-normal text-slate-500">· {wardLabel(c.ward_name)}</span>
           </p>
           <p className="text-xs text-slate-500">
-            {where}
+            {c.by_location && !c.light_id && !c.pyau_id ? "" : where}
             {c.latitude != null && c.longitude != null && (
               <a
                 href={`https://www.google.com/maps?q=${c.latitude},${c.longitude}`}
@@ -126,6 +130,35 @@ function Complaint({ c, canVerify, onDone }: { c: PublicComplaint; canVerify: bo
         </div>
       </div>
 
+      {c.by_location && c.reported_latitude != null && c.reported_longitude != null && (
+        <div className="mt-2 rounded-md border border-blue-200 bg-blue-50 p-2.5 text-xs text-blue-900">
+          <p>
+            <b>Reported by location</b> - the citizen did not know the {c.asset_type === "pyau" ? "submersible" : "light"} number.{" "}
+            <a
+              href={`https://www.google.com/maps?q=${c.reported_latitude},${c.reported_longitude}`}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-0.5 font-semibold text-nnm-blue hover:underline"
+            >
+              <MapPin className="h-3 w-3" /> Spot on map
+            </a>
+            {c.reported_accuracy_m != null && <span className="text-blue-700"> (GPS within about {c.reported_accuracy_m} m)</span>}
+          </p>
+          {c.landmark && (
+            <p className="mt-0.5">
+              <span className="text-blue-700">Landmark:</span> {c.landmark}
+            </p>
+          )}
+          {needsAsset && (
+            <p className="mt-0.5 text-blue-700">
+              {c.nearby.length
+                ? `${c.nearby.length} registered asset(s) within 300 m - check on the spot and choose the right one when approving.`
+                : "No registered asset with GPS within 300 m - find it on the spot and type its number when approving, or mark not accepted."}
+            </p>
+          )}
+        </div>
+      )}
+
       {c.status === "pending" && c.already_open && (
         <p className="mt-2 rounded-md border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">
           Staff have already reported this as not working. Approving will link this complaint to that open fault instead of creating another.
@@ -141,6 +174,24 @@ function Complaint({ c, canVerify, onDone }: { c: PublicComplaint; canVerify: bo
       ) : canVerify ? (
         mode ? (
           <div className="mt-3 space-y-2">
+            {mode === "approve" && needsAsset && (
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-600">Which registered {c.asset_type === "pyau" ? "submersible" : "light"} is it?</label>
+                {c.nearby.length > 0 ? (
+                  <select value={assetId} onChange={(e) => setAssetId(e.target.value)} className={inputClass}>
+                    <option value="">Choose</option>
+                    {c.nearby.map((n) => (
+                      <option key={n.id} value={n.id}>
+                        {n.serial_number ?? `ID ${n.id}`}
+                        {n.label ? ` - ${n.label}` : ""} · {wardLabel(n.ward_name)} · {n.distance_m ?? "?"} m away
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input value={assetId} onChange={(e) => setAssetId(e.target.value)} placeholder="Number written on the pole / submersible" className={inputClass} />
+                )}
+              </div>
+            )}
             <label className="block text-xs font-medium text-slate-600">
               {mode === "approve" ? "Remarks for the contractor (optional)" : "Reason for not accepting (the citizen will see this)"}
             </label>

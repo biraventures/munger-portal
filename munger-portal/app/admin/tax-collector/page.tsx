@@ -487,7 +487,10 @@ export default function TaxCollectorPage() {
               <div className="grid grid-cols-1 gap-1.5 text-sm sm:grid-cols-2">
                 {DETAIL_FIELDS.map(([key, label]) => (
                   <p key={key}>
-                    <span className="text-slate-500">{label}:</span> {detailVal(key, property[key])}
+                    <span className="text-slate-500">{label}:</span>{" "}
+                    {key === "tax_paid_till_year" && !property.tax_paid_till_year
+                      ? `Nothing paid since creation - due from ${property.holding_creation_year ?? "the creation year"}`
+                      : detailVal(key, property[key])}
                   </p>
                 ))}
                 <p>
@@ -816,7 +819,17 @@ export default function TaxCollectorPage() {
 
         <div className="mt-8 rounded-xl border border-slate-200 bg-white p-5">
           <h3 className="mb-3 text-sm font-semibold text-slate-700">Issues I have reported &amp; notices raised</h3>
-          <CollectionIssueList issues={myIssues} showHolding emptyText="You have not reported any collection issue yet." />
+          <CollectionIssueList
+            issues={myIssues}
+            showHolding
+            emptyText="You have not reported any collection issue yet."
+            viewer={admin ? { role: admin.role, username: admin.username } : undefined}
+            onChanged={() =>
+              fetchMyCollectionIssues()
+                .then(setMyIssues)
+                .catch(() => undefined)
+            }
+          />
         </div>
       </main>
 

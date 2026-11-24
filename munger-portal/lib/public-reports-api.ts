@@ -49,6 +49,24 @@ export interface PublicComplaint {
   already_open: boolean;
   /** How many complaints from this mobile were not accepted before. */
   phone_rejected_count: number;
+  /** The citizen did not know which asset - reported it by GPS location; the officer picks the asset when approving. */
+  by_location: boolean;
+  light_id: string | null;
+  pyau_id: string | null;
+  reported_latitude: number | null;
+  reported_longitude: number | null;
+  reported_accuracy_m: number | null;
+  landmark: string | null;
+  /** For a pending complaint by location: registered assets within about 300 m, nearest first. */
+  nearby: NearbyAsset[];
+}
+
+export interface NearbyAsset {
+  id: string;
+  serial_number: string | null;
+  label: string | null;
+  ward_name: string;
+  distance_m: number | null;
 }
 
 export interface PendingCounts {
@@ -66,6 +84,6 @@ export function fetchComplaints(f: { status?: VerificationStatus | ""; type?: "s
   return call<{ reports: PublicComplaint[]; pending: PendingCounts; canVerify: boolean }>(`?${q}`, {}, "Could not load the complaints.");
 }
 export const fetchPendingCounts = () => call<{ pending: PendingCounts }>("/pending-count").then((r) => r.pending);
-export const approveComplaint = (id: string, remarks: string | null) =>
-  call<{ linkedToExisting: boolean }>(`/${id}/approve`, { method: "POST", body: JSON.stringify({ remarks }) }, "Could not approve.");
+export const approveComplaint = (id: string, remarks: string | null, asset?: { assetId?: number; assetSerial?: string }) =>
+  call<{ linkedToExisting: boolean }>(`/${id}/approve`, { method: "POST", body: JSON.stringify({ remarks, ...asset }) }, "Could not approve.");
 export const rejectComplaint = (id: string, reason: string) => call(`/${id}/reject`, { method: "POST", body: JSON.stringify({ reason }) }, "Could not reject.");

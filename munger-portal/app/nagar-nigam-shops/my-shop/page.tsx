@@ -129,7 +129,11 @@ export default function MyShopDetailsPage() {
                   </button>
                 </div>
 
-                <div className="rounded-xl border border-line bg-white p-8 text-[12px] text-[#222]" style={{ fontFamily: "Arial, sans-serif" }}>
+                {/* printable-flow: the site-wide print style prints only this, over as many pages as it needs (globals.css). */}
+                <div
+                  className="printable-flow rounded-xl border border-line bg-white p-8 text-[12px] text-[#222]"
+                  style={{ fontFamily: "Arial, sans-serif" }}
+                >
                   <div className="border-b-2 border-nnm-blue pb-2 text-center">
                     <h1 className="m-0 text-xl font-bold text-nnm-blue">MUNGER NAGAR NIGAM</h1>
                     <div className="text-[13px] text-slate-500">MY SHOP DETAILS</div>

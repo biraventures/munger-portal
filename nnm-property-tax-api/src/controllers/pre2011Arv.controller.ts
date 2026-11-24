@@ -3,7 +3,7 @@ import { z } from "zod";
 import { asyncHandler } from "../middleware/asyncHandler";
 import { ApiError } from "../utils/ApiError";
 import { normalizeWard } from "../utils/ward";
-import { approveEntry, listEntries, lookupHolding, pendingCount, rejectEntry, submitEntry, worklist } from "../services/pre2011Arv.service";
+import { approveEntry, listEntries, lookupHolding, pendingCount, rejectEntry, revertEntry, submitEntry, worklist } from "../services/pre2011Arv.service";
 
 const idParam = (v: unknown) => {
   const r = z.coerce.number().int().positive().safeParse(v);
@@ -26,7 +26,7 @@ export const getPre2011Holding = asyncHandler(async (req: Request, res: Response
 
 /** GET /api/v1/admin/pre2011-arv/entries?status= */
 export const getPre2011Entries = asyncHandler(async (req: Request, res: Response) => {
-  const s = z.enum(["pending", "approved", "rejected"]).optional().safeParse(req.query.status || undefined);
+  const s = z.enum(["pending", "approved", "rejected", "reverted"]).optional().safeParse(req.query.status || undefined);
   res.status(200).json({ entries: await listEntries(s.success ? s.data : undefined), pending: await pendingCount(), role: req.admin!.role });
 });
 
@@ -61,4 +61,11 @@ export const postPre2011Reject = asyncHandler(async (req: Request, res: Response
   const b = z.object({ reason: z.string().trim().min(3, "Give the reason for rejecting.").max(1000) }).safeParse(req.body ?? {});
   if (!b.success) throw ApiError.badRequest(b.error.issues[0]?.message ?? "Give the reason.");
   res.status(200).json(await rejectEntry(req.admin!, idParam(req.params.id), b.data.reason));
+});
+
+/** POST /api/v1/admin/pre2011-arv/entries/:id/revert { comment } - back to the Tax Daroga (CM / DMC / MC; approved: DMC / MC) */
+export const postPre2011Revert = asyncHandler(async (req: Request, res: Response) => {
+  const b = z.object({ comment: z.string().trim().min(5, "Say what has to be corrected.").max(1000) }).safeParse(req.body ?? {});
+  if (!b.success) throw ApiError.badRequest(b.error.issues[0]?.message ?? "Say what has to be corrected.");
+  res.status(200).json(await revertEntry(req.admin!, idParam(req.params.id), b.data.comment));
 });

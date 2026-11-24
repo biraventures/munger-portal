@@ -1,6 +1,8 @@
 "use client";
 
+import { discrepancyPhotoNeeds, missingDiscrepancyPhotos } from "@/lib/discrepancy-photo-rules";
 import { Suspense, useEffect, useState } from "react";
+import { floorChangeProblem } from "@/components/floor-change-box";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { AlertCircle, CheckCircle2, Search, AlertTriangle } from "lucide-react";
@@ -45,17 +47,23 @@ function ReportPropertyDiscrepancyContent() {
   const [ownerOnRecord, setOwnerOnRecord] = useState("");
   const [formOptions, setFormOptions] = useState<FormOptions | null>(null);
   const [form, setForm] = useState<AdminPropertyFormState>(blankAdminPropertyForm());
+  const [originalFloors, setOriginalFloors] = useState<AdminPropertyFormState["floors"]>([]);
+  // The holding as recorded - which photos the report needs depends on what it changes.
+  const [originalForm, setOriginalForm] = useState<AdminPropertyFormState | null>(null);
   const [discrepancyNotes, setDiscrepancyNotes] = useState("");
   const [capture, setCapture] = useState<CaptureState>(blankCaptureState());
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
+  const [success, setSuccess] = useState<false | "old" | "report">(false);
   const [migOpen, setMigOpen] = useState(false);
   const [migQuery, setMigQuery] = useState("");
   const [migWard, setMigWard] = useState("");
   const [migSearching, setMigSearching] = useState(false);
   const [migError, setMigError] = useState<string | null>(null);
   const [migResults, setMigResults] = useState<MigHoldingHit[] | null>(null);
+  // An old-record (MUNG-MIG-) holding: this is its survey entry, which also needs the Commissioner's approval.
+  const isOld = found && holdingNo.trim().toUpperCase().startsWith("MUNG-MIG");
+  const photoNeeds = discrepancyPhotoNeeds(originalForm, form);
 
   useEffect(() => {
     fetchFormOptions()
@@ -76,7 +84,10 @@ function ReportPropertyDiscrepancyContent() {
         return;
       }
       setOwnerOnRecord(String(result.property.owner_name ?? ""));
-      setForm(propertyFormFromExisting(result.property, result.floors ?? []));
+      const loaded = propertyFormFromExisting(result.property, result.floors ?? []);
+      setForm(loaded);
+      setOriginalFloors(loaded.floors);
+      setOriginalForm(loaded);
       setFound(true);
     } catch (err) {
       setSearchError(err instanceof Error ? err.message : "Search failed.");
@@ -108,20 +119,37 @@ function ReportPropertyDiscrepancyContent() {
 
   async function handleSubmit() {
     if (!discrepancyNotes.trim()) {
-      setSubmitError("Describe what you found that doesn't match the records.");
+      setSubmitError(
+        isOld ? "Write your survey remarks - what you found at the house." : "Describe what you found that doesn't match the records.",
+      );
+      return;
+    }
+    const floorProblem = floorChangeProblem(originalFloors, form.floors, form.floorChange);
+    if (floorProblem) {
+      setSubmitError(floorProblem);
       return;
     }
     if (!form.aadhaarNumber.trim() && !form.ownerDeceased && !form.aadhaarRefused) {
       setSubmitError("The holding owner's Aadhaar number is required (or tick that the owner has died / does not agree to give Aadhaar).");
       return;
     }
+    const photoProblem = missingDiscrepancyPhotos(
+      photoNeeds,
+      { site: !!capture.photoFile, aadhaar: !!capture.aadhaarFile, owner: !!capture.ownerFile },
+      form,
+    );
+    if (photoProblem) {
+      setSubmitError(photoProblem);
+      return;
+    }
     setSubmitting(true);
     setSubmitError(null);
     try {
-      const [photoBase64Data, previousReceiptPhotoBase64Data, aadhaarPhotoBase64Data] = await Promise.all([
+      const [photoBase64Data, previousReceiptPhotoBase64Data, aadhaarPhotoBase64Data, ownerPhotoBase64Data] = await Promise.all([
         capture.photoFile ? fileToBase64(capture.photoFile) : undefined,
         capture.previousReceiptFile ? fileToBase64(capture.previousReceiptFile) : undefined,
         capture.aadhaarFile && !form.ownerDeceased && !form.aadhaarRefused ? fileToBase64(capture.aadhaarFile) : undefined,
+        capture.ownerFile ? fileToBase64(capture.ownerFile) : undefined,
       ]);
       await reportPropertyDiscrepancy(holdingNo.trim(), {
         discrepancyNotes: discrepancyNotes.trim(),
@@ -134,8 +162,10 @@ function ReportPropertyDiscrepancyContent() {
         previousReceiptPhotoMimeType: capture.previousReceiptFile?.type,
         aadhaarPhotoBase64Data,
         aadhaarPhotoMimeType: capture.aadhaarFile?.type,
+        ownerPhotoBase64Data,
+        ownerPhotoMimeType: capture.ownerFile?.type,
       });
-      setSuccess(true);
+      setSuccess(isOld ? "old" : "report");
       setFound(false);
       setHoldingNo("");
       setDiscrepancyNotes("");
@@ -151,7 +181,9 @@ function ReportPropertyDiscrepancyContent() {
     return <div className="flex min-h-screen items-center justify-center text-sm text-slate-400">Loading…</div>;
   }
 
-  if (admin.role !== "tax_collector") {
+  // An old (MUNG-MIG) holding's details can also be entered by the Tax Surveyor, Tax Daroga or Commissioner.
+  const oldHoldingEntry = (searchParams.get("holding") ?? holdingNo).toUpperCase().startsWith("MUNG-MIG-");
+  if (admin.role !== "tax_collector" && !(oldHoldingEntry && ["tax_collector", "tax_surveyor", "tax_daroga", "commissioner"].includes(admin.role))) {
     return (
       <div className="min-h-screen bg-slate-50">
         <AdminHeader admin={admin} />
@@ -172,11 +204,23 @@ function ReportPropertyDiscrepancyContent() {
       <main className="mx-auto max-w-3xl px-6 py-10">
         <h1 className="mb-1 flex items-center gap-2 text-2xl font-semibold text-slate-900">
           <AlertTriangle className="h-6 w-6" />
-          Report Property Discrepancy
+          {isOld ? "Old Holding Survey Entry" : "Report Property Discrepancy"}
         </h1>
         <p className="mb-6 text-sm text-slate-500">
-          Found something during collection that doesn&apos;t match the records? Search the holding, enter the complete corrected details,
-          and it will go through Tax Surveyor, Tax Daroga, City Manager, and DMC review before anything changes.
+          {isOld ? (
+            <>
+              Enter the full details of this old-record holding as you found it. It goes to the Tax Surveyor of the ward, Tax Daroga, City
+              Manager, DMC and Commissioner.{" "}
+              <Link href="/admin/old-records" className="font-semibold text-nnm-blue underline">
+                Back to Old Records (MIG)
+              </Link>
+            </>
+          ) : (
+            <>
+              Found something during collection that doesn&apos;t match the records? Search the holding, enter the complete corrected
+              details, and it will go through Tax Surveyor, Tax Daroga, City Manager, and DMC review before anything changes.
+            </>
+          )}
         </p>
 
         {success && (
@@ -185,7 +229,17 @@ function ReportPropertyDiscrepancyContent() {
             className="mb-5 flex items-center gap-2 rounded-md border border-green-200 bg-green-50 p-4 text-sm text-green-800"
           >
             <CheckCircle2 className="h-4 w-4 shrink-0" />
-            Submitted for review. Nothing changes on the record until all four stages approve it.
+            {success === "old" ? (
+              <>
+                Old holding entry submitted. It goes to the Tax Surveyor of the ward, then the Tax Daroga, City Manager, DMC and
+                Commissioner.{" "}
+                <Link href="/admin/old-records" className="font-semibold underline">
+                  Back to Old Records (MIG)
+                </Link>
+              </>
+            ) : (
+              "Submitted for review. Nothing changes on the record until all four stages approve it."
+            )}
           </div>
         )}
 
@@ -250,7 +304,7 @@ function ReportPropertyDiscrepancyContent() {
                 <p className="text-sm text-slate-600">
                   Nothing found. If the house is in neither database,{" "}
                   <Link href="/admin/unsurveyed-house-entry" className="font-semibold text-nnm-blue underline">
-                    record it as a house not in records
+                    record it as a missing house
                   </Link>
                   .
                 </p>
@@ -286,7 +340,7 @@ function ReportPropertyDiscrepancyContent() {
               <p className="text-xs text-slate-500">
                 Not in the MUNG-MIG data either?{" "}
                 <Link href="/admin/unsurveyed-house-entry" className="font-semibold text-nnm-blue underline">
-                  Record a house not in records
+                  Record Missing House
                 </Link>
                 .
               </p>
@@ -305,10 +359,14 @@ function ReportPropertyDiscrepancyContent() {
           <div className="space-y-6">
             <div className="rounded-xl border border-slate-200 bg-white p-6">
               <p className="mb-4 text-sm text-slate-600">
-                On record: <span className="font-semibold text-slate-800">{ownerOnRecord}</span>. Correct the fields below to match what you
-                actually found.
+                {isOld ? "Old record" : "On record"}: <span className="font-semibold text-slate-800">{ownerOnRecord}</span>.{" "}
+                {isOld
+                  ? "Enter the full details of the house as you found it - owner, address, every floor. It goes to the Tax Surveyor of the ward, Tax Daroga, City Manager, DMC and Commissioner."
+                  : "Correct the fields below to match what you actually found."}
               </p>
-              <label className="mb-1 block text-xs font-medium text-slate-600">What doesn&apos;t match? (required)</label>
+              <label className="mb-1 block text-xs font-medium text-slate-600">
+                {isOld ? "Survey remarks (required)" : "What doesn't match? (required)"}
+              </label>
               <textarea
                 value={discrepancyNotes}
                 onChange={(e) => setDiscrepancyNotes(e.target.value)}
@@ -323,12 +381,18 @@ function ReportPropertyDiscrepancyContent() {
               <AdminPropertyDetailsForm
                 form={form}
                 onChange={setForm}
+                originalFloors={originalFloors}
                 usageTypes={formOptions?.usageTypes ?? []}
                 solidWasteChargeTypes={formOptions?.solidWasteChargeTypes ?? []}
               />
             </div>
 
-            <DiscrepancyCaptureSection state={capture} onChange={setCapture} hideAadhaar={form.ownerDeceased || form.aadhaarRefused} />
+            <DiscrepancyCaptureSection
+              state={capture}
+              onChange={setCapture}
+              hideAadhaar={form.ownerDeceased || form.aadhaarRefused}
+              needs={photoNeeds}
+            />
 
             {submitError && (
               <div role="alert" className="flex items-center gap-2 rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-700">

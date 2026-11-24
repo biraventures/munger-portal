@@ -1,3 +1,28 @@
+import { getFieldRecords, getLegacy, getOneRecord, postDeleteLegacy, postTakeUp } from "../controllers/migRecord.controller";
+import { getProgressReport, getProgressReportOfficers } from "../controllers/progressReport.controller";
+import {
+  getHistoricalHolding,
+  getHistoricalPending,
+  getHistoricalPendingCount,
+  getHistoricalProof,
+  postHistoricalApprove,
+  postHistoricalPreview,
+  postHistoricalReturn,
+  postHistoricalSettlement,
+  putHistoricalProof,
+} from "../controllers/historicalPayment.controller";
+import { getHeldItem, getHeldItems, getResolutionsWaiting, postResolution, postResolutionDecision } from "../controllers/importResolution.controller";
+import {
+  getStaffKycFile,
+  getStaffKycList,
+  getStaffKycOne,
+  getStaffKycPending,
+  postStaffKycReview,
+  postStaffKycSubmit,
+  putStaffKycDoc,
+  putStaffKycNumbers,
+} from "../controllers/staffKyc.controller";
+import { exportNoticeReportHandler, getNoticeReportCollectorsHandler, getNoticeReportHandler } from "../controllers/noticeReport.controller";
 import { collectorHoldingParam, collectorDemandNoticeParam } from "../middleware/collectorWardGuard";
 import {
   assignSurveyorHandler,
@@ -22,6 +47,7 @@ import {
   postRejectChangeRequest,
   postRevertChangeRequest,
   getChangeRequestTimeline,
+  getChangeRequestPremisesPhoto,
   getApplicationTimeline,
   getMutationPendingSummary,
   getHoldingLineage,
@@ -77,7 +103,6 @@ import {
   exportGeoData,
 } from "../controllers/geo.controller";
 import {
-  uploadPropertiesXlsxHandler,
   listImportBatchesHandler,
   getImportBatchHandler,
   getImportHoldingHandler,
@@ -110,10 +135,10 @@ import {
 } from "../controllers/shopAgreementDocument.controller";
 import { postCreateShopInspection, listShopInspectionsForShop, listAllShopInspections } from "../controllers/shopInspection.controller";
 import {
-  uploadMigratedHoldingsHandler,
   listReviewRowsHandler,
   importReviewRowHandler,
   discardReviewRowHandler,
+  discardAllReviewRowsHandler,
   listPendingAssignmentHandler,
   listTaxDarogasHandler,
   listTaxSurveyorsHandler,
@@ -140,7 +165,19 @@ import {
   postApproveSolidWasteRequest,
   postRejectSolidWasteRequest,
 } from "../controllers/solidWasteRequest.controller";
-import { listAllCollectionIssues, listMyCollectionIssues } from "../controllers/collectionIssue.controller";
+import {
+  getCiReceiving,
+  getCiReceivingLog,
+  getCiRemovedCopy,
+  getCollectionIssueCounts,
+  listAllCollectionIssues,
+  listMyCollectionIssues,
+  postCiReceiving,
+  postCiRemovalDecision,
+  postCiRemovalRequest,
+  postReopenCollectionIssue,
+  postResolveCollectionIssue,
+} from "../controllers/collectionIssue.controller";
 import {
   postGenerateCollectionIssueNotice,
   getCollectionIssueNotices,
@@ -209,9 +246,11 @@ import {
   postPre2011Approve,
   postPre2011Entry,
   postPre2011Reject,
+  postPre2011Revert,
 } from "../controllers/pre2011Arv.controller";
 import {
   searchMigratedHoldingsHandler,
+  listOldHoldingsForCollectorHandler,
   createUnsurveyedHouseHandler,
   listUnsurveyedHousesHandler,
   getUnsurveyedHousePhotoHandler,
@@ -273,6 +312,15 @@ import {
 } from "../controllers/newHoldingRequest.controller";
 import {
   getTlNotice,
+  getTlReceivingCopy,
+  getTlReceivingLog,
+  getTlRemovalCount,
+  getTlRemovedCopy,
+  postTlReceivingRemovalDecision,
+  postTlReceivingRemovalRequest,
+  postTlReissue,
+  getTlPrintCount,
+  postTlReceivingCopy,
   getTlPrintQueue,
   getTlSurveyFile,
   getTlSurveys,
@@ -284,6 +332,8 @@ import {
 export const adminRouter = Router();
 
 adminRouter.use(requireAdmin);
+
+// The submersible (pyau) dashboard of the JE / AE (Mechanical) is on the asset management login (pyau.routes.ts, /pyau/officer).
 
 // Senior-role gate reused across the routes below — operator account
 // management, full data export, and system-wide bulk mutations are
@@ -300,10 +350,13 @@ const requireSeniorAdmin = requireAdminRole("commissioner", "deputy_commissioner
 // mutation approvals, cancellation requests, tax collector management,
 // and trade license services below, per what was explicitly asked for.
 // The Tax Surveyor is in the chain for the field report of a mutation (only the cases assigned to him - see changeRequest.service).
+// The City Manager approves changes of use (Tax Daroga -> City Manager -> Deputy Commissioner); each action is still
+// checked against the request's current stage.
 const requireMutationChainRole = requireAdminRole(
   "tax_daroga",
   "tax_surveyor",
   "mutation_nodal_clerk",
+  "city_manager",
   "deputy_commissioner",
   "commissioner",
 );
@@ -345,6 +398,7 @@ const requireMutationViewRole = requireAdminRole(
 );
 adminRouter.get("/field-report-photos/:photoId", requireMutationViewRole, getFieldReportPhoto);
 adminRouter.get("/change-requests/:id/timeline", requireMutationViewRole, getChangeRequestTimeline);
+adminRouter.get("/change-requests/:id/premises-photo", requireMutationViewRole, getChangeRequestPremisesPhoto);
 adminRouter.get("/mutation-applications/:id/timeline", requireMutationViewRole, getApplicationTimeline);
 adminRouter.get("/mutation-pending-summary", requireMutationViewRole, getMutationPendingSummary);
 adminRouter.post("/change-requests/:id/approve", requireMutationChainRole, postApproveChangeRequest);
@@ -423,8 +477,6 @@ const requireStreetlightReporterRole = requireAdminRole(
   "tax_surveyor",
   "tax_collector",
   "stall_prabhari",
-  "je_mechanical",
-  "ae_mechanical",
   "commissioner",
   "deputy_commissioner",
   "city_manager",
@@ -438,7 +490,7 @@ adminRouter.get("/streetlight-faults", listStreetlightFaultsHandler);
 // Ward-wise / street-wise / agency-wise street light reports (on-screen + CSV download).
 adminRouter.get(
   "/streetlight-reports/:kind",
-  requireAdminRole("commissioner", "deputy_commissioner", "city_manager", "je_mechanical", "ae_mechanical"),
+  requireAdminRole("commissioner", "deputy_commissioner", "city_manager"),
   getStreetlightReportHandler,
 );
 
@@ -492,10 +544,17 @@ adminRouter.post("/properties/remove-duplicate-floors", requireAdminRole("commis
 // Bulk holding uploads are staged for review, not imported. Tax Daroga and City Manager review the staged
 // holdings (Tax Daroga can keep holdings out); the FINAL approval - integrating into the live data (all /
 // selected / all except some) or discarding - is the City Manager's alone. The Commissioner sees progress only.
-adminRouter.post("/properties/bulk-upload", requireAdminRole("commissioner", "tax_daroga", "city_manager"), uploadPropertiesXlsxHandler);
-adminRouter.get("/property-imports", requireAdminRole("tax_daroga", "city_manager", "commissioner"), listImportBatchesHandler);
-adminRouter.get("/property-imports/:id", requireAdminRole("tax_daroga", "city_manager", "commissioner"), getImportBatchHandler);
+adminRouter.get("/property-imports", requireAdminRole("tax_daroga", "city_manager", "deputy_commissioner", "commissioner"), listImportBatchesHandler);
+adminRouter.get("/property-imports/:id", requireAdminRole("tax_daroga", "city_manager", "deputy_commissioner", "commissioner"), getImportBatchHandler);
 adminRouter.get("/property-imports/:id/holdings/:holdingNo", requireAdminRole("tax_daroga", "city_manager"), getImportHoldingHandler);
+// Holdings of an upload that did not go live, and their resolution: Tax Daroga -> City Manager -> DMC -> Municipal
+// Commissioner (importResolution.service.ts; who may do what is checked there).
+const requireResolutionView = requireAdminRole("tax_daroga", "city_manager", "deputy_commissioner", "commissioner");
+adminRouter.get("/property-imports/:id/held", requireResolutionView, getHeldItems);
+adminRouter.get("/property-imports/:id/held/:ref", requireResolutionView, getHeldItem);
+adminRouter.post("/property-imports/:id/held/:ref/resolution", requireAdminRole("tax_daroga"), postResolution);
+adminRouter.post("/import-resolutions/:caseId/decide", requireAdminRole("city_manager", "deputy_commissioner", "commissioner"), postResolutionDecision);
+adminRouter.get("/import-resolutions/waiting", requireResolutionView, getResolutionsWaiting);
 adminRouter.post("/property-imports/:id/exclude", requireAdminRole("tax_daroga", "city_manager"), excludeImportHoldingsHandler);
 adminRouter.post("/property-imports/:id/restore", requireAdminRole("tax_daroga", "city_manager"), restoreImportHoldingsHandler);
 adminRouter.post("/property-imports/:id/review", requireAdminRole("tax_daroga"), reviewImportHoldingsHandler);
@@ -560,11 +619,20 @@ adminRouter.post("/shops/:shopNo/inspections", requireInspectionRole, postCreate
 // ward parity: Deputy Commissioner handles odd wards, City Manager
 // handles even wards, and each verifies only what they themselves
 // assigned. See migratedHoldingSurvey.controller.ts.
-adminRouter.post("/migrated-holdings/bulk-upload", requireAdminRole("commissioner"), uploadMigratedHoldingsHandler);
+// Old records (MIG stage): the Commissioner's approval list, and the field staff's ward-wise list. Roles: migRecord.service.ts.
+adminRouter.get("/mig-records/legacy", getLegacy);
+adminRouter.post("/mig-records/legacy/delete", postDeleteLegacy);
+// Progress report: each officer's own work in a period; Commissioner / DMC / City Manager can open anyone's.
+adminRouter.get("/progress-report", getProgressReport);
+adminRouter.get("/progress-report/officers", requireAdminRole("commissioner", "deputy_commissioner", "city_manager"), getProgressReportOfficers);
+adminRouter.get("/old-records", getFieldRecords);
+adminRouter.get("/old-records/:id", getOneRecord);
+adminRouter.post("/old-records/:id/take-up", postTakeUp);
 // Rows of the old-holding upload held back for review: correct and import, or discard, one by one.
 const requireMigratedReviewRole = requireAdminRole("commissioner", "tax_daroga");
 adminRouter.get("/migrated-holdings/review-rows", requireMigratedReviewRole, listReviewRowsHandler);
 adminRouter.post("/migrated-holdings/review-rows/:id/import", requireMigratedReviewRole, importReviewRowHandler);
+adminRouter.post("/migrated-holdings/review-rows/discard-all", requireAdminRole("commissioner"), discardAllReviewRowsHandler);
 adminRouter.post("/migrated-holdings/review-rows/:id/discard", requireMigratedReviewRole, discardReviewRowHandler);
 adminRouter.get("/migrated-holdings/export", requireAdminRole("commissioner"), exportMigratedHoldingsHandler);
 adminRouter.get("/migrated-holdings/pending-assignment", listPendingAssignmentHandler);
@@ -599,6 +667,30 @@ const requireAgencyReportRole = requireAdminRole(
   "agency_operator",
 );
 adminRouter.get("/agency/report-filters", requireAgencyReportRole, getReportFilterOptionsHandler);
+// Notices report (served demand notices, trade licence notices and applications) - date / period, ward-wise and
+// Tax Collector-wise. For the agency Team Leader and Project Manager, and the officers above them.
+const requireNoticeReportRole = requireAdminRole(
+  "agency_team_leader",
+  "agency_project_manager",
+  "tax_daroga",
+  "city_manager",
+  "deputy_commissioner",
+  "commissioner",
+);
+// Staff identity documents (KYC) - access is checked in staffKyc.service.ts (Tax Daroga uploads, City Manager + DMC review).
+adminRouter.get("/staff-kyc", getStaffKycList);
+adminRouter.get("/staff-kyc/pending-count", getStaffKycPending);
+adminRouter.get("/staff-kyc/me", getStaffKycOne);
+adminRouter.get("/staff-kyc/me/file/:doc", getStaffKycFile);
+adminRouter.get("/staff-kyc/:username", getStaffKycOne);
+adminRouter.get("/staff-kyc/:username/file/:doc", getStaffKycFile);
+adminRouter.put("/staff-kyc/:username/numbers", putStaffKycNumbers);
+adminRouter.put("/staff-kyc/:username/doc/:doc", putStaffKycDoc);
+adminRouter.post("/staff-kyc/:username/submit", postStaffKycSubmit);
+adminRouter.post("/staff-kyc/:username/review", postStaffKycReview);
+adminRouter.get("/notice-reports", requireNoticeReportRole, getNoticeReportHandler);
+adminRouter.get("/notice-reports/filters", requireNoticeReportRole, getNoticeReportCollectorsHandler);
+adminRouter.get("/notice-reports/export.xlsx", requireNoticeReportRole, exportNoticeReportHandler);
 adminRouter.get("/agency/reports", requireAgencyReportRole, getAgencyReportHandler);
 adminRouter.get("/agency/reports/export", requireAgencyReportRole, exportAgencyReportHandler);
 adminRouter.get("/agency/wards", requireAdminRole("agency_team_leader"), listAgencyWardsHandler);
@@ -640,6 +732,7 @@ adminRouter.get("/agency-operator/dues-report.xlsx", requireDuesReportRole, expo
 // Viewing is read-only; receiving copies can never be changed or removed.
 const requireFieldViewRole = requireAdminRole("tax_collector", "tax_daroga", "city_manager", "deputy_commissioner", "commissioner");
 adminRouter.get("/migrated-holdings/search", requireAdminRole("tax_collector"), searchMigratedHoldingsHandler);
+adminRouter.get("/old-holdings", requireAdminRole("tax_collector"), listOldHoldingsForCollectorHandler);
 adminRouter.post("/unsurveyed-houses", requireAdminRole("tax_collector"), createUnsurveyedHouseHandler);
 adminRouter.get("/unsurveyed-houses", requireFieldViewRole, listUnsurveyedHousesHandler);
 adminRouter.get("/unsurveyed-houses/:id/photo", requireFieldViewRole, getUnsurveyedHousePhotoHandler);
@@ -788,16 +881,62 @@ adminRouter.post("/tl-survey", requireAdminRole("tax_collector"), postTlSurvey);
 adminRouter.get("/tl-surveys", requireTlViewRole, getTlSurveys);
 adminRouter.get("/tl-surveys/:id/file/:which", requireTlViewRole, getTlSurveyFile);
 adminRouter.post("/tl-surveys/:id/complied", requireAdminRole("tax_collector", "city_manager"), postTlComplied);
-adminRouter.get("/tl-notices/print-queue", requireAdminRole("tax_collector"), getTlPrintQueue);
-adminRouter.post("/tl-notices/mark-printed", requireAdminRole("tax_collector"), postTlMarkPrinted);
+// Printing: the Tax Collector (own businesses), or the Trade Licence Prabhari / City Manager (every notice, signed by them).
+adminRouter.get("/tl-notices/print-queue/count", requireAdminRole("tax_collector", "trade_license_nodal", "city_manager"), getTlPrintCount);
+adminRouter.get("/tl-notices/print-queue", requireAdminRole("tax_collector", "trade_license_nodal", "city_manager"), getTlPrintQueue);
+adminRouter.post("/tl-notices/mark-printed", requireAdminRole("tax_collector", "trade_license_nodal", "city_manager"), postTlMarkPrinted);
 adminRouter.get("/tl-notices/:id", requireTlViewRole, getTlNotice);
+// Receiving copies: uploaded by the Tax Collector who raised the notice, the Trade Licence Prabhari or the City Manager;
+// removed only with the DMC's approval (migration 190).
+const requireTlReceivingViewRole = requireAdminRole(
+  "tax_collector",
+  "trade_license_nodal",
+  "city_manager",
+  "tax_daroga",
+  "deputy_commissioner",
+  "commissioner",
+  "agency_team_leader",
+  "agency_project_manager",
+);
+adminRouter.get("/tl-notices/receiving-removals/count", requireAdminRole("deputy_commissioner", "commissioner"), getTlRemovalCount);
+adminRouter.get("/tl-notices/receiving-removed/:logId", requireTlReceivingViewRole, getTlRemovedCopy);
+adminRouter.post("/tl-notices/:id/reissue", requireAdminRole("tax_collector", "trade_license_nodal", "city_manager"), postTlReissue);
+adminRouter.post("/tl-notices/:id/receiving", requireAdminRole("tax_collector", "trade_license_nodal", "city_manager"), postTlReceivingCopy);
+adminRouter.get("/tl-notices/:id/receiving", requireTlReceivingViewRole, getTlReceivingCopy);
+adminRouter.get("/tl-notices/:id/receiving/log", requireTlReceivingViewRole, getTlReceivingLog);
+adminRouter.post(
+  "/tl-notices/:id/receiving/remove-request",
+  requireAdminRole("tax_collector", "trade_license_nodal", "city_manager", "commissioner"),
+  postTlReceivingRemovalRequest,
+);
+adminRouter.post("/tl-notices/:id/receiving/remove-decision", requireAdminRole("deputy_commissioner"), postTlReceivingRemovalDecision);
 
 adminRouter.get("/collection-issues/mine", requireAdminRole("tax_collector"), listMyCollectionIssues);
-adminRouter.get("/collection-issues", requireAdminRole("tax_daroga", "commissioner", "city_manager"), listAllCollectionIssues);
-adminRouter.post("/collection-issues/:id/generate-notice", requireAdminRole("city_manager"), postGenerateCollectionIssueNotice);
+adminRouter.get("/collection-issues", requireAdminRole("tax_daroga", "commissioner", "city_manager", "deputy_commissioner"), listAllCollectionIssues);
+adminRouter.get(
+  "/collection-issues/counts",
+  requireAdminRole("tax_daroga", "commissioner", "city_manager", "deputy_commissioner"),
+  getCollectionIssueCounts,
+);
+adminRouter.post("/collection-issues/:id/resolve", requireAdminRole("city_manager", "commissioner"), postResolveCollectionIssue);
+adminRouter.post("/collection-issues/:id/reopen", requireAdminRole("city_manager", "commissioner"), postReopenCollectionIssue);
+// Receiving copies of collection issue notices: uploaded by the reporting Tax Collector, the Tax Daroga or the City
+// Manager; removed only with the DMC's approval (migration 191).
+const requireCiReceivingViewRole = requireAdminRole("tax_collector", "tax_daroga", "city_manager", "deputy_commissioner", "commissioner");
+adminRouter.get("/collection-issue-notices/receiving-removed/:logId", requireCiReceivingViewRole, getCiRemovedCopy);
+adminRouter.post("/collection-issue-notices/:id/receiving", requireAdminRole("tax_collector", "tax_daroga", "city_manager"), postCiReceiving);
+adminRouter.get("/collection-issue-notices/:id/receiving", requireCiReceivingViewRole, getCiReceiving);
+adminRouter.get("/collection-issue-notices/:id/receiving/log", requireCiReceivingViewRole, getCiReceivingLog);
+adminRouter.post(
+  "/collection-issue-notices/:id/receiving/remove-request",
+  requireAdminRole("tax_collector", "tax_daroga", "city_manager", "commissioner"),
+  postCiRemovalRequest,
+);
+adminRouter.post("/collection-issue-notices/:id/receiving/remove-decision", requireAdminRole("deputy_commissioner"), postCiRemovalDecision);
+adminRouter.post("/collection-issues/:id/generate-notice", requireAdminRole("city_manager", "tax_daroga"), postGenerateCollectionIssueNotice);
 adminRouter.get(
   "/collection-issues/:id/notices",
-  requireAdminRole("tax_daroga", "commissioner", "city_manager"),
+  requireAdminRole("tax_daroga", "commissioner", "city_manager", "deputy_commissioner"),
   getCollectionIssueNotices,
 );
 adminRouter.get(
@@ -858,6 +997,17 @@ adminRouter.post("/trade-license-applications/:id/reject", requireNonStallPrabha
 
 // Pre-2011 ARV from the old demand register (migration 146): Tax Daroga enters, City Manager approves.
 const requirePre2011View = requireAdminRole("tax_daroga", "city_manager", "deputy_commissioner", "commissioner");
+// Historical part payments on old holdings: Tax Daroga records, City Manager approves (historicalPayment.service.ts).
+const requireHistoricalView = requireAdminRole("tax_daroga", "city_manager", "deputy_commissioner", "commissioner");
+adminRouter.get("/historical-payments/holding/:holdingNo", requireHistoricalView, getHistoricalHolding);
+adminRouter.get("/historical-payments/pending", requireHistoricalView, getHistoricalPending);
+adminRouter.get("/historical-payments/pending-count", requireHistoricalView, getHistoricalPendingCount);
+adminRouter.get("/historical-payments/payment/:id/proof", requireHistoricalView, getHistoricalProof);
+adminRouter.post("/historical-payments/preview", requireAdminRole("tax_daroga"), postHistoricalPreview);
+adminRouter.post("/historical-payments", requireAdminRole("tax_daroga"), postHistoricalSettlement);
+adminRouter.put("/historical-payments/payment/:id/proof", requireAdminRole("tax_daroga"), putHistoricalProof);
+adminRouter.post("/historical-payments/:id/approve", requireAdminRole("city_manager"), postHistoricalApprove);
+adminRouter.post("/historical-payments/:id/return", requireAdminRole("city_manager"), postHistoricalReturn);
 adminRouter.get("/pre2011-arv/worklist", requirePre2011View, getPre2011Worklist);
 adminRouter.get("/pre2011-arv/holding/:holdingNo", requirePre2011View, getPre2011Holding);
 adminRouter.get("/pre2011-arv/entries", requirePre2011View, getPre2011Entries);
@@ -865,6 +1015,7 @@ adminRouter.get("/pre2011-arv/pending-count", requirePre2011View, getPre2011Pend
 adminRouter.post("/pre2011-arv/entries", requireAdminRole("tax_daroga"), postPre2011Entry);
 adminRouter.post("/pre2011-arv/entries/:id/approve", requireAdminRole("city_manager"), postPre2011Approve);
 adminRouter.post("/pre2011-arv/entries/:id/reject", requireAdminRole("city_manager"), postPre2011Reject);
+adminRouter.post("/pre2011-arv/entries/:id/revert", requireAdminRole("city_manager", "deputy_commissioner", "commissioner"), postPre2011Revert);
 
 // Bulk demand notice generation
 adminRouter.post("/demand-notices/bulk-generate", requireSeniorAdmin, postBulkGenerateDemandNotices);

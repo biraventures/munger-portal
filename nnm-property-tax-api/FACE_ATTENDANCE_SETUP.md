@@ -90,7 +90,7 @@ The defaults for the rest are fine to start with:
 |---|---|---|
 | FACE_MATCH_THRESHOLD | 0.85 | similarity needed for the straight photo |
 | FACE_MATCH_THRESHOLD_TURNED | 0.75 | similarity needed for the head-turned photo |
-| FACE_FRONT_MAX_YAW | 15 | first photo must be within 15° of straight |
+| FACE_FRONT_MAX_YAW | 25 | first photo must be within 25° of straight (phone cameras and the pose estimate read a straight face at 15-25°) |
 | FACE_TURN_MIN_YAW | 20 | head must turn at least 20° |
 | FACE_YAW_SIGN | 0 | direction check (see step 7); 0 = only checks that the head turned |
 | FACE_PHOTO_RETENTION_DAYS | 90 | punch photos deleted after this; scores and attendance stay |

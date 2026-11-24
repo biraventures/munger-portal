@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Image as ImageIcon, Loader2 } from "lucide-react";
 import { fetchReceivingCopyPhoto } from "@/lib/collector-field-api";
+import { blobUrlIsPdf } from "@/lib/upload-limits";
 import { waterStatusLabel } from "./water-status-field";
 
 export interface ReceivingCopyVisit {
@@ -19,13 +20,16 @@ export interface ReceivingCopyVisit {
 /** A Tax Collector's field visit that delivered a demand notice: the signed receiving copy (photo on request) and GPS. */
 export function ReceivingCopyVisitEntry({ visit, when }: { visit: ReceivingCopyVisit; when: (v: string) => string }) {
   const [url, setUrl] = useState<string | null>(null);
+  const [isPdf, setIsPdf] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   async function show() {
     setLoading(true);
     setError(null);
     try {
-      setUrl(await fetchReceivingCopyPhoto(visit.id));
+      const u = await fetchReceivingCopyPhoto(visit.id);
+      setIsPdf(await blobUrlIsPdf(u));
+      setUrl(u);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not load the photo.");
     } finally {
@@ -47,7 +51,16 @@ export function ReceivingCopyVisitEntry({ visit, when }: { visit: ReceivingCopyV
       {visit.water_connection_status && (
         <p className="mt-1 text-slate-600">Water supply: {waterStatusLabel(visit.water_connection_status, visit.water_connection_count)}</p>
       )}
-      {url ? (
+      {url && isPdf ? (
+        <a
+          href={url}
+          target="_blank"
+          rel="noreferrer"
+          className="mt-2 inline-flex items-center gap-2 font-semibold text-nnm-blue underline"
+        >
+          <span className="rounded bg-red-600 px-1.5 py-0.5 text-[10px] font-bold text-white no-underline">PDF</span> Open receiving copy
+        </a>
+      ) : url ? (
         // eslint-disable-next-line @next/next/no-img-element -- authenticated blob URL
         <img src={url} alt={`Receiving copy of notice ${visit.demand_no}`} className="mt-2 max-h-72 rounded border border-slate-200" />
       ) : (

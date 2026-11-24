@@ -1,3 +1,4 @@
+import type { FloorChangeSpec, FloorSnapshot } from "../utils/floorTimeline";
 export interface FloorInput {
   floorLabel: string;
   buildupSqft: number;
@@ -6,6 +7,25 @@ export interface FloorInput {
   occupancy: "self" | "rented";
   yearBuilt?: string | null;
   closingYear?: string | null;
+  /** Floor changes: the recorded floor this row comes from (several rows, same source = the floor was split). */
+  source?: FloorSnapshot | null;
+  /** Floor changes: how this row's change applies - from a year (past kept) or a correction. */
+  change?: FloorChangeSpec | null;
+}
+
+/**
+ * How a change to the floors (use, construction, area, floors added / removed) is to be applied:
+ *  - from_year: it really changed from `effectiveYear` - earlier years keep the old floors (timeline);
+ *  - correction: the record was always wrong - the floors are replaced for every year.
+ */
+export interface FloorChangeInput {
+  /** Per-floor statements (each row's `change`, plus `removed`). Older requests have one kind for the whole edit. */
+  mode?: "per_floor";
+  kind?: "from_year" | "correction";
+  effectiveYear?: string | null;
+  reason: string;
+  /** Recorded floors removed: from which year they no longer exist, or a correction (never existed). */
+  removed?: { floor: FloorSnapshot; kind: "from_year" | "correction"; effectiveYear?: string | null }[];
 }
 
 export interface TaxExemptionInput {
@@ -29,6 +49,11 @@ export interface PropertySaveInput {
   ownerDeceased?: boolean;
   /** Field reports only: the owner does not agree to give Aadhaar details, so the number is not required. */
   aadhaarRefused?: boolean;
+  /** Required whenever the floors change (see FloorChangeInput). */
+  floorChange?: FloorChangeInput | null;
+  /** Operator's change request only, not stored in proposed_data: photo of the premises (required for a use change). */
+  premisesPhotoBase64?: string | null;
+  premisesPhotoMimeType?: string | null;
   ownerName: string;
   relationType?: "S/O" | "D/O" | "W/O" | "C/O" | null;
   relationName?: string | null;

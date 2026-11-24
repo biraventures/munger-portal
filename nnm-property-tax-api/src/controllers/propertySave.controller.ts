@@ -45,6 +45,17 @@ const taxExemptionSchema = z
     }
   });
 
+const floorSnapshotSchema = z.object({
+  floorLabel: z.string(),
+  buildupSqft: z.union([z.number(), z.string()]),
+  constType: z.string(),
+  usageType: z.string(),
+  occupancy: z.string(),
+  yearBuilt: z.string().nullish(),
+  closingYear: z.string().nullish(),
+});
+const floorChangeSpecSchema = z.object({ kind: z.enum(["from_year", "correction"]), effectiveYear: z.string().nullish() });
+
 const floorSchema = z.object({
   floorLabel: z.string().min(1),
   buildupSqft: z.coerce.number().min(0),
@@ -53,6 +64,9 @@ const floorSchema = z.object({
   occupancy: z.enum(["self", "rented"]),
   yearBuilt: z.string().nullish(),
   closingYear: z.string().nullish(),
+  // Floor changes (see utils/floorTimeline.ts planFloorChanges).
+  source: floorSnapshotSchema.nullish(),
+  change: floorChangeSpecSchema.nullish(),
 });
 
 export const propertySaveSchema = z.object({
@@ -69,6 +83,17 @@ export const propertySaveSchema = z.object({
   ownerDeceased: z.boolean().optional(),
   // Field reports only: the owner does not agree to give Aadhaar details.
   aadhaarRefused: z.boolean().optional(),
+  floorChange: z
+    .object({
+      mode: z.literal("per_floor").optional(),
+      kind: z.enum(["from_year", "correction"]).optional(),
+      effectiveYear: z.string().nullish(),
+      reason: z.string().trim().max(1000).default(""),
+      removed: z.array(floorChangeSpecSchema.extend({ floor: floorSnapshotSchema })).optional(),
+    })
+    .nullish(),
+  premisesPhotoBase64: z.string().nullish(),
+  premisesPhotoMimeType: z.string().nullish(),
   ownerName: z.string().min(1),
   relationType: z.enum(["S/O", "D/O", "W/O", "C/O"]).nullish(),
   relationName: z.string().nullish(),

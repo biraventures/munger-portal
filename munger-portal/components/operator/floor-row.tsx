@@ -12,6 +12,34 @@ export interface FloorFormState {
   occupancy: "self" | "rented";
   yearBuilt: string;
   closingYear: string;
+  /** Floor changes: the recorded floor this row comes from (set when the holding is loaded; several rows = a split). */
+  source?: FloorSnapshot | null;
+  /** Floor changes: how this row's change applies. */
+  changeKind?: "" | "from_year" | "correction";
+  changeYear?: string;
+}
+
+/** A recorded floor, as it was when the holding was loaded. */
+export interface FloorSnapshot {
+  floorLabel: string;
+  buildupSqft: string | number;
+  constType: string;
+  usageType: string;
+  occupancy: string;
+  yearBuilt: string | null;
+  closingYear: string | null;
+}
+
+export function snapshotOfRow(f: FloorFormState): FloorSnapshot {
+  return {
+    floorLabel: f.floorLabel,
+    buildupSqft: f.buildupSqft,
+    constType: f.constType,
+    usageType: f.usageType,
+    occupancy: f.occupancy,
+    yearBuilt: f.yearBuilt || null,
+    closingYear: f.closingYear || null,
+  };
 }
 
 // Value strings are what actually gets stored/sent — "Ground Floor - 0"
@@ -92,12 +120,7 @@ export function FloorRow({
             </span>
           )}
           {removable && (
-            <button
-              type="button"
-              onClick={onRemove}
-              aria-label="Remove floor"
-              className="rounded-md p-1.5 text-red-500 hover:bg-red-50"
-            >
+            <button type="button" onClick={onRemove} aria-label="Remove floor" className="rounded-md p-1.5 text-red-500 hover:bg-red-50">
               <Trash2 className="h-4 w-4" />
             </button>
           )}
@@ -140,11 +163,7 @@ export function FloorRow({
         </div>
         <div className="col-span-2 sm:col-span-3">
           <label className={labelClass}>Usage</label>
-          <select
-            value={floor.usageType}
-            onChange={(e) => onChange({ ...floor, usageType: e.target.value })}
-            className={inputClass}
-          >
+          <select value={floor.usageType} onChange={(e) => onChange({ ...floor, usageType: e.target.value })} className={inputClass}>
             <option value="">Select usage…</option>
             {usageTypes.map((u) => (
               <option key={u} value={u}>

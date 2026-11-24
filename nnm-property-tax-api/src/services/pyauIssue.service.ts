@@ -5,26 +5,20 @@ import { ApiError } from "../utils/ApiError";
 import type { PyauRow, PyauIssueRow } from "../types/pyau.types";
 import type { AttendanceTokenPayload } from "../types/attendance.types";
 
-const BUILDER_WARRANTY_YEARS = 2;
-
 /**
- * Whether a pyau is still within its 2-year builder-warranty window -
- * during this period the BUILDER (tracked as plain text on the pyau
- * record, not a login) is responsible for maintenance, not one of the
- * 3 assigned contractors. Nullable installed_date (older/pre-existing
- * pyaus in the initial registry import) is treated as never under
- * warranty, since there's no construction date to measure from.
+ * Whether the pyau is maintained by its BUILDER (tracked as plain text on the pyau record, not a login) rather than one
+ * of the maintenance contractors: the "under maintenance by builder" checkbox the AE / JE ticks for newly built pyaus
+ * (migration 168 set it for every pyau that was inside the old 2-year window from its installation date).
  */
-export function isUnderBuilderWarranty(pyau: PyauRow, asOf: Date = new Date()): boolean {
-  if (!pyau.installed_date) return false;
-  const installedDate = new Date(pyau.installed_date);
-  const warrantyEnd = new Date(installedDate);
-  warrantyEnd.setFullYear(warrantyEnd.getFullYear() + BUILDER_WARRANTY_YEARS);
-  return asOf < warrantyEnd;
+export function isUnderBuilderWarranty(pyau: PyauRow): boolean {
+  return !!pyau.under_builder_maintenance;
 }
 
 /** "Any issue will be marked by JE or AE" - role check is enforced at the route level (requireAttendanceRole), this just does the assignment logic. */
-export async function reportPyauIssue(user: AttendanceTokenPayload, input: { pyauId: number; issueNotes: string | null }): Promise<PyauIssueRow> {
+export async function reportPyauIssue(
+  user: AttendanceTokenPayload,
+  input: { pyauId: number; issueNotes: string | null },
+): Promise<PyauIssueRow> {
   const pyau = await pyauRepository.findById(input.pyauId);
   if (!pyau) throw ApiError.notFound("Pyau not found.");
 
@@ -34,7 +28,7 @@ export async function reportPyauIssue(user: AttendanceTokenPayload, input: { pya
   let assignedContractorId: number | null = null;
   if (!isUnderBuilderWarranty(pyau)) {
     const mapping = await pyauContractorWardRepository.findByWard(pyau.ward_id);
-    assignedContractorId = mapping?.contractor_id ?? null;
+    assignedContractorId = pyau.maintenance_contractor_id ?? mapping?.contractor_id ?? null;
   }
   // If under warranty, assignedContractorId stays null - the frontend
   // shows the builder_name/builder_contact from the pyau record

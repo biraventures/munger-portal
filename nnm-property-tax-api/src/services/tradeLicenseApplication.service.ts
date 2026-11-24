@@ -4,6 +4,7 @@ import { TRADE_LICENSE_BUSINESS_CATEGORIES } from "../constants/tradeLicenseBusi
 import { attachClaims, listApplicationDocuments, TL_DOC_TYPES, verifyClaims, type DocumentClaim, type TlDocType } from "./tradeLicenseDocuments.service";
 import { nextTradeLicenseApprovalStage, TRADE_LICENSE_APPROVAL_STAGE_ORDER } from "../types/admin.types";
 import { ApiError } from "../utils/ApiError";
+import { creditApplication } from "./tradeLicenseCredit.service";
 import type { TradeLicenseApplicationInput, TradeLicenseApplicationRow } from "../types/tradeLicense.types";
 import type { AdminRole, AdminTokenPayload } from "../types/admin.types";
 
@@ -52,6 +53,8 @@ export async function submitTradeLicenseApplication(
     await client.query("BEGIN");
     const application = await tradeLicenseApplicationRepository.create(withFlags, requestedBy, renewedFromApplicationId, client);
     await attachClaims(client, application.id, documents);
+    // Credited to the Tax Collector whose notice brought it in, else an automatic application.
+    await creditApplication(client, application.id, { noticeNo: input.noticeNo, holdingNo: input.holdingNo, entityName: input.entityName });
     await client.query("COMMIT");
     return { applicationId: application.id, applicationNumber: application.application_number, status: "pending" };
   } catch (err) {

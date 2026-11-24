@@ -1,7 +1,6 @@
 import { getAttendanceToken } from "./attendance-auth";
 
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_PROPERTY_TAX_API_URL || "http://localhost:4000/api/v1";
+const API_BASE_URL = process.env.NEXT_PUBLIC_PROPERTY_TAX_API_URL || "http://localhost:4000/api/v1";
 
 function authHeaders(): HeadersInit {
   const token = getAttendanceToken();
@@ -73,7 +72,11 @@ export interface StreetLight {
   functionalStatus?: "functional" | "partially_functional" | "non_functional" | null;
 }
 
-export const FUNCTIONAL_STATUS_LABELS: Record<string, string> = { functional: "Functional", partially_functional: "Partially functional", non_functional: "Not functional" };
+export const FUNCTIONAL_STATUS_LABELS: Record<string, string> = {
+  functional: "Functional",
+  partially_functional: "Partially functional",
+  non_functional: "Not functional",
+};
 
 export async function fetchLights(lightType?: "streetlight" | "high_mast"): Promise<StreetLight[]> {
   const url = lightType ? `${API_BASE_URL}/streetlight/lights?lightType=${lightType}` : `${API_BASE_URL}/streetlight/lights`;
@@ -663,6 +666,7 @@ export interface SegmentLightStatus {
   faultHistory: SegmentLightFaultHistoryEntry[];
   lightSerialSeq: number | null;
   switchStatus: "working" | "not_working" | "automatic" | "joint" | null;
+  lampType?: LampType;
   latitude: number | null;
   longitude: number | null;
 }
@@ -838,11 +842,11 @@ export async function setLightSwitchStatus(lightId: number, switchStatus: LightS
 }
 
 /** Inserts a light into a street right after the given sequence number (0 = as the new first light). Every later light's numbering shifts up by one; nothing else about them changes. */
-export async function insertLight(segmentId: number, afterSeq: number): Promise<void> {
+export async function insertLight(segmentId: number, afterSeq: number, lampType: LampType = DEFAULT_LAMP_TYPE): Promise<void> {
   const res = await fetch(`${API_BASE_URL}/streetlight/lights/insert`, {
     method: "POST",
     headers: authHeaders(),
-    body: JSON.stringify({ segmentId, afterSeq }),
+    body: JSON.stringify({ segmentId, afterSeq, lampType }),
   });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
@@ -861,6 +865,7 @@ export interface CreateStreetSegmentInput {
   intermediatePoint: string | null;
   endPoint: string | null;
   lightCount: number;
+  lampType?: LampType;
 }
 
 export async function createStreetSegment(input: CreateStreetSegmentInput): Promise<void> {
@@ -921,3 +926,15 @@ export async function deleteLightMistake(lightId: number): Promise<void> {
     throw new Error(body.error || "Could not remove this light.");
   }
 }
+
+/** Type of streetlight fitting. LED panel light - tall is the default. */
+export const LAMP_TYPES = ["led_panel_tall", "led_panel_short", "led_strip", "globe", "halogen"] as const;
+export type LampType = (typeof LAMP_TYPES)[number];
+export const DEFAULT_LAMP_TYPE: LampType = "led_panel_tall";
+export const LAMP_TYPE_LABELS: Record<LampType, string> = {
+  led_panel_tall: "LED panel light - tall",
+  led_panel_short: "LED panel light - short",
+  led_strip: "LED strip light",
+  globe: "Globe light",
+  halogen: "Halogen lamp",
+};

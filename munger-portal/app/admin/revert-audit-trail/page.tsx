@@ -10,6 +10,8 @@ import { ADMIN_ROLE_LABELS, type AdminRole } from "@/lib/admin-auth";
 const ENTRY_TYPE_LABELS: Record<EntryRevertEvent["entry_type"], string> = {
   property_mutation: "Property Mutation",
   shop_agreement: "Shop Agreement",
+  property_discrepancy: "Property Discrepancy",
+  pre2011_arv: "Pre-2011 ARV Entry",
 };
 
 export default function RevertAuditTrailPage() {
@@ -82,7 +84,7 @@ export default function RevertAuditTrailPage() {
         </p>
 
         <div className="mb-5 flex gap-2">
-          {(["all", "property_mutation", "shop_agreement"] as const).map((f) => (
+          {(["all", "property_mutation", "shop_agreement", "property_discrepancy", "pre2011_arv"] as const).map((f) => (
             <button
               key={f}
               onClick={() => setFilter(f)}

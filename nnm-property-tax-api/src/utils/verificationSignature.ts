@@ -7,7 +7,11 @@ export type VerifiableDocType =
   | "shop-receipt"
   | "shop-demand"
   | "violation-notice"
-  | "agreement";
+  | "agreement"
+  | "tl-notice"
+  | "garden-ticket"
+  | "cremation-ticket"
+  | "hall-booking";
 
 /**
  * Signs (docType, docNo) into a short hex signature. Document/receipt
@@ -37,6 +41,14 @@ export function verifyDocumentSignature(docType: VerifiableDocType, docNo: strin
   const givenBuf = Buffer.from(signature);
   if (expectedBuf.length !== givenBuf.length) return false;
   return crypto.timingSafeEqual(expectedBuf, givenBuf);
+}
+
+/**
+ * The link in a trade licence notice's QR code: the public application form, filled in from the notice. The signature
+ * stops anyone from reading other businesses' details by changing the notice number in the link.
+ */
+export function buildTlNoticeApplyUrl(noticeNo: string): string {
+  return `${env.FRONTEND_URL}/trade-license?notice=${encodeURIComponent(noticeNo)}&sig=${signDocument("tl-notice", noticeNo)}`;
 }
 
 export function buildVerificationUrl(docType: VerifiableDocType, docNo: string): string {

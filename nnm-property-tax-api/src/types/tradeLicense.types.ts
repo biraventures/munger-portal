@@ -15,6 +15,8 @@ export interface TradeLicenseApplicationInput {
   entityType?: TradeLicenseEntityType | null;
   completeAddress: string;
   holdingNo?: string | null;
+  /** The trade licence notice the business received (if any) - credits the application to that Tax Collector. */
+  noticeNo?: string | null;
   holdingReceiptAttached: boolean;
   typeOfBusiness?: string | null;
   durationYears: number;

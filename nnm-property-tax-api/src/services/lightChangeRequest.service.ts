@@ -1,7 +1,7 @@
 import { lightChangeRequestRepository } from "../repositories/lightChangeRequest.repository";
 import { lightRepository } from "../repositories/light.repository";
 import { ApiError } from "../utils/ApiError";
-import { nextLightChangeStage } from "../types/streetlight.types";
+import { DEFAULT_LAMP_TYPE, LAMP_TYPES, nextLightChangeStage } from "../types/streetlight.types";
 import type { LightChangeRequestRow, LightChangeActionType } from "../types/streetlight.types";
 import type { AttendanceTokenPayload } from "../types/attendance.types";
 
@@ -22,6 +22,9 @@ export async function requestLightChange(
 
   if (input.actionType === "add") {
     if (!input.proposedData) throw ApiError.badRequest("Light details are required to add a light.");
+    if (input.proposedData.lampType !== undefined && !(LAMP_TYPES as readonly string[]).includes(String(input.proposedData.lampType))) {
+      throw ApiError.badRequest("Choose the type of light.");
+    }
   } else {
     if (!input.lightId) throw ApiError.badRequest("A light must be specified for this action.");
     const light = await lightRepository.findById(input.lightId);
@@ -53,6 +56,7 @@ async function applyLightChange(request: LightChangeRequestRow): Promise<void> {
         latitude: (d.latitude as number) ?? null,
         longitude: (d.longitude as number) ?? null,
         installationAgencyId: (d.installationAgencyId as number) ?? null,
+        lampType: (LAMP_TYPES as readonly string[]).includes(String(d.lampType)) ? String(d.lampType) : DEFAULT_LAMP_TYPE,
       });
       break;
     }
@@ -80,7 +84,11 @@ async function applyLightChange(request: LightChangeRequestRow): Promise<void> {
  * logged to light_change_approvals regardless of whether it advances
  * or finalizes, for the full audit trail.
  */
-export async function approveLightChangeAtStage(user: AttendanceTokenPayload, requestId: number, notes: string | null): Promise<LightChangeRequestRow> {
+export async function approveLightChangeAtStage(
+  user: AttendanceTokenPayload,
+  requestId: number,
+  notes: string | null,
+): Promise<LightChangeRequestRow> {
   const request = await lightChangeRequestRepository.findById(requestId);
   if (!request) throw ApiError.notFound("Request not found.");
   if (request.status !== "pending") throw ApiError.badRequest(`This request has already been ${request.status}.`);
@@ -103,7 +111,11 @@ export async function approveLightChangeAtStage(user: AttendanceTokenPayload, re
   return finalized;
 }
 
-export async function rejectLightChangeAtStage(user: AttendanceTokenPayload, requestId: number, notes: string): Promise<LightChangeRequestRow> {
+export async function rejectLightChangeAtStage(
+  user: AttendanceTokenPayload,
+  requestId: number,
+  notes: string,
+): Promise<LightChangeRequestRow> {
   if (!notes.trim()) throw ApiError.badRequest("A reason is required to reject.");
   const request = await lightChangeRequestRepository.findById(requestId);
   if (!request) throw ApiError.notFound("Request not found.");

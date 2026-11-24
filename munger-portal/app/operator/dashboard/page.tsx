@@ -1,6 +1,8 @@
 "use client";
 
-import { Store, Building2, ShoppingBag, Award, Download, ClipboardCheck, RotateCcw, FileUp, Users } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Store, Building2, ShoppingBag, Award, Download, ClipboardCheck, ClipboardList, RotateCcw, FileUp, Users } from "lucide-react";
+import { fetchMigMyCount, setMigOperatorLogin } from "@/lib/mig-records-api";
 import { OperatorHeader } from "@/components/operator-header";
 import { OperatorTaskCard } from "@/components/operator-task-card";
 import { DashboardSummaryWidget } from "@/components/dashboard-summary-widget";
@@ -14,6 +16,26 @@ import {
   fetchDashboardTradeLicenseApplications,
   fetchDashboardTradeLicensesIssued,
 } from "@/lib/operator-api";
+
+/** Old Records (MIG): uploaded old-holding records waiting for the Operator's verification. */
+function MigApprovalsCard() {
+  const [n, setN] = useState<number | undefined>(undefined);
+  useEffect(() => {
+    setMigOperatorLogin(true);
+    fetchMigMyCount()
+      .then((r) => setN(r.pending))
+      .catch(() => setN(undefined));
+  }, []);
+  return (
+    <OperatorTaskCard
+      href="/operator/mig-records"
+      icon={ClipboardList}
+      title="Old Records (MIG) - Verification"
+      description="Verify uploaded old-holding records against the old register and send them to the Tax Daroga."
+      badge={n}
+    />
+  );
+}
 
 export default function OperatorDashboardPage() {
   const operator = useOperatorGuard();
@@ -68,6 +90,8 @@ export default function OperatorDashboardPage() {
             title="Property Survey Worklist"
             description="Holdings added with only old ARV values, awaiting a real physical survey."
           />
+
+          <MigApprovalsCard />
 
           <OperatorTaskCard
             href="/operator/migrated-holding-entry"

@@ -26,6 +26,7 @@ export interface PropertyDiscrepancyRequestRow {
   photo_path: string | null;
   previous_receipt_photo_path: string | null;
   aadhaar_photo_path: string | null;
+  owner_photo_path: string | null;
   reverted_by: string | null;
   reverted_by_role: string | null;
   reverted_from_stage: string | null;

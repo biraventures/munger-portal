@@ -9,7 +9,7 @@ import { useAdminGuard } from "@/lib/use-admin-guard";
 import { ADMIN_ROLE_LABELS } from "@/lib/admin-auth";
 import { fetchChangeRequests, TIER_LABELS, type ApprovalTier, type ChangeRequestSummary } from "@/lib/admin-api";
 
-const TIERS: ApprovalTier[] = ["minor", "significant", "mutation"];
+const TIERS: ApprovalTier[] = ["minor", "significant", "use_change", "mutation"];
 
 export default function AdminAllChangesPage() {
   const admin = useAdminGuard();
@@ -35,8 +35,8 @@ export default function AdminAllChangesPage() {
           <ShieldAlert className="mx-auto mb-4 h-10 w-10 text-slate-300" />
           <h1 className="mb-2 text-lg font-semibold text-slate-900">Commissioner-only view</h1>
           <p className="mb-6 text-sm text-slate-500">
-            This full categorized overview of every change request is only shown to the Municipal Commissioner. Use
-            &ldquo;Mutation Approvals&rdquo; on your dashboard to review requests waiting at your own desk.
+            This full categorized overview of every change request is only shown to the Municipal Commissioner. Use &ldquo;Mutation
+            Approvals&rdquo; on your dashboard to review requests waiting at your own desk.
           </p>
           <Link href="/admin/dashboard" className="text-sm font-medium text-nnm-blue hover:underline">
             Back to dashboard
@@ -46,7 +46,7 @@ export default function AdminAllChangesPage() {
     );
   }
 
-  const byTier: Record<ApprovalTier, ChangeRequestSummary[]> = { minor: [], significant: [], mutation: [] };
+  const byTier: Record<ApprovalTier, ChangeRequestSummary[]> = { minor: [], significant: [], mutation: [], use_change: [] };
   (requests ?? []).forEach((r) => byTier[r.approval_tier]?.push(r));
 
   return (
@@ -56,9 +56,8 @@ export default function AdminAllChangesPage() {
       <main className="mx-auto max-w-4xl px-6 py-10">
         <h1 className="mb-1 text-2xl font-semibold text-slate-900">All Property Changes</h1>
         <p className="mb-6 text-sm text-slate-500">
-          Every mutation approval request, done and in process, grouped by category. Minor edits finalize at Tax
-          Daroga; significant changes at Mutation Nodal Clerk; mutations (ownership changes) still require your own
-          final approval.
+          Every mutation approval request, done and in process, grouped by category. Minor edits finalize at Tax Daroga; significant changes
+          at Mutation Nodal Clerk; mutations (ownership changes) still require your own final approval.
         </p>
 
         {error && (
@@ -120,9 +119,7 @@ export default function AdminAllChangesPage() {
                               <td className="px-4 py-2">
                                 <StageBadge status={r.status} currentStage={r.current_stage} />
                                 {r.status === "pending" && (
-                                  <span className="ml-1.5 text-xs text-slate-400">
-                                    (finalizes at {ADMIN_ROLE_LABELS[r.final_stage]})
-                                  </span>
+                                  <span className="ml-1.5 text-xs text-slate-400">(finalizes at {ADMIN_ROLE_LABELS[r.final_stage]})</span>
                                 )}
                               </td>
                             </tr>

@@ -20,7 +20,11 @@ export type AdminRole =
   | "agency_project_manager"
   | "abhilekh_prabhari"
   | "agency_operator"
-  | "map_section_nodal_clerk";
+  | "map_section_nodal_clerk"
+  | "garden_counter"
+  | "crematorium_counter"
+  | "crematorium_prabhari"
+  | "community_hall_prabhari";
 
 export const ADMIN_ROLE_LABELS: Record<AdminRole, string> = {
   tax_daroga: "Tax Daroga",
@@ -42,6 +46,10 @@ export const ADMIN_ROLE_LABELS: Record<AdminRole, string> = {
   abhilekh_prabhari: "Abhilekh Prabhari",
   agency_operator: "Agency Operator",
   map_section_nodal_clerk: "Map Section Nodal Clerk",
+  garden_counter: "Garden Counter",
+  crematorium_counter: "Crematorium Counter",
+  crematorium_prabhari: "Crematorium Prabhari",
+  community_hall_prabhari: "Community Hall Prabhari",
 };
 
 export const ADMIN_ROLE_ORDER: AdminRole[] = [
@@ -62,6 +70,10 @@ export const ADMIN_ROLE_ORDER: AdminRole[] = [
   "abhilekh_prabhari",
   "agency_operator",
   "map_section_nodal_clerk",
+  "garden_counter",
+  "crematorium_counter",
+  "crematorium_prabhari",
+  "community_hall_prabhari",
   "deputy_commissioner",
   "commissioner",
 ];
@@ -88,6 +100,9 @@ export async function adminLogin(username: string, password: string, rememberMe:
 
   if (!res.ok) {
     if (res.status === 401) throw new Error("Incorrect username or password.");
+    // 403: e.g. a collection staff login whose identity documents are not approved yet - the server says why.
+    const body = await res.json().catch(() => ({}));
+    if (res.status === 403 && body.error) throw new Error(body.error);
     throw new Error("Login failed. Please try again.");
   }
 

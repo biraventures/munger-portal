@@ -4,151 +4,222 @@ import { pyauRepository } from "../repositories/pyau.repository";
 
 export interface PyauImportResult {
   created: number;
+  /** Rows matching a pyau already in the registry (same ward, same address) - not added again. */
+  alreadyInRegistry: number;
   errors: { row: number; message: string }[];
 }
 
+type Col =
+  | "ward"
+  | "address"
+  | "tank"
+  | "status"
+  | "notWorking"
+  | "structure"
+  | "tankStand"
+  | "taps"
+  | "standposts"
+  | "houses"
+  | "scheme"
+  | "pump"
+  | "boring"
+  | "casing"
+  | "installed"
+  | "builderName"
+  | "builderContact"
+  | "remarks"
+  | "lat"
+  | "lng";
+
 /**
- * Imports the ward-level pyau field-inventory CSV - column headers
- * are fixed (matched by position, not name, since the real file's
- * headers are long mixed Hindi/English text that's fragile to match
- * exactly). Columns 0-9 are the original field-survey columns; 10-17
- * are optional additions covering every field the "Add One Pyau" form
- * supports, so the bulk upload isn't limited to a narrower set of
- * fields than manual entry - a CSV without these trailing columns
- * still imports fine, they just come through as null (to be filled
- * in later per-pyau, same as before this was added). Columns:
- *   0 Ward No
- *   1 (installed count summary - ward-level only, ignored per-row)
- *   2 Address/Location of Water Kiosk
- *   3 (has water tank) - a COUNT (0/1/2/3), with a couple of
- *     free-text outliers ("0(Ground)", "Only Submersible") that get
- *     preserved as remarks rather than forced into a number
- *   4 Working status ("Working" / "Not working")
- *   5 Not-working reason/remarks (free text)
- *   6 Type of stand ("PCC Structure" / "Iron stand" / "Nothing")
- *   7 Tank Stand type ("Yes" / "Through Direct pipe")
- *   8 (without-stand count - sparse, low-value, not imported)
- *   9 Houses served (via pipeline)
- *   10 Scheme Name (optional)
- *   11 Pump Details (optional)
- *   12 Boring Depth in feet (optional, numeric)
- *   13 Casing Details (optional)
- *   14 Installed Date (optional, yyyy-MM-dd)
- *   15 Builder Name (optional)
- *   16 Builder Contact (optional)
- *   17 Remarks (optional, additional free text - combined with any
- *      auto-captured not-working reason from column 5, not replacing it)
- *   18 Latitude (optional, numeric)
- *   19 Longitude (optional, numeric)
+ * Which field a column header is. Headers are long mixed Hindi/English text, so they are matched by key words, in an
+ * order that keeps look-alikes apart ("Tank Stand ..." before "tank", "houses ... just stand" before "stand").
+ * Unknown columns (e.g. the ward-level "installed count" or "without stand" counts) are ignored.
+ */
+function columnFor(header: string): Col | null {
+  const h = header.toLowerCase().replace(/\s+/g, " ").trim();
+  if (!h) return null;
+  if (h.includes("latitude")) return "lat";
+  if (h.includes("longitude")) return "lng";
+  if (h.includes("builder") && /contact|phone|mobile/.test(h)) return "builderContact";
+  if (h.includes("builder")) return "builderName";
+  if (h.includes("scheme")) return "scheme";
+  if (h.includes("pump")) return "pump";
+  if (h.includes("boring") || h.includes("depth")) return "boring";
+  if (h.includes("casing")) return "casing";
+  if (h.includes("install") && h.includes("date")) return "installed";
+  if (h.includes("houses") || h.includes("घरों") || h.includes("घर ")) return "houses";
+  if (h.includes("without stand") || h.includes("बिना")) return null;
+  if (h.includes("standpost") || h.includes("stand post")) return "standposts";
+  if (/\btaps?\b/.test(h)) return "taps";
+  if (h.includes("type of stand")) return "structure";
+  if (h.includes("tank stand") || (h.includes("stand") && h.includes("concrete"))) return "tankStand";
+  if (h.includes("functionality") || h.includes("बंद")) return "notWorking";
+  if (h.includes("status") || h.includes("स्थिति") || h.includes("चालू")) return "status";
+  if (h.includes("tank") || h.includes("टंकी")) return "tank";
+  if (h.startsWith("remarks") || h.includes("remark")) return "remarks";
+  if (h.includes("address") || h.includes("location")) return "address";
+  if (h.includes("ward")) return "ward";
+  return null;
+}
+
+/** The original 20-column field-survey layout, read by position - used only when the header row is not recognised. */
+const LEGACY_POSITIONS: Record<Col, number> = {
+  ward: 0,
+  address: 2,
+  tank: 3,
+  status: 4,
+  notWorking: 5,
+  structure: 6,
+  tankStand: 7,
+  houses: 9,
+  scheme: 10,
+  pump: 11,
+  boring: 12,
+  casing: 13,
+  installed: 14,
+  builderName: 15,
+  builderContact: 16,
+  remarks: 17,
+  lat: 18,
+  lng: 19,
+  taps: -1,
+  standposts: -1,
+};
+
+const intOrNull = (v: string) => (/^\d+$/.test(v) ? parseInt(v, 10) : null);
+const numOrNull = (v: string) => (/^-?\d+(\.\d+)?$/.test(v) ? parseFloat(v) : null);
+const addressKey = (wardId: number, a: string | null) => `${wardId}|${(a ?? "").toLowerCase().replace(/\s+/g, " ").trim()}`;
+
+/**
+ * Imports the submersible / pyau field-inventory CSV. Columns are found by their header names (any order), so both
+ * the original survey sheet (10 columns, Hindi headers) and the later layout ("Ward No, Address/Location of Water
+ * Kiosk, Has water tank, Pyau status (Working), Remarks on functionality, Type of stand, Number of water taps,
+ * Number of water standposts, How many houses ..., Scheme Name, Pump Details, Boring Depth, Casing Details,
+ * Installed Date, Builder Name, Builder Contact, Remarks, Latitude, Longitude") are read correctly.
  *
- * Auto-creates a ward if the CSV's ward number doesn't exist yet
- * (this import IS the initial ward setup for many municipalities
- * using this module for the first time), and auto-generates each
- * pyau's serial number as "W{ward}-{seq}", per what was asked for.
+ * - Ward: "Ward 1", "1", "Ward No. 1" all mean ward 1 and match an existing ward named either "1" or "Ward 1"; a
+ *   ward not yet in the system is created (this import is the initial ward setup for this module).
+ * - Serial number: auto-generated per ward as "W{ward}-{seq}".
+ * - A row with neither ward nor address (e.g. a totals row at the bottom) is skipped silently.
+ * - A row matching a pyau already in the registry (same ward, same address) is not added again, so the same file can
+ *   be uploaded twice without creating duplicates.
  */
 export async function importPyauCsv(csvContent: string): Promise<PyauImportResult> {
-  const records: string[][] = parse(csvContent, { columns: false, skip_empty_lines: true, from_line: 2, relax_column_count: true });
+  const all: string[][] = parse(csvContent.replace(/^\uFEFF/, ""), { columns: false, skip_empty_lines: true, relax_column_count: true });
+  const header = all[0] ?? [];
+  const records = all.slice(1);
+
+  const pos = new Map<Col, number>();
+  header.forEach((h, i) => {
+    const c = columnFor(h);
+    if (c && !pos.has(c)) pos.set(c, i);
+  });
+  const byHeader = pos.has("ward") && pos.has("address");
+  // In the original sheet the second status column ("(प्याऊ की स्थिति (बंद )") being filled MEANS not working; in the
+  // later layout "Remarks on functionality" is just a remark.
+  const notWorkingMeansClosed = byHeader ? (header[pos.get("notWorking") ?? -1]?.includes("बंद") ?? false) : true;
+  const cell = (row: string[], c: Col): string => {
+    const i = byHeader ? (pos.get(c) ?? -1) : LEGACY_POSITIONS[c];
+    return i >= 0 ? (row[i] ?? "").trim() : "";
+  };
 
   const wards = await attendanceWardRepository.listAll();
-  const wardByName = new Map(wards.map((w) => [w.ward_name.trim(), w]));
-  // Tracks the next serial sequence per ward in-memory during the
-  // import, seeded from what's already in the database - avoids a
-  // database round-trip per row to recompute the max sequence.
-  const nextSeqByWard = new Map<number, number>();
+  const wardByExact = new Map(wards.map((w) => [w.ward_name.trim().toLowerCase(), w]));
+  const wardNum = (label: string) => label.match(/\d+/)?.[0]?.replace(/^0+(?=\d)/, "") ?? null;
+  const wardByNum = new Map<string, (typeof wards)[number]>();
+  for (const w of wards) {
+    const n = /^(ward\s*(no\.?)?\s*)?\d+$/i.test(w.ward_name.trim()) ? wardNum(w.ward_name) : null;
+    if (n && !wardByNum.has(n)) wardByNum.set(n, w);
+  }
+  // New wards follow the naming already in use ("1" or "Ward 1").
+  const plainNumberNames = wards.some((w) => /^\d+$/.test(w.ward_name.trim()));
 
-  const result: PyauImportResult = { created: 0, errors: [] };
+  const existing = new Map<string, number>();
+  for (const p of await pyauRepository.listAll()) {
+    const k = addressKey(p.ward_id, p.location_address);
+    existing.set(k, (existing.get(k) ?? 0) + 1);
+  }
+
+  const nextSeqByWard = new Map<number, number>();
+  const result: PyauImportResult = { created: 0, alreadyInRegistry: 0, errors: [] };
 
   for (let i = 0; i < records.length; i++) {
     const row = records[i]!;
-    const rowNum = i + 2; // +1 for header, +1 for 1-indexing
+    const rowNum = i + 2;
     try {
-      const wardLabel = (row[0] ?? "").trim();
+      const wardLabel = cell(row, "ward");
+      const locationAddress = cell(row, "address") || null;
+      if (!wardLabel && !locationAddress) continue; // blank or totals row
       if (!wardLabel) {
         result.errors.push({ row: rowNum, message: "Missing Ward No" });
         continue;
       }
-
-      let ward = wardByName.get(wardLabel);
+      const num = wardNum(wardLabel);
+      let ward = wardByExact.get(wardLabel.toLowerCase()) ?? (num ? wardByNum.get(num) : undefined);
       if (!ward) {
-        ward = await attendanceWardRepository.create(wardLabel);
-        wardByName.set(wardLabel, ward);
+        ward = await attendanceWardRepository.create(num ? (plainNumberNames ? num : `Ward ${num}`) : wardLabel);
+        wardByExact.set(ward.ward_name.trim().toLowerCase(), ward);
+        if (num) wardByNum.set(num, ward);
       }
 
-      if (!nextSeqByWard.has(ward.id)) {
-        const maxSeq = await pyauRepository.maxSerialSequenceForWard(ward.id);
-        nextSeqByWard.set(ward.id, maxSeq + 1);
+      const key = addressKey(ward.id, locationAddress);
+      const already = existing.get(key) ?? 0;
+      if (already > 0) {
+        existing.set(key, already - 1);
+        result.alreadyInRegistry++;
+        continue;
       }
+
+      if (!nextSeqByWard.has(ward.id)) nextSeqByWard.set(ward.id, (await pyauRepository.maxSerialSequenceForWard(ward.id)) + 1);
       const seq = nextSeqByWard.get(ward.id)!;
-      const serialNumber = `W${wardLabel}-${String(seq).padStart(2, "0")}`;
       nextSeqByWard.set(ward.id, seq + 1);
+      const serialNumber = `W${num ?? wardLabel}-${String(seq).padStart(2, "0")}`;
 
-      const locationAddress = (row[2] ?? "").trim() || null;
+      // Has water tank: a count (0/1/2/3); text such as "0(Ground)" or "Only Submersible" is kept as a remark.
+      const tankRaw = cell(row, "tank");
+      const overheadTankCount = intOrNull(tankRaw) ?? (tankRaw.match(/^(\d+)/) ? parseInt(tankRaw, 10) : 0);
+      const tankRemark = tankRaw && intOrNull(tankRaw) === null ? `Water tank: "${tankRaw}"` : null;
 
-      const tankRaw = (row[3] ?? "").trim();
-      let overheadTankCount = 0;
-      let tankRemark: string | null = null;
-      if (tankRaw && /^\d+$/.test(tankRaw)) {
-        overheadTankCount = parseInt(tankRaw, 10);
-      } else if (tankRaw) {
-        tankRemark = `Tank field (unparsed): "${tankRaw}"`;
-      }
+      const statusRaw = cell(row, "status").toLowerCase();
+      const notWorkingRaw = cell(row, "notWorking");
+      const notWorkingText = notWorkingRaw && !/^\d+$/.test(notWorkingRaw) ? notWorkingRaw : null;
+      const functionalStatus: "functional" | "non_functional" =
+        /not\s*working|non[-\s]*functional|बंद/.test(statusRaw) || (notWorkingMeansClosed && !!notWorkingRaw)
+          ? "non_functional"
+          : "functional";
 
-      const workingRaw = (row[4] ?? "").trim().toLowerCase();
-      const notWorkingRaw = (row[5] ?? "").trim();
-      const functionalStatus: "functional" | "non_functional" = workingRaw === "not working" || notWorkingRaw ? "non_functional" : "functional";
+      const structureRaw = cell(row, "structure").toLowerCase();
+      const structureType: "pcc_structure" | "iron_stand" | "nothing" | null = structureRaw.includes("pcc")
+        ? "pcc_structure"
+        : structureRaw.includes("iron")
+          ? "iron_stand"
+          : structureRaw === "nothing" || structureRaw === "none"
+            ? "nothing"
+            : null;
 
-      const structureRaw = (row[6] ?? "").trim().toLowerCase();
-      const structureType: "pcc_structure" | "iron_stand" | "nothing" | null =
-        structureRaw === "pcc structure" ? "pcc_structure" : structureRaw === "iron stand" ? "iron_stand" : structureRaw === "nothing" ? "nothing" : null;
-
-      const tankStandType = (row[7] ?? "").trim() || null;
-
-      const housesServedRaw = (row[9] ?? "").trim();
-      const housesServed = /^\d+$/.test(housesServedRaw) ? parseInt(housesServedRaw, 10) : null;
-
-      // Optional trailing columns - every field the individual "Add
-      // One Pyau" form supports, so the bulk upload isn't limited to
-      // a narrower set of fields than manual entry.
-      const schemeName = (row[10] ?? "").trim() || null;
-      const pumpDetails = (row[11] ?? "").trim() || null;
-      const boringDepthRaw = (row[12] ?? "").trim();
-      const boringDepthFeet = boringDepthRaw && /^\d+(\.\d+)?$/.test(boringDepthRaw) ? parseFloat(boringDepthRaw) : null;
-      const casingDetails = (row[13] ?? "").trim() || null;
-      const installedDateRaw = (row[14] ?? "").trim();
-      const installedDate = /^\d{4}-\d{2}-\d{2}$/.test(installedDateRaw) ? installedDateRaw : null;
-      const builderName = (row[15] ?? "").trim() || null;
-      const builderContact = (row[16] ?? "").trim() || null;
-      const remarksColumnRaw = (row[17] ?? "").trim() || null;
-
-      const remarksParts = [
-        tankRemark,
-        notWorkingRaw && !/^\d+$/.test(notWorkingRaw) ? notWorkingRaw : null,
-        remarksColumnRaw,
-      ].filter(Boolean);
-      const remarks = remarksParts.length > 0 ? remarksParts.join(" | ") : null;
-
-      const latitudeRaw = (row[18] ?? "").trim();
-      const latitude = latitudeRaw && /^-?\d+(\.\d+)?$/.test(latitudeRaw) ? parseFloat(latitudeRaw) : null;
-      const longitudeRaw = (row[19] ?? "").trim();
-      const longitude = longitudeRaw && /^-?\d+(\.\d+)?$/.test(longitudeRaw) ? parseFloat(longitudeRaw) : null;
+      const installedRaw = cell(row, "installed");
+      const remarks = [tankRemark, notWorkingText, cell(row, "remarks") || null].filter(Boolean).join(" | ") || null;
 
       await pyauRepository.create({
         wardId: ward.id,
         serialNumber,
         locationAddress,
-        latitude,
-        longitude,
-        schemeName,
+        latitude: numOrNull(cell(row, "lat")),
+        longitude: numOrNull(cell(row, "lng")),
+        schemeName: cell(row, "scheme") || null,
         overheadTankCount,
-        housesServed,
+        housesServed: intOrNull(cell(row, "houses")),
+        waterTapCount: intOrNull(cell(row, "taps")),
+        standpostCount: intOrNull(cell(row, "standposts")),
         structureType,
-        tankStandType,
-        pumpDetails,
-        boringDepthFeet,
-        casingDetails,
-        installedDate,
-        builderName,
-        builderContact,
+        tankStandType: cell(row, "tankStand") || null,
+        pumpDetails: cell(row, "pump") || null,
+        boringDepthFeet: numOrNull(cell(row, "boring")),
+        casingDetails: cell(row, "casing") || null,
+        installedDate: /^\d{4}-\d{2}-\d{2}$/.test(installedRaw) ? installedRaw : null,
+        builderName: cell(row, "builderName") || null,
+        builderContact: cell(row, "builderContact") || null,
         remarks,
         initialFunctionalStatus: functionalStatus,
       });

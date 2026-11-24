@@ -6,6 +6,7 @@ import { AlertCircle, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Ligh
 import { SiteHeader } from "@/components/site-header";
 import { SiteFooter } from "@/components/site-footer";
 import { PendingPill, ReportStageCell } from "@/components/public-reports/report-stage";
+import { ReportByLocation } from "@/components/public-reports/report-by-location";
 import {
   clearSession,
   fetchMyReports,
@@ -14,6 +15,7 @@ import {
   fetchWards,
   openSession,
   reportFault,
+  reportFaultByLocation,
   savedSession,
   type LightRow,
   type MyReport,
@@ -193,6 +195,8 @@ export default function PublicStreetlightPage() {
   const [wardData, setWardData] = useState<{ streets: StreetRow[]; highMasts: LightRow[] } | null>(null);
   const [tab, setTab] = useState<"lights" | "mine">("lights");
   const [mine, setMine] = useState<MyReport[] | null>(null);
+  const [locKind, setLocKind] = useState<"streetlight" | "high_mast" | "">("");
+  const [locSwitch, setLocSwitch] = useState<SwitchSeen | "">("");
 
   useEffect(() => {
     setSession(savedSession());
@@ -397,6 +401,42 @@ export default function PublicStreetlightPage() {
                         </button>
                       ))}
                     </div>
+
+                    <ReportByLocation
+                      what="streetlight / High Mast"
+                      loadWards={() => fetchWards().then((w) => w.map((x) => ({ id: Number(x.wardId), name: x.wardName })))}
+                      defaultWardId={session.homeWardId ?? null}
+                      extraProblem={() => (!locKind ? "Choose streetlight or High Mast." : !locSwitch ? "Choose the switch status." : null)}
+                      extra={
+                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                          <div>
+                            <label className="mb-1 block text-xs font-medium text-slate-600">Kind of light</label>
+                            <select value={locKind} onChange={(e) => setLocKind(e.target.value as "streetlight" | "high_mast" | "")} className={inputClass}>
+                              <option value="">Choose</option>
+                              <option value="streetlight">Streetlight</option>
+                              <option value="high_mast">High Mast</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="mb-1 block text-xs font-medium text-slate-600">Switch status you saw</label>
+                            <select value={locSwitch} onChange={(e) => setLocSwitch(e.target.value as SwitchSeen)} className={inputClass}>
+                              <option value="">Choose</option>
+                              {SWITCH_OPTIONS.map((o) => (
+                                <option key={o.value} value={o.value}>
+                                  {o.label}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
+                      }
+                      send={async (r) => {
+                        await reportFaultByLocation({ ...r, lightKind: locKind as "streetlight" | "high_mast", switchStatus: locSwitch as SwitchSeen });
+                        setLocKind("");
+                        setLocSwitch("");
+                      }}
+                      onSent={reported}
+                    />
 
                     {!openWard ? (
                       <div className={cardClass}>

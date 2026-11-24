@@ -87,6 +87,19 @@ export type SwitchSeen = "working" | "not_working" | "automatic" | "joint" | "un
 export const reportFault = (body: { lightId: number; nonFunctionalSince: string; switchStatus: SwitchSeen; remarks: string | null }) =>
   call<{ reportId: number; serialNumber: string }>("/faults", { method: "POST", body: JSON.stringify(body) }, "Could not send the report.");
 
+/** A light the citizen cannot find in the list, reported by its GPS location (the officer identifies it). */
+export const reportFaultByLocation = (body: {
+  wardId: number;
+  latitude: number;
+  longitude: number;
+  accuracyM: number | null;
+  landmark: string;
+  nonFunctionalSince: string;
+  remarks: string | null;
+  lightKind: "streetlight" | "high_mast";
+  switchStatus: SwitchSeen;
+}) => call<{ reportId: number }>("/faults-by-location", { method: "POST", body: JSON.stringify(body) }, "Could not send the report.");
+
 export interface MyReport {
   id: string;
   reported_at: string;

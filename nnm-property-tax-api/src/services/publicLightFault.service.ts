@@ -144,3 +144,42 @@ export async function reportFault(session: PublicLightToken, input: PublicFaultI
 export async function myReports(session: PublicLightToken) {
   return myPublicReports(session.phone, "light");
 }
+
+/** A complaint by GPS location, when the citizen cannot find the asset in the list (the City Manager identifies it). */
+export interface LocationReportInput {
+  wardId: number;
+  latitude: number;
+  longitude: number;
+  accuracyM: number | null;
+  landmark: string;
+  nonFunctionalSince: string;
+  remarks?: string | null;
+}
+
+async function assertWardExists(wardId: number) {
+  const { rows } = await pool.query(`SELECT 1 FROM attendance_wards WHERE id = $1`, [wardId]);
+  if (!rows[0]) throw ApiError.badRequest("Choose the ward.");
+}
+
+export async function reportFaultByLocation(
+  session: PublicLightToken,
+  input: LocationReportInput & { lightKind: "streetlight" | "high_mast"; switchStatus: "working" | "not_working" | "automatic" | "joint" | "unknown" },
+) {
+  checkSinceDate(input.nonFunctionalSince);
+  await assertWardExists(input.wardId);
+  if ((await reportsToday(session.phone, "light")) >= MAX_REPORTS_PER_DAY) {
+    throw ApiError.badRequest(`At most ${MAX_REPORTS_PER_DAY} lights can be reported from one mobile number in a day.`);
+  }
+  const r = await submit({
+    assetType: "light",
+    assetId: null,
+    wardId: input.wardId,
+    phone: session.phone,
+    holdingNo: session.holdingNo,
+    nonFunctionalSince: input.nonFunctionalSince,
+    switchStatus: input.switchStatus,
+    remarks: input.remarks,
+    location: { lat: input.latitude, lng: input.longitude, accuracy: input.accuracyM, landmark: input.landmark, lightKind: input.lightKind },
+  });
+  return { reportId: r.reportId };
+}

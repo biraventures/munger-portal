@@ -1,12 +1,14 @@
 import type { Request, Response } from "express";
 import { z } from "zod";
 import { attendanceWardRepository, attendanceShiftRepository } from "../repositories/attendanceWard.repository";
+import { filterByWard } from "../services/wardScope";
 import { asyncHandler } from "../middleware/asyncHandler";
 import { ApiError } from "../utils/ApiError";
 
 /** GET /api/v1/attendance/wards - any authenticated attendance user. */
-export const getAttendanceWards = asyncHandler(async (_req: Request, res: Response) => {
-  const wards = await attendanceWardRepository.listAll();
+export const getAttendanceWards = asyncHandler(async (req: Request, res: Response) => {
+  // A JE / AE gets only the wards assigned to them, so every ward drop-down on their screens is limited too.
+  const wards = await filterByWard(req, await attendanceWardRepository.listAll(), (w) => w.id);
   res.status(200).json({ wards: wards.map((w) => ({ id: w.id, wardName: w.ward_name })) });
 });
 

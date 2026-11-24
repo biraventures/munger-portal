@@ -17,6 +17,8 @@ export interface FaceResult {
 }
 
 const DET_PROB = 0.8;
+/** A head turned part-way is detected with less confidence - the turned photo is checked at this threshold. */
+export const DET_PROB_TURNED = 0.5;
 
 function base(): string {
   if (!env.COMPREFACE_API_KEY) {
@@ -73,8 +75,8 @@ export async function addExample(subject: string, image: Buffer): Promise<string
 }
 
 /** 1:1 check of a photo against one stored example. Returns every face found (caller insists on exactly one). */
-export async function verifyAgainst(imageId: string, image: Buffer): Promise<FaceResult[]> {
-  const data = await call("POST", `/api/v1/recognition/faces/${encodeURIComponent(imageId)}/verify?det_prob_threshold=${DET_PROB}&face_plugins=pose`, image);
+export async function verifyAgainst(imageId: string, image: Buffer, detProb = DET_PROB): Promise<FaceResult[]> {
+  const data = await call("POST", `/api/v1/recognition/faces/${encodeURIComponent(imageId)}/verify?det_prob_threshold=${detProb}&face_plugins=pose`, image);
   return faces(data).map(toResult);
 }
 

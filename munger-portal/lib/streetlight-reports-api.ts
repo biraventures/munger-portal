@@ -1,4 +1,10 @@
 import { getAdminToken } from "./admin-auth";
+import { getAttendanceToken } from "./attendance-auth";
+
+/** Which login is asking: the admin portal, or asset management (where a JE / AE gets only their wards). */
+export type ReportPortal = "admin" | "attendance";
+const reportUrl = (portal: ReportPortal, kind: StreetlightReportKind) =>
+  portal === "attendance" ? `${API_BASE_URL}/streetlight/reports/${kind}` : `${API_BASE_URL}/admin/streetlight-reports/${kind}`;
 
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_PROPERTY_TAX_API_URL || "http://localhost:4000/api/v1";
@@ -20,14 +26,14 @@ export interface StreetlightReportTable {
   generatedOn: string;
 }
 
-function authHeaders(): HeadersInit {
-  const token = getAdminToken();
+function authHeaders(portal: ReportPortal = "admin"): HeadersInit {
+  const token = portal === "attendance" ? getAttendanceToken() : getAdminToken();
   if (!token) throw new Error("Not logged in — please log in again.");
   return { Authorization: `Bearer ${token}` };
 }
 
-export async function fetchStreetlightReport(kind: StreetlightReportKind): Promise<StreetlightReportTable> {
-  const res = await fetch(`${API_BASE_URL}/admin/streetlight-reports/${kind}`, { headers: authHeaders() });
+export async function fetchStreetlightReport(kind: StreetlightReportKind, portal: ReportPortal = "admin"): Promise<StreetlightReportTable> {
+  const res = await fetch(reportUrl(portal, kind), { headers: authHeaders(portal) });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     throw new Error(body.error || "Could not load this report.");
@@ -37,8 +43,8 @@ export async function fetchStreetlightReport(kind: StreetlightReportKind): Promi
 }
 
 /** The download endpoint needs the Bearer header, so it's fetched as a blob and saved through a temporary link rather than a plain <a href>. */
-export async function downloadStreetlightReportCsv(kind: StreetlightReportKind): Promise<void> {
-  const res = await fetch(`${API_BASE_URL}/admin/streetlight-reports/${kind}?format=csv`, { headers: authHeaders() });
+export async function downloadStreetlightReportCsv(kind: StreetlightReportKind, portal: ReportPortal = "admin"): Promise<void> {
+  const res = await fetch(`${reportUrl(portal, kind)}?format=csv`, { headers: authHeaders(portal) });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     throw new Error(body.error || "Could not download this report.");

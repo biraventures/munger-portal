@@ -31,10 +31,14 @@ export interface StreetStatusRow {
  * (see WARD_SCOPED_ROLES in attendance.types.ts); omit for every
  * ward, as the cross-ward oversight roles get.
  */
-export async function buildWardStatusDashboard(agencyName?: string, wardId?: number, lightType?: "streetlight" | "high_mast"): Promise<WardStatusRow[]> {
+export async function buildWardStatusDashboard(
+  agencyName?: string,
+  wardId?: number,
+  lightType?: "streetlight" | "high_mast",
+): Promise<WardStatusRow[]> {
   // An agency filter (Nagar Nigam / EESL) is about streetlights - High Mast towers are left out of it, even when the
   // tower was installed by the same agency. lightType narrows to one kind; neither = streetlights and High Masts together.
-  const type = agencyName ? "streetlight" : lightType ?? null;
+  const type = agencyName ? "streetlight" : (lightType ?? null);
   const { rows } = await pool.query<WardStatusRow>(
     `SELECT
        w.id AS "wardId", w.ward_name AS "wardName",
@@ -109,6 +113,7 @@ export interface SegmentLightStatusRow {
   faultHistory: SegmentLightFaultHistoryRow[];
   lightSerialSeq: number | null;
   switchStatus: "working" | "not_working" | "automatic" | "joint" | null;
+  lampType: string;
   /** Optional GPS location recorded for this specific light (distinct from a fault report's own GPS) - null until someone sets it from the status dashboard. */
   latitude: number | null;
   longitude: number | null;
@@ -129,8 +134,9 @@ export async function buildSegmentLightStatus(segmentId: number): Promise<Segmen
     switch_status: "working" | "not_working" | "automatic" | "joint" | null;
     latitude: number | null;
     longitude: number | null;
+    lamp_type: string | null;
   }>(
-    `SELECT id, serial_number, active, light_serial_seq, switch_status, latitude, longitude FROM lights WHERE segment_id = $1 AND deleted_at IS NULL ORDER BY light_serial_seq ASC, light_serial_suffix ASC NULLS FIRST`,
+    `SELECT id, serial_number, active, light_serial_seq, switch_status, latitude, longitude, lamp_type FROM lights WHERE segment_id = $1 AND deleted_at IS NULL ORDER BY light_serial_seq ASC, light_serial_suffix ASC NULLS FIRST`,
     [segmentId],
   );
   if (lights.length === 0) return [];
@@ -191,6 +197,7 @@ export async function buildSegmentLightStatus(segmentId: number): Promise<Segmen
       faultHistory: history,
       lightSerialSeq: l.light_serial_seq,
       switchStatus: l.switch_status,
+      lampType: l.lamp_type ?? "led_panel_tall",
       latitude: l.latitude == null ? null : Number(l.latitude),
       longitude: l.longitude == null ? null : Number(l.longitude),
     };

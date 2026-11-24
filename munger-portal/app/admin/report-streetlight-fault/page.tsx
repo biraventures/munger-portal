@@ -16,7 +16,7 @@ import {
 import { getCurrentGpsPosition } from "@/lib/geolocation";
 import type { AdminRole } from "@/lib/admin-auth";
 
-const REPORTER_ROLES: AdminRole[] = ["tax_daroga", "tax_surveyor", "tax_collector", "stall_prabhari", "je_mechanical", "ae_mechanical", "commissioner", "deputy_commissioner", "city_manager"];
+const REPORTER_ROLES: AdminRole[] = ["tax_daroga", "tax_surveyor", "tax_collector", "stall_prabhari", "commissioner", "deputy_commissioner", "city_manager"];
 const inputClass = "w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-nnm-blue focus:ring-offset-1";
 
 export default function ReportStreetlightFaultPage() {

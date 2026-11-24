@@ -1,22 +1,31 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AlertCircle, Loader2, Printer } from "lucide-react";
+import { AlertCircle, AlertTriangle, CheckCircle2, History, Loader2, Printer, Upload, X } from "lucide-react";
+import { PhotoSourceButtons, PickedFilePreview } from "@/components/admin/photo-source-buttons";
 import { AdminHeader } from "@/components/admin-header";
 import { TlNoticePages } from "@/components/admin/tl-notice-sheet";
 import { useAdminGuard } from "@/lib/use-admin-guard";
 import { printElementInNewWindow } from "@/lib/print-in-new-window";
 import {
+  decideTlReceivingRemoval,
   fetchTlNotice,
+  fetchTlReceivingLog,
   fetchTlSurveys,
   licenseYearOptions,
   markTlComplied,
+  openTlReceivingCopy,
+  openTlRemovedCopy,
   openTlSurveyFile,
+  requestTlReceivingRemoval,
+  uploadTlReceivingCopy,
   readLicenceFile,
+  reissueTlNotice,
   TL_STATUS,
   validTillOptions,
   type FileUpload,
   type TlNotice,
+  type TlReceivingLogEntry,
   type TlSurvey,
 } from "@/lib/tl-notice-api";
 
@@ -30,6 +39,19 @@ const FILTERS = [
   { value: "", label: "All" },
 ];
 
+const RECEIVING_FILTERS = [
+  { value: "", label: "All" },
+  { value: "missing", label: "Not uploaded" },
+  { value: "uploaded", label: "Uploaded" },
+  { value: "removal", label: "Removal waiting for DMC" },
+];
+const LOG_LABEL: Record<TlReceivingLogEntry["action"], string> = {
+  uploaded: "Uploaded",
+  removal_requested: "Removal asked",
+  removal_rejected: "Removal rejected by DMC",
+  removed: "Removed with DMC's approval",
+};
+
 function fmt(d: string | null): string {
   return d ? new Date(d).toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata" }) : "-";
 }
@@ -37,6 +59,8 @@ function fmt(d: string | null): string {
 export default function TlNoticesPage() {
   const admin = useAdminGuard();
   const [filter, setFilter] = useState("");
+  const [receiving, setReceiving] = useState("");
+  const [logFor, setLogFor] = useState<{ noticeNo: string; log: TlReceivingLogEntry[] } | null>(null);
   const [q, setQ] = useState("");
   const [rows, setRows] = useState<TlSurvey[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -47,10 +71,17 @@ export default function TlNoticesPage() {
   const [cFile, setCFile] = useState<FileUpload | null>(null);
   const [busy, setBusy] = useState(false);
   const [reprint, setReprint] = useState<TlNotice | null>(null);
+  const [receivingFor, setReceivingFor] = useState<{
+    id: string;
+    noticeNo: string;
+    business: string | null;
+  } | null>(null);
+  const [rFile, setRFile] = useState<{ file: File; url: string | null } | null>(null);
+  const [servedOn, setServedOn] = useState("");
 
   function load() {
     setRows(null);
-    fetchTlSurveys({ status: filter || undefined, q: q.trim() || undefined })
+    fetchTlSurveys({ status: filter || undefined, q: q.trim() || undefined, receiving: receiving || undefined })
       .then(setRows)
       .catch((err) => setError(err instanceof Error ? err.message : "Could not load."));
   }
@@ -58,7 +89,7 @@ export default function TlNoticesPage() {
   useEffect(() => {
     if (admin && ALLOWED.includes(admin.role)) load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [admin, filter]);
+  }, [admin, filter, receiving]);
 
   useEffect(() => {
     if (!reprint) return;
@@ -78,17 +109,77 @@ export default function TlNoticesPage() {
   }
   const isTc = admin.role === "tax_collector";
   const canComply = isTc || admin.role === "city_manager";
+  // Receiving copies: the Tax Collector who raised the notice (a Tax Collector sees only their own), the Trade Licence
+  // Prabhari or the City Manager upload; once uploaded only the DMC can approve its removal.
+  const canUploadReceiving = isTc || admin.role === "trade_license_nodal" || admin.role === "city_manager";
+  const canAskRemoval = canUploadReceiving || admin.role === "commissioner";
+  const canReissue = canUploadReceiving;
+  const isDmc = admin.role === "deputy_commissioner";
+
+  async function askRemoval(noticeId: string, noticeNo: string) {
+    const reason = window.prompt(`Why should the receiving copy of ${noticeNo} be removed? (The DMC approves the removal.)`);
+    if (!reason?.trim()) return;
+    try {
+      await requestTlReceivingRemoval(noticeId, reason.trim());
+      load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not send the request.");
+    }
+  }
+  async function decideRemoval(noticeId: string, approve: boolean) {
+    const remark = window.prompt(approve ? "Approve the removal - remark (optional):" : "Reject the removal - remark (optional):");
+    if (remark === null) return;
+    try {
+      await decideTlReceivingRemoval(noticeId, approve, remark.trim() || null);
+      load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not save.");
+    }
+  }
+  async function showLog(noticeId: string, noticeNo: string) {
+    try {
+      setLogFor({ noticeNo, log: await fetchTlReceivingLog(noticeId) });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not load the history.");
+    }
+  }
 
   async function saveComplied() {
     if (!complyFor || !cFile) return;
     setBusy(true);
     setError(null);
     try {
-      await markTlComplied(complyFor.id, { licenseYear: cYear, licenseValidTill: cTill, licenseNo: cNo.trim() || undefined, photo: cFile });
+      await markTlComplied(complyFor.id, {
+        licenseYear: cYear,
+        licenseValidTill: cTill,
+        licenseNo: cNo.trim() || undefined,
+        photo: cFile,
+      });
       setComplyFor(null);
       load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not save.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function saveReceiving() {
+    if (!receivingFor || !rFile) return;
+    if (!servedOn) return setError("Enter the date the notice was served (the date on the signed slip).");
+    setBusy(true);
+    setError(null);
+    try {
+      const upload = await readLicenceFile(rFile.file);
+      const pos = await new Promise<GeolocationPosition | null>((resolve) =>
+        navigator.geolocation ? navigator.geolocation.getCurrentPosition(resolve, () => resolve(null), { timeout: 10000 }) : resolve(null),
+      );
+      await uploadTlReceivingCopy(receivingFor.id, upload, servedOn, pos?.coords.latitude ?? null, pos?.coords.longitude ?? null);
+      setReceivingFor(null);
+      setRFile(null);
+      load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not upload.");
     } finally {
       setBusy(false);
     }
@@ -103,6 +194,12 @@ export default function TlNoticesPage() {
   }
 
   const counts = rows?.reduce<Record<string, number>>((acc, r) => ({ ...acc, [r.status]: (acc[r.status] ?? 0) + 1 }), {});
+  const allNotices = rows?.flatMap((r) => r.notices ?? []) ?? [];
+  const noticeTotals = {
+    total: allNotices.length,
+    received: allNotices.filter((n) => n.receivingUploadedAt).length,
+    removal: allNotices.filter((n) => n.removalRequestedAt).length,
+  };
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -110,8 +207,8 @@ export default function TlNoticesPage() {
       <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
         <h1 className="mb-1 text-2xl font-semibold text-slate-900">{isTc ? "My Trade Licence Visits" : "Trade Licence Notices"}</h1>
         <p className="mb-6 text-sm text-slate-500">
-          Businesses checked by Tax Collectors. A 1st notice gives 14 days; if the licence is not obtained, a 2nd notice gives another 14 days, after
-          which the business is listed for legal action. When the licence is produced, record it here with a copy.
+          Businesses checked by Tax Collectors. A 1st notice gives 14 days; if the licence is not obtained, a 2nd notice gives another 14
+          days, after which the business is listed for legal action. When the licence is produced, record it here with a copy.
         </p>
 
         {error && (
@@ -119,6 +216,15 @@ export default function TlNoticesPage() {
             <AlertCircle className="h-4 w-4 shrink-0" />
             {error}
           </div>
+        )}
+
+        {rows && rows.some((r) => r.application_number) && (
+          <p className="mb-3 rounded-md bg-green-50 px-3 py-2 text-sm text-green-800">
+            {rows.filter((r) => r.application_number).length} trade licence application(s) received against {isTc ? "your" : "these"}{" "}
+            notices - counted in
+            {isTc ? " your" : " the Tax Collector's"} collection. Applications that came without a notice are automatic and not credited to
+            a Tax Collector.
+          </p>
         )}
 
         <div className="mb-4 flex flex-wrap items-center gap-2">
@@ -139,9 +245,39 @@ export default function TlNoticesPage() {
             }}
             className="ml-auto flex gap-2"
           >
-            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Holding / business / name" className="rounded-md border border-slate-300 px-2 py-1.5 text-sm" />
+            <input
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Holding / business / name"
+              className="rounded-md border border-slate-300 px-2 py-1.5 text-sm"
+            />
             <button className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm">Search</button>
           </form>
+        </div>
+
+        <div className="mb-4 flex flex-wrap items-center gap-2 text-sm">
+          <span className="text-slate-500">Receiving copy:</span>
+          {RECEIVING_FILTERS.map((f) => (
+            <button
+              key={f.value}
+              onClick={() => setReceiving(f.value)}
+              className={`rounded-md px-3 py-1 text-xs font-medium ${receiving === f.value ? "bg-slate-800 text-white" : "border border-slate-300 bg-white text-slate-700"}`}
+            >
+              {f.label}
+            </button>
+          ))}
+          {rows && noticeTotals.total > 0 && (
+            <span className="ml-auto text-xs text-slate-600">
+              Notices shown: {noticeTotals.total} · receiving uploaded <b className="text-green-700">{noticeTotals.received}</b> · not
+              uploaded <b className="text-red-700">{noticeTotals.total - noticeTotals.received}</b>
+              {noticeTotals.removal > 0 && (
+                <>
+                  {" "}
+                  · removal waiting for DMC <b className="text-amber-700">{noticeTotals.removal}</b>
+                </>
+              )}
+            </span>
+          )}
         </div>
 
         {!rows ? (
@@ -170,7 +306,12 @@ export default function TlNoticesPage() {
                     <td className="p-2">
                       {r.holding_no}
                       {r.ward && <span className="block text-xs text-slate-400">Ward {r.ward}</span>}
-                      {r.is_nnm_shop && <span className="block text-xs font-semibold text-amber-700">NNM stall/shop{r.nnm_shop_no ? ` ${r.nnm_shop_no}` : ""}</span>}
+                      {r.is_nnm_shop && (
+                        <span className="block text-xs font-semibold text-amber-700">
+                          NNM stall/shop
+                          {r.nnm_shop_no ? ` ${r.nnm_shop_no}` : ""}
+                        </span>
+                      )}
                     </td>
                     <td className="p-2">
                       {r.business_name ?? <span className="text-slate-400">-</span>}
@@ -183,9 +324,24 @@ export default function TlNoticesPage() {
                         </span>
                       )}
                     </td>
-                    <td className="p-2">{r.phone ?? "-"}</td>
                     <td className="p-2">
-                      <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${TL_STATUS[r.status]?.tone}`}>{TL_STATUS[r.status]?.label ?? r.status}</span>
+                      {r.phone ?? "-"}
+                      {r.latitude && r.longitude && (
+                        <a
+                          href={`https://www.google.com/maps?q=${r.latitude},${r.longitude}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="mt-0.5 block text-xs text-nnm-blue hover:underline"
+                          title={r.gps_accuracy_m ? `Within about ${Number(r.gps_accuracy_m)} m` : undefined}
+                        >
+                          📍 Shop on map
+                        </a>
+                      )}
+                    </td>
+                    <td className="p-2">
+                      <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${TL_STATUS[r.status]?.tone}`}>
+                        {TL_STATUS[r.status]?.label ?? r.status}
+                      </span>
                       {r.status === "complied" && (
                         <span className="mt-1 block text-xs text-slate-500">
                           {r.complied_license_year}
@@ -195,13 +351,135 @@ export default function TlNoticesPage() {
                       )}
                     </td>
                     <td className="p-2 text-xs">
-                      {(r.notices ?? []).map((n) => (
-                        <button key={n.id} onClick={() => fetchTlNotice(n.id).then(setReprint).catch((e) => setError(e.message))} className="block text-left text-nnm-blue hover:underline" title="Print a copy">
-                          <Printer className="mr-1 inline h-3 w-3" />
-                          {n.noticeNo} · due {fmt(n.dueOn)}
-                          {!n.printedAt && <span className="text-amber-700"> (not printed)</span>}
-                        </button>
-                      ))}
+                      {r.application_number && (
+                        <p className="mb-1.5 rounded bg-green-50 px-1.5 py-1 font-medium text-green-800">
+                          Application {r.application_number} received {fmt(r.application_received_at)} ({r.application_status})
+                        </p>
+                      )}
+                      {(r.notices ?? []).map((n) =>
+                        n.supersededAt ? (
+                          <div key={n.id} className="mb-1.5 text-slate-400">
+                            <span className="line-through">{n.noticeNo}</span> - reissued {fmt(n.supersededAt)}
+                            {n.supersededBy ? ` by ${n.supersededBy}` : ""}
+                            {n.reissueReason ? `: ${n.reissueReason}` : ""}
+                          </div>
+                        ) : (
+                          <div key={n.id} className="mb-1.5">
+                            <button
+                              onClick={() =>
+                                fetchTlNotice(n.id)
+                                  .then(setReprint)
+                                  .catch((e) => setError(e.message))
+                              }
+                              className="block text-left text-nnm-blue hover:underline"
+                              title="Print a copy"
+                            >
+                              <Printer className="mr-1 inline h-3 w-3" />
+                              {n.noticeNo} · {n.level === 2 ? "2nd" : "1st"} notice
+                              {!n.printedAt && <span className="text-amber-700"> (not printed)</span>}
+                            </button>
+                            <span className="block text-slate-600">
+                              {n.servedOn ? (
+                                <>
+                                  Served {fmt(n.servedOn)} · last date <b>{fmt(n.dueOn)}</b>
+                                </>
+                              ) : (
+                                <span className="text-amber-700">Not served yet - 14 days start from the date of service</span>
+                              )}
+                            </span>
+                            {canReissue &&
+                              ((n.level === 1 && r.status === "notice_1") ||
+                                (n.level === 2 && (r.status === "notice_2" || r.status === "legal_action_due"))) && (
+                                <button
+                                  onClick={async () => {
+                                    const reason = window.prompt(
+                                      `Reissue the ${n.level === 2 ? "second" : "first"} notice ${n.noticeNo}? A fresh notice with a new number and today's date will be made, to be printed and served again. Reason (e.g. not served, business closed at the time):`,
+                                    );
+                                    if (!reason?.trim()) return;
+                                    try {
+                                      const out = await reissueTlNotice(n.id, reason.trim());
+                                      window.alert(`New notice ${out.noticeNo} made - it is in the print list.`);
+                                      load();
+                                    } catch (err) {
+                                      setError(err instanceof Error ? err.message : "Could not reissue.");
+                                    }
+                                  }}
+                                  className="mt-0.5 block font-semibold text-violet-700 hover:underline"
+                                >
+                                  Reissue {n.level === 2 ? "second" : "first"} notice
+                                </button>
+                              )}
+                            {n.receivingUploadedAt ? (
+                              <>
+                                <button
+                                  onClick={() => openTlReceivingCopy(n.id).catch((e) => setError(e.message))}
+                                  className="mt-0.5 flex items-center gap-1 text-left text-green-700 hover:underline"
+                                >
+                                  <CheckCircle2 className="h-3 w-3 shrink-0" /> Receiving copy - {fmt(n.receivingUploadedAt)}
+                                  {n.receivingBy ? `, ${n.receivingBy}` : ""}
+                                </button>
+                                {n.removalRequestedAt ? (
+                                  <span className="mt-0.5 block max-w-64 whitespace-normal text-amber-800">
+                                    <AlertTriangle className="mr-0.5 inline h-3 w-3" />
+                                    Removal asked by {n.removalRequestedBy} ({fmt(n.removalRequestedAt)}): {n.removalReason} - waiting for
+                                    DMC
+                                    {isDmc && (
+                                      <span className="mt-0.5 flex gap-2">
+                                        <button
+                                          onClick={() => decideRemoval(n.id, true)}
+                                          className="font-semibold text-red-700 hover:underline"
+                                        >
+                                          Approve removal
+                                        </button>
+                                        <button
+                                          onClick={() => decideRemoval(n.id, false)}
+                                          className="font-semibold text-slate-700 hover:underline"
+                                        >
+                                          Reject
+                                        </button>
+                                      </span>
+                                    )}
+                                  </span>
+                                ) : (
+                                  canAskRemoval && (
+                                    <button
+                                      onClick={() => askRemoval(n.id, n.noticeNo)}
+                                      className="mt-0.5 block text-slate-500 hover:underline"
+                                    >
+                                      Ask DMC to remove
+                                    </button>
+                                  )
+                                )}
+                              </>
+                            ) : canUploadReceiving ? (
+                              <button
+                                onClick={() => {
+                                  setRFile(null);
+                                  setServedOn("");
+                                  setReceivingFor({
+                                    id: n.id,
+                                    noticeNo: n.noticeNo,
+                                    business: r.business_name,
+                                  });
+                                }}
+                                className="mt-0.5 flex items-center gap-1 font-semibold text-amber-800 hover:underline"
+                              >
+                                <Upload className="h-3 w-3" /> Upload receiving copy
+                              </button>
+                            ) : (
+                              <span className="mt-0.5 block font-medium text-red-700">Receiving copy not uploaded</span>
+                            )}
+                            {(n.receivingUploadedAt || n.removedCount > 0) && (
+                              <button
+                                onClick={() => showLog(n.id, n.noticeNo)}
+                                className="mt-0.5 flex items-center gap-1 text-slate-500 hover:underline"
+                              >
+                                <History className="h-3 w-3" /> History{n.removedCount > 0 ? ` (${n.removedCount} removed)` : ""}
+                              </button>
+                            )}
+                          </div>
+                        ),
+                      )}
                     </td>
                     {!isTc && (
                       <td className="p-2 text-xs">
@@ -242,15 +520,109 @@ export default function TlNoticesPage() {
           </div>
         )}
 
+        {receivingFor && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+            <div className="w-full max-w-md space-y-3 rounded-xl bg-white p-5 text-sm">
+              <h2 className="text-lg font-semibold">Receiving copy - {receivingFor.noticeNo}</h2>
+              <p className="text-slate-500">
+                {receivingFor.business ? `${receivingFor.business}. ` : ""}
+                Take a photo of the bottom half of the notice signed by the business as received, or attach it (photo or PDF). Once uploaded
+                it can be removed only with the DMC&apos;s approval.
+              </p>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-600" htmlFor="tl-served-on">
+                  Date of service * (the date the business received the notice)
+                </label>
+                <input
+                  id="tl-served-on"
+                  type="date"
+                  value={servedOn}
+                  max={new Date(Date.now() + 5.5 * 3600000).toISOString().slice(0, 10)}
+                  onChange={(e) => setServedOn(e.target.value)}
+                  className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                />
+                <p className="mt-1 text-xs text-slate-500">The 14 days to obtain the licence run from this date.</p>
+              </div>
+              <div className="flex flex-col items-center gap-2 rounded-md border border-dashed border-slate-300 p-3">
+                {rFile && <PickedFilePreview file={rFile.file} url={rFile.url} label="Receiving copy" className="h-40 w-full max-w-xs" />}
+                <PhotoSourceButtons
+                  idBase="tl-receiving"
+                  document
+                  hasFile={!!rFile}
+                  onFile={(files) => {
+                    const f = files?.[0];
+                    if (f) setRFile({ file: f, url: f.type.startsWith("image/") ? URL.createObjectURL(f) : null });
+                  }}
+                />
+              </div>
+              <div className="flex justify-end gap-2">
+                <button onClick={() => setReceivingFor(null)} className="rounded-md border border-slate-300 px-3 py-1.5">
+                  Cancel
+                </button>
+                <button
+                  onClick={saveReceiving}
+                  disabled={busy || !rFile || !servedOn}
+                  className="inline-flex items-center gap-1 rounded-md bg-nnm-blue px-3 py-1.5 font-semibold text-white disabled:opacity-60"
+                >
+                  {busy && <Loader2 className="h-3 w-3 animate-spin" />}
+                  Upload
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {logFor && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setLogFor(null)}>
+            <div className="w-full max-w-md space-y-3 rounded-xl bg-white p-5 text-sm" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center justify-between">
+                <h2 className="text-lg font-semibold">Receiving copy history - {logFor.noticeNo}</h2>
+                <button onClick={() => setLogFor(null)} aria-label="Close" className="rounded p-1 hover:bg-slate-100">
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+              {logFor.log.length === 0 ? (
+                <p className="text-slate-400">Nothing yet.</p>
+              ) : (
+                <ul className="space-y-2">
+                  {logFor.log.map((l) => (
+                    <li key={l.id} className="border-b border-slate-100 pb-2">
+                      <p>
+                        <b>{LOG_LABEL[l.action]}</b> - {l.by_name ?? "-"},{" "}
+                        {new Date(l.at).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })}
+                      </p>
+                      {l.reason && <p className="text-xs text-slate-600">{l.reason}</p>}
+                      {l.has_removed_copy && (
+                        <button
+                          onClick={() => openTlRemovedCopy(l.id).catch((e) => setError(e.message))}
+                          className="text-xs text-nnm-blue hover:underline"
+                        >
+                          View the removed copy
+                        </button>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+        )}
+
         {complyFor && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
             <div className="w-full max-w-md space-y-3 rounded-xl bg-white p-5 text-sm">
               <h2 className="text-lg font-semibold">Licence obtained — {complyFor.business_name}</h2>
-              <p className="text-slate-500">Holding {complyFor.holding_no}. The licence must be valid for {complyFor.financial_year}.</p>
+              <p className="text-slate-500">
+                Holding {complyFor.holding_no}. The licence must be valid for {complyFor.financial_year}.
+              </p>
               <div className="grid grid-cols-2 gap-3">
                 <label className="text-xs text-slate-600">
                   Licence year
-                  <select value={cYear} onChange={(e) => setCYear(e.target.value)} className="mt-1 w-full rounded-md border border-slate-300 px-2 py-2 text-sm">
+                  <select
+                    value={cYear}
+                    onChange={(e) => setCYear(e.target.value)}
+                    className="mt-1 w-full rounded-md border border-slate-300 px-2 py-2 text-sm"
+                  >
                     {licenseYearOptions().map((y) => (
                       <option key={y}>{y}</option>
                     ))}
@@ -258,13 +630,23 @@ export default function TlNoticesPage() {
                 </label>
                 <label className="text-xs text-slate-600">
                   Valid till
-                  <select value={cTill} onChange={(e) => setCTill(e.target.value)} className="mt-1 w-full rounded-md border border-slate-300 px-2 py-2 text-sm">
+                  <select
+                    value={cTill}
+                    onChange={(e) => setCTill(e.target.value)}
+                    className="mt-1 w-full rounded-md border border-slate-300 px-2 py-2 text-sm"
+                  >
                     {validTillOptions(cYear).map((y) => (
                       <option key={y}>{y}</option>
                     ))}
                   </select>
                 </label>
-                <input value={cNo} onChange={(e) => setCNo(e.target.value)} placeholder="Licence no. (optional)" maxLength={50} className="col-span-2 rounded-md border border-slate-300 px-2 py-2" />
+                <input
+                  value={cNo}
+                  onChange={(e) => setCNo(e.target.value)}
+                  placeholder="Licence no. (optional)"
+                  maxLength={50}
+                  className="col-span-2 rounded-md border border-slate-300 px-2 py-2"
+                />
               </div>
               <input
                 type="file"
@@ -283,7 +665,11 @@ export default function TlNoticesPage() {
                 <button onClick={() => setComplyFor(null)} className="rounded-md border border-slate-300 px-3 py-1.5">
                   Cancel
                 </button>
-                <button onClick={saveComplied} disabled={busy || !cFile || cTill < complyFor.financial_year} className="inline-flex items-center gap-1 rounded-md bg-nnm-blue px-3 py-1.5 font-semibold text-white disabled:opacity-60">
+                <button
+                  onClick={saveComplied}
+                  disabled={busy || !cFile || cTill < complyFor.financial_year}
+                  className="inline-flex items-center gap-1 rounded-md bg-nnm-blue px-3 py-1.5 font-semibold text-white disabled:opacity-60"
+                >
                   {busy && <Loader2 className="h-3 w-3 animate-spin" />}
                   Save
                 </button>
@@ -295,7 +681,7 @@ export default function TlNoticesPage() {
         {reprint && (
           <div className="hidden">
             <div id="tl-reprint">
-              <TlNoticePages sheets={[{ key: reprint.id, n: reprint }]} />
+              <TlNoticePages notices={[reprint]} printerRole={admin.role} />
             </div>
           </div>
         )}

@@ -8,7 +8,7 @@ import { istDateString } from "../utils/istDate";
 import { fieldStaffRepository } from "../repositories/fieldStaff.repository";
 import { fieldStaffAttendanceRepository } from "../repositories/fieldStaffAttendance.repository";
 import { markStaffIn, markStaffOut } from "./fieldStaffAttendance.service";
-import { addExample, deleteSubject, recognizeTop, verifyAgainst, type FaceResult } from "./compreface";
+import { addExample, deleteSubject, DET_PROB_TURNED, recognizeTop, verifyAgainst, type FaceResult } from "./compreface";
 import type { AttendanceRole, AttendanceTokenPayload } from "../types/attendance.types";
 
 /**
@@ -155,7 +155,10 @@ interface LivenessOutcome {
 }
 
 function single(faces: FaceResult[], label: string): FaceResult | string {
-  if (faces.length === 0) return `No face found in the ${label} photo.`;
+  if (faces.length === 0)
+    return label === "second"
+      ? "No face found in the second photo - turn the head only part-way (both eyes still visible), not fully sideways, and keep the face in the frame."
+      : `No face found in the ${label} photo.`;
   if (faces.length > 1) return `More than one face in the ${label} photo - only the worker should be in the frame.`;
   const f = faces[0]!;
   if (f.yaw == null) {
@@ -179,11 +182,14 @@ function judge(front: FaceResult, turn: FaceResult, direction: "left" | "right",
   const yt = turn.yaw ?? 0;
   if (requireMatch && (front.similarity ?? 0) < env.FACE_MATCH_THRESHOLD) out.reason = "Face does not match the enrolled worker.";
   else if (requireMatch && (turn.similarity ?? 0) < env.FACE_MATCH_THRESHOLD_TURNED) out.reason = "Head-turned photo does not match the enrolled worker.";
-  else if (Math.abs(yf) > env.FACE_FRONT_MAX_YAW) out.reason = "In the first photo the worker must look straight at the camera.";
-  else if (Math.abs(yt - yf) < env.FACE_TURN_MIN_YAW) out.reason = `Head was not turned ${direction} enough in the second photo (liveness check).`;
+  else if (Math.abs(yf) > env.FACE_FRONT_MAX_YAW)
+    out.reason = `In the first photo the worker must look straight at the camera (head measured ${Math.round(Math.abs(yf))}° to one side; up to ${env.FACE_FRONT_MAX_YAW}° allowed). Hold the phone straight in front of the face.`;
+  else if (Math.abs(yt - yf) < env.FACE_TURN_MIN_YAW)
+    out.reason = `Head was not turned ${direction} enough in the second photo (turned ${Math.round(Math.abs(yt - yf))}°, needs ${env.FACE_TURN_MIN_YAW}°) - liveness check.`;
   else if (env.FACE_YAW_SIGN !== 0 && Math.sign(yt - yf) * env.FACE_YAW_SIGN !== (direction === "left" ? 1 : -1)) {
     out.reason = `Head was turned the wrong way - the worker had to turn ${direction} (liveness check).`;
   } else out.ok = true;
+  if (!out.ok) console.warn(`[face] check failed: yawFront=${yf.toFixed(1)} yawTurn=${yt.toFixed(1)} asked=${direction} - ${out.reason}`);
   return out;
 }
 
@@ -217,7 +223,7 @@ export async function facePunch(user: AttendanceTokenPayload, challengeId: strin
     if (problem || !best) {
       verdict = { ok: false, reason: problem ?? "No enrolled photo to compare with.", similarityFront: null, similarityTurn: null, yawFront: null, yawTurn: null };
     } else {
-      const t = single(await verifyAgainst(best.id, turn), "second");
+      const t = single(await verifyAgainst(best.id, turn, DET_PROB_TURNED), "second");
       verdict = typeof t === "string"
         ? { ok: false, reason: t, similarityFront: best.r.similarity, similarityTurn: null, yawFront: best.r.yaw, yawTurn: null }
         : judge(best.r, t, ch.direction, true);
@@ -309,7 +315,7 @@ export async function enrolFace(user: AttendanceTokenPayload, challengeId: strin
     added.push(firstId);
     const f = single(await verifyAgainst(firstId, front), "first");
     if (typeof f === "string") throw ApiError.badRequest(f);
-    const t = single(await verifyAgainst(firstId, turn), "second");
+    const t = single(await verifyAgainst(firstId, turn, DET_PROB_TURNED), "second");
     if (typeof t === "string") throw ApiError.badRequest(t);
     const v = judge(f, t, ch.direction, false);
     if (!v.ok) throw ApiError.badRequest(v.reason ?? "Liveness check failed.");

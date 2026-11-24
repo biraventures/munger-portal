@@ -17,7 +17,11 @@ export type AdminRole =
   | "agency_project_manager"
   | "abhilekh_prabhari"
   | "agency_operator"
-  | "map_section_nodal_clerk";
+  | "map_section_nodal_clerk"
+  | "garden_counter"
+  | "crematorium_counter"
+  | "crematorium_prabhari"
+  | "community_hall_prabhari";
 
 export const ADMIN_ROLES: AdminRole[] = [
   "tax_daroga",
@@ -39,6 +43,10 @@ export const ADMIN_ROLES: AdminRole[] = [
   "abhilekh_prabhari",
   "agency_operator",
   "map_section_nodal_clerk",
+  "garden_counter",
+  "crematorium_counter",
+  "crematorium_prabhari",
+  "community_hall_prabhari",
 ];
 
 export const ADMIN_ROLE_LABELS: Record<AdminRole, string> = {
@@ -61,6 +69,10 @@ export const ADMIN_ROLE_LABELS: Record<AdminRole, string> = {
   abhilekh_prabhari: "Abhilekh Prabhari",
   agency_operator: "Agency Operator",
   map_section_nodal_clerk: "Map Section Nodal Clerk",
+  garden_counter: "Garden Counter",
+  crematorium_counter: "Crematorium Counter",
+  crematorium_prabhari: "Crematorium Prabhari",
+  community_hall_prabhari: "Community Hall Prabhari",
 };
 
 /**
@@ -73,13 +85,20 @@ export const ADMIN_ROLE_LABELS: Record<AdminRole, string> = {
  * list.
  */
 export const APPROVAL_STAGE_ORDER: AdminRole[] = ["tax_daroga", "tax_surveyor", "mutation_nodal_clerk", "deputy_commissioner", "commissioner"];
+/** Every desk a property change can wait at, for the "pending at each desk" counts - the mutation chain plus the City
+ * Manager, who has changes of use / back-dated floor changes (USE_CHANGE_STAGE_ORDER). Display only, not routing. */
+export const PENDING_DESK_ORDER: AdminRole[] = ["tax_daroga", "tax_surveyor", "mutation_nodal_clerk", "city_manager", "deputy_commissioner", "commissioner"];
 
 /**
  * The next desk. The Tax Surveyor's field report is part of a MUTATION only (owner change, migration 140); every other
  * edit goes from the Tax Daroga straight to the Mutation Nodal Clerk.
  */
+/** A change of use / back-dated floor change: Tax Daroga -> City Manager -> Deputy Commissioner. */
+export const USE_CHANGE_STAGE_ORDER: AdminRole[] = ["tax_daroga", "city_manager", "deputy_commissioner"];
+
 export function nextApprovalStage(stage: AdminRole, tier?: string | null): AdminRole | null {
-  const order = tier === "mutation" ? APPROVAL_STAGE_ORDER : APPROVAL_STAGE_ORDER.filter((s) => s !== "tax_surveyor");
+  const order =
+    tier === "use_change" ? USE_CHANGE_STAGE_ORDER : tier === "mutation" ? APPROVAL_STAGE_ORDER : APPROVAL_STAGE_ORDER.filter((s) => s !== "tax_surveyor");
   const idx = order.indexOf(stage);
   return idx >= 0 && idx < order.length - 1 ? order[idx + 1]! : null;
 }
@@ -119,9 +138,18 @@ export const PROPERTY_DISCREPANCY_APPROVAL_STAGE_ORDER: AdminRole[] = [
   "deputy_commissioner",
 ];
 
-export function nextPropertyDiscrepancyStage(stage: AdminRole): AdminRole | null {
-  const idx = PROPERTY_DISCREPANCY_APPROVAL_STAGE_ORDER.indexOf(stage);
-  return idx >= 0 && idx < PROPERTY_DISCREPANCY_APPROVAL_STAGE_ORDER.length - 1 ? PROPERTY_DISCREPANCY_APPROVAL_STAGE_ORDER[idx + 1]! : null;
+/** An old (MUNG-MIG-) holding entered by a Tax Collector also needs the Municipal Commissioner's approval, last. */
+export const OLD_HOLDING_ENTRY_STAGE_ORDER: AdminRole[] = [...PROPERTY_DISCREPANCY_APPROVAL_STAGE_ORDER, "commissioner"];
+
+/** The chain a discrepancy request walks - by its holding (old MUNG-MIG- holdings end with the Commissioner). */
+export function discrepancyStagesFor(holdingNo: string): AdminRole[] {
+  return holdingNo.startsWith("MUNG-MIG") ? OLD_HOLDING_ENTRY_STAGE_ORDER : PROPERTY_DISCREPANCY_APPROVAL_STAGE_ORDER;
+}
+
+export function nextPropertyDiscrepancyStage(stage: AdminRole, holdingNo = ""): AdminRole | null {
+  const order = discrepancyStagesFor(holdingNo);
+  const idx = order.indexOf(stage);
+  return idx >= 0 && idx < order.length - 1 ? order[idx + 1]! : null;
 }
 
 /**

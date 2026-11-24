@@ -3,6 +3,7 @@ import jwt from "jsonwebtoken";
 import { env } from "../config/env";
 import { adminRepository } from "../repositories/admin.repository";
 import { ApiError } from "../utils/ApiError";
+import { isActiveForCollection, NOT_ACTIVE_MESSAGE } from "./staffKyc.service";
 import type { AdminLoginResult, AdminTokenPayload } from "../types/admin.types";
 
 export async function adminLogin(username: string, password: string): Promise<AdminLoginResult> {
@@ -18,6 +19,7 @@ export async function adminLogin(username: string, password: string): Promise<Ad
   if (!passwordMatches) {
     throw new ApiError(401, "Invalid username or password");
   }
+  if (!(await isActiveForCollection(admin.username, admin.role))) throw new ApiError(403, NOT_ACTIVE_MESSAGE);
 
   const payload: AdminTokenPayload = {
     type: "admin",

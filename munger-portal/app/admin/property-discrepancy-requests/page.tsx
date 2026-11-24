@@ -83,7 +83,9 @@ export default function PropertyDiscrepancyRequestsPage() {
       <main className="mx-auto max-w-4xl px-6 py-10">
         <h1 className="mb-1 text-2xl font-semibold text-slate-900">Property Discrepancy Approvals</h1>
         <p className="mb-3 text-sm text-slate-500">
-          A Tax Collector&apos;s field-found correction moves through Tax Surveyor → Tax Daroga → City Manager → Deputy Commissioner.
+          A Tax Collector&apos;s field-found correction moves through Tax Surveyor → Tax Daroga → City Manager → Deputy Commissioner. The Tax
+          Daroga can also act on a report still with the Tax Surveyor - it then goes straight to the City Manager. An old
+          (MUNG-MIG) holding entered from Old Records (MIG) then also goes to the Municipal Commissioner.
         </p>
 
         {stageCounts && (

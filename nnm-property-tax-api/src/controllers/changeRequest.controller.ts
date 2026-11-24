@@ -2,6 +2,10 @@ import type { Request, Response } from "express";
 import { buildTimeline, pendingSummary } from "../services/mutationAudit.service";
 import { holdingLineage } from "../services/changeRequest.service";
 import { z } from "zod";
+import fs from "node:fs";
+import path from "node:path";
+import { env } from "../config/env";
+import { changeRequestRepository } from "../repositories/changeRequest.repository";
 import {
   listChangeRequests,
   getChangeRequestDetail,
@@ -29,7 +33,11 @@ export const getChangeRequests = asyncHandler(async (req: Request, res: Response
   if (!parsed.success) throw ApiError.badRequest("Invalid query", parsed.error.flatten().fieldErrors);
 
   const admin = req.admin!;
-  const requests = await listChangeRequests(parsed.data.status, parsed.data.myStage || admin.role === "tax_surveyor" ? admin.role : undefined, admin);
+  const requests = await listChangeRequests(
+    parsed.data.status,
+    parsed.data.myStage || admin.role === "tax_surveyor" ? admin.role : undefined,
+    admin,
+  );
   res.status(200).json({ requests, myRole: admin.role, stageOrder: ADMIN_ROLES });
 });
 
@@ -51,14 +59,26 @@ export const fieldReportSchema = z.object({
   remarks: z.string().trim().min(10, "Write the field report (at least a line on what was found).").max(3000),
   latitude: z.number().min(24).max(27).nullish(),
   longitude: z.number().min(85).max(88).nullish(),
-  photos: z.array(z.object({ base64: z.string().min(10).max(1_100_000), mimeType: z.string().max(20) })).max(4).optional(),
+  photos: z
+    .array(z.object({ base64: z.string().min(10).max(1_100_000), mimeType: z.string().max(20) }))
+    .max(4)
+    .optional(),
   // New holding requests only (see saveFieldReport): self-assessment check, its 4 pages, 2 photos of holding with owner.
   selfAssessmentCorrect: z.boolean().nullish(),
-  formPagePhotos: z.array(z.object({ base64: z.string().min(10).max(1_100_000), mimeType: z.string().max(20) })).max(4).optional(),
-  holdingOwnerPhotos: z.array(z.object({ base64: z.string().min(10).max(1_100_000), mimeType: z.string().max(20) })).max(2).optional(),
+  formPagePhotos: z
+    .array(z.object({ base64: z.string().min(10).max(1_100_000), mimeType: z.string().max(20) }))
+    .max(4)
+    .optional(),
+  holdingOwnerPhotos: z
+    .array(z.object({ base64: z.string().min(10).max(1_100_000), mimeType: z.string().max(20) }))
+    .max(2)
+    .optional(),
 });
 
-const areaSqft = z.coerce.number({ invalid_type_error: "Enter the area in sq ft." }).positive("Areas must be more than 0 sq ft.").max(10_000_000);
+const areaSqft = z.coerce
+  .number({ invalid_type_error: "Enter the area in sq ft." })
+  .positive("Areas must be more than 0 sq ft.")
+  .max(10_000_000);
 const notesBodySchema = z.object({
   notes: z.string().max(2000).optional(),
   verification: z
@@ -111,7 +131,9 @@ export const postRejectChangeRequest = asyncHandler(async (req: Request, res: Re
   const result = await rejectAtCurrentStage(paramsParsed.data.id, req.admin!, bodyParsed.data.notes);
   res.status(200).json({ request: result });
 });
-const revertBodySchema = z.object({ comment: z.string().trim().min(1, "A comment is required explaining what needs to be corrected.").max(2000) });
+const revertBodySchema = z.object({
+  comment: z.string().trim().min(1, "A comment is required explaining what needs to be corrected.").max(2000),
+});
 
 /** POST /api/v1/admin/change-requests/:id/revert - any admin, at whatever stage the request is currently at. */
 export const postRevertChangeRequest = asyncHandler(async (req: Request, res: Response) => {
@@ -154,4 +176,15 @@ export const getHoldingLineage = asyncHandler(async (req: Request, res: Response
   const h = z.string().trim().min(1).max(32).safeParse(req.params.holdingNo);
   if (!h.success) throw ApiError.badRequest("Invalid holding number");
   res.status(200).json({ lineage: await holdingLineage(h.data) });
+});
+
+/** GET /admin/change-requests/:id/premises-photo - photo of the premises attached to a change of use. */
+export const getChangeRequestPremisesPhoto = asyncHandler(async (req: Request, res: Response) => {
+  const parsed = idParamSchema.safeParse(req.params);
+  if (!parsed.success) throw ApiError.badRequest("Invalid change request id");
+  const r = await changeRequestRepository.findById(parsed.data.id);
+  if (!r?.premises_photo_path) throw ApiError.notFound("No premises photo on this request.");
+  const full = path.resolve(path.join(env.PHOTO_UPLOAD_DIR, r.premises_photo_path));
+  if (!fs.existsSync(full)) throw ApiError.notFound("Photo file is missing from storage.");
+  res.sendFile(full);
 });

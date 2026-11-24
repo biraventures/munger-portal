@@ -117,10 +117,20 @@ body {
   }
 
   .printable-area,
-  .printable-area * {
+  .printable-area *,
+  .printable-flow,
+  .printable-flow * {
     visibility: visible;
   }
-
+  /* Like .printable-area, for content that can run past one page (a permit letter): position: fixed would print only
+     the first page, absolute lets it continue onto the next pages. */
+  .printable-flow {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    margin: 0;
+  }
   .printable-area {
     /* position: fixed (not absolute) ties this to the viewport/page
        directly, independent of any ancestor's now-collapsed height. */

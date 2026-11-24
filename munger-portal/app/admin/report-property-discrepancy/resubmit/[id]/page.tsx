@@ -1,6 +1,9 @@
 "use client";
 
+import { discrepancyPhotoNeeds, missingDiscrepancyPhotos } from "@/lib/discrepancy-photo-rules";
 import { useEffect, useState } from "react";
+import { floorChangeProblem } from "@/components/floor-change-box";
+import { fetchFullPropertyAdmin } from "@/lib/admin-api";
 import { useParams, useRouter } from "next/navigation";
 import { AlertCircle, Loader2, RotateCcw } from "lucide-react";
 import { AdminHeader } from "@/components/admin-header";
@@ -10,6 +13,7 @@ import { fetchFormOptions, type FormOptions } from "@/lib/operator-api";
 import {
   AdminPropertyDetailsForm,
   propertyFormFromProposedData,
+  propertyFormFromExisting,
   propertyFormToPayload,
   type AdminPropertyFormState,
 } from "@/components/admin/property-details-form";
@@ -33,6 +37,10 @@ export default function ResubmitDiscrepancyPage() {
   const [revertComment, setRevertComment] = useState<string | null>(null);
   const [discrepancyNotes, setDiscrepancyNotes] = useState("");
   const [form, setForm] = useState<AdminPropertyFormState | null>(null);
+  const [originalFloors, setOriginalFloors] = useState<AdminPropertyFormState["floors"]>([]);
+  const [originalForm, setOriginalForm] = useState<AdminPropertyFormState | null>(null);
+  // Photos already on the request - kept unless retaken.
+  const [onFile, setOnFile] = useState({ site: false, aadhaar: false, owner: false });
   const [formOptions, setFormOptions] = useState<FormOptions | null>(null);
   const [capture, setCapture] = useState<CaptureState>(blankCaptureState());
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -54,26 +62,57 @@ export default function ResubmitDiscrepancyPage() {
         setDiscrepancyNotes(request.discrepancy_notes);
         setRevertComment(request.revert_comment ? `${request.reverted_by ?? "Reviewer"}: "${request.revert_comment}"` : null);
         setForm(propertyFormFromProposedData(request.proposed_data));
+        setOnFile({ site: !!request.photo_path, aadhaar: !!request.aadhaar_photo_path, owner: !!request.owner_photo_path });
+        // The holding's floors as now recorded - to see whether the report changes them.
+        fetchFullPropertyAdmin(request.holding_no)
+          .then((r) => {
+            if (!r.property) return;
+            const recorded = propertyFormFromExisting(r.property, r.floors ?? []);
+            setOriginalFloors(recorded.floors);
+            setOriginalForm(recorded);
+          })
+          .catch(() => undefined);
       })
       .catch((err) => setLoadError(err instanceof Error ? err.message : "Could not load this request."));
   }, [admin, id]);
+
+  const photoNeeds = discrepancyPhotoNeeds(originalForm, form);
 
   async function handleSubmit() {
     if (!form || !discrepancyNotes.trim()) {
       setSubmitError("Describe what you found that doesn't match the records.");
       return;
     }
+    const floorProblem = floorChangeProblem(originalFloors, form.floors, form.floorChange);
+    if (floorProblem) {
+      setSubmitError(floorProblem);
+      return;
+    }
     if (!form.aadhaarNumber.trim() && !form.ownerDeceased && !form.aadhaarRefused) {
       setSubmitError("The holding owner's Aadhaar number is required (or tick that the owner has died / does not agree to give Aadhaar).");
+      return;
+    }
+    const photoProblem = missingDiscrepancyPhotos(
+      photoNeeds,
+      {
+        site: !!capture.photoFile || onFile.site,
+        aadhaar: !!capture.aadhaarFile || onFile.aadhaar,
+        owner: !!capture.ownerFile || onFile.owner,
+      },
+      form,
+    );
+    if (photoProblem) {
+      setSubmitError(photoProblem);
       return;
     }
     setSubmitting(true);
     setSubmitError(null);
     try {
-      const [photoBase64Data, previousReceiptPhotoBase64Data, aadhaarPhotoBase64Data] = await Promise.all([
+      const [photoBase64Data, previousReceiptPhotoBase64Data, aadhaarPhotoBase64Data, ownerPhotoBase64Data] = await Promise.all([
         capture.photoFile ? fileToBase64(capture.photoFile) : undefined,
         capture.previousReceiptFile ? fileToBase64(capture.previousReceiptFile) : undefined,
         capture.aadhaarFile && !form.ownerDeceased && !form.aadhaarRefused ? fileToBase64(capture.aadhaarFile) : undefined,
+        capture.ownerFile ? fileToBase64(capture.ownerFile) : undefined,
       ]);
       await resubmitDiscrepancyRequest(id, {
         discrepancyNotes: discrepancyNotes.trim(),
@@ -86,6 +125,8 @@ export default function ResubmitDiscrepancyPage() {
         previousReceiptPhotoMimeType: capture.previousReceiptFile?.type,
         aadhaarPhotoBase64Data,
         aadhaarPhotoMimeType: capture.aadhaarFile?.type,
+        ownerPhotoBase64Data,
+        ownerPhotoMimeType: capture.ownerFile?.type,
       });
       router.push("/admin/my-discrepancy-reports");
     } catch (err) {
@@ -99,7 +140,7 @@ export default function ResubmitDiscrepancyPage() {
     return <div className="flex min-h-screen items-center justify-center text-sm text-slate-400">Loading…</div>;
   }
 
-  if (admin.role !== "tax_collector") {
+  if (!["tax_collector", "tax_surveyor", "tax_daroga", "commissioner"].includes(admin.role)) {
     return (
       <div className="min-h-screen bg-slate-50">
         <AdminHeader admin={admin} />
@@ -162,12 +203,19 @@ export default function ResubmitDiscrepancyPage() {
               <AdminPropertyDetailsForm
                 form={form}
                 onChange={setForm}
+                originalFloors={originalFloors}
                 usageTypes={formOptions?.usageTypes ?? []}
                 solidWasteChargeTypes={formOptions?.solidWasteChargeTypes ?? []}
               />
             </div>
 
-            <DiscrepancyCaptureSection state={capture} onChange={setCapture} hideAadhaar={form.ownerDeceased || form.aadhaarRefused} />
+            <DiscrepancyCaptureSection
+              state={capture}
+              onChange={setCapture}
+              hideAadhaar={form.ownerDeceased || form.aadhaarRefused}
+              needs={photoNeeds}
+              onFile={onFile}
+            />
             <p className="-mt-4 text-xs text-slate-400">
               Leaving a photo slot empty on resubmission keeps the one already on file from your original report.
             </p>

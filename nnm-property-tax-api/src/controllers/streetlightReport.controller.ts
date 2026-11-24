@@ -2,6 +2,7 @@ import type { Request, Response } from "express";
 import { z } from "zod";
 import { asyncHandler } from "../middleware/asyncHandler";
 import { ApiError } from "../utils/ApiError";
+import { wardScope } from "../services/wardScope";
 import { buildStreetlightReport, streetlightReportToCsv, STREETLIGHT_REPORT_KINDS } from "../services/streetlightReport.service";
 
 const querySchema = z.object({ format: z.enum(["json", "csv"]).optional() });
@@ -17,7 +18,7 @@ export const getStreetlightReportHandler = asyncHandler(async (req: Request, res
   const query = querySchema.safeParse(req.query);
   if (!query.success) throw ApiError.badRequest("Invalid format");
 
-  const table = await buildStreetlightReport(kind as (typeof STREETLIGHT_REPORT_KINDS)[number]);
+  const table = await buildStreetlightReport(kind as (typeof STREETLIGHT_REPORT_KINDS)[number], await wardScope(req));
 
   if (query.data.format === "csv") {
     res.setHeader("Content-Type", "text/csv; charset=utf-8");

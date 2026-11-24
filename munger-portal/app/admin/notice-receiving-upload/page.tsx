@@ -1,13 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AlertCircle, Camera, CheckCircle2, FileCheck2, RotateCcw, Search } from "lucide-react";
+import { AlertCircle, Camera, CheckCircle2, FileCheck2, RotateCcw, Search, Paperclip } from "lucide-react";
 import { MobileHoldingLookup } from "@/components/mobile-holding-lookup";
 import { AdminHeader } from "@/components/admin-header";
 import { GpsButton } from "@/components/admin/field-capture";
 import { useAdminGuard } from "@/lib/use-admin-guard";
 import { sanitizeHoldingNoInput } from "@/lib/holding-no";
 import { fetchNoticesForReceiving, prepareImageForUpload, uploadReceivingCopy, type NoticeForReceiving } from "@/lib/collector-field-api";
+import { assertPdfSize, blobToBase64 } from "@/lib/upload-limits";
 import {
   EMPTY_WATER,
   WaterStatusField,
@@ -104,7 +105,11 @@ export default function NoticeReceivingUploadPage() {
     setUploading(true);
     setError(null);
     try {
-      const img = await prepareImageForUpload(photo);
+      // A scanned PDF of the slip goes as it is; a photo is shrunk.
+      const img =
+        photo.type === "application/pdf"
+          ? (assertPdfSize(photo), { base64: await blobToBase64(photo), mimeType: "application/pdf" })
+          : await prepareImageForUpload(photo);
       await uploadReceivingCopy(selected, {
         photoBase64Data: img.base64,
         photoMimeType: img.mimeType,
@@ -248,6 +253,14 @@ export default function NoticeReceivingUploadPage() {
                   className="hidden"
                   onChange={(e) => setPhoto(e.target.files?.[0] ?? null)}
                 />
+                <input
+                  key={`file-${cameraKey}`}
+                  id="receiving-photo-file"
+                  type="file"
+                  accept="image/jpeg,image/png,application/pdf"
+                  className="hidden"
+                  onChange={(e) => setPhoto(e.target.files?.[0] ?? null)}
+                />
                 {!photo ? (
                   <label
                     htmlFor="receiving-photo"
@@ -259,12 +272,26 @@ export default function NoticeReceivingUploadPage() {
                     <span className="text-sm font-semibold text-slate-800">Take photo of the signed receiving slip</span>
                     <span className="text-xs text-slate-500">Notice number, receiver&apos;s signature and date must be readable.</span>
                   </label>
+                ) : null}
+                {!photo ? (
+                  <label
+                    htmlFor="receiving-photo-file"
+                    className="flex cursor-pointer items-center justify-center gap-2 rounded-md border border-nnm-blue bg-white px-4 py-2 text-sm font-semibold text-nnm-blue"
+                  >
+                    <Paperclip className="h-4 w-4" /> Or attach the slip as a file (photo / PDF)
+                  </label>
                 ) : (
                   <div>
                     <p className="mb-2 text-sm font-medium text-slate-700">
                       Check the photo: is the notice number, signature and date clearly readable?
                     </p>
-                    {previewUrl && (
+                    {photo.type === "application/pdf" ? (
+                      <p className="mb-3 rounded-md border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
+                        <span className="mr-2 rounded bg-red-600 px-1.5 py-0.5 text-xs font-bold text-white">PDF</span>
+                        {photo.name}
+                      </p>
+                    ) : null}
+                    {previewUrl && photo.type !== "application/pdf" && (
                       // eslint-disable-next-line @next/next/no-img-element -- local file preview
                       <img
                         src={previewUrl}

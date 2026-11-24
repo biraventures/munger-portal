@@ -75,7 +75,9 @@ function computeFloorPeriodTax(
     const area = num(f.buildup_sqft);
     const constType = String(f.const_type || "").trim() as ConstType;
     const usage = String(f.usage_type || "").trim();
-    const occupancy = String(f.occupancy || "self").trim().toLowerCase();
+    const occupancy = String(f.occupancy || "self")
+      .trim()
+      .toLowerCase();
 
     if (f.floor_label.trim() === "Ground Floor - 0") {
       groundFloorBuiltArea += area;
@@ -154,7 +156,9 @@ export function computeAutomaticStages(property: PropertyRow, floors: FloorRow[]
   if (holdingCreationYearNum === null) return [];
   const out: AutomaticStage[] = [];
 
-  const roadType = String(property.road_type || "").trim().toUpperCase() as RoadType;
+  const roadType = String(property.road_type || "")
+    .trim()
+    .toUpperCase() as RoadType;
   const vacantRate = VACANT_LAND_RATE[roadType] ?? 0;
   const totalPlotArea = num(property.area_sqft);
   const lastYear = getCurrentAssessmentYearStartNum() - 1;
@@ -167,29 +171,60 @@ export function computeAutomaticStages(property: PropertyRow, floors: FloorRow[]
     if (!bounds) continue; // holding didn't exist during this period
 
     const rateTable = periodLabel === "2021-2022 to last year" ? CONSTRUCTION_RATE : CONSTRUCTION_RATE_2011_2020;
-    const { builtArv, groundFloorBuiltArea } = computeFloorPeriodTax(floors, roadType, rateTable, bounds.start, bounds.end);
-    if (builtArv <= 0 && groundFloorBuiltArea <= 0) continue; // nothing standing during this period — no stage to record
-
-    const taxableVacantArea = Math.max(0, totalPlotArea - groundFloorBuiltArea * 1.43);
-    const vacantTax = taxableVacantArea * vacantRate;
-
     const taxRate = PERIOD_TAX_RATES[periodLabel] ?? 0.09;
-    const annualTaxAmount = builtArv * taxRate + vacantTax;
-    const yearsCount = bounds.end - bounds.start + 1;
-    const totalAmount = annualTaxAmount * yearsCount;
+    const openEnded = bucket.end === "lastYear";
 
-    if (annualTaxAmount <= 0) continue;
-
-    out.push({
-      periodOfAssessment: periodLabel,
-      startYearUsed: bounds.start,
-      closingYear: bounds.end,
-      arvInPeriod: builtArv,
-      taxRateInPeriod: taxRate,
-      annualTaxAmount,
-      yearsCount,
-      totalAmount,
+    // A floor that starts or ends inside the period (built, demolished, or its use / construction / area changed -
+    // recorded as a closed row and a new row) splits the period there, so every year is priced on the floors that
+    // actually stood that year. Neighbouring pieces with the same tax are merged back.
+    // The open-ended period is also cut at a change in the CURRENT year, so that when this year becomes an arrears
+    // year it is priced on the new floors, not carried on the old ones.
+    const limit = openEnded ? lastYear + 1 : bounds.end;
+    const cuts = new Set<number>();
+    for (const f of floors) {
+      const built = parseYearStartOrNull(f.year_built);
+      const closing = parseYearStartOrNull(f.closing_year);
+      if (built !== null && built > bounds.start && built <= limit) cuts.add(built);
+      if (closing !== null && closing >= bounds.start && closing < limit) cuts.add(closing + 1);
+    }
+    const starts = [bounds.start, ...[...cuts].sort((a, b) => a - b)];
+    const pieces: { start: number; end: number; builtArv: number; annual: number }[] = [];
+    starts.forEach((start, i) => {
+      const end = i + 1 < starts.length ? starts[i + 1]! - 1 : Math.max(bounds.end, start);
+      const { builtArv, groundFloorBuiltArea } = computeFloorPeriodTax(floors, roadType, rateTable, start, end);
+      if (builtArv <= 0 && groundFloorBuiltArea <= 0) return; // nothing standing - no stage
+      const taxableVacantArea = Math.max(0, totalPlotArea - groundFloorBuiltArea * 1.43);
+      const annual = builtArv * taxRate + taxableVacantArea * vacantRate;
+      if (annual <= 0) return;
+      const prev = pieces[pieces.length - 1];
+      if (prev && prev.end === start - 1 && Math.abs(prev.annual - annual) < 0.005) prev.end = end;
+      else pieces.push({ start, end, builtArv, annual });
     });
+
+    for (const pc of pieces) {
+      // Years already ended (a piece starting this year counts none yet).
+      const yearsCount = Math.max(0, Math.min(pc.end, lastYear) - pc.start + 1);
+      // The whole period keeps its own name and a piece of it is named by its years; in the "... to last year" period
+      // only the LAST piece keeps the open-ended name, so the pieces never overlap (see stageForYear).
+      const whole = pc.start === bounds.start && pc.end === bounds.end;
+      const last = pc === pieces[pieces.length - 1];
+      const label =
+        (openEnded ? last : whole)
+          ? periodLabel
+          : pc.start === pc.end
+            ? `${pc.start}-${pc.start + 1}`
+            : `${pc.start}-${pc.start + 1} to ${pc.end}-${pc.end + 1}`;
+      out.push({
+        periodOfAssessment: label,
+        startYearUsed: pc.start,
+        closingYear: pc.end,
+        arvInPeriod: pc.builtArv,
+        taxRateInPeriod: taxRate,
+        annualTaxAmount: pc.annual,
+        yearsCount,
+        totalAmount: pc.annual * yearsCount,
+      });
+    }
   }
   return out;
 }
@@ -225,9 +260,7 @@ export interface BulkRegenerateResult {
  * whose stages otherwise need refreshing without waiting for a full
  * save-and-approval cycle. Admin-triggered (see adminTaxHistory routes).
  */
-export async function bulkRegenerateAutomaticTaxHistoryStages(
-  actorDisplayName: string,
-): Promise<BulkRegenerateResult> {
+export async function bulkRegenerateAutomaticTaxHistoryStages(actorDisplayName: string): Promise<BulkRegenerateResult> {
   const holdingNos = await propertyRepository.listAllHoldingNosWithFloors();
   const result: BulkRegenerateResult = { processed: 0, errors: [] };
 

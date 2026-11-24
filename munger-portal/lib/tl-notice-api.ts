@@ -40,11 +40,26 @@ export function licenseYearOptions(): string[] {
 }
 
 export const TL_STATUS: Record<string, { label: string; tone: string }> = {
-  licensed: { label: "Valid licence shown", tone: "bg-green-100 text-green-800" },
-  notice_1: { label: "1st notice running", tone: "bg-amber-100 text-amber-800" },
-  notice_2: { label: "2nd notice running", tone: "bg-orange-100 text-orange-800" },
-  legal_action_due: { label: "Legal action due", tone: "bg-red-100 text-red-700" },
-  complied: { label: "Licence obtained after notice", tone: "bg-blue-100 text-blue-800" },
+  licensed: {
+    label: "Valid licence shown",
+    tone: "bg-green-100 text-green-800",
+  },
+  notice_1: {
+    label: "1st notice running",
+    tone: "bg-amber-100 text-amber-800",
+  },
+  notice_2: {
+    label: "2nd notice running",
+    tone: "bg-orange-100 text-orange-800",
+  },
+  legal_action_due: {
+    label: "Legal action due",
+    tone: "bg-red-100 text-red-700",
+  },
+  complied: {
+    label: "Licence obtained after notice",
+    tone: "bg-blue-100 text-blue-800",
+  },
 };
 
 export interface FileUpload {
@@ -65,12 +80,17 @@ export interface TlSurveyInput {
   phone?: string | null;
   latitude?: number | null;
   longitude?: number | null;
+  gpsAccuracyM?: number | null;
   isNnmShop: boolean;
   nnmShopNo?: string | null;
 }
 
 export async function submitTlSurvey(input: TlSurveyInput): Promise<{ surveyId: string; status: string; noticeNo: string | null }> {
-  const res = await fetch(`${API_BASE_URL}/admin/tl-survey`, { method: "POST", headers: headers(), body: JSON.stringify(input) });
+  const res = await fetch(`${API_BASE_URL}/admin/tl-survey`, {
+    method: "POST",
+    headers: headers(),
+    body: JSON.stringify(input),
+  });
   return json(res, "Could not save the visit");
 }
 
@@ -79,7 +99,9 @@ export interface TlNotice {
   noticeNo: string;
   level: 1 | 2;
   issuedOn: string;
-  dueOn: string;
+  /** 14 days from the date of service; null until served. */
+  dueOn: string | null;
+  servedOn?: string | null;
   financialYear: string;
   holdingNo: string;
   ward: string | null;
@@ -92,23 +114,38 @@ export interface TlNotice {
   firstNoticeNo: string | null;
   firstNoticeDate: string | null;
   printedAt: string | null;
+  /** Role of the login that printed it - Trade Licence Prabhari prints carry the Prabhari as signatory. */
+  printedByRole?: string | null;
+  receivingUploadedAt: string | null;
+  /** QR code link: the public application form filled in from this notice. */
+  applyUrl?: string;
 }
 
 export async function fetchPrintQueue(opts: { date?: string; all?: boolean } = {}): Promise<TlNotice[]> {
   const q = new URLSearchParams();
   if (opts.date) q.set("date", opts.date);
   if (opts.all) q.set("all", "1");
-  const res = await fetch(`${API_BASE_URL}/admin/tl-notices/print-queue?${q}`, { headers: headers(), cache: "no-store" });
+  const res = await fetch(`${API_BASE_URL}/admin/tl-notices/print-queue?${q}`, {
+    headers: headers(),
+    cache: "no-store",
+  });
   return (await json<{ notices: TlNotice[] }>(res, "Could not load the notices")).notices;
 }
 
 export async function markNoticesPrinted(ids: string[]): Promise<number> {
-  const res = await fetch(`${API_BASE_URL}/admin/tl-notices/mark-printed`, { method: "POST", headers: headers(), body: JSON.stringify({ ids }) });
+  const res = await fetch(`${API_BASE_URL}/admin/tl-notices/mark-printed`, {
+    method: "POST",
+    headers: headers(),
+    body: JSON.stringify({ ids }),
+  });
   return (await json<{ marked: number }>(res, "Could not mark the notices printed")).marked;
 }
 
 export async function fetchTlNotice(id: string): Promise<TlNotice> {
-  const res = await fetch(`${API_BASE_URL}/admin/tl-notices/${id}`, { headers: headers(), cache: "no-store" });
+  const res = await fetch(`${API_BASE_URL}/admin/tl-notices/${id}`, {
+    headers: headers(),
+    cache: "no-store",
+  });
   return (await json<{ notice: TlNotice }>(res, "Could not load the notice")).notice;
 }
 
@@ -136,20 +173,66 @@ export interface TlSurvey {
   complied_license_year: string | null;
   complied_valid_till: string | null;
   complied_license_no: string | null;
+  latitude: string | null;
+  longitude: string | null;
+  gps_accuracy_m: string | null;
   has_license_photo: boolean;
   has_complied_photo: boolean;
-  notices: { id: string; noticeNo: string; level: number; issuedOn: string; dueOn: string; printedAt: string | null }[] | null;
+  /** The trade licence application this notice brought in - credited to the Tax Collector who issued the notice. */
+  application_number: string | null;
+  application_status: string | null;
+  application_received_at: string | null;
+  notices:
+    | {
+        id: string;
+        noticeNo: string;
+        level: number;
+        issuedOn: string;
+        /** Last date - 14 days from the date of service; null until served. */
+        dueOn: string | null;
+        printedAt: string | null;
+        /** Date of service (entered with the receiving copy). */
+        servedOn: string | null;
+        /** Reissued: a fresh notice replaced this one. */
+        supersededAt: string | null;
+        supersededBy: string | null;
+        reissueReason: string | null;
+        receivingUploadedAt: string | null;
+        receivingBy: string | null;
+        /** Removal of the receiving copy asked for - waiting for the DMC. */
+        removalRequestedAt: string | null;
+        removalRequestedBy: string | null;
+        removalReason: string | null;
+        /** Receiving copies of this notice removed earlier (with the DMC's approval). */
+        removedCount: number;
+      }[]
+    | null;
 }
 
-export async function fetchTlSurveys(filter: { status?: string; date?: string; q?: string }): Promise<TlSurvey[]> {
+export async function fetchTlSurveys(filter: { status?: string; date?: string; q?: string; receiving?: string }): Promise<TlSurvey[]> {
   const q = new URLSearchParams();
   for (const [k, v] of Object.entries(filter)) if (v) q.set(k, v);
-  const res = await fetch(`${API_BASE_URL}/admin/tl-surveys?${q}`, { headers: headers(), cache: "no-store" });
+  const res = await fetch(`${API_BASE_URL}/admin/tl-surveys?${q}`, {
+    headers: headers(),
+    cache: "no-store",
+  });
   return (await json<{ surveys: TlSurvey[] }>(res, "Could not load the records")).surveys;
 }
 
-export async function markTlComplied(id: string, body: { licenseYear: string; licenseValidTill: string; licenseNo?: string; photo: FileUpload }): Promise<void> {
-  const res = await fetch(`${API_BASE_URL}/admin/tl-surveys/${id}/complied`, { method: "POST", headers: headers(), body: JSON.stringify(body) });
+export async function markTlComplied(
+  id: string,
+  body: {
+    licenseYear: string;
+    licenseValidTill: string;
+    licenseNo?: string;
+    photo: FileUpload;
+  },
+): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/admin/tl-surveys/${id}/complied`, {
+    method: "POST",
+    headers: headers(),
+    body: JSON.stringify(body),
+  });
   await json(res, "Could not save");
 }
 
@@ -167,6 +250,36 @@ export async function openTlSurveyFile(id: string, which: "license" | "complied"
   else window.location.href = url;
 }
 
+/** The signed receiving half of a notice - a camera photo, or an attached photo / PDF. */
+export async function uploadTlReceivingCopy(
+  noticeId: string,
+  photo: FileUpload,
+  servedOn: string,
+  latitude: number | null,
+  longitude: number | null,
+): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/admin/tl-notices/${noticeId}/receiving`, {
+    method: "POST",
+    headers: headers(),
+    body: JSON.stringify({ photo, servedOn, latitude, longitude }),
+  });
+  await json(res, "Could not upload the receiving copy");
+}
+
+/** Opens the receiving copy photo in a new tab. */
+export async function openTlReceivingCopy(noticeId: string): Promise<void> {
+  const win = window.open("", "_blank");
+  const res = await fetch(`${API_BASE_URL}/admin/tl-notices/${noticeId}/receiving`, { headers: headers(false) });
+  if (!res.ok) {
+    win?.close();
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || "Could not open the receiving copy.");
+  }
+  const url = URL.createObjectURL(await res.blob());
+  if (win) win.location.href = url;
+  else window.location.href = url;
+}
+
 /** A PDF goes as is (at most 2 MB); a photo is shrunk to at most 750 KB. */
 export async function readLicenceFile(file: File): Promise<FileUpload> {
   if (isPdfFile(file)) {
@@ -175,4 +288,66 @@ export async function readLicenceFile(file: File): Promise<FileUpload> {
   }
   const blob = await shrinkPhoto(file);
   return { base64: await blobToBase64(blob), mime: blob.type || "image/jpeg" };
+}
+
+async function post(path: string, body: unknown, fallback: string): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}${path}`, { method: "POST", headers: headers(), body: JSON.stringify(body) });
+  await json(res, fallback);
+}
+
+/** Asks the DMC to remove an uploaded receiving copy. */
+export const requestTlReceivingRemoval = (noticeId: string, reason: string) =>
+  post(`/admin/tl-notices/${noticeId}/receiving/remove-request`, { reason }, "Could not send the request");
+
+/** DMC: approves (copy removed, kept in the log) or rejects a requested removal. */
+export const decideTlReceivingRemoval = (noticeId: string, approve: boolean, remark: string | null) =>
+  post(`/admin/tl-notices/${noticeId}/receiving/remove-decision`, { approve, remark }, "Could not save");
+
+export interface TlReceivingLogEntry {
+  id: string;
+  action: "uploaded" | "removal_requested" | "removal_rejected" | "removed";
+  reason: string | null;
+  by_name: string | null;
+  at: string;
+  has_removed_copy: boolean;
+}
+export async function fetchTlReceivingLog(noticeId: string): Promise<TlReceivingLogEntry[]> {
+  const res = await fetch(`${API_BASE_URL}/admin/tl-notices/${noticeId}/receiving/log`, { headers: headers(), cache: "no-store" });
+  return (await json<{ log: TlReceivingLogEntry[] }>(res, "Could not load the history")).log;
+}
+
+/** Opens a removed receiving copy (from the history) in a new tab. */
+export async function openTlRemovedCopy(logId: string): Promise<void> {
+  const win = window.open("", "_blank");
+  const res = await fetch(`${API_BASE_URL}/admin/tl-notices/receiving-removed/${logId}`, { headers: headers(false) });
+  if (!res.ok) {
+    win?.close();
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || "Could not open the copy.");
+  }
+  const url = URL.createObjectURL(await res.blob());
+  if (win) win.location.href = url;
+  else window.location.href = url;
+}
+
+/** Receiving copy removals waiting for the DMC. */
+export async function fetchTlRemovalCount(): Promise<number> {
+  const res = await fetch(`${API_BASE_URL}/admin/tl-notices/receiving-removals/count`, { headers: headers(), cache: "no-store" });
+  return (await json<{ pending: number }>(res, "Could not load")).pending;
+}
+
+/** Reissues a first / second notice: a fresh notice (new number, today's date) to be printed and served again. */
+export const reissueTlNotice = async (noticeId: string, reason: string): Promise<{ noticeNo: string }> => {
+  const res = await fetch(`${API_BASE_URL}/admin/tl-notices/${noticeId}/reissue`, {
+    method: "POST",
+    headers: headers(),
+    body: JSON.stringify({ reason }),
+  });
+  return json<{ noticeNo: string }>(res, "Could not reissue the notice");
+};
+
+/** Print card red count: notices to print (incl. automatic second notices) and businesses due for legal action. */
+export async function fetchTlPrintCount(): Promise<{ toPrint: number; secondNotices: number; legalActionDue: number }> {
+  const res = await fetch(`${API_BASE_URL}/admin/tl-notices/print-queue/count`, { headers: headers(), cache: "no-store" });
+  return json(res, "Could not load");
 }

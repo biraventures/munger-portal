@@ -26,6 +26,8 @@ export interface TradeLicenseApplicationInput {
   entityType?: TradeLicenseEntityType | null;
   completeAddress: string;
   holdingNo?: string | null;
+  /** The trade licence notice the business received, if any - credits the application to that Tax Collector. */
+  noticeNo?: string | null;
   holdingReceiptAttached: boolean;
   typeOfBusiness?: string | null;
   durationYears: number;
@@ -221,6 +223,10 @@ export interface TradeLicenseApplicationDetail {
     status: "pending" | "approved" | "rejected";
     current_stage: string;
     requested_by: string;
+    /** "notice" = came in against a Tax Collector's notice (credited to him); "automatic" = no notice. */
+    source?: "notice" | "automatic";
+    tl_notice_no?: string | null;
+    credited_collector_name?: string | null;
     requested_at: string;
     reviewed_by: string | null;
     reviewed_role: string | null;
@@ -280,4 +286,24 @@ export async function updateChecklistItem(
     const body = await res.json().catch(() => ({}));
     throw new Error(body.error || "Could not update checklist item.");
   }
+}
+/** The details on a trade licence notice, from the signed link in its QR code - to fill in the application form. */
+export interface NoticePrefill {
+  noticeNo: string;
+  applicantName: string;
+  entityName: string;
+  completeAddress: string;
+  holdingNo: string;
+  mobile: string;
+  /** An application already made against this notice. */
+  alreadyApplied: string | null;
+}
+
+export async function fetchNoticePrefill(notice: string, sig: string): Promise<NoticePrefill> {
+  const res = await fetch(
+    `${API_BASE_URL}/trade-license-applications/notice-prefill?notice=${encodeURIComponent(notice)}&sig=${encodeURIComponent(sig)}`,
+  );
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body.error || "Could not read the notice.");
+  return body as NoticePrefill;
 }

@@ -1,6 +1,6 @@
 import { Router } from "express";
 import rateLimit from "express-rate-limit";
-import { getPyauMyReports, getPyauWard, getPyauWards, postPyauFault } from "../controllers/publicPyauFault.controller";
+import { getPyauMyReports, getPyauWard, getPyauWards, postPyauFault, postPyauFaultByLocation } from "../controllers/publicPyauFault.controller";
 
 /**
  * Public reporting of non-working submersibles (pyaus). The citizen first verifies with holding number + registered
@@ -15,4 +15,5 @@ const reportLimit = rateLimit({ ...base, windowMs: 60 * 60 * 1000, max: 20, mess
 publicSubmersibleRouter.get("/wards", readLimit, getPyauWards);
 publicSubmersibleRouter.get("/wards/:id", readLimit, getPyauWard);
 publicSubmersibleRouter.post("/faults", reportLimit, postPyauFault);
+publicSubmersibleRouter.post("/faults-by-location", reportLimit, postPyauFaultByLocation);
 publicSubmersibleRouter.get("/my-reports", readLimit, getPyauMyReports);

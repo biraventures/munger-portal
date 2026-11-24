@@ -5,6 +5,7 @@ import { propertyRepository } from "../repositories/property.repository";
 import { propertySaveRepository } from "../repositories/propertySave.repository";
 import { PERIOD_OF_ASSESSMENT_BUCKETS, PERIOD_TAX_RATES } from "../constants/taxRates";
 import { computeStageYears } from "./computeStageYears.service";
+import { entryRevertEventRepository } from "../repositories/entryRevertEvent.repository";
 import { missingTaxYears, yearRangesLabel } from "./arrears.service";
 import type { AdminTokenPayload } from "../types/admin.types";
 import type { PropertyRow, TaxHistoryStageRow } from "../types/property.types";
@@ -15,11 +16,19 @@ import type { PropertyRow, TaxHistoryStageRow } from "../types/property.types";
  * period of assessment (with the register reference), the City Manager approves, and approval adds the manual tax
  * history stages that the demand notice then includes. Until then notices and payments are refused for the holding
  * (arrears.service assertNoMissingTaxYears).
+ *
+ * Revert: an entry waiting for approval can be reverted to the Tax Daroga for correction by the City Manager, DMC or
+ * Municipal Commissioner; an approved entry by the DMC or Municipal Commissioner - the tax history rows it added are
+ * removed (refused if tax was collected on the holding after the approval) and the Tax Daroga enters it again. Each
+ * revert goes to the holding history (approved ones) and the unified revert audit trail.
  */
 
 export const ENTER_ROLES = ["tax_daroga"] as const;
 export const APPROVE_ROLES = ["city_manager"] as const;
 export const VIEW_ROLES = ["tax_daroga", "city_manager", "deputy_commissioner", "commissioner"] as const;
+/** May revert an entry waiting for approval / an approved entry. */
+export const REVERT_PENDING_ROLES = ["city_manager", "deputy_commissioner", "commissioner"] as const;
+export const REVERT_APPROVED_ROLES = ["deputy_commissioner", "commissioner"] as const;
 
 /** The periods of assessment before 2011-12, oldest first. */
 const PRE_2011_PERIODS = Object.keys(PERIOD_OF_ASSESSMENT_BUCKETS).filter((p) => {
@@ -62,7 +71,8 @@ export async function lookupHolding(holdingNo: string) {
   const stages = await propertyRepository.findTaxHistoryByHoldingNo(property.holding_no);
   const missing = missingTaxYears(property, stages);
   const { rows: history } = await pool.query(
-    `SELECT id, entries, register_reference, remarks, status, entered_by_name, entered_at, decided_by_name, decided_at, decision_remarks
+    `SELECT id, entries, register_reference, remarks, status, entered_by_name, entered_at, decided_by_name, decided_at, decision_remarks,
+            reverted_from, reverted_by_name, reverted_by_role, reverted_at, revert_comment
        FROM pre2011_arv_entries WHERE holding_no = $1 ORDER BY entered_at DESC`,
     [property.holding_no],
   );
@@ -169,11 +179,16 @@ export async function submitEntry(admin: AdminTokenPayload, holdingNo: string, e
      VALUES ($1, $2::jsonb, $3, $4, $5, $6) RETURNING id`,
     [property.holding_no, JSON.stringify(clean), registerReference.trim(), remarks?.trim() || null, admin.username, admin.displayName],
   );
+  // A corrected entry after a revert closes the open revert in the audit trail.
+  await pool.query(
+    `UPDATE entry_revert_events SET resubmitted_at = now() WHERE entry_type = 'pre2011_arv' AND reference_no = $1 AND resubmitted_at IS NULL`,
+    [property.holding_no],
+  );
   return { id: Number(rows[0]!.id) };
 }
 
 /** Entries for the officers' list, newest first, with each period's tax worked out for review. */
-export async function listEntries(status?: "pending" | "approved" | "rejected") {
+export async function listEntries(status?: "pending" | "approved" | "rejected" | "reverted") {
   const { rows } = await pool.query(
     `SELECT e.*, p.owner_name, p.ward, p.tax_paid_till_year, p.holding_creation_year
        FROM pre2011_arv_entries e JOIN properties p ON p.holding_no = e.holding_no
@@ -227,15 +242,19 @@ export async function approveEntry(admin: AdminTokenPayload, id: number, remarks
     if (!property) throw ApiError.notFound("The holding no longer exists.");
     const creationYear = parseYearStartOrNull(property.holding_creation_year);
     const addedBy = `${e.entered_by_name} (register ARV), approved by ${admin.displayName}`.slice(0, 64);
+    const stageIds: string[] = [];
     for (const line of e.entries) {
       const st = computeStageYears(line.period, line.arv, creationYear);
-      await client.query(
+      const { rows: ins } = await client.query<{ id: string }>(
         `INSERT INTO tax_history_stages (holding_no, period_of_assessment, start_year_used, closing_year, arv_in_period, tax_rate_in_period,
                                          annual_tax_amount, years_count, total_amount, added_by, added_date, auto_generated)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10, now(), FALSE)`,
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10, now(), FALSE) RETURNING id`,
         [e.holding_no, st.periodOfAssessment, st.startYearUsed, st.closingYear, st.arvInPeriod, st.taxRateInPeriod, st.annualTaxAmount, st.yearsCount, st.totalAmount, addedBy],
       );
+      stageIds.push(ins[0]!.id);
     }
+    // Remembered so a revert removes exactly these rows.
+    await client.query(`UPDATE pre2011_arv_entries SET stage_ids = $2::bigint[] WHERE id = $1`, [id, stageIds]);
     // Any notice already issued was billed without these years - paying it would mark them paid. Close them so the
     // next payment needs a fresh notice that includes the register ARV.
     const { rowCount: closed } = await client.query(
@@ -266,4 +285,85 @@ export async function approveEntry(admin: AdminTokenPayload, id: number, remarks
 export async function rejectEntry(admin: AdminTokenPayload, id: number, reason: string) {
   await claim(pool, id, "rejected", admin, reason);
   return { rejected: true };
+}
+
+const ROLE_NAME: Record<string, string> = { city_manager: "City Manager", deputy_commissioner: "DMC", commissioner: "Municipal Commissioner" };
+
+/**
+ * Sends an entry back to the Tax Daroga for correction. Waiting for approval: City Manager, DMC or Municipal
+ * Commissioner. Approved: DMC or Municipal Commissioner - the ARV rows it added are removed, so the holding again shows
+ * those years without an assessment (no notice / payment until a corrected entry is approved).
+ */
+export async function revertEntry(admin: AdminTokenPayload, id: number, comment: string) {
+  const text = comment.trim();
+  if (text.length < 5) throw ApiError.badRequest("Say what has to be corrected - the Tax Daroga will see it.");
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const { rows } = await client.query(`SELECT * FROM pre2011_arv_entries WHERE id = $1 FOR UPDATE`, [id]);
+    const e = rows[0];
+    if (!e) throw ApiError.notFound("Entry not found.");
+    const from = e.status as string;
+    if (from === "pending") {
+      if (!(REVERT_PENDING_ROLES as readonly string[]).includes(admin.role))
+        throw new ApiError(403, "An entry waiting for approval can be reverted by the City Manager, DMC or Municipal Commissioner.");
+    } else if (from === "approved") {
+      if (!(REVERT_APPROVED_ROLES as readonly string[]).includes(admin.role))
+        throw new ApiError(403, "An approved entry can be reverted only by the DMC or the Municipal Commissioner.");
+      // Tax collected after the approval was worked out on this ARV - reverting would leave it on figures no longer there.
+      const { rows: paid } = await client.query(
+        `SELECT receipt_no FROM transactions WHERE holding_no = $1 AND COALESCE(cancelled, FALSE) = FALSE AND txn_date > $2 LIMIT 1`,
+        [e.holding_no, e.decided_at],
+      );
+      if (paid[0])
+        throw ApiError.badRequest(
+          `Tax has been collected on this holding since the approval${paid[0].receipt_no ? ` (receipt ${paid[0].receipt_no})` : ""}, on this ARV. It cannot be reverted now - correct the tax history through a property change instead.`,
+        );
+      const ids: string[] = e.stage_ids ?? [];
+      if (!ids.length)
+        throw ApiError.badRequest("The tax history rows this entry added could not be identified - correct the tax history through a property change instead.");
+      const { rowCount } = await client.query(`DELETE FROM tax_history_stages WHERE holding_no = $1 AND id = ANY($2::bigint[])`, [e.holding_no, ids]);
+      if (rowCount !== ids.length)
+        throw ApiError.badRequest("The holding's tax history was changed after this approval - correct it through a property change instead.");
+      await client.query(
+        `UPDATE demand_notices SET superseded = TRUE WHERE holding_no = $1 AND settled = FALSE AND cancelled = FALSE AND superseded = FALSE`,
+        [e.holding_no],
+      );
+      const version = await propertySaveRepository.nextHistoryVersion(e.holding_no, client);
+      await propertySaveRepository.insertHistory(
+        e.holding_no,
+        version,
+        "Updated",
+        "Pre-2011 ARV approval reverted",
+        `Entry no. ${id} (${e.register_reference}) approved by ${e.decided_by_name} reverted by ${admin.displayName} (${ROLE_NAME[admin.role] ?? admin.role}): ${text}`,
+        admin.displayName,
+        { pre2011ArvReverted: { entryId: id, entries: e.entries, registerReference: e.register_reference, approvedBy: e.decided_by_name, comment: text } },
+        client,
+      );
+    } else {
+      throw ApiError.badRequest(`This entry has been ${from} - it cannot be reverted.`);
+    }
+    await client.query(
+      `UPDATE pre2011_arv_entries SET status = 'reverted', reverted_from = $2, reverted_by_username = $3, reverted_by_name = $4,
+              reverted_by_role = $5, reverted_at = now(), revert_comment = $6 WHERE id = $1`,
+      [id, from, admin.username, admin.displayName, admin.role, text],
+    );
+    await client.query("COMMIT");
+    await entryRevertEventRepository.create({
+      entryType: "pre2011_arv",
+      entryId: id,
+      referenceNo: e.holding_no,
+      originallyRequestedBy: e.entered_by_name,
+      revertedBy: admin.displayName,
+      revertedByRole: admin.role,
+      revertedFromStage: from === "approved" ? "Approved entry" : "city_manager",
+      comment: text,
+    });
+    return { reverted: true, from };
+  } catch (err) {
+    await client.query("ROLLBACK");
+    throw err;
+  } finally {
+    client.release();
+  }
 }

@@ -293,7 +293,9 @@ export default function DocumentArchivePage() {
                       <span className="text-slate-500">
                         ₹{Number(p.amountReceived).toLocaleString("en-IN")} — {p.paymentMode}
                       </span>
+                      {p.historical && <span className="block text-slate-500">Old receipt / register ref.: {p.formattedReceiptNo}</span>}
                     </div>
+                    {!p.historical && (
                     <button
                       onClick={() => withLoading(`p-${p.receiptNo}`, async () => setReceiptReprint(await fetchReceiptReprintAdmin(p.receiptNo)))}
                       disabled={loadingItem === `p-${p.receiptNo}`}
@@ -302,6 +304,7 @@ export default function DocumentArchivePage() {
                       {loadingItem === `p-${p.receiptNo}` ? <Loader2 className="h-3 w-3 animate-spin" /> : <Printer className="h-3 w-3" />}
                       View
                     </button>
+                    )}
                   </li>
                 ))}
               </ul>

@@ -1,8 +1,10 @@
 "use client";
 
+import { PhotoSourceButtons } from "@/components/admin/photo-source-buttons";
 import { useEffect, useState } from "react";
 import { Camera, CheckCircle2, Loader2, MapPin, MapPinOff } from "lucide-react";
 import { getCurrentGpsPosition } from "@/lib/geolocation";
+import { blobUrlIsPdf } from "@/lib/upload-limits";
 
 export function GpsButton({
   lat,
@@ -85,7 +87,7 @@ export function PhotoPicker({ label, file, onChange, required }: { label: string
   const inputId = `photo-${label.replace(/\s+/g, "-").toLowerCase()}`;
   return (
     <div className={`rounded-lg border-2 border-dashed p-4 text-center ${file ? "border-green-300 bg-green-50" : "border-nnm-blue/40 bg-blue-50/50"}`}>
-      <label htmlFor={inputId} className="flex cursor-pointer flex-col items-center gap-2">
+      <div className="flex flex-col items-center gap-2">
         {previewUrl ? (
           // eslint-disable-next-line @next/next/no-img-element -- local file preview
           <img src={previewUrl} alt={label} className="h-32 w-32 rounded-md border border-slate-200 object-cover" />
@@ -98,27 +100,23 @@ export function PhotoPicker({ label, file, onChange, required }: { label: string
           {label}
           {required && <span className="text-red-500"> *</span>}
         </span>
-        <span className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold ${file ? "bg-green-600 text-white" : "bg-nnm-blue text-white"}`}>
-          {file ? (
-            <>
-              <CheckCircle2 className="h-3.5 w-3.5" />
-              Captured - tap to retake
-            </>
-          ) : (
-            <>
-              <Camera className="h-3.5 w-3.5" />
-              Take / Choose Photo
-            </>
-          )}
-        </span>
-      </label>
-      <input id={inputId} type="file" accept="image/jpeg,image/png" capture="environment" onChange={(e) => onChange(e.target.files?.[0] ?? null)} className="hidden" />
+        <PhotoSourceButtons idBase={inputId} hasFile={!!file} onFile={(files) => onChange(files?.[0] ?? null)} />
+      </div>
     </div>
   );
 }
 
 /** Loads a photo through the authenticated API and shows it in a dialog. */
 export function PhotoDialog({ url, title, onClose }: { url: string; title: string; onClose: () => void }) {
+  // A document may have been attached as a PDF - shown embedded, with a link to open it on its own.
+  const [isPdf, setIsPdf] = useState(false);
+  useEffect(() => {
+    let live = true;
+    blobUrlIsPdf(url).then((pdf) => live && setIsPdf(pdf));
+    return () => {
+      live = false;
+    };
+  }, [url]);
   return (
     <div role="dialog" aria-label={title} className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={onClose}>
       <div className="max-h-full w-full max-w-3xl rounded-xl bg-white p-4" onClick={(e) => e.stopPropagation()}>
@@ -128,8 +126,17 @@ export function PhotoDialog({ url, title, onClose }: { url: string; title: strin
             Close
           </button>
         </div>
-        {/* eslint-disable-next-line @next/next/no-img-element -- blob URL from an authenticated fetch */}
-        <img src={url} alt={title} className="max-h-[75vh] w-full rounded-md object-contain" />
+        {isPdf ? (
+          <>
+            <iframe src={url} title={title} className="h-[70vh] w-full rounded-md border border-slate-200" />
+            <a href={url} target="_blank" rel="noreferrer" className="mt-2 inline-block text-sm font-semibold text-nnm-blue underline">
+              Open the PDF in a new tab
+            </a>
+          </>
+        ) : (
+          // eslint-disable-next-line @next/next/no-img-element -- blob URL from an authenticated fetch
+          <img src={url} alt={title} className="max-h-[75vh] w-full rounded-md object-contain" />
+        )}
       </div>
     </div>
   );

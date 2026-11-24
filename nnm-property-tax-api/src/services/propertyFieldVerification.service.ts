@@ -6,13 +6,9 @@ import { env } from "../config/env";
 import { ApiError } from "../utils/ApiError";
 import type { PropertyFieldVerificationRow } from "../types/propertyFieldVerification.types";
 import type { AdminTokenPayload } from "../types/admin.types";
-import { MAX_PHOTO_BYTES, uploadLimitMessage } from "../utils/uploadLimits";
+import { photoOrDocumentExt } from "../utils/uploadLimits";
 
-const ALLOWED_PHOTO_MIME_TO_EXT: Record<string, string> = {
-  "image/jpeg": "jpg",
-  "image/jpg": "jpg",
-  "image/png": "png",
-};
+const DOCUMENT_KINDS = new Set(["aadhaar", "receipt", "landdoc", "register"]);
 
 /** Saves a photo to PHOTO_UPLOAD_DIR (same shared storage/validation as the discrepancy-report photo flow). `kind` (holding/aadhaar/receipt/landdoc) keeps the four photos on one capture distinct on disk. Returns null when no photo was given. */
 async function savePhoto(
@@ -22,12 +18,9 @@ async function savePhoto(
   mimeType: string | undefined,
 ): Promise<string | null> {
   if (!base64Data || !mimeType) return null;
-  const ext = ALLOWED_PHOTO_MIME_TO_EXT[mimeType];
-  if (!ext) throw ApiError.badRequest("Only JPEG or PNG photos are accepted.");
-
   const buffer = Buffer.from(base64Data, "base64");
-  if (buffer.length === 0) throw ApiError.badRequest("The photo is empty.");
-  if (buffer.length > MAX_PHOTO_BYTES) throw ApiError.badRequest(uploadLimitMessage("image/jpeg", buffer.length));
+  // Documents (Aadhaar, previous receipt, land papers, register page) may be a PDF; photos of the site may not.
+  const ext = photoOrDocumentExt(mimeType, buffer, DOCUMENT_KINDS.has(kind));
 
   const relativePath = path.join("field-verification-photos", `${holdingNo}-${kind}-${Date.now()}.${ext}`);
   const fullPath = path.join(env.PHOTO_UPLOAD_DIR, relativePath);

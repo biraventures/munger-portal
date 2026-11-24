@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { ImageOff, Loader2 } from "lucide-react";
 import { getAdminToken } from "@/lib/admin-auth";
+import { getAttendanceToken } from "@/lib/attendance-auth";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_PROPERTY_TAX_API_URL || "http://localhost:4000/api/v1";
 
@@ -30,20 +31,36 @@ function Photo({ id, kind, label }: { id: number; kind: PhotoKind; label: string
 }
 
 /** Photos are behind the admin login, so they are fetched with the token and shown from a blob URL. `path` is under the API base. */
-export function AuthPhoto({ path, label, large }: { path: string; label: string; large?: boolean }) {
+/** portal: whose login fetches the photo - the admin portal (default) or asset management (attendance). */
+export function AuthPhoto({
+  path,
+  label,
+  large,
+  portal = "admin",
+}: {
+  path: string;
+  label: string;
+  large?: boolean;
+  portal?: "admin" | "attendance";
+}) {
   const [url, setUrl] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
+  const [isPdf, setIsPdf] = useState(false);
 
   useEffect(() => {
     let objectUrl: string | null = null;
     let cancelled = false;
     (async () => {
       try {
-        const token = getAdminToken();
+        const token = portal === "attendance" ? getAttendanceToken() : getAdminToken();
         const res = await fetch(`${API_BASE_URL}${path}`, { headers: { Authorization: `Bearer ${token ?? ""}` } });
         if (!res.ok) throw new Error();
-        objectUrl = URL.createObjectURL(await res.blob());
-        if (!cancelled) setUrl(objectUrl);
+        const blob = await res.blob();
+        objectUrl = URL.createObjectURL(blob);
+        if (!cancelled) {
+          setIsPdf(blob.type === "application/pdf");
+          setUrl(objectUrl);
+        }
       } catch {
         if (!cancelled) setFailed(true);
       }
@@ -52,7 +69,7 @@ export function AuthPhoto({ path, label, large }: { path: string; label: string;
       cancelled = true;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [path]);
+  }, [path, portal]);
 
   return (
     <figure className={large ? "w-56" : "w-36"}>
@@ -64,9 +81,17 @@ export function AuthPhoto({ path, label, large }: { path: string; label: string;
         ) : !url ? (
           <Loader2 className="h-4 w-4 animate-spin text-slate-300" />
         ) : (
-          <a href={url} target="_blank" rel="noreferrer" title="Open full size">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={url} alt={label} className={large ? "h-44 w-56 object-cover" : "h-28 w-36 object-cover"} />
+          <a href={url} target="_blank" rel="noreferrer" title={isPdf ? "Open the PDF" : "Open full size"}>
+            {isPdf ? (
+              // A document attached as a PDF - opens in a new tab.
+              <span className="flex flex-col items-center gap-1 text-xs font-semibold text-nnm-blue">
+                <span className="rounded bg-red-600 px-2 py-0.5 text-[11px] font-bold text-white">PDF</span>
+                Open
+              </span>
+            ) : (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={url} alt={label} className={large ? "h-44 w-56 object-cover" : "h-28 w-36 object-cover"} />
+            )}
           </a>
         )}
       </div>

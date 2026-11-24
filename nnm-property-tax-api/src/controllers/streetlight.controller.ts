@@ -20,6 +20,11 @@ import {
 } from "../services/streetlightStatusDashboard.service";
 import { asyncHandler } from "../middleware/asyncHandler";
 import { ApiError } from "../utils/ApiError";
+import { pool } from "../config/db";
+import { assertRecordWard, assertUnlimited, assertWard, filterByWard, wardScope } from "../services/wardScope";
+
+const LIGHT_WARD = `SELECT ward_id FROM lights WHERE id = $1`;
+const FAULT_WARD = `SELECT l.ward_id FROM light_faults f JOIN lights l ON l.id = f.light_id WHERE f.id = $1`;
 
 // ---------------------------------------------------------------------------
 // Installation agencies - municipal_commissioner manages this list.
@@ -58,7 +63,7 @@ export const setInstallationAgencyActiveHandler = asyncHandler(async (req: Reque
 
 export const listLightsHandler = asyncHandler(async (req: Request, res: Response) => {
   const lightType = req.query.lightType as "streetlight" | "high_mast" | undefined;
-  const lights = await lightRepository.listAll(lightType);
+  const lights = await filterByWard(req, await lightRepository.listAll(lightType), (l) => l.ward_id);
   res.status(200).json({
     lights: lights.map((l) => ({
       id: l.id,
@@ -98,6 +103,7 @@ export const createLightHandler = asyncHandler(async (req: Request, res: Respons
   const parsed = createLightSchema.safeParse(req.body);
   if (!parsed.success) throw ApiError.badRequest("Invalid input", parsed.error.flatten().fieldErrors);
 
+  await assertWard(req, parsed.data.wardId);
   const existing = await lightRepository.findBySerialNumber(parsed.data.serialNumber);
   if (existing) throw ApiError.badRequest(`A light with serial number "${parsed.data.serialNumber}" already exists.`);
 
@@ -134,6 +140,7 @@ export const setLightActiveHandler = asyncHandler(async (req: Request, res: Resp
   if (!paramsParsed.success) throw ApiError.badRequest("Invalid light id");
   const bodyParsed = activeBodySchema.safeParse(req.body);
   if (!bodyParsed.success) throw ApiError.badRequest("Body must include { active: boolean }");
+  await assertRecordWard(req, LIGHT_WARD, paramsParsed.data.id);
   const updated = await lightRepository.setActive(paramsParsed.data.id, bodyParsed.data.active);
   if (!updated) throw ApiError.notFound("Light not found");
   res.status(200).json({ light: { id: updated.id, active: updated.active } });
@@ -160,6 +167,7 @@ export const setLightGpsHandler = asyncHandler(async (req: Request, res: Respons
   if ((bodyParsed.data.latitude === null) !== (bodyParsed.data.longitude === null)) {
     throw ApiError.badRequest("Provide both latitude and longitude, or clear both.");
   }
+  await assertRecordWard(req, LIGHT_WARD, paramsParsed.data.id);
   const updated = await lightRepository.setGpsLocation(paramsParsed.data.id, bodyParsed.data.latitude, bodyParsed.data.longitude);
   if (!updated) throw ApiError.notFound("Light not found");
   res.status(200).json({ light: { id: updated.id, latitude: updated.latitude, longitude: updated.longitude } });
@@ -171,6 +179,7 @@ const csvUploadSchema = z.object({ csvContent: z.string().min(1, "File appears t
 export const uploadLightsCsvHandler = asyncHandler(async (req: Request, res: Response) => {
   const parsed = csvUploadSchema.safeParse(req.body);
   if (!parsed.success) throw ApiError.badRequest("Invalid input", parsed.error.flatten().fieldErrors);
+  await assertUnlimited(req, "Bulk upload");
   const result = await importLightsCsv(parsed.data.csvContent);
   res.status(200).json(result);
 });
@@ -179,6 +188,7 @@ export const uploadLightsCsvHandler = asyncHandler(async (req: Request, res: Res
 export const uploadHighMastBulkHandler = asyncHandler(async (req: Request, res: Response) => {
   const parsed = csvUploadSchema.safeParse(req.body);
   if (!parsed.success) throw ApiError.badRequest("Invalid input", parsed.error.flatten().fieldErrors);
+  await assertUnlimited(req, "Bulk upload");
   const result = await importHighMastBulkCsv(parsed.data.csvContent);
   res.status(200).json(result);
 });
@@ -187,8 +197,8 @@ export const uploadHighMastBulkHandler = asyncHandler(async (req: Request, res: 
 // Contractor-ward assignment
 // ---------------------------------------------------------------------------
 
-export const listContractorWardsHandler = asyncHandler(async (_req: Request, res: Response) => {
-  const mappings = await contractorWardRepository.listAll();
+export const listContractorWardsHandler = asyncHandler(async (req: Request, res: Response) => {
+  const mappings = await filterByWard(req, await contractorWardRepository.listAll(), (m) => m.ward_id);
   res.status(200).json({ mappings: mappings.map((m) => ({ wardId: m.ward_id, contractorId: m.contractor_id })) });
 });
 
@@ -197,6 +207,7 @@ const assignContractorWardSchema = z.object({ wardId: z.coerce.number().int().po
 export const assignContractorWardHandler = asyncHandler(async (req: Request, res: Response) => {
   const parsed = assignContractorWardSchema.safeParse(req.body);
   if (!parsed.success) throw ApiError.badRequest("Invalid input", parsed.error.flatten().fieldErrors);
+  await assertWard(req, parsed.data.wardId);
   const mapping = await contractorWardRepository.assign(parsed.data.wardId, parsed.data.contractorId);
   res.status(200).json({ mapping: { wardId: mapping.ward_id, contractorId: mapping.contractor_id } });
 });
@@ -209,8 +220,14 @@ export const listFaultsHandler = asyncHandler(async (req: Request, res: Response
   await accrueAllOverduePenalties();
   const status = req.query.status as "open" | "repaired" | undefined;
   const user = req.attendanceUser!;
-  const faults =
+  let faults =
     user.role === "streetlight_contractor" ? await lightFaultRepository.listByContractor(user.sub, status) : await lightFaultRepository.listAll(status);
+  const scope = await wardScope(req);
+  if (scope !== null) {
+    const { rows } = await pool.query<{ id: string }>(`SELECT id FROM lights WHERE ward_id = ANY($1)`, [scope]);
+    const mine = new Set(rows.map((r) => Number(r.id)));
+    faults = faults.filter((f) => f.light_id !== null && mine.has(Number(f.light_id)));
+  }
   res.status(200).json({
     faults: faults.map((f) => ({
       id: f.id,
@@ -261,6 +278,7 @@ export const markFaultRepairedHandler = asyncHandler(async (req: Request, res: R
   if (!paramsParsed.success) throw ApiError.badRequest("Invalid fault id");
   const bodyParsed = markRepairedSchema.safeParse(req.body);
   if (!bodyParsed.success) throw ApiError.badRequest("Invalid input");
+  await assertRecordWard(req, FAULT_WARD, paramsParsed.data.id);
   const fault = await markFaultRepaired(req.attendanceUser!, paramsParsed.data.id, bodyParsed.data.repairNotes ?? null, bodyParsed.data.functionalSince ?? null);
   res.status(200).json({ fault: { id: fault.id, status: fault.status, repairedAt: fault.repaired_at, functionalSince: fault.functional_since } });
 });
@@ -272,6 +290,7 @@ export const linkFaultToLightHandler = asyncHandler(async (req: Request, res: Re
   if (!paramsParsed.success) throw ApiError.badRequest("Invalid fault id");
   const bodyParsed = linkLightSchema.safeParse(req.body);
   if (!bodyParsed.success) throw ApiError.badRequest("Invalid input", bodyParsed.error.flatten().fieldErrors);
+  await assertRecordWard(req, LIGHT_WARD, bodyParsed.data.lightId);
   const fault = await linkFaultToLight(paramsParsed.data.id, bodyParsed.data.lightId);
   res.status(200).json({ fault: { id: fault.id, lightId: fault.light_id, assignedContractorId: fault.assigned_contractor_id } });
 });

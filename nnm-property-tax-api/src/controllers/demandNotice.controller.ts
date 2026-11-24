@@ -1,3 +1,4 @@
+import { discrepancyHold } from "../services/discrepancyHold.service";
 import type { Request, Response } from "express";
 import { withEffectivePaidTill } from "../services/paidYearGuard.service";
 import { propertyRepository } from "../repositories/property.repository";
@@ -62,7 +63,7 @@ export const getUnsettledDemandNotices = asyncHandler(async (req: Request, res: 
   if (property) {
     try {
       assertNoMissingTaxYears(property, await propertyRepository.findTaxHistoryByHoldingNo(property.holding_no));
-      paymentHold = await solidWasteTypeBlock(property);
+      paymentHold = (await discrepancyHold(property.holding_no)) ?? (await solidWasteTypeBlock(property));
     } catch (err) {
       paymentHold = err instanceof Error ? err.message : "Payment cannot be taken for this holding yet.";
     }

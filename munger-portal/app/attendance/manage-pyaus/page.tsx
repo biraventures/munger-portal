@@ -1,7 +1,20 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AlertCircle, CheckCircle2, Loader2, PlusCircle, Upload, BookOpen, X, Wrench, Pencil, Trash2, Download, AlertTriangle } from "lucide-react";
+import {
+  AlertCircle,
+  CheckCircle2,
+  Loader2,
+  PlusCircle,
+  Upload,
+  BookOpen,
+  X,
+  Wrench,
+  Pencil,
+  Trash2,
+  Download,
+  AlertTriangle,
+} from "lucide-react";
 import { AttendanceHeader } from "@/components/attendance/attendance-header";
 import { useAttendanceGuard } from "@/lib/use-attendance-guard";
 import { fetchAttendanceWards, fetchAttendanceUsers, type AttendanceWard, type AttendanceUserSummary } from "@/lib/attendance-api";
@@ -31,7 +44,7 @@ const labelClass = "mb-1.5 block text-sm font-medium text-slate-700";
 
 const STRUCTURE_LABELS: Record<string, string> = { pcc_structure: "PCC Structure", iron_stand: "Iron Stand", nothing: "None" };
 
-const MANAGE_ROLES = ["pyau_je", "pyau_ae", "attendance_admin"];
+const MANAGE_ROLES = ["pyau_je", "pyau_ae", "je_mechanical", "ae_mechanical", "attendance_admin"];
 
 export default function ManagePyausPage() {
   const user = useAttendanceGuard();
@@ -53,6 +66,8 @@ export default function ManagePyausPage() {
   const [schemeName, setSchemeName] = useState("");
   const [overheadTankCount, setOverheadTankCount] = useState("0");
   const [housesServed, setHousesServed] = useState("");
+  const [waterTapCount, setWaterTapCount] = useState("");
+  const [standpostCount, setStandpostCount] = useState("");
   const [structureType, setStructureType] = useState<"" | "pcc_structure" | "iron_stand" | "nothing">("");
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
@@ -77,6 +92,8 @@ export default function ManagePyausPage() {
   const [editSchemeName, setEditSchemeName] = useState("");
   const [editOverheadTankCount, setEditOverheadTankCount] = useState("0");
   const [editHousesServed, setEditHousesServed] = useState("");
+  const [editWaterTapCount, setEditWaterTapCount] = useState("");
+  const [editStandpostCount, setEditStandpostCount] = useState("");
   const [editStructureType, setEditStructureType] = useState<"" | "pcc_structure" | "iron_stand" | "nothing">("");
   const [editPumpDetails, setEditPumpDetails] = useState("");
   const [editBoringDepthFeet, setEditBoringDepthFeet] = useState("");
@@ -107,7 +124,7 @@ export default function ManagePyausPage() {
   const [markingRepaired, setMarkingRepaired] = useState<number | null>(null);
 
   const wardName = (id: number) => wards.find((w) => w.id === id)?.wardName ?? "-";
-  const contractorName = (id: number | null) => (id ? contractors.find((c) => c.id === id)?.displayName ?? `#${id}` : "-");
+  const contractorName = (id: number | null) => (id ? (contractors.find((c) => c.id === id)?.displayName ?? `#${id}`) : "-");
 
   async function loadPyaus() {
     try {
@@ -119,11 +136,15 @@ export default function ManagePyausPage() {
 
   useEffect(() => {
     if (!user) return;
-    fetchAttendanceWards().then(setWards).catch(() => setWards([]));
+    fetchAttendanceWards()
+      .then(setWards)
+      .catch(() => setWards([]));
     fetchAttendanceUsers()
       .then((users) => setContractors(users.filter((u) => u.role === "pyau_contractor")))
       .catch(() => setContractors([]));
-    fetchPyauContractorWards().then(setContractorWards).catch(() => setContractorWards([]));
+    fetchPyauContractorWards()
+      .then(setContractorWards)
+      .catch(() => setContractorWards([]));
     loadPyaus();
   }, [user]);
 
@@ -145,6 +166,8 @@ export default function ManagePyausPage() {
         schemeName: schemeName || null,
         overheadTankCount: Number(overheadTankCount) || 0,
         housesServed: housesServed ? Number(housesServed) : null,
+        waterTapCount: waterTapCount ? Number(waterTapCount) : null,
+        standpostCount: standpostCount ? Number(standpostCount) : null,
         structureType: structureType || null,
         tankStandType: null,
         pumpDetails: null,
@@ -162,6 +185,8 @@ export default function ManagePyausPage() {
       setSchemeName("");
       setOverheadTankCount("0");
       setHousesServed("");
+      setWaterTapCount("");
+      setStandpostCount("");
       setStructureType("");
       await loadPyaus();
     } catch (err) {
@@ -228,6 +253,8 @@ export default function ManagePyausPage() {
     setEditSchemeName(p.schemeName ?? "");
     setEditOverheadTankCount(String(p.overheadTankCount));
     setEditHousesServed(p.housesServed !== null ? String(p.housesServed) : "");
+    setEditWaterTapCount(p.waterTapCount !== null && p.waterTapCount !== undefined ? String(p.waterTapCount) : "");
+    setEditStandpostCount(p.standpostCount !== null && p.standpostCount !== undefined ? String(p.standpostCount) : "");
     setEditStructureType(p.structureType ?? "");
     setEditPumpDetails(p.pumpDetails ?? "");
     setEditBoringDepthFeet(p.boringDepthFeet ?? "");
@@ -252,6 +279,8 @@ export default function ManagePyausPage() {
         schemeName: editSchemeName || null,
         overheadTankCount: Number(editOverheadTankCount) || 0,
         housesServed: editHousesServed ? Number(editHousesServed) : null,
+        waterTapCount: editWaterTapCount ? Number(editWaterTapCount) : null,
+        standpostCount: editStandpostCount ? Number(editStandpostCount) : null,
         structureType: editStructureType || null,
         pumpDetails: editPumpDetails || null,
         boringDepthFeet: editBoringDepthFeet ? Number(editBoringDepthFeet) : null,
@@ -272,7 +301,8 @@ export default function ManagePyausPage() {
 
   async function handleDeleteOne(p: Pyau) {
     setDeleteError(null);
-    if (!window.confirm(`Permanently delete ${p.serialNumber ?? "this pyau"} and its full maintenance history? This cannot be undone.`)) return;
+    if (!window.confirm(`Permanently delete ${p.serialNumber ?? "this pyau"} and its full maintenance history? This cannot be undone.`))
+      return;
     setDeletingId(p.id);
     try {
       await deletePyau(p.id);
@@ -291,7 +321,11 @@ export default function ManagePyausPage() {
       return;
     }
     const count = (pyaus ?? []).filter((p) => p.wardId === Number(wardFilter)).length;
-    if (!window.confirm(`Permanently delete all ${count} pyau(s) in ${wardName(Number(wardFilter))}, including their maintenance history? This cannot be undone.`))
+    if (
+      !window.confirm(
+        `Permanently delete all ${count} pyau(s) in ${wardName(Number(wardFilter))}, including their maintenance history? This cannot be undone.`,
+      )
+    )
       return;
     setDeleteWardBusy(true);
     try {
@@ -328,6 +362,8 @@ export default function ManagePyausPage() {
       "Scheme",
       "Overhead Tank Count",
       "Houses Served",
+      "Water Taps",
+      "Water Standposts",
       "Structure Type",
       "Functional Status",
       "Under Builder Warranty",
@@ -339,11 +375,14 @@ export default function ManagePyausPage() {
       p.schemeName ?? "",
       String(p.overheadTankCount),
       p.housesServed !== null ? String(p.housesServed) : "",
+      p.waterTapCount !== null && p.waterTapCount !== undefined ? String(p.waterTapCount) : "",
+      p.standpostCount !== null && p.standpostCount !== undefined ? String(p.standpostCount) : "",
       p.structureType ? STRUCTURE_LABELS[p.structureType] : "",
       p.functionalStatus,
       p.underBuilderWarranty ? "Yes" : "No",
     ]);
-    const escapeCsvCell = (cell: string) => (cell.includes(",") || cell.includes('"') || cell.includes("\n") ? `"${cell.replace(/"/g, '""')}"` : cell);
+    const escapeCsvCell = (cell: string) =>
+      cell.includes(",") || cell.includes('"') || cell.includes("\n") ? `"${cell.replace(/"/g, '""')}"` : cell;
     const csvContent = [headers, ...rows].map((row) => row.map(escapeCsvCell).join(",")).join("\n");
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
@@ -419,7 +458,9 @@ export default function ManagePyausPage() {
 
       <main className="mx-auto max-w-5xl px-6 py-10">
         <h1 className="mb-1 text-2xl font-semibold text-slate-900">Submersible Pyau Registry</h1>
-        <p className="mb-6 text-sm text-slate-500">Ward-wise water kiosk inventory - status, maintenance history, and contractor assignment.</p>
+        <p className="mb-6 text-sm text-slate-500">
+          Ward-wise water kiosk inventory - status, maintenance history, and contractor assignment.
+        </p>
 
         {error && (
           <div role="alert" className="mb-5 flex items-center gap-2 rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-700">
@@ -435,7 +476,10 @@ export default function ManagePyausPage() {
               Add One Pyau
             </h2>
             {createError && (
-              <div role="alert" className="mb-4 flex items-center gap-2 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+              <div
+                role="alert"
+                className="mb-4 flex items-center gap-2 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700"
+              >
                 <AlertCircle className="h-4 w-4 shrink-0" />
                 {createError}
               </div>
@@ -464,11 +508,23 @@ export default function ManagePyausPage() {
               </div>
               <div>
                 <label className={labelClass}>Latitude</label>
-                <input type="number" step="0.000001" value={latitude} onChange={(e) => setLatitude(e.target.value)} className={inputClass} />
+                <input
+                  type="number"
+                  step="0.000001"
+                  value={latitude}
+                  onChange={(e) => setLatitude(e.target.value)}
+                  className={inputClass}
+                />
               </div>
               <div>
                 <label className={labelClass}>Longitude</label>
-                <input type="number" step="0.000001" value={longitude} onChange={(e) => setLongitude(e.target.value)} className={inputClass} />
+                <input
+                  type="number"
+                  step="0.000001"
+                  value={longitude}
+                  onChange={(e) => setLongitude(e.target.value)}
+                  className={inputClass}
+                />
               </div>
               <div>
                 <label className={labelClass}>Scheme Name (optional)</label>
@@ -476,15 +532,51 @@ export default function ManagePyausPage() {
               </div>
               <div>
                 <label className={labelClass}>Overhead Tank Count</label>
-                <input type="number" min="0" value={overheadTankCount} onChange={(e) => setOverheadTankCount(e.target.value)} className={inputClass} />
+                <input
+                  type="number"
+                  min="0"
+                  value={overheadTankCount}
+                  onChange={(e) => setOverheadTankCount(e.target.value)}
+                  className={inputClass}
+                />
               </div>
               <div>
                 <label className={labelClass}>Houses Served (via pipeline)</label>
-                <input type="number" min="0" value={housesServed} onChange={(e) => setHousesServed(e.target.value)} className={inputClass} />
+                <input
+                  type="number"
+                  min="0"
+                  value={housesServed}
+                  onChange={(e) => setHousesServed(e.target.value)}
+                  className={inputClass}
+                />
+              </div>
+              <div>
+                <label className={labelClass}>Number of Water Taps</label>
+                <input
+                  type="number"
+                  min="0"
+                  value={waterTapCount}
+                  onChange={(e) => setWaterTapCount(e.target.value)}
+                  className={inputClass}
+                />
+              </div>
+              <div>
+                <label className={labelClass}>Number of Water Standposts</label>
+                <input
+                  type="number"
+                  min="0"
+                  value={standpostCount}
+                  onChange={(e) => setStandpostCount(e.target.value)}
+                  className={inputClass}
+                />
               </div>
               <div>
                 <label className={labelClass}>Structure Type</label>
-                <select value={structureType} onChange={(e) => setStructureType(e.target.value as typeof structureType)} className={inputClass}>
+                <select
+                  value={structureType}
+                  onChange={(e) => setStructureType(e.target.value as typeof structureType)}
+                  className={inputClass}
+                >
                   <option value="">Not specified</option>
                   <option value="pcc_structure">PCC Structure</option>
                   <option value="iron_stand">Iron Stand</option>
@@ -515,34 +607,26 @@ export default function ManagePyausPage() {
               generated automatically per ward. This adds to the registry - it does not replace or deactivate existing entries.
             </p>
             <details className="mb-4 rounded-md border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
-              <summary className="cursor-pointer font-semibold text-slate-700">Expected CSV columns (in this exact order)</summary>
+              <summary className="cursor-pointer font-semibold text-slate-700">Expected CSV columns</summary>
+              <p className="mt-2">Columns are recognised by their header names, in any order. Only Ward No and Address are required:</p>
               <ol className="mt-2 list-inside list-decimal space-y-0.5">
-                <li>Ward No</li>
-                <li>(Number of installed pyau - ward-level summary, ignored per-row)</li>
+                <li>Ward No - &quot;Ward 1&quot; or &quot;1&quot;</li>
                 <li>Address/Location of Water Kiosk</li>
                 <li>Has water tank - a count (0, 1, 2, 3...)</li>
-                <li>Pyau status (Working)</li>
-                <li>Pyau status (Not working) - free-text reason if not working</li>
+                <li>Pyau status (Working) - &quot;Working&quot; or &quot;Not working&quot;</li>
+                <li>Remarks on functionality</li>
                 <li>Type of stand - &quot;PCC Structure&quot;, &quot;Iron stand&quot;, or &quot;Nothing&quot;</li>
-                <li>Tank Stand of Water Kiosk (Made of Concrete)</li>
-                <li>Number of Water Kiosks Without Stand (not imported)</li>
+                <li>Number of water taps</li>
+                <li>Number of water standposts</li>
                 <li>How many houses get water via line or just stand</li>
-                <li>Scheme Name (optional)</li>
-                <li>Pump Details (optional)</li>
-                <li>Boring Depth in feet (optional, numeric)</li>
-                <li>Casing Details (optional)</li>
-                <li>Installed Date (optional, format yyyy-mm-dd)</li>
-                <li>Builder Name (optional)</li>
-                <li>Builder Contact (optional)</li>
-                <li>Remarks (optional - combined with any not-working reason from column 6, not replacing it)</li>
-                <li>Latitude (optional, numeric)</li>
-                <li>Longitude (optional, numeric)</li>
+                <li>
+                  Scheme Name, Pump Details, Boring Depth in feet, Casing Details, Installed Date (yyyy-mm-dd), Builder Name, Builder
+                  Contact, Remarks, Latitude, Longitude (all optional)
+                </li>
               </ol>
               <p className="mt-2 text-slate-500">
-                Columns 1-10 are matched by position, not header name, since the source file&apos;s headers mix Hindi and English
-                text. Columns 11-19 are optional additions covering every field the &quot;Add One Pyau&quot; form supports - a file
-                without them still imports fine, those fields are just left blank to fill in later. If you add any of them, they
-                must be appended in this exact order after column 10, since position is what&apos;s matched, not the column name.
+                The original survey sheet (Hindi headers) is also accepted. Rows already in the registry (same ward and address) are not
+                added again, and a totals row at the bottom is ignored.
               </p>
             </details>
             <input
@@ -559,14 +643,21 @@ export default function ManagePyausPage() {
               </div>
             )}
             {uploadError && (
-              <div role="alert" className="mt-4 flex items-center gap-2 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+              <div
+                role="alert"
+                className="mt-4 flex items-center gap-2 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700"
+              >
                 <AlertCircle className="h-4 w-4 shrink-0" />
                 {uploadError}
               </div>
             )}
             {uploadResult && (
               <div className="mt-4 rounded-md border border-slate-200 bg-slate-50 p-4 text-sm">
-                <p className="mb-2 font-semibold text-slate-700">Created {uploadResult.created} pyau(s).</p>
+                <p className="mb-2 font-semibold text-slate-700">
+                  Created {uploadResult.created} pyau(s).
+                  {!!uploadResult.alreadyInRegistry &&
+                    ` ${uploadResult.alreadyInRegistry} row(s) were already in the registry (same ward and address) and were not added again.`}
+                </p>
                 {uploadResult.errors.length > 0 && (
                   <div>
                     <p className="mb-1 font-semibold text-amber-700">{uploadResult.errors.length} row(s) skipped:</p>
@@ -589,7 +680,10 @@ export default function ManagePyausPage() {
             <h2 className="mb-4 text-sm font-semibold text-slate-700">Contractor-Ward Assignment</h2>
             <p className="mb-4 text-xs text-slate-500">Each ward is covered by exactly one of the 3 maintenance contractors.</p>
             {assignError && (
-              <div role="alert" className="mb-4 flex items-center gap-2 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+              <div
+                role="alert"
+                className="mb-4 flex items-center gap-2 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700"
+              >
                 <AlertCircle className="h-4 w-4 shrink-0" />
                 {assignError}
               </div>
@@ -647,7 +741,11 @@ export default function ManagePyausPage() {
                 <Download className="h-3.5 w-3.5" />
                 Download CSV
               </button>
-              <select value={wardFilter} onChange={(e) => setWardFilter(e.target.value)} className="rounded-md border border-slate-300 px-2 py-1.5 text-xs">
+              <select
+                value={wardFilter}
+                onChange={(e) => setWardFilter(e.target.value)}
+                className="rounded-md border border-slate-300 px-2 py-1.5 text-xs"
+              >
                 <option value="">All wards</option>
                 {wards.map((w) => (
                   <option key={w.id} value={w.id}>
@@ -694,6 +792,7 @@ export default function ManagePyausPage() {
                     <th className="px-3 py-2 font-medium">Structure</th>
                     <th className="px-3 py-2 font-medium">Tanks</th>
                     <th className="px-3 py-2 font-medium">Houses Served</th>
+                    <th className="px-3 py-2 font-medium">Taps / Standposts</th>
                     <th className="px-3 py-2 font-medium">GPS Location</th>
                     <th className="px-3 py-2 font-medium">Remarks</th>
                     <th className="px-3 py-2 font-medium">Status</th>
@@ -714,6 +813,9 @@ export default function ManagePyausPage() {
                       <td className="px-3 py-2 text-xs">{p.structureType ? STRUCTURE_LABELS[p.structureType] : "-"}</td>
                       <td className="px-3 py-2 text-xs">{p.overheadTankCount}</td>
                       <td className="px-3 py-2 text-xs">{p.housesServed ?? "-"}</td>
+                      <td className="px-3 py-2 text-xs">
+                        {p.waterTapCount ?? "-"} / {p.standpostCount ?? "-"}
+                      </td>
                       <td className="px-3 py-2 text-xs">
                         {p.latitude && p.longitude ? (
                           <a
@@ -739,23 +841,34 @@ export default function ManagePyausPage() {
                             {p.functionalStatus === "functional" ? "Functional" : "Non-Functional"}
                           </span>
                           {p.underBuilderWarranty && (
-                            <span className="w-fit rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-semibold text-blue-700">Builder Warranty</span>
+                            <span className="w-fit rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-semibold text-blue-700">
+                              Builder Warranty
+                            </span>
                           )}
                         </div>
                       </td>
                       <td className="px-3 py-2 text-right">
                         <div className="flex justify-end gap-3">
-                          <button onClick={() => openLogbook(p.id)} className="inline-flex items-center gap-1 text-xs font-medium text-nnm-blue hover:underline">
+                          <button
+                            onClick={() => openLogbook(p.id)}
+                            className="inline-flex items-center gap-1 text-xs font-medium text-nnm-blue hover:underline"
+                          >
                             <BookOpen className="h-3 w-3" />
                             Logbook
                           </button>
                           {canManage && (
                             <>
-                              <button onClick={() => openEditModal(p)} className="inline-flex items-center gap-1 text-xs font-medium text-nnm-blue hover:underline">
+                              <button
+                                onClick={() => openEditModal(p)}
+                                className="inline-flex items-center gap-1 text-xs font-medium text-nnm-blue hover:underline"
+                              >
                                 <Pencil className="h-3 w-3" />
                                 Edit
                               </button>
-                              <button onClick={() => handleToggleActive(p.id, !p.active)} className="text-xs font-medium text-slate-500 hover:underline">
+                              <button
+                                onClick={() => handleToggleActive(p.id, !p.active)}
+                                className="text-xs font-medium text-slate-500 hover:underline"
+                              >
                                 {p.active ? "Deactivate" : "Activate"}
                               </button>
                               <button
@@ -797,7 +910,10 @@ export default function ManagePyausPage() {
             )}
 
             {logbookError && (
-              <div role="alert" className="mb-4 flex items-center gap-2 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+              <div
+                role="alert"
+                className="mb-4 flex items-center gap-2 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700"
+              >
                 <AlertCircle className="h-4 w-4 shrink-0" />
                 {logbookError}
               </div>
@@ -824,7 +940,9 @@ export default function ManagePyausPage() {
                         <td className="px-2.5 py-1.5 whitespace-nowrap">{iss.dateOfIssue}</td>
                         <td className="px-2.5 py-1.5 whitespace-nowrap">{iss.dateOfRepair ?? "-"}</td>
                         <td className="px-2.5 py-1.5">
-                          {iss.reportedByType === "public" && <span className="mr-1 rounded bg-blue-50 px-1 py-0.5 text-[10px] font-semibold text-nnm-blue">PUBLIC</span>}
+                          {iss.reportedByType === "public" && (
+                            <span className="mr-1 rounded bg-blue-50 px-1 py-0.5 text-[10px] font-semibold text-nnm-blue">PUBLIC</span>
+                          )}
                           {iss.issueNotes ?? (iss.repairBrief ? "" : "-")}
                           {iss.repairBrief && <div className="text-green-700">Repair: {iss.repairBrief}</div>}
                         </td>
@@ -845,7 +963,14 @@ export default function ManagePyausPage() {
                 </div>
                 <div>
                   <label className={labelClass}>Amount Spent</label>
-                  <input type="number" min="0" step="0.01" value={repairAmount} onChange={(e) => setRepairAmount(e.target.value)} className={inputClass} />
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={repairAmount}
+                    onChange={(e) => setRepairAmount(e.target.value)}
+                    className={inputClass}
+                  />
                 </div>
                 <button
                   onClick={() => handleMarkRepaired(openIssue.id)}
@@ -889,7 +1014,10 @@ export default function ManagePyausPage() {
             </div>
 
             {editError && (
-              <div role="alert" className="mb-4 flex items-center gap-2 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+              <div
+                role="alert"
+                className="mb-4 flex items-center gap-2 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700"
+              >
                 <AlertCircle className="h-4 w-4 shrink-0" />
                 {editError}
               </div>
@@ -903,11 +1031,23 @@ export default function ManagePyausPage() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className={labelClass}>Latitude</label>
-                  <input type="number" step="0.000001" value={editLatitude} onChange={(e) => setEditLatitude(e.target.value)} className={inputClass} />
+                  <input
+                    type="number"
+                    step="0.000001"
+                    value={editLatitude}
+                    onChange={(e) => setEditLatitude(e.target.value)}
+                    className={inputClass}
+                  />
                 </div>
                 <div>
                   <label className={labelClass}>Longitude</label>
-                  <input type="number" step="0.000001" value={editLongitude} onChange={(e) => setEditLongitude(e.target.value)} className={inputClass} />
+                  <input
+                    type="number"
+                    step="0.000001"
+                    value={editLongitude}
+                    onChange={(e) => setEditLongitude(e.target.value)}
+                    className={inputClass}
+                  />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
@@ -917,7 +1057,11 @@ export default function ManagePyausPage() {
                 </div>
                 <div>
                   <label className={labelClass}>Structure Type</label>
-                  <select value={editStructureType} onChange={(e) => setEditStructureType(e.target.value as typeof editStructureType)} className={inputClass}>
+                  <select
+                    value={editStructureType}
+                    onChange={(e) => setEditStructureType(e.target.value as typeof editStructureType)}
+                    className={inputClass}
+                  >
                     <option value="">Not specified</option>
                     <option value="pcc_structure">PCC Structure</option>
                     <option value="iron_stand">Iron Stand</option>
@@ -926,11 +1070,43 @@ export default function ManagePyausPage() {
                 </div>
                 <div>
                   <label className={labelClass}>Overhead Tank Count</label>
-                  <input type="number" min="0" value={editOverheadTankCount} onChange={(e) => setEditOverheadTankCount(e.target.value)} className={inputClass} />
+                  <input
+                    type="number"
+                    min="0"
+                    value={editOverheadTankCount}
+                    onChange={(e) => setEditOverheadTankCount(e.target.value)}
+                    className={inputClass}
+                  />
                 </div>
                 <div>
                   <label className={labelClass}>Houses Served</label>
-                  <input type="number" min="0" value={editHousesServed} onChange={(e) => setEditHousesServed(e.target.value)} className={inputClass} />
+                  <input
+                    type="number"
+                    min="0"
+                    value={editHousesServed}
+                    onChange={(e) => setEditHousesServed(e.target.value)}
+                    className={inputClass}
+                  />
+                </div>
+                <div>
+                  <label className={labelClass}>Number of Water Taps</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={editWaterTapCount}
+                    onChange={(e) => setEditWaterTapCount(e.target.value)}
+                    className={inputClass}
+                  />
+                </div>
+                <div>
+                  <label className={labelClass}>Number of Water Standposts</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={editStandpostCount}
+                    onChange={(e) => setEditStandpostCount(e.target.value)}
+                    className={inputClass}
+                  />
                 </div>
                 <div>
                   <label className={labelClass}>Pump Details</label>
@@ -938,7 +1114,14 @@ export default function ManagePyausPage() {
                 </div>
                 <div>
                   <label className={labelClass}>Boring Depth (feet)</label>
-                  <input type="number" min="0" step="0.1" value={editBoringDepthFeet} onChange={(e) => setEditBoringDepthFeet(e.target.value)} className={inputClass} />
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.1"
+                    value={editBoringDepthFeet}
+                    onChange={(e) => setEditBoringDepthFeet(e.target.value)}
+                    className={inputClass}
+                  />
                 </div>
                 <div>
                   <label className={labelClass}>Casing Details</label>
@@ -946,7 +1129,12 @@ export default function ManagePyausPage() {
                 </div>
                 <div>
                   <label className={labelClass}>Installed Date</label>
-                  <input type="date" value={editInstalledDate} onChange={(e) => setEditInstalledDate(e.target.value)} className={inputClass} />
+                  <input
+                    type="date"
+                    value={editInstalledDate}
+                    onChange={(e) => setEditInstalledDate(e.target.value)}
+                    className={inputClass}
+                  />
                 </div>
                 <div>
                   <label className={labelClass}>Builder Name</label>
@@ -990,8 +1178,9 @@ export default function ManagePyausPage() {
               <h2 className="text-sm font-semibold">Delete the Entire Pyau Dataset</h2>
             </div>
             <p className="mb-4 text-sm text-slate-600">
-              This permanently deletes <strong>every pyau across every ward</strong>, including all maintenance history. This cannot
-              be undone. To confirm, type <code className="rounded bg-slate-100 px-1 py-0.5 font-mono text-xs">DELETE ALL PYAU DATA</code> below.
+              This permanently deletes <strong>every pyau across every ward</strong>, including all maintenance history. This cannot be
+              undone. To confirm, type <code className="rounded bg-slate-100 px-1 py-0.5 font-mono text-xs">DELETE ALL PYAU DATA</code>{" "}
+              below.
             </p>
             <input
               value={deleteAllConfirmText}

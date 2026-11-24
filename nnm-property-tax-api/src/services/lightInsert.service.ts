@@ -1,7 +1,7 @@
 import { pool } from "../config/db";
 import { formatLightSerialNo, type StreetlightAgency } from "../types/streetlight.types";
 import { ApiError } from "../utils/ApiError";
-import type { LightRow } from "../types/streetlight.types";
+import { DEFAULT_LAMP_TYPE, type LampType, type LightRow } from "../types/streetlight.types";
 
 const AGENCY_CODE_BY_NAME: Record<string, StreetlightAgency> = { "Nagar Nigam": "NN", EESL: "EESL" };
 
@@ -38,7 +38,11 @@ function nextUnusedSuffix(usedSuffixes: Set<string>): string {
  * highest sequence down to the lowest so no two lights briefly
  * collide on the same serial number (UNIQUE) mid-update.
  */
-export async function insertLightAfterSequence(segmentId: number, afterSeq: number): Promise<LightRow> {
+export async function insertLightAfterSequence(
+  segmentId: number,
+  afterSeq: number,
+  lampType: LampType = DEFAULT_LAMP_TYPE,
+): Promise<LightRow> {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
@@ -73,16 +77,30 @@ export async function insertLightAfterSequence(segmentId: number, afterSeq: numb
       );
       for (const light of existingLights) {
         const newSeq = light.light_serial_seq + 1;
-        const newSerial = formatLightSerialNo(agency, newSeq, segment.start_point, segment.end_point, segment.ward_name, light.light_serial_suffix);
+        const newSerial = formatLightSerialNo(
+          agency,
+          newSeq,
+          segment.start_point,
+          segment.end_point,
+          segment.ward_name,
+          light.light_serial_suffix,
+        );
         await client.query(`UPDATE lights SET light_serial_seq = $2, serial_number = $3 WHERE id = $1`, [light.id, newSeq, newSerial]);
       }
 
       const newSerial = formatLightSerialNo(agency, 1, segment.start_point, segment.end_point, segment.ward_name);
       const { rows: insertedRows } = await client.query<LightRow>(
-        `INSERT INTO lights (light_type, ward_id, locality_name, serial_number, latitude, longitude, installation_agency_id, segment_id, light_serial_seq, light_serial_suffix)
-         VALUES ('streetlight', $1, $2, $3, NULL, NULL, $4, $5, 1, NULL)
+        `INSERT INTO lights (light_type, ward_id, locality_name, serial_number, latitude, longitude, installation_agency_id, segment_id, light_serial_seq, light_serial_suffix, lamp_type)
+         VALUES ('streetlight', $1, $2, $3, NULL, NULL, $4, $5, 1, NULL, $6)
          RETURNING *`,
-        [segment.ward_id, segment.end_point ? `${segment.start_point}-${segment.end_point}` : segment.start_point, newSerial, segment.installation_agency_id, segmentId],
+        [
+          segment.ward_id,
+          segment.end_point ? `${segment.start_point}-${segment.end_point}` : segment.start_point,
+          newSerial,
+          segment.installation_agency_id,
+          segmentId,
+          lampType,
+        ],
       );
 
       await client.query(`UPDATE street_segments SET light_count = light_count + 1 WHERE id = $1`, [segmentId]);
@@ -116,10 +134,19 @@ export async function insertLightAfterSequence(segmentId: number, afterSeq: numb
 
     const newSerial = formatLightSerialNo(agency, newSeq, segment.start_point, segment.end_point, segment.ward_name, newSuffix);
     const { rows: insertedRows } = await client.query<LightRow>(
-      `INSERT INTO lights (light_type, ward_id, locality_name, serial_number, latitude, longitude, installation_agency_id, segment_id, light_serial_seq, light_serial_suffix)
-       VALUES ('streetlight', $1, $2, $3, NULL, NULL, $4, $5, $6, $7)
+      `INSERT INTO lights (light_type, ward_id, locality_name, serial_number, latitude, longitude, installation_agency_id, segment_id, light_serial_seq, light_serial_suffix, lamp_type)
+       VALUES ('streetlight', $1, $2, $3, NULL, NULL, $4, $5, $6, $7, $8)
        RETURNING *`,
-      [segment.ward_id, segment.end_point ? `${segment.start_point}-${segment.end_point}` : segment.start_point, newSerial, segment.installation_agency_id, segmentId, newSeq, newSuffix],
+      [
+        segment.ward_id,
+        segment.end_point ? `${segment.start_point}-${segment.end_point}` : segment.start_point,
+        newSerial,
+        segment.installation_agency_id,
+        segmentId,
+        newSeq,
+        newSuffix,
+        lampType,
+      ],
     );
 
     await client.query(`UPDATE street_segments SET light_count = light_count + 1 WHERE id = $1`, [segmentId]);

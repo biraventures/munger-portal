@@ -86,6 +86,16 @@ export const services = [
     live: true,
   },
   {
+    counter: "COUNTER 01G",
+    title: "Community Hall Booking",
+    description:
+      "See the Nagar Nigam's community halls, their rent and booked dates, apply for your function, and track the approval and payment.",
+    icon: "building",
+    cta: "Book a Hall",
+    href: "/community-halls",
+    live: true,
+  },
+  {
     counter: "COUNTER 02",
     title: "Solid Waste Management",
     description:

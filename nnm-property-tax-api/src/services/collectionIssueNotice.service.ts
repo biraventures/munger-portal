@@ -1,3 +1,4 @@
+import { pool } from "../config/db";
 import { collectionIssueRepository } from "../repositories/collectionIssue.repository";
 import { collectionIssueNoticeRepository } from "../repositories/collectionIssueNotice.repository";
 import { demandNoticeRepository, type DemandNoticeRow } from "../repositories/demandNotice.repository";
@@ -68,6 +69,8 @@ export interface GeneratedCollectionIssueNotice {
   noticeDate: string;
   complianceDays: number;
   language: NoticeLanguage;
+  /** Who signs the notice - the officer who generated it (notices before this was kept: the City Manager). */
+  signatory?: "city_manager" | "tax_daroga";
   /** True only for a reprint of a notice issued before snapshots were kept - rebuilt from current records, so property details (e.g. owner name) may differ from the original. */
   reconstructed?: boolean;
 }
@@ -100,7 +103,7 @@ function composeNoticeText(
 /**
  * Generates one of the six standard legal notice formats for a
  * Tax Collector's reported collection issue, in the requested
- * language (English or Hindi) - City Manager only. Picks the most
+ * language (English or Hindi) - City Manager or Tax Daroga (signed by the officer who generates it). Picks the most
  * relevant demand notice for the holding (the first still-unsettled
  * one if any, otherwise the most recent one overall) so the
  * generated notice's demand figures and the attached demand notice
@@ -113,6 +116,7 @@ export async function generateCollectionIssueNotice(
 ): Promise<GeneratedCollectionIssueNotice> {
   const issue = await collectionIssueRepository.findById(collectionIssueId);
   if (!issue) throw ApiError.notFound("Collection issue not found.");
+  if (issue.status === "resolved") throw ApiError.badRequest("This issue is resolved - reopen it first to issue a notice.");
 
   const property = await propertyRepository.findByHoldingNo(issue.holding_no);
   if (!property) throw ApiError.notFound("Holding not found.");
@@ -131,7 +135,8 @@ export async function generateCollectionIssueNotice(
 
   // Frozen alongside the record, so reprinting this notice later gives
   // exactly what was issued today.
-  const snapshot = { property, issue, demandNotice, ...content, language };
+  const signatory: "city_manager" | "tax_daroga" = admin.role === "tax_daroga" ? "tax_daroga" : "city_manager";
+  const snapshot = { property, issue, demandNotice, ...content, language, signatory };
 
   const record = await collectionIssueNoticeRepository.create({
     collectionIssueId,
@@ -145,7 +150,9 @@ export async function generateCollectionIssueNotice(
     snapshot,
   });
 
-  return { record, property, issue, demandNotice, ...content, language };
+  await pool.query(`UPDATE collection_issues SET status = 'notice_issued' WHERE id = $1 AND status = 'open'`, [collectionIssueId]);
+
+  return { record, property, issue, demandNotice, ...content, language, signatory };
 }
 
 /**

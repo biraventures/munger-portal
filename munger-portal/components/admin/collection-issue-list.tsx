@@ -9,16 +9,22 @@ import {
   type GeneratedCollectionIssueNotice,
 } from "@/lib/admin-api";
 import { CollectionIssueNoticeView } from "@/components/admin/collection-issue-notice-view";
+import { CiReceiving, CiStatusBadge } from "@/components/admin/ci-receiving";
 
 /** Read-only list of reported collection issues with the legal notices raised on each; any notice can be opened/reprinted. */
 export function CollectionIssueList({
   issues,
   showHolding = false,
   emptyText,
+  viewer,
+  onChanged,
 }: {
   issues: CollectionIssueWithNotices[] | null;
   showHolding?: boolean;
   emptyText: string;
+  /** The signed-in officer - for the receiving copy actions (upload / ask removal). */
+  viewer?: { role: string; username: string };
+  onChanged?: () => void;
 }) {
   const [openNotice, setOpenNotice] = useState<GeneratedCollectionIssueNotice | null>(null);
   const [busyId, setBusyId] = useState<number | null>(null);
@@ -53,6 +59,12 @@ export function CollectionIssueList({
               </span>
               <span className="text-slate-500">{new Date(i.reported_at).toLocaleString("en-IN")}</span>
             </div>
+            {i.status && (
+              <p className="mt-1">
+                <CiStatusBadge status={i.status} how={i.resolved_how} />
+                {i.status === "resolved" && i.resolution_note && <span className="ml-1 text-green-700">{i.resolution_note}</span>}
+              </p>
+            )}
             {i.notes && <p className="mt-1 text-slate-600">{i.notes}</p>}
             <p className="mt-1 text-slate-500">Reported by {i.reported_by_display_name}</p>
             {i.notices.length === 0 ? (
@@ -60,9 +72,12 @@ export function CollectionIssueList({
             ) : (
               <ul className="mt-1.5 space-y-1">
                 {i.notices.map((n) => (
-                  <li key={n.id} className="flex items-center justify-between rounded border border-slate-100 bg-slate-50 px-2 py-1">
+                  <li key={n.id} className="flex items-start justify-between rounded border border-slate-100 bg-slate-50 px-2 py-1">
                     <span>
                       Notice <span className="font-mono font-semibold">{n.notice_no}</span> · {new Date(n.generated_at).toLocaleDateString("en-IN")} · {n.language === "hi" ? "हिन्दी" : "English"}
+                      {viewer && (
+                        <CiReceiving notice={n} role={viewer.role} onChanged={() => onChanged?.()} />
+                      )}
                     </span>
                     <button
                       onClick={() => open(n.id)}

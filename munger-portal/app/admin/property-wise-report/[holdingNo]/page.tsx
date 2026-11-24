@@ -218,6 +218,7 @@ export default function PropertyWiseReportDetailPage() {
                         <th className="py-1 pr-3">Construction</th>
                         <th className="py-1 pr-3">Usage</th>
                         <th className="py-1 pr-3">Occupancy</th>
+                        <th className="py-1 pr-3">Years</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -228,6 +229,10 @@ export default function PropertyWiseReportDetailPage() {
                           <td className="py-1.5 pr-3">{f.const_type}</td>
                           <td className="py-1.5 pr-3">{f.usage_type}</td>
                           <td className="py-1.5 pr-3">{f.occupancy}</td>
+                          <td className={`py-1.5 pr-3 ${f.closing_year ? "text-slate-400" : ""}`}>
+                            {f.year_built ? `from ${f.year_built}` : "original"}
+                            {f.closing_year ? ` till ${f.closing_year}` : " - now"}
+                          </td>
                         </tr>
                       ))}
                     </tbody>

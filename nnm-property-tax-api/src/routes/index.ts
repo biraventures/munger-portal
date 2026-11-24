@@ -1,6 +1,13 @@
 import { Router } from "express";
 import { agencyOperatorScope } from "../middleware/agencyOperatorScope";
+import { staffKycGate } from "../middleware/staffKycGate";
+import { gardenCounterScope } from "../middleware/gardenCounterScope";
+import { gardenRouter, publicGardenRouter } from "./garden.routes";
+import { crematoriumRouter, publicCrematoriumRouter } from "./crematorium.routes";
+import { communityHallRouter, publicCommunityHallRouter } from "./communityHall.routes";
+import { crematoriumCounterScope } from "../middleware/crematoriumCounterScope";
 import { propertyRouter } from "./property.routes";
+import { migRecordRouter } from "./migRecord.routes";
 import { operatorRouter } from "./operator.routes";
 import { shopRouter } from "./shop.routes";
 import { shopRentalApplicationRouter } from "./shopRentalApplication.routes";
@@ -17,6 +24,7 @@ import { attendanceRouter } from "./attendance.routes";
 import { taxCollectorRouter } from "./taxCollector.routes";
 import { streetlightRouter } from "./streetlight.routes";
 import { pyauRouter } from "./pyau.routes";
+import { projectRouter } from "./project.routes";
 import { enforcementRouter, encroachmentRouter, mobileCourtRouter } from "./enforcement.routes";
 import { publicDocumentRouter } from "./publicDocument.routes";
 import { documentManagerRouter } from "./documentManager.routes";
@@ -32,6 +40,12 @@ export const apiRouter = Router();
 
 // The Agency Operator login (a private agency) may only reach an allowlist of routes - checked here, before every route.
 apiRouter.use(agencyOperatorScope);
+// Garden Counter logins: garden tickets only.
+apiRouter.use(gardenCounterScope);
+// Crematorium Counter logins: cremation tickets only.
+apiRouter.use(crematoriumCounterScope);
+// Collection staff whose identity documents are not approved yet (only with STAFF_KYC_REQUIRED on).
+apiRouter.use(staffKycGate);
 
 apiRouter.get("/health", (_req, res) => {
   res.status(200).json({ status: "ok" });
@@ -41,6 +55,8 @@ apiRouter.get("/form-options", getFormOptions);
 apiRouter.use("/auth", authRouter);
 apiRouter.use("/properties", propertyRouter);
 apiRouter.use("/operator", operatorRouter);
+// Old records (MIG) approvals - operator and admin logins (migration 189).
+apiRouter.use("/mig-records", migRecordRouter);
 apiRouter.use("/shops", shopRouter);
 apiRouter.use("/shop-rental-applications", shopRentalApplicationRouter);
 apiRouter.use("/shop-rental-preferences", shopRentalPreferenceRouter);
@@ -69,6 +85,8 @@ apiRouter.use("/streetlight", streetlightRouter);
 // its own dedicated JE/AE/contractor roles (kept separate from the
 // street light module's, per what was asked for).
 apiRouter.use("/pyau", pyauRouter);
+// Project monitoring - Commissioner, Yojana Prabhari and the JE / AE (Civil / Mechanical) logins (migration 171).
+apiRouter.use("/projects", projectRouter);
 
 // Documents/reports the Commissioner publishes on the public website - read-only and unauthenticated here; managed via /admin/public-documents.
 apiRouter.use("/public-documents", publicDocumentRouter);
@@ -83,6 +101,15 @@ apiRouter.use("/public/building-permit", publicBuildingPermitRouter);
 apiRouter.use("/public/new-holding", publicNewHoldingRouter);
 apiRouter.use("/public/streetlights", publicStreetlightRouter);
 apiRouter.use("/public/submersibles", publicSubmersibleRouter);
+// Garden entry tickets: counter, gate, officers; public garden page and e-ticket.
+apiRouter.use("/garden", gardenRouter);
+apiRouter.use("/public/gardens", publicGardenRouter);
+// Electric crematorium tickets; public check of a printed ticket.
+apiRouter.use("/crematorium", crematoriumRouter);
+apiRouter.use("/public/crematorium", publicCrematoriumRouter);
+// Community hall bookings: office, and public applications / booking status.
+apiRouter.use("/community-halls", communityHallRouter);
+apiRouter.use("/public/community-halls", publicCommunityHallRouter);
 // The City Manager verifies those public complaints before they go to the contractor (attendance login).
 apiRouter.use("/public-reports", publicReportVerificationRouter);
 

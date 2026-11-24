@@ -1,6 +1,7 @@
 import type { Request, Response } from "express";
 import { z } from "zod";
 import { holdingNoSchema } from "../utils/holdingNoSchema";
+import { noticePrefill } from "../services/tradeLicenseNotice.service";
 import {
   submitTradeLicenseApplication,
   submitPublicTradeLicenseApplication,
@@ -31,6 +32,7 @@ const applicationInputSchema = z.object({
   entityType: z.enum(["fully_owned", "partnership", "pvt_limited", "public_ltd"]).nullish(),
   completeAddress: z.string().min(1),
   holdingNo: holdingNoSchema.nullish(),
+  noticeNo: z.string().trim().max(40).nullish(),
   holdingReceiptAttached: z.boolean().default(false),
   typeOfBusiness: z.string().nullish(),
   durationYears: z.coerce.number().refine((v) => [1, 3, 5].includes(v), "Duration must be 1, 3, or 5 years"),
@@ -193,4 +195,13 @@ export const getTradeLicenseDocumentFile = asyncHandler(async (req: Request, res
   res.setHeader("X-Content-Type-Options", "nosniff");
   res.setHeader("Content-Disposition", `inline; filename="${f.fileName.replace(/[^\w.\- ]/g, "_")}"`);
   fs.createReadStream(f.full).pipe(res);
+});
+
+/** GET /api/v1/trade-license-applications/notice-prefill?notice=&sig= - public, from the QR code on a trade licence notice. */
+export const getNoticePrefillHandler = asyncHandler(async (req: Request, res: Response) => {
+  const q = z.object({ notice: z.string().trim().min(1).max(40), sig: z.string().regex(/^[0-9a-f]{32}$/) }).safeParse(req.query);
+  if (!q.success) throw ApiError.badRequest("This link is not valid. Please scan the QR code on the notice again.");
+  const data = await noticePrefill(q.data.notice, q.data.sig);
+  res.locals.autofillMatched = true; // a valid link does not count toward the rate limit
+  res.json(data);
 });

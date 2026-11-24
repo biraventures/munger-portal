@@ -29,6 +29,7 @@ const emptyForm: TradeLicenseApplicationInput = {
   entityType: null,
   completeAddress: "",
   holdingNo: "",
+  noticeNo: "",
   holdingReceiptAttached: false,
   typeOfBusiness: "",
   durationYears: 1,
@@ -133,11 +134,14 @@ function FileField({
 export function TradeLicenseApplicationForm({
   mode,
   onSubmitted,
+  prefill,
 }: {
   mode: "public" | "operator";
   onSubmitted: (result: SubmitResult) => void;
+  /** Filled in from a trade licence notice (its QR code) - the application is credited to that notice's Tax Collector. */
+  prefill?: Partial<TradeLicenseApplicationInput>;
 }) {
-  const [form, setForm] = useState<TradeLicenseApplicationInput>(emptyForm);
+  const [form, setForm] = useState<TradeLicenseApplicationInput>(() => ({ ...emptyForm, ...prefill }));
   const [autofillChecking, setAutofillChecking] = useState(false);
   const [renewalMobile, setRenewalMobile] = useState("");
   const [autofillMessage, setAutofillMessage] = useState<string | null>(null);
@@ -275,6 +279,7 @@ export function TradeLicenseApplicationForm({
         relationName: form.relationName || null,
         entityNameHindi: form.entityNameHindi || null,
         holdingNo: form.holdingNo || null,
+        noticeNo: form.noticeNo?.trim() || null,
         typeOfBusiness: form.typeOfBusiness || null,
         tanOrGstrNumber: form.tanOrGstrNumber || null,
         panNumber: form.panNumber || null,
@@ -388,6 +393,15 @@ export function TradeLicenseApplicationForm({
               <input value={form.holdingNo ?? ""} onChange={(e) => update("holdingNo", sanitizeHoldingNoInput(e.target.value))} className={inputClass} />
             </div>
           )}
+          <div>
+            <label className={labelClass}>Trade licence notice no. (if the business received a notice)</label>
+            <input
+              value={form.noticeNo ?? ""}
+              onChange={(e) => update("noticeNo", e.target.value.toUpperCase().replace(/[^A-Z0-9/-]/g, ""))}
+              placeholder="e.g. TLN/2026-27/000012"
+              className={inputClass}
+            />
+          </div>
         </div>
       </section>
 

@@ -23,4 +23,10 @@ export interface CollectionIssueRow {
   reported_by_username: string;
   reported_by_display_name: string;
   reported_at: Date;
+  /** open -> notice_issued -> resolved (migration 191). */
+  status: "open" | "notice_issued" | "resolved";
+  resolved_how: "paid" | "manual" | null;
+  resolved_at: Date | null;
+  resolved_by: string | null;
+  resolution_note: string | null;
 }

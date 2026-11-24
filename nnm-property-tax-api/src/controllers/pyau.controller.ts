@@ -8,6 +8,11 @@ import { reportPyauIssue, markPyauIssueRepaired, isUnderBuilderWarranty, deleteO
 import { importPyauCsv } from "../services/pyauCsvImport.service";
 import { asyncHandler } from "../middleware/asyncHandler";
 import { ApiError } from "../utils/ApiError";
+import { pool } from "../config/db";
+import { assertRecordWard, assertUnlimited, assertWard, filterByWard, wardScope } from "../services/wardScope";
+
+const PYAU_WARD = `SELECT ward_id FROM pyaus WHERE id = $1`;
+const ISSUE_WARD = `SELECT p.ward_id FROM pyau_issues i JOIN pyaus p ON p.id = i.pyau_id WHERE i.id = $1`;
 
 function serializePyau(p: Awaited<ReturnType<typeof pyauRepository.findById>>) {
   if (!p) return null;
@@ -21,6 +26,8 @@ function serializePyau(p: Awaited<ReturnType<typeof pyauRepository.findById>>) {
     schemeName: p.scheme_name,
     overheadTankCount: p.overhead_tank_count,
     housesServed: p.houses_served,
+    waterTapCount: p.water_tap_count,
+    standpostCount: p.standpost_count,
     structureType: p.structure_type,
     tankStandType: p.tank_stand_type,
     functionalStatus: p.functional_status,
@@ -40,8 +47,8 @@ function serializePyau(p: Awaited<ReturnType<typeof pyauRepository.findById>>) {
 // Pyau registry
 // ---------------------------------------------------------------------------
 
-export const listPyausHandler = asyncHandler(async (_req: Request, res: Response) => {
-  const pyaus = await pyauRepository.listAll();
+export const listPyausHandler = asyncHandler(async (req: Request, res: Response) => {
+  const pyaus = await filterByWard(req, await pyauRepository.listAll(), (p) => p.ward_id);
   res.status(200).json({ pyaus: pyaus.map(serializePyau) });
 });
 
@@ -53,6 +60,8 @@ const createPyauSchema = z.object({
   schemeName: z.string().trim().nullish(),
   overheadTankCount: z.coerce.number().int().nonnegative().default(0),
   housesServed: z.coerce.number().int().nonnegative().nullish(),
+  waterTapCount: z.coerce.number().int().nonnegative().nullish(),
+  standpostCount: z.coerce.number().int().nonnegative().nullish(),
   structureType: z.enum(["pcc_structure", "iron_stand", "nothing"]).nullish(),
   tankStandType: z.string().trim().nullish(),
   pumpDetails: z.string().trim().nullish(),
@@ -76,6 +85,7 @@ export const createPyauHandler = asyncHandler(async (req: Request, res: Response
 
   const ward = await attendanceWardRepository.findById(parsed.data.wardId);
   if (!ward) throw ApiError.badRequest("Ward not found.");
+  await assertWard(req, parsed.data.wardId);
 
   const serialNumber = await generateNextSerialNumber(parsed.data.wardId, ward.ward_name);
   const pyau = await pyauRepository.create({
@@ -87,6 +97,8 @@ export const createPyauHandler = asyncHandler(async (req: Request, res: Response
     schemeName: parsed.data.schemeName ?? null,
     overheadTankCount: parsed.data.overheadTankCount,
     housesServed: parsed.data.housesServed ?? null,
+    waterTapCount: parsed.data.waterTapCount ?? null,
+    standpostCount: parsed.data.standpostCount ?? null,
     structureType: parsed.data.structureType ?? null,
     tankStandType: parsed.data.tankStandType ?? null,
     pumpDetails: parsed.data.pumpDetails ?? null,
@@ -109,6 +121,7 @@ const csvUploadSchema = z.object({ csvContent: z.string().min(1, "File appears t
 export const uploadPyauCsvHandler = asyncHandler(async (req: Request, res: Response) => {
   const parsed = csvUploadSchema.safeParse(req.body);
   if (!parsed.success) throw ApiError.badRequest("Invalid input", parsed.error.flatten().fieldErrors);
+  await assertUnlimited(req, "Bulk upload");
   const result = await importPyauCsv(parsed.data.csvContent);
   res.status(200).json(result);
 });
@@ -118,6 +131,7 @@ export const setPyauActiveHandler = asyncHandler(async (req: Request, res: Respo
   if (!paramsParsed.success) throw ApiError.badRequest("Invalid pyau id");
   const bodyParsed = activeBodySchema.safeParse(req.body);
   if (!bodyParsed.success) throw ApiError.badRequest("Body must include { active: boolean }");
+  await assertRecordWard(req, PYAU_WARD, paramsParsed.data.id);
   const updated = await pyauRepository.setActive(paramsParsed.data.id, bodyParsed.data.active);
   if (!updated) throw ApiError.notFound("Pyau not found");
   res.status(200).json({ pyau: serializePyau(updated) });
@@ -130,6 +144,8 @@ const updatePyauSchema = z.object({
   schemeName: z.string().trim().nullish(),
   overheadTankCount: z.coerce.number().int().nonnegative().nullish(),
   housesServed: z.coerce.number().int().nonnegative().nullish(),
+  waterTapCount: z.coerce.number().int().nonnegative().nullish(),
+  standpostCount: z.coerce.number().int().nonnegative().nullish(),
   structureType: z.enum(["pcc_structure", "iron_stand", "nothing"]).nullish(),
   tankStandType: z.string().trim().nullish(),
   pumpDetails: z.string().trim().nullish(),
@@ -147,6 +163,7 @@ export const updatePyauHandler = asyncHandler(async (req: Request, res: Response
   if (!paramsParsed.success) throw ApiError.badRequest("Invalid pyau id");
   const bodyParsed = updatePyauSchema.safeParse(req.body);
   if (!bodyParsed.success) throw ApiError.badRequest("Invalid input", bodyParsed.error.flatten().fieldErrors);
+  await assertRecordWard(req, PYAU_WARD, paramsParsed.data.id);
 
   const updated = await pyauRepository.update(paramsParsed.data.id, {
     ...bodyParsed.data,
@@ -160,6 +177,7 @@ export const updatePyauHandler = asyncHandler(async (req: Request, res: Response
 export const deletePyauHandler = asyncHandler(async (req: Request, res: Response) => {
   const paramsParsed = pyauIdParamSchema.safeParse(req.params);
   if (!paramsParsed.success) throw ApiError.badRequest("Invalid pyau id");
+  await assertRecordWard(req, PYAU_WARD, paramsParsed.data.id);
   await deleteOnePyau(paramsParsed.data.id);
   res.status(200).json({ success: true });
 });
@@ -170,6 +188,7 @@ const wardIdParamSchema = z.object({ wardId: z.coerce.number().int().positive() 
 export const deletePyausByWardHandler = asyncHandler(async (req: Request, res: Response) => {
   const paramsParsed = wardIdParamSchema.safeParse(req.params);
   if (!paramsParsed.success) throw ApiError.badRequest("Invalid ward id");
+  await assertWard(req, paramsParsed.data.wardId);
   const count = await deletePyausByWard(paramsParsed.data.wardId);
   res.status(200).json({ deleted: count });
 });
@@ -194,8 +213,8 @@ export const deleteAllPyausHandler = asyncHandler(async (req: Request, res: Resp
 // Contractor-ward assignment
 // ---------------------------------------------------------------------------
 
-export const listPyauContractorWardsHandler = asyncHandler(async (_req: Request, res: Response) => {
-  const mappings = await pyauContractorWardRepository.listAll();
+export const listPyauContractorWardsHandler = asyncHandler(async (req: Request, res: Response) => {
+  const mappings = await filterByWard(req, await pyauContractorWardRepository.listAll(), (m) => m.ward_id);
   res.status(200).json({ mappings: mappings.map((m) => ({ wardId: m.ward_id, contractorId: m.contractor_id })) });
 });
 
@@ -204,6 +223,7 @@ const assignContractorWardSchema = z.object({ wardId: z.coerce.number().int().po
 export const assignPyauContractorWardHandler = asyncHandler(async (req: Request, res: Response) => {
   const parsed = assignContractorWardSchema.safeParse(req.body);
   if (!parsed.success) throw ApiError.badRequest("Invalid input", parsed.error.flatten().fieldErrors);
+  await assertWard(req, parsed.data.wardId);
   const mapping = await pyauContractorWardRepository.assign(parsed.data.wardId, parsed.data.contractorId);
   res.status(200).json({ mapping: { wardId: mapping.ward_id, contractorId: mapping.contractor_id } });
 });
@@ -238,6 +258,7 @@ export const listPyauIssuesForPyauHandler = asyncHandler(async (req: Request, re
   if (!paramsParsed.success) throw ApiError.badRequest("Invalid pyau id");
   const pyau = await pyauRepository.findById(paramsParsed.data.id);
   if (!pyau) throw ApiError.notFound("Pyau not found");
+  await assertWard(req, pyau.ward_id);
   const issues = await pyauIssueRepository.listForPyau(paramsParsed.data.id);
   res.status(200).json({ pyau: serializePyau(pyau), issues: issues.map(serializeIssue) });
 });
@@ -245,8 +266,14 @@ export const listPyauIssuesForPyauHandler = asyncHandler(async (req: Request, re
 export const listAllPyauIssuesHandler = asyncHandler(async (req: Request, res: Response) => {
   const status = req.query.status as "open" | "repaired" | undefined;
   const user = req.attendanceUser!;
-  const issues =
+  let issues =
     user.role === "pyau_contractor" ? await pyauIssueRepository.listByContractor(user.sub, status) : await pyauIssueRepository.listAll(status);
+  const scope = await wardScope(req);
+  if (scope !== null) {
+    const { rows } = await pool.query<{ id: string }>(`SELECT id FROM pyaus WHERE ward_id = ANY($1)`, [scope]);
+    const mine = new Set(rows.map((r) => Number(r.id)));
+    issues = issues.filter((i) => mine.has(Number(i.pyau_id)));
+  }
   res.status(200).json({ issues: issues.map(serializeIssue) });
 });
 
@@ -255,6 +282,7 @@ const reportIssueSchema = z.object({ pyauId: z.coerce.number().int().positive(),
 export const reportPyauIssueHandler = asyncHandler(async (req: Request, res: Response) => {
   const parsed = reportIssueSchema.safeParse(req.body);
   if (!parsed.success) throw ApiError.badRequest("Invalid input", parsed.error.flatten().fieldErrors);
+  await assertRecordWard(req, PYAU_WARD, parsed.data.pyauId);
   const issue = await reportPyauIssue(req.attendanceUser!, { pyauId: parsed.data.pyauId, issueNotes: parsed.data.issueNotes ?? null });
   res.status(200).json({ issue: serializeIssue(issue) });
 });
@@ -267,6 +295,7 @@ export const markPyauIssueRepairedHandler = asyncHandler(async (req: Request, re
   if (!paramsParsed.success) throw ApiError.badRequest("Invalid issue id");
   const bodyParsed = markRepairedSchema.safeParse(req.body);
   if (!bodyParsed.success) throw ApiError.badRequest("Invalid input", bodyParsed.error.flatten().fieldErrors);
+  await assertRecordWard(req, ISSUE_WARD, paramsParsed.data.id);
   const issue = await markPyauIssueRepaired(req.attendanceUser!, paramsParsed.data.id, {
     repairBrief: bodyParsed.data.repairBrief ?? null,
     amountSpent: bodyParsed.data.amountSpent ?? null,

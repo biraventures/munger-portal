@@ -27,7 +27,10 @@ const args = process.argv.slice(2);
 const isDemo = args.includes("--demo");
 const [username, password, displayName, role] = args.filter((a) => a !== "--demo");
 
-const VALID_ROLES: string[] = ADMIN_ROLES;
+// The JE / AE - Mechanical work (submersibles, street light reports) is on the asset management login now:
+// npm run create-attendance-user -- <username> <password> "<Name>" je_mechanical (or ae_mechanical).
+const RETIRED_ROLES = ["je_mechanical", "ae_mechanical"];
+const VALID_ROLES: string[] = ADMIN_ROLES.filter((r) => !RETIRED_ROLES.includes(r));
 
 // Excludes visually-confusable characters (0/O, 1/I) - these codes get
 // read aloud and typed by hand in the field, so ambiguity here is a
@@ -57,6 +60,11 @@ async function main() {
   if (!username || !password || !displayName || !role) {
     console.error('Usage: npm run create-admin -- <username> <password> "<Display Name>" <role> [--demo]');
     console.error(`role must be one of: ${VALID_ROLES.join(", ")}`);
+    process.exit(1);
+  }
+  if (RETIRED_ROLES.includes(role)) {
+    console.error(`"${role}" is no longer an admin-portal login. Create it on the asset management side instead:`);
+    console.error(`  npm run create-attendance-user -- ${username ?? "<username>"} <password> "<Name>" ${role}`);
     process.exit(1);
   }
   if (!VALID_ROLES.includes(role)) {

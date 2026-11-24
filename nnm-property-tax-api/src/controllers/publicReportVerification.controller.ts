@@ -29,11 +29,20 @@ export const getPendingCount = asyncHandler(async (_req: Request, res: Response)
   res.status(200).json({ pending: await pendingCounts() });
 });
 
-/** POST /api/v1/public-reports/:id/approve { remarks? } */
+/** POST /api/v1/public-reports/:id/approve { remarks?, assetId? | assetSerial? } */
 export const postApprove = asyncHandler(async (req: Request, res: Response) => {
-  const b = z.object({ remarks: z.string().trim().max(500).nullish() }).safeParse(req.body ?? {});
+  // assetId: for a complaint by location, the registered asset the City Manager identified at that spot.
+  const b = z
+    .object({
+      remarks: z.string().trim().max(500).nullish(),
+      assetId: z.coerce.number().int().positive().nullish(),
+      assetSerial: z.string().trim().max(100).nullish(),
+    })
+    .safeParse(req.body ?? {});
   if (!b.success) throw ApiError.badRequest("Check the remarks.");
-  res.status(200).json(await approve(req.attendanceUser!, idParam(req.params.id), b.data.remarks || null));
+  res
+    .status(200)
+    .json(await approve(req.attendanceUser!, idParam(req.params.id), b.data.remarks || null, b.data.assetId ?? null, b.data.assetSerial || null));
 });
 
 /** POST /api/v1/public-reports/:id/reject { reason } */

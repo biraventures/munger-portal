@@ -1,4 +1,5 @@
 import type { Request, Response } from "express";
+import { DEFAULT_LAMP_TYPE, LAMP_TYPES } from "../types/streetlight.types";
 import { z } from "zod";
 import ExcelJS from "exceljs";
 import { importStreetWiseLightsCsv } from "../services/streetWiseLightImport.service";
@@ -14,6 +15,7 @@ import { streetlightCityManagerAssignmentRepository } from "../repositories/stre
 import { attendanceUserRepository } from "../repositories/attendanceUser.repository";
 import { asyncHandler } from "../middleware/asyncHandler";
 import { ApiError } from "../utils/ApiError";
+import { assertRecordWard, filterByWard } from "../services/wardScope";
 
 // ---------------------------------------------------------------------------
 // Asset-management-side (attendance login) versions of the
@@ -36,8 +38,8 @@ export const uploadStreetWiseLightsAttendanceHandler = asyncHandler(async (req: 
   res.status(200).json(result);
 });
 
-export const listStreetSegmentsAttendanceHandler = asyncHandler(async (_req: Request, res: Response) => {
-  const segments = await streetSegmentRepository.listAll();
+export const listStreetSegmentsAttendanceHandler = asyncHandler(async (req: Request, res: Response) => {
+  const segments = await filterByWard(req, await streetSegmentRepository.listAll(), (s) => s.ward_id);
   res.status(200).json({ segments });
 });
 
@@ -69,6 +71,7 @@ export const setStreetSegmentGpsAttendanceHandler = asyncHandler(async (req: Req
 export const listLightsForSegmentAttendanceHandler = asyncHandler(async (req: Request, res: Response) => {
   const paramsParsed = segmentIdParamSchema.safeParse(req.params);
   if (!paramsParsed.success) throw ApiError.badRequest("Invalid segment id");
+  await assertRecordWard(req, `SELECT ward_id FROM street_segments WHERE id = $1`, paramsParsed.data.id);
   const lights = await lightRepository.listBySegment(paramsParsed.data.id);
   res.status(200).json({ lights });
 });
@@ -184,7 +187,12 @@ export const setLightSwitchStatusHandler = asyncHandler(async (req: Request, res
   res.status(200).json({ light: updated });
 });
 
-const insertLightSchema = z.object({ segmentId: z.coerce.number().int().positive(), afterSeq: z.coerce.number().int().min(0) });
+const lampTypeSchema = z.enum(LAMP_TYPES).default(DEFAULT_LAMP_TYPE);
+const insertLightSchema = z.object({
+  segmentId: z.coerce.number().int().positive(),
+  afterSeq: z.coerce.number().int().min(0),
+  lampType: lampTypeSchema,
+});
 
 /**
  * Inserts a light into a street at a specific position (e.g. between
@@ -195,7 +203,7 @@ const insertLightSchema = z.object({ segmentId: z.coerce.number().int().positive
 export const insertLightHandler = asyncHandler(async (req: Request, res: Response) => {
   const parsed = insertLightSchema.safeParse(req.body);
   if (!parsed.success) throw ApiError.badRequest("Invalid input", parsed.error.flatten().fieldErrors);
-  const light = await insertLightAfterSequence(parsed.data.segmentId, parsed.data.afterSeq);
+  const light = await insertLightAfterSequence(parsed.data.segmentId, parsed.data.afterSeq, parsed.data.lampType);
   res.status(200).json({ light });
 });
 
@@ -207,6 +215,7 @@ const createStreetSegmentSchema = z.object({
   intermediatePoint: z.string().trim().nullish(),
   endPoint: z.string().trim().nullish(),
   lightCount: z.coerce.number().int().min(0),
+  lampType: lampTypeSchema,
 });
 
 /** POST /api/v1/streetlight/street-segments - "Add new street" on the status dashboard's ward-wise view, as opposed to the bulk CSV upload. */
@@ -221,6 +230,7 @@ export const createStreetSegmentHandler = asyncHandler(async (req: Request, res:
     endPoint: parsed.data.endPoint ?? null,
     lightCount: parsed.data.lightCount,
     createdBy: req.attendanceUser!.displayName,
+    lampType: parsed.data.lampType,
   });
   res.status(200).json({ segment });
 });

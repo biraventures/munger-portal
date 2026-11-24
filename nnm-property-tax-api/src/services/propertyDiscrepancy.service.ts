@@ -1,3 +1,5 @@
+import { pool } from "../config/db";
+import { discrepancyPhotoNeeds, missingDiscrepancyPhotos } from "./discrepancyPhotoRules";
 import { taxEffect } from "./taxPreview.service";
 import type { PropertySaveInput as TaxEffectInput } from "../types/propertySave.types";
 import fs from "node:fs";
@@ -10,21 +12,23 @@ import { getNextFinalizedMigratedHoldingNo } from "./holdingNumberSeries.service
 import { migratedHoldingSurveyRepository } from "../repositories/migratedHoldingSurvey.repository";
 import { MIGRATED_HOLDING_NO_PREFIX } from "../constants/taxRates";
 import { entryRevertEventRepository } from "../repositories/entryRevertEvent.repository";
-import { nextPropertyDiscrepancyStage, PROPERTY_DISCREPANCY_APPROVAL_STAGE_ORDER } from "../types/admin.types";
+import { nextPropertyDiscrepancyStage, discrepancyStagesFor } from "../types/admin.types";
 import { env } from "../config/env";
+import { assertFloorChangeStated } from "./floorChange.service";
 import { ApiError } from "../utils/ApiError";
 import type { PropertyDiscrepancyRequestRow, PropertyDiscrepancyStatus } from "../types/propertyDiscrepancy.types";
 import type { PropertySaveInput } from "../types/propertySave.types";
 import type { AdminRole, AdminTokenPayload } from "../types/admin.types";
-import { MAX_PHOTO_BYTES, uploadLimitMessage } from "../utils/uploadLimits";
+import { photoOrDocumentExt } from "../utils/uploadLimits";
 
-const FINAL_STAGE: AdminRole = PROPERTY_DISCREPANCY_APPROVAL_STAGE_ORDER[PROPERTY_DISCREPANCY_APPROVAL_STAGE_ORDER.length - 1]!;
+const DOCUMENT_KINDS = new Set(["aadhaar", "receipt"]);
 
-const ALLOWED_PHOTO_MIME_TO_EXT: Record<string, string> = {
-  "image/jpeg": "jpg",
-  "image/jpg": "jpg",
-  "image/png": "png",
-};
+/** The desk whose approval applies the request: the Deputy Commissioner, or the Commissioner for an old MUNG-MIG- holding. */
+function finalStageFor(holdingNo: string): AdminRole {
+  const order = discrepancyStagesFor(holdingNo);
+  return order[order.length - 1]!;
+}
+
 
 /** Saves a photo to PHOTO_UPLOAD_DIR (same shared storage as the Jamadar daily-photo flow), returns the relative path to store. Returns null when no photo was given. `kind` (holding/receipt/aadhaar) keeps the three photos on one request distinct on disk. */
 async function saveDiscrepancyPhoto(
@@ -34,12 +38,9 @@ async function saveDiscrepancyPhoto(
   mimeType: string | undefined,
 ): Promise<string | null> {
   if (!base64Data || !mimeType) return null;
-  const ext = ALLOWED_PHOTO_MIME_TO_EXT[mimeType];
-  if (!ext) throw ApiError.badRequest("Only JPEG or PNG photos are accepted.");
-
   const buffer = Buffer.from(base64Data, "base64");
-  if (buffer.length === 0) throw ApiError.badRequest("The photo is empty.");
-  if (buffer.length > MAX_PHOTO_BYTES) throw ApiError.badRequest(uploadLimitMessage("image/jpeg", buffer.length));
+  // Documents (Aadhaar, previous receipt, land papers, register page) may be a PDF; photos of the site may not.
+  const ext = photoOrDocumentExt(mimeType, buffer, DOCUMENT_KINDS.has(kind));
 
   const relativePath = path.join("discrepancy-photos", `${holdingNo}-${kind}-${Date.now()}.${ext}`);
   const fullPath = path.join(env.PHOTO_UPLOAD_DIR, relativePath);
@@ -57,6 +58,8 @@ export interface DiscrepancyPhotoInputs {
   previousReceiptPhotoMimeType: string | undefined;
   aadhaarPhotoBase64Data: string | undefined;
   aadhaarPhotoMimeType: string | undefined;
+  ownerPhotoBase64Data?: string | undefined;
+  ownerPhotoMimeType?: string | undefined;
 }
 
 async function saveAllDiscrepancyPhotos(holdingNo: string, photos: DiscrepancyPhotoInputs) {
@@ -69,6 +72,7 @@ async function saveAllDiscrepancyPhotos(holdingNo: string, photos: DiscrepancyPh
       photos.previousReceiptPhotoMimeType,
     ),
     aadhaarPhotoPath: await saveDiscrepancyPhoto(holdingNo, "aadhaar", photos.aadhaarPhotoBase64Data, photos.aadhaarPhotoMimeType),
+    ownerPhotoPath: await saveDiscrepancyPhoto(holdingNo, "owner", photos.ownerPhotoBase64Data, photos.ownerPhotoMimeType),
   };
 }
 
@@ -81,6 +85,25 @@ async function saveAllDiscrepancyPhotos(holdingNo: string, photos: DiscrepancyPh
  * submission itself becomes the first entry in the audit trail (see
  * propertyDiscrepancyRepository.create).
  */
+/**
+ * An old (MUNG-MIG-) holding can be entered by a Tax Collector only while nobody else is on it: not already surveyed,
+ * not handed out through the assignment route (City Manager / DMC -> Tax Daroga -> Tax Surveyor), and no entry of
+ * another collector sent back for correction.
+ */
+async function assertOldHoldingOpenForEntry(holdingNo: string): Promise<void> {
+  const survey = await migratedHoldingSurveyRepository.findByHoldingNo(holdingNo);
+  if (survey?.status === "finalized") throw ApiError.badRequest("This old holding has already been surveyed and approved.");
+  if (survey && survey.status !== "pending_assignment") {
+    const who = survey.assigned_to_tax_surveyor_display_name || survey.assigned_to_tax_daroga_display_name || "an officer";
+    throw ApiError.badRequest(`This old holding is already being surveyed through the assignment route (with ${who}).`);
+  }
+  const { rows } = await pool.query<{ reported_by_display_name: string }>(
+    `SELECT reported_by_display_name FROM property_discrepancy_requests WHERE holding_no = $1 AND status = 'reverted' LIMIT 1`,
+    [holdingNo],
+  );
+  if (rows[0]) throw ApiError.badRequest(`${rows[0].reported_by_display_name}'s entry for this holding was sent back for correction - it is being redone.`);
+}
+
 export async function reportPropertyDiscrepancy(
   holdingNo: string,
   admin: AdminTokenPayload,
@@ -93,9 +116,20 @@ export async function reportPropertyDiscrepancy(
   if (!proposedData.aadhaarNumber?.trim() && !proposedData.ownerDeceased && !proposedData.aadhaarRefused) {
     throw ApiError.badRequest("The holding owner's Aadhaar number is required (or tick that the owner has died / does not agree to give Aadhaar).");
   }
+  // A floor change must say whether it applies from a year (past kept) or is a correction.
+  assertFloorChangeStated(property, await propertyRepository.findFloorsByHoldingNo(holdingNo), proposedData);
 
   const existingPending = await propertyDiscrepancyRepository.findPendingForHolding(holdingNo);
   if (existingPending) throw ApiError.badRequest("This holding already has a discrepancy report pending review.");
+  if (holdingNo.startsWith(MIGRATED_HOLDING_NO_PREFIX)) await assertOldHoldingOpenForEntry(holdingNo);
+
+  const needs = discrepancyPhotoNeeds(property, await propertyRepository.findFloorsByHoldingNo(holdingNo), proposedData);
+  const missing = missingDiscrepancyPhotos(
+    needs,
+    { site: !!photos.photoBase64Data, aadhaar: !!photos.aadhaarPhotoBase64Data, owner: !!photos.ownerPhotoBase64Data },
+    proposedData,
+  );
+  if (missing) throw ApiError.badRequest(missing);
 
   const savedPhotos = await saveAllDiscrepancyPhotos(holdingNo, photos);
 
@@ -138,14 +172,33 @@ export async function getDiscrepancyRequestDetail(id: number) {
   };
 }
 
+/**
+ * The Tax Surveyor and the Tax Daroga hold concurrent power over a report waiting at the Tax Surveyor: either may act
+ * on it, so it does not wait for one of them. A Tax Daroga acting there also covers his own stage - an approval moves
+ * the report straight on to the City Manager.
+ */
+function darogaInPlaceOfSurveyor(request: PropertyDiscrepancyRequestRow, admin: AdminTokenPayload): boolean {
+  return request.current_stage === "tax_surveyor" && admin.role === "tax_daroga";
+}
+
+/** The stage an action is recorded under - the Tax Daroga's own, when he acts at the Tax Surveyor's stage. */
+function actingStage(request: PropertyDiscrepancyRequestRow, admin: AdminTokenPayload): AdminRole {
+  return darogaInPlaceOfSurveyor(request, admin) ? "tax_daroga" : request.current_stage;
+}
+
 function assertActionable(request: PropertyDiscrepancyRequestRow, admin: AdminTokenPayload) {
+  // The first check (the Tax Surveyor's stage, where a Tax Daroga may also act) is by someone other than the officer who
+  // entered the details - an old holding's details can be entered by a Tax Surveyor or Tax Daroga too.
+  if (request.current_stage === "tax_surveyor" && request.reported_by_username === admin.username)
+    throw new ApiError(403, "You entered these details - another officer must do the first check.");
   if (request.status !== "pending") {
     throw ApiError.badRequest(`This request has already been ${request.status}.`);
   }
+  if (darogaInPlaceOfSurveyor(request, admin)) return;
   if (admin.role !== request.current_stage) {
     throw new ApiError(403, `This request is currently with ${request.current_stage.replace(/_/g, " ")} - it isn't at your stage.`);
   }
-  // Once the Tax Daroga has given it to a surveyor, only that surveyor can act on it.
+  // Once the Tax Daroga has given it to a surveyor, only that surveyor (or a Tax Daroga) can act on it.
   const assigned = request.assigned_surveyor_username;
   if (request.current_stage === "tax_surveyor" && assigned && assigned !== admin.username) {
     throw new ApiError(403, "This remeasurement request is assigned to another Tax Surveyor.");
@@ -177,20 +230,22 @@ export async function approveDiscrepancyAtCurrentStage(
   const dataForwarded = editedData ?? request.proposed_data;
   const decision = editedData ? "edited_and_forwarded" : "approved";
 
+  const stage = actingStage(request, admin);
+  const inPlace = stage !== request.current_stage;
   await propertyDiscrepancyRepository.recordApprovalLogEntry(
     id,
-    request.current_stage,
+    stage,
     decision,
     admin.username,
     admin.displayName,
-    notes ?? null,
+    inPlace ? `Verified by the Tax Daroga directly (in place of the Tax Surveyor).${notes ? ` ${notes}` : ""}` : (notes ?? null),
     dataForwarded,
   );
 
-  const atFinalStage = request.current_stage === FINAL_STAGE;
+  const atFinalStage = stage === finalStageFor(request.holding_no);
 
   if (!atFinalStage) {
-    const next = nextPropertyDiscrepancyStage(request.current_stage);
+    const next = nextPropertyDiscrepancyStage(stage, request.holding_no);
     if (!next) {
       throw ApiError.badRequest("This request has no further stage to advance to - please contact support.");
     }
@@ -227,6 +282,7 @@ export async function approveDiscrepancyAtCurrentStage(
       admin.username,
       admin.displayName,
       request.reported_by_display_name,
+      admin.role,
     );
     if (survey) {
       const newHoldingNo = await getNextFinalizedMigratedHoldingNo();
@@ -250,7 +306,7 @@ export async function rejectDiscrepancyAtCurrentStage(
 
   await propertyDiscrepancyRepository.recordApprovalLogEntry(
     id,
-    request.current_stage,
+    actingStage(request, admin),
     "rejected",
     admin.username,
     admin.displayName,
@@ -286,7 +342,7 @@ export async function revertDiscrepancyToCollector(
 
   await propertyDiscrepancyRepository.recordApprovalLogEntry(
     id,
-    request.current_stage,
+    actingStage(request, admin),
     "reverted",
     admin.username,
     admin.displayName,
@@ -333,12 +389,31 @@ export async function resubmitDiscrepancyAfterRevert(
   if (!proposedData.aadhaarNumber?.trim() && !proposedData.ownerDeceased && !proposedData.aadhaarRefused) {
     throw ApiError.badRequest("The holding owner's Aadhaar number is required (or tick that the owner has died / does not agree to give Aadhaar).");
   }
+  {
+    const current = await propertyRepository.findByHoldingNo(request.holding_no);
+    if (current) {
+      const floors = await propertyRepository.findFloorsByHoldingNo(request.holding_no);
+      assertFloorChangeStated(current, floors, proposedData);
+      // A photo already on the request counts - it is kept unless a new one is attached.
+      const missing = missingDiscrepancyPhotos(
+        discrepancyPhotoNeeds(current, floors, proposedData),
+        {
+          site: !!photos.photoBase64Data || !!request.photo_path,
+          aadhaar: !!photos.aadhaarPhotoBase64Data || !!request.aadhaar_photo_path,
+          owner: !!photos.ownerPhotoBase64Data || !!request.owner_photo_path,
+        },
+        proposedData,
+      );
+      if (missing) throw ApiError.badRequest(missing);
+    }
+  }
 
   // A photo not re-attached on resubmission keeps whatever was on file from the original submission.
   const savedPhotos = await saveAllDiscrepancyPhotos(request.holding_no, photos);
   const photoPath = savedPhotos.photoPath ?? request.photo_path;
   const previousReceiptPhotoPath = savedPhotos.previousReceiptPhotoPath ?? request.previous_receipt_photo_path;
   const aadhaarPhotoPath = savedPhotos.aadhaarPhotoPath ?? request.aadhaar_photo_path;
+  const ownerPhotoPath = savedPhotos.ownerPhotoPath ?? request.owner_photo_path;
 
   const resubmitted = await propertyDiscrepancyRepository.resubmitWithCorrections(id, {
     discrepancyNotes: discrepancyNotes.trim(),
@@ -348,6 +423,7 @@ export async function resubmitDiscrepancyAfterRevert(
     photoPath,
     previousReceiptPhotoPath,
     aadhaarPhotoPath,
+    ownerPhotoPath,
   });
   if (!resubmitted) throw ApiError.badRequest("This request is no longer awaiting correction.");
 

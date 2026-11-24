@@ -25,7 +25,12 @@ export type AttendanceRole =
   | "mayor"
   | "deputy_mayor"
   | "encroachment_staff"
-  | "mobile_court_staff";
+  | "mobile_court_staff"
+  | "je_civil"
+  | "je_mechanical"
+  | "ae_civil"
+  | "ae_mechanical"
+  | "yojana_prabhari";
 
 export const ATTENDANCE_ROLE_LABELS: Record<AttendanceRole, string> = {
   jamadar: "Jamadar",
@@ -52,6 +57,11 @@ export const ATTENDANCE_ROLE_LABELS: Record<AttendanceRole, string> = {
   deputy_mayor: "Deputy Mayor",
   encroachment_staff: "Encroachment Staff",
   mobile_court_staff: "Mobile Court Staff",
+  je_civil: "Junior Engineer (Civil)",
+  je_mechanical: "Junior Engineer (Mechanical)",
+  ae_civil: "Assistant Engineer (Civil)",
+  ae_mechanical: "Assistant Engineer (Mechanical)",
+  yojana_prabhari: "Yojana Prabhari",
 };
 
 export const ATTENDANCE_ROLE_LABELS_HI: Record<AttendanceRole, string> = {
@@ -79,6 +89,11 @@ export const ATTENDANCE_ROLE_LABELS_HI: Record<AttendanceRole, string> = {
   deputy_mayor: "उप मेयर",
   encroachment_staff: "अतिक्रमण स्टाफ",
   mobile_court_staff: "मोबाइल कोर्ट स्टाफ",
+  je_civil: "कनिष्ठ अभियंता (सिविल)",
+  je_mechanical: "कनिष्ठ अभियंता (यांत्रिक)",
+  ae_civil: "सहायक अभियंता (सिविल)",
+  ae_mechanical: "सहायक अभियंता (यांत्रिक)",
+  yojana_prabhari: "योजना प्रभारी",
 };
 
 /** Role label in the given UI language - use this instead of reading ATTENDANCE_ROLE_LABELS directly wherever a page already knows the current language. */
@@ -98,8 +113,7 @@ export interface AttendanceUserInfo {
   wardName: string | null;
 }
 
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_PROPERTY_TAX_API_URL || "http://localhost:4000/api/v1";
+const API_BASE_URL = process.env.NEXT_PUBLIC_PROPERTY_TAX_API_URL || "http://localhost:4000/api/v1";
 
 export async function attendanceLogin(username: string, password: string, rememberMe: boolean = false): Promise<AttendanceUserInfo> {
   const res = await fetch(`${API_BASE_URL}/attendance/auth/login`, {

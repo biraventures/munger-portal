@@ -1,6 +1,8 @@
 "use client";
 
+import { PhotoDialog } from "@/components/admin/field-capture";
 import { useEffect, useState } from "react";
+import { FloorChangeSummary } from "@/components/admin/floor-change-summary";
 import { useParams, useRouter } from "next/navigation";
 import { AlertCircle, CheckCircle2, Loader2, MapPin, Pencil, RotateCcw, XCircle } from "lucide-react";
 import { AdminHeader } from "@/components/admin-header";
@@ -23,8 +25,6 @@ import {
 import { PropertyChangeReview } from "@/components/admin/property-change-review";
 import { fetchFormOptions, type FormOptions } from "@/lib/operator-api";
 
-
-
 const DECISION_LABELS: Record<string, string> = {
   submitted: "submitted",
   approved: "approved",
@@ -33,10 +33,11 @@ const DECISION_LABELS: Record<string, string> = {
   reverted: "reverted",
 };
 
-
 function StatusBadge({ request }: { request: PropertyDiscrepancyRequest }) {
   if (request.status === "approved") {
-    return <span className="inline-flex items-center rounded-full bg-green-100 px-2.5 py-1 text-xs font-semibold text-green-700">Approved</span>;
+    return (
+      <span className="inline-flex items-center rounded-full bg-green-100 px-2.5 py-1 text-xs font-semibold text-green-700">Approved</span>
+    );
   }
   if (request.status === "rejected") {
     return (
@@ -46,7 +47,11 @@ function StatusBadge({ request }: { request: PropertyDiscrepancyRequest }) {
     );
   }
   if (request.status === "reverted") {
-    return <span className="inline-flex items-center rounded-full bg-orange-100 px-2.5 py-1 text-xs font-semibold text-orange-700">Reverted to Tax Collector</span>;
+    return (
+      <span className="inline-flex items-center rounded-full bg-orange-100 px-2.5 py-1 text-xs font-semibold text-orange-700">
+        Reverted to Tax Collector
+      </span>
+    );
   }
   return (
     <span className="inline-flex items-center rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-700">
@@ -79,7 +84,9 @@ export default function PropertyDiscrepancyRequestDetailPage() {
   useEffect(() => {
     if (!admin || !id) return;
     load();
-    fetchFormOptions().then(setFormOptions).catch(() => setFormOptions(null));
+    fetchFormOptions()
+      .then(setFormOptions)
+      .catch(() => setFormOptions(null));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [admin, id]);
 
@@ -145,12 +152,30 @@ export default function PropertyDiscrepancyRequestDetailPage() {
     return <div className="flex min-h-screen items-center justify-center text-sm text-slate-400">Loading…</div>;
   }
 
+  // The Tax Daroga holds concurrent power at the Tax Surveyor's stage - either of them can act there.
+  const atMyDesk =
+    !!detail &&
+    (detail.request.current_stage === admin.role || (detail.request.current_stage === "tax_surveyor" && admin.role === "tax_daroga"));
+  const photoKinds = !detail
+    ? []
+    : (
+        [
+          { kind: "holding", label: "site photo", path: detail.request.photo_path },
+          { kind: "aadhaar", label: "Aadhaar card", path: detail.request.aadhaar_photo_path },
+          { kind: "owner", label: "owner's photo", path: detail.request.owner_photo_path },
+          { kind: "receipt", label: "previous receipt", path: detail.request.previous_receipt_photo_path },
+        ] as const
+      ).filter((p) => !!p.path);
+
   return (
     <div className="min-h-screen bg-slate-50">
       <AdminHeader admin={admin} />
 
       <main className="mx-auto max-w-3xl px-6 py-10">
-        <button onClick={() => router.push("/admin/property-discrepancy-requests")} className="mb-4 text-sm font-medium text-nnm-blue hover:underline">
+        <button
+          onClick={() => router.push("/admin/property-discrepancy-requests")}
+          className="mb-4 text-sm font-medium text-nnm-blue hover:underline"
+        >
           ← Back to Property Discrepancy Approvals
         </button>
 
@@ -177,7 +202,16 @@ export default function PropertyDiscrepancyRequestDetailPage() {
                 <p className="mt-2 text-sm text-slate-700">
                   <span className="font-medium">What the Tax Collector found:</span> {detail.request.discrepancy_notes}
                 </p>
-                {(detail.request.gps_lat || detail.request.photo_path) && (
+                <div className="mt-3">
+                  <FloorChangeSummary
+                    floorChange={
+                      (detail.request.proposed_data as { floorChange?: Parameters<typeof FloorChangeSummary>[0]["floorChange"] })
+                        .floorChange
+                    }
+                    floors={(detail.request.proposed_data as { floors?: Parameters<typeof FloorChangeSummary>[0]["floors"] }).floors}
+                  />
+                </div>
+                {(detail.request.gps_lat || photoKinds.length > 0) && (
                   <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-slate-500">
                     {detail.request.gps_lat && (
                       <span className="inline-flex items-center gap-1">
@@ -185,20 +219,21 @@ export default function PropertyDiscrepancyRequestDetailPage() {
                         {detail.request.gps_lat}, {detail.request.gps_lng}
                       </span>
                     )}
-                    {detail.request.photo_path && (
+                    {photoKinds.map((p) => (
                       <button
+                        key={p.kind}
                         onClick={async () => {
                           try {
-                            setPhotoUrl(await fetchDiscrepancyPhotoBlobUrl(id));
+                            setPhotoUrl(await fetchDiscrepancyPhotoBlobUrl(id, p.kind));
                           } catch (err) {
                             setError(err instanceof Error ? err.message : "Could not load this photo.");
                           }
                         }}
                         className="text-nnm-blue hover:underline"
                       >
-                        View holding photo
+                        View {p.label}
                       </button>
-                    )}
+                    ))}
                   </div>
                 )}
               </div>
@@ -207,9 +242,14 @@ export default function PropertyDiscrepancyRequestDetailPage() {
 
             <section className="rounded-xl border border-slate-200 bg-white p-6">
               <div className="mb-4 flex items-center justify-between">
-                <h2 className="text-base font-semibold text-slate-900">{editing ? "Correcting the proposed details" : "What's changing"}</h2>
-                {detail.request.status === "pending" && detail.request.current_stage === admin.role && !editing && (
-                  <button onClick={startEditing} className="inline-flex items-center gap-1.5 text-xs font-semibold text-nnm-blue hover:underline">
+                <h2 className="text-base font-semibold text-slate-900">
+                  {editing ? "Correcting the proposed details" : "What's changing"}
+                </h2>
+                {detail.request.status === "pending" && atMyDesk && !editing && (
+                  <button
+                    onClick={startEditing}
+                    className="inline-flex items-center gap-1.5 text-xs font-semibold text-nnm-blue hover:underline"
+                  >
                     <Pencil className="h-3.5 w-3.5" />
                     Correct these entries
                   </button>
@@ -222,7 +262,12 @@ export default function PropertyDiscrepancyRequestDetailPage() {
               </div>
 
               {editing && editForm ? (
-                <AdminPropertyDetailsForm form={editForm} onChange={setEditForm} usageTypes={formOptions?.usageTypes ?? []} solidWasteChargeTypes={formOptions?.solidWasteChargeTypes ?? []} />
+                <AdminPropertyDetailsForm
+                  form={editForm}
+                  onChange={setEditForm}
+                  usageTypes={formOptions?.usageTypes ?? []}
+                  solidWasteChargeTypes={formOptions?.solidWasteChargeTypes ?? []}
+                />
               ) : (
                 <PropertyChangeReview
                   title="Full holding details - proposed corrections highlighted"
@@ -253,8 +298,8 @@ export default function PropertyDiscrepancyRequestDetailPage() {
                       )}
                       <div>
                         <p className="text-slate-700">
-                          <span className="font-medium">{ADMIN_ROLE_LABELS[a.stage]}</span> ({a.admin_display_name}) {DECISION_LABELS[a.decision] ?? a.decision} -{" "}
-                          {new Date(a.decided_at).toLocaleString("en-IN")}
+                          <span className="font-medium">{ADMIN_ROLE_LABELS[a.stage]}</span> ({a.admin_display_name}){" "}
+                          {DECISION_LABELS[a.decision] ?? a.decision} - {new Date(a.decided_at).toLocaleString("en-IN")}
                         </p>
                         {a.notes && <p className="text-slate-500">&ldquo;{a.notes}&rdquo;</p>}
                       </div>
@@ -264,13 +309,18 @@ export default function PropertyDiscrepancyRequestDetailPage() {
               )}
             </section>
 
-            {detail.request.status === "pending" && detail.request.current_stage === admin.role ? (
+            {detail.request.status === "pending" && atMyDesk ? (
               <section className="rounded-xl border border-nnm-blue bg-blue-50 p-6">
                 <h2 className="mb-1 text-base font-semibold text-slate-900">Your decision</h2>
                 <p className="mb-4 text-xs text-slate-500">
-                  {detail.request.current_stage === "deputy_commissioner"
-                    ? "Approving applies this correction to the property record."
-                    : "Approving sends this to the next desk."}{" "}
+                  {detail.request.current_stage ===
+                  (detail.request.holding_no.startsWith("MUNG-MIG") ? "commissioner" : "deputy_commissioner")
+                    ? detail.request.holding_no.startsWith("MUNG-MIG")
+                      ? "Approving applies these entries to the old holding and gives it its new regular holding number."
+                      : "Approving applies this correction to the property record."
+                    : detail.request.current_stage === "tax_surveyor" && admin.role === "tax_daroga"
+                      ? "This is still with the Tax Surveyor - as Tax Daroga you can act on it directly; approving sends it straight to the City Manager."
+                      : "Approving sends this to the next desk."}{" "}
                   If the entries are substantially wrong, revert it to the Tax Collector instead of correcting it yourself.
                 </p>
                 <textarea
@@ -318,14 +368,7 @@ export default function PropertyDiscrepancyRequestDetailPage() {
         )}
       </main>
 
-      {photoUrl && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => setPhotoUrl(null)}>
-          <div className="max-h-[90vh] max-w-2xl overflow-y-auto rounded-xl bg-white p-4" onClick={(e) => e.stopPropagation()}>
-            {/* eslint-disable-next-line @next/next/no-img-element -- object URL from an authenticated fetch */}
-            <img src={photoUrl} alt="Holding photo" className="max-h-[80vh] w-full rounded-md object-contain" />
-          </div>
-        </div>
-      )}
+      {photoUrl && <PhotoDialog url={photoUrl} title="Attached to this report" onClose={() => setPhotoUrl(null)} />}
     </div>
   );
 }

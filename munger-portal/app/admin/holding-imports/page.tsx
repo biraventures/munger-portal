@@ -5,7 +5,7 @@ import Link from "next/link";
 import { AlertCircle, Loader2 } from "lucide-react";
 import { AdminHeader } from "@/components/admin-header";
 import { useAdminGuard } from "@/lib/use-admin-guard";
-import { fetchImportBatches, type ImportBatch } from "@/lib/holding-import-api";
+import { fetchImportBatches, fetchResolutionsWaiting, type ImportBatch } from "@/lib/holding-import-api";
 
 function fmt(v: string): string {
   return new Date(v).toLocaleString("en-IN", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
@@ -15,15 +15,19 @@ export default function HoldingImportsPage() {
   const admin = useAdminGuard();
   const [batches, setBatches] = useState<ImportBatch[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [waiting, setWaiting] = useState<Record<string, number>>({});
 
   useEffect(() => {
-    if (!admin || !["tax_daroga", "city_manager", "commissioner"].includes(admin.role)) return;
+    if (!admin || !["tax_daroga", "city_manager", "deputy_commissioner", "commissioner"].includes(admin.role)) return;
     fetchImportBatches().then(setBatches).catch((e) => setError(e instanceof Error ? e.message : "Could not load uploads."));
+    fetchResolutionsWaiting()
+      .then((w) => setWaiting(w.byBatch))
+      .catch(() => undefined);
   }, [admin]);
 
   if (!admin) return <div className="flex min-h-screen items-center justify-center text-sm text-slate-400">Loading…</div>;
 
-  if (!["tax_daroga", "city_manager", "commissioner"].includes(admin.role)) {
+  if (!["tax_daroga", "city_manager", "deputy_commissioner", "commissioner"].includes(admin.role)) {
     return (
       <div className="min-h-screen bg-slate-50">
         <AdminHeader admin={admin} />
@@ -47,12 +51,9 @@ export default function HoldingImportsPage() {
             <p className="text-sm text-slate-500">
               {admin.role === "commissioner"
                 ? "Progress of bulk-uploaded holdings being integrated into the live data."
-                : "Bulk uploads wait here. Nothing goes live until the City Manager gives final approval and integrates it."}
+                : "Holdings uploaded earlier wait here. Nothing goes live until the City Manager gives final approval and integrates it."}
             </p>
           </div>
-          <Link href="/admin/properties-bulk-upload" className="rounded-md bg-nnm-blue px-4 py-2 text-sm font-semibold text-white hover:bg-nnm-blue-dark">
-            Upload a file
-          </Link>
         </div>
 
         {error && (
@@ -93,7 +94,12 @@ export default function HoldingImportsPage() {
                 {b.totalHoldings} holdings · <span className="text-amber-700">{b.counts.pending} pending</span> ·{" "}
                 <span className="text-green-700">{b.counts.integrated} integrated</span> · {b.counts.excluded} kept out
                 {b.counts.failed > 0 && <span className="text-red-700"> · {b.counts.failed} failed</span>}
+                {b.counts.blocked > 0 && <span className="text-red-700"> · {b.counts.blocked} cannot be imported</span>}
+                {b.uploadErrors.length > 0 && <span className="text-amber-700"> · {b.uploadErrors.length} file row(s) not staged</span>}
               </p>
+              {waiting[String(b.id)] ? (
+                <p className="mt-1 text-sm font-semibold text-amber-700">{waiting[String(b.id)]} held-back holding resolution(s) waiting for you</p>
+              ) : null}
             </Link>
           ))}
         </div>

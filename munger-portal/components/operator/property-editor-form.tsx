@@ -9,7 +9,28 @@ import { sanitizeOldHoldingNoInput } from "@/lib/holding-no";
 import { FinancialYearSelect } from "./financial-year-select";
 import { TaxExemptionSection } from "./tax-exemption-section";
 import { blankExemption, finalizeExemption, type TaxExemptionFormState } from "@/lib/tax-exemption-api";
-import { saveProperty, createNewEntryProperty, previewPropertyTax, type FormOptions, type SaveError, type SavePropertyApiResult, type TaxPreviewResult } from "@/lib/operator-api";
+import {
+  FloorChangeBox,
+  blankFloorChange,
+  floorChangePayload,
+  floorChangeProblem,
+  floorRowExtras,
+  floorsChanged,
+  isUseChange,
+  withSources,
+  type FloorChangeState,
+} from "@/components/floor-change-box";
+import { fileToBase64 } from "@/components/admin/discrepancy-capture-section";
+import { shrinkPhotoFile } from "@/lib/upload-limits";
+import {
+  saveProperty,
+  createNewEntryProperty,
+  previewPropertyTax,
+  type FormOptions,
+  type SaveError,
+  type SavePropertyApiResult,
+  type TaxPreviewResult,
+} from "@/lib/operator-api";
 
 const inputClass =
   "w-full rounded-md border border-slate-300 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-nnm-blue focus:ring-offset-1";
@@ -130,9 +151,16 @@ export function PropertyEditorForm({
     ...blankMaster(defaultAssessmentYear),
     ...initialMaster,
   });
-  const [floors, setFloors] = useState<FloorFormState[]>(initialFloors?.length ? initialFloors : [makeBlankFloor(0)]);
+  // When editing, every loaded floor remembers the recorded floor it is (its `source`), for floor-by-floor change statements.
+  const [floors, setFloors] = useState<FloorFormState[]>(
+    initialFloors?.length ? (isEditing ? withSources(initialFloors) : initialFloors) : [makeBlankFloor(0)],
+  );
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<SaveError | null>(null);
+  // Floors as loaded, to see whether they are being changed (only when editing an existing holding).
+  const [originalFloors] = useState<FloorFormState[]>(() => (isEditing && initialFloors?.length ? withSources(initialFloors) : []));
+  const [floorChange, setFloorChange] = useState<FloorChangeState>(blankFloorChange);
+  const [premisesPhoto, setPremisesPhoto] = useState<File | null>(null);
   const [result, setResult] = useState<SaveResult | null>(null);
   const [preview, setPreview] = useState<TaxPreviewResult | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
@@ -200,6 +228,16 @@ export function PropertyEditorForm({
       setError({ message: "Change basis and a reference/remark are required when editing an existing holding." });
       return;
     }
+    const floorProblem = isEditing ? floorChangeProblem(originalFloors, floors, floorChange) : null;
+    if (floorProblem) {
+      setError({ message: floorProblem });
+      return;
+    }
+    const needsPremisesPhoto = isEditing && isUseChange(originalFloors, floors, floorChange);
+    if (needsPremisesPhoto && !premisesPhoto) {
+      setError({ message: "Attach a photo of the premises - it is required for a change of use or a back-dated floor change." });
+      return;
+    }
 
     setSubmitting(true);
     try {
@@ -240,6 +278,10 @@ export function PropertyEditorForm({
         changeBasis: isEditing ? master.changeBasis : null,
         changeReference: isEditing ? master.changeReference : null,
         ...(taxExemption ? { taxExemption } : {}),
+        ...(isEditing && floorsChanged(originalFloors, floors) ? { floorChange: floorChangePayload(floorChange) } : {}),
+        ...(needsPremisesPhoto && premisesPhoto
+          ? { premisesPhotoBase64: await fileToBase64(premisesPhoto), premisesPhotoMimeType: premisesPhoto.type }
+          : {}),
         floors: floors.map((f) => ({
           floorLabel: f.floorLabel,
           buildupSqft: Number(f.buildupSqft) || 0,
@@ -248,12 +290,17 @@ export function PropertyEditorForm({
           occupancy: f.occupancy,
           yearBuilt: f.yearBuilt || null,
           closingYear: f.closingYear || null,
+          ...(isEditing ? floorRowExtras(f) : {}),
         })),
       };
 
       if (autoAssign) {
         const saved = await createNewEntryProperty({ holdingEntryMode: "new", ...payload });
-        setResult({ holdingNo: saved.holdingNo, taxCalc: saved.taxCalc as SaveResult["taxCalc"], solidWasteCharge: saved.solidWasteCharge });
+        setResult({
+          holdingNo: saved.holdingNo,
+          taxCalc: saved.taxCalc as SaveResult["taxCalc"],
+          solidWasteCharge: saved.solidWasteCharge,
+        });
         onSaved(saved.holdingNo);
       } else {
         if (!holdingNo) throw { message: "Holding number is missing." } as SaveError;
@@ -315,13 +362,8 @@ export function PropertyEditorForm({
                   Solid Waste ({formOptions.solidWasteRates[master.solidWasteChargeType]}/mo)
                 </span>
                 <span className="block font-mono text-base font-semibold text-slate-900">
-                  ₹
-                  {(
-                    formOptions.solidWasteRates[master.solidWasteChargeType]! * 12
-                  ).toLocaleString("en-IN")}
-                  <span className="ml-1 text-xs font-normal text-slate-400">
-                    per year
-                  </span>
+                  ₹{(formOptions.solidWasteRates[master.solidWasteChargeType]! * 12).toLocaleString("en-IN")}
+                  <span className="ml-1 text-xs font-normal text-slate-400">per year</span>
                 </span>
               </div>
             )}
@@ -352,14 +394,10 @@ export function PropertyEditorForm({
               <span className="block font-mono text-sm text-slate-700">{preview.taxCalc.vacant.declaredArea} sqft</span>
             </div>
             <div>
-              <span className="block text-[10px] font-semibold uppercase tracking-wide text-slate-400">
-                Taxable Vacant Area
-              </span>
+              <span className="block text-[10px] font-semibold uppercase tracking-wide text-slate-400">Taxable Vacant Area</span>
               <span className="block font-mono text-sm font-semibold text-slate-900">
                 {preview.taxCalc.vacant.taxableArea} sqft
-                <span className="ml-1 text-xs font-normal text-slate-400">
-                  (Total Plot − Ground Floor Built × 1.43)
-                </span>
+                <span className="ml-1 text-xs font-normal text-slate-400">(Total Plot − Ground Floor Built × 1.43)</span>
               </span>
             </div>
             {Number(preview.taxCalc.vacant.tax) > 0 && (
@@ -416,12 +454,12 @@ export function PropertyEditorForm({
           <div>
             <p className="font-semibold">Submitted for approval (request #{result.pendingChangeRequestId})</p>
             <p className="text-blue-700">
-              This edit now goes to Tax Daroga for review before it takes effect. Nothing has changed on the property
-              yet — the figures below are a preview of what it would become.
+              This edit now goes to Tax Daroga for review before it takes effect. Nothing has changed on the property yet — the figures
+              below are a preview of what it would become.
             </p>
             <p className="mt-1 text-blue-700">
-              Preview current year tax: ₹{Number(result.taxCalc.netTax).toLocaleString("en-IN")} · Solid waste
-              charge: ₹{result.solidWasteCharge.toLocaleString("en-IN")}
+              Preview current year tax: ₹{Number(result.taxCalc.netTax).toLocaleString("en-IN")} · Solid waste charge: ₹
+              {result.solidWasteCharge.toLocaleString("en-IN")}
             </p>
           </div>
         </div>
@@ -479,7 +517,7 @@ export function PropertyEditorForm({
             />
           </div>
           <div className="sm:col-span-2">
-           <label className={labelClass}>Old PID (optional)</label>
+            <label className={labelClass}>Old PID (optional)</label>
             <input
               value={master.oldPid}
               onChange={(e) => updateMaster("oldPid", e.target.value)}
@@ -520,11 +558,7 @@ export function PropertyEditorForm({
           </div>
           <div>
             <label className={labelClass}>Present category of holding (optional)</label>
-            <select
-              value={master.presentCategory}
-              onChange={(e) => updateMaster("presentCategory", e.target.value)}
-              className={inputClass}
-            >
+            <select value={master.presentCategory} onChange={(e) => updateMaster("presentCategory", e.target.value)} className={inputClass}>
               <option value="">—</option>
               {formOptions.presentCategories.map((c) => (
                 <option key={c} value={c}>
@@ -597,7 +631,14 @@ export function PropertyEditorForm({
           </div>
           <div>
             <label className={labelClass}>Total plot area (sqft)</label>
-            <input required type="number" min="0" value={master.areaSqft} onChange={(e) => updateMaster("areaSqft", e.target.value)} className={inputClass} />
+            <input
+              required
+              type="number"
+              min="0"
+              value={master.areaSqft}
+              onChange={(e) => updateMaster("areaSqft", e.target.value)}
+              className={inputClass}
+            />
           </div>
           <div>
             <label className={labelClass}>Tax paid till year (if known)</label>
@@ -675,9 +716,9 @@ export function PropertyEditorForm({
       {canSetExemption && <TaxExemptionSection value={exemption} onChange={setExemption} wasExempt={Boolean(initialExemption?.isExempt)} />}
 
       <div className="rounded-md border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800">
-        Penalty and Outstanding Demand are no longer entered manually — they&apos;re calculated automatically from
-        pending arrears (visible in the sticky panel above once you Calculate, and on the property&apos;s search
-        result). Anything else — a one-off cost, fee, or rebate not covered elsewhere — goes in Miscellaneous below.
+        Penalty and Outstanding Demand are no longer entered manually — they&apos;re calculated automatically from pending arrears (visible
+        in the sticky panel above once you Calculate, and on the property&apos;s search result). Anything else — a one-off cost, fee, or
+        rebate not covered elsewhere — goes in Miscellaneous below.
       </div>
 
       <section className="rounded-xl border border-slate-200 bg-white p-6">
@@ -752,6 +793,19 @@ export function PropertyEditorForm({
       </section>
 
       {isEditing && (
+        <FloorChangeBox
+          original={originalFloors}
+          current={floors}
+          onFloorsChange={setFloors}
+          creationYear={master.holdingCreationYear}
+          value={floorChange}
+          onChange={setFloorChange}
+          photo={premisesPhoto}
+          onPhoto={async (f) => setPremisesPhoto(f ? await shrinkPhotoFile(f) : null)}
+        />
+      )}
+
+      {isEditing && (
         <section className="rounded-xl border border-amber-200 bg-amber-50 p-6">
           <h2 className="mb-1 text-base font-semibold text-amber-900">Reason for change</h2>
           <p className="mb-4 text-xs text-amber-700">Required when editing an existing holding — recorded in the audit history.</p>
@@ -769,7 +823,11 @@ export function PropertyEditorForm({
             </div>
             <div>
               <label className={labelClass}>Reference / remarks</label>
-              <input value={master.changeReference} onChange={(e) => updateMaster("changeReference", e.target.value)} className={inputClass} />
+              <input
+                value={master.changeReference}
+                onChange={(e) => updateMaster("changeReference", e.target.value)}
+                className={inputClass}
+              />
             </div>
           </div>
         </section>

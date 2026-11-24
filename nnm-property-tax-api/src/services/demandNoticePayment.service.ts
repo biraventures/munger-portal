@@ -1,3 +1,4 @@
+import { assertNoDiscrepancyPending } from "./discrepancyHold.service";
 import { pool } from "../config/db";
 import { noticeMissingSolidWasteCharge, solidWasteTypeBlock } from "./solidWasteGuard.service";
 import { getHoldingDocumentStatus, onlinePaymentDocumentsMessage } from "./holdingDocuments.service";
@@ -76,6 +77,7 @@ export async function getDemandNoticePaymentInfo(demandNo: string): Promise<Dema
     assertNotDisputed(property);
     assertNoResurveyPending(property);
     await assertNoNoticeOnHold(holdingNo);
+    await assertNoDiscrepancyPending(holdingNo);
     assertNoMissingTaxYears(property, await propertyRepository.findTaxHistoryByHoldingNo(holdingNo));
   } catch {
     return { ...base, available: false, reason: "Please contact the Holding Tax Section, Municipal Corporation Office, Munger." };

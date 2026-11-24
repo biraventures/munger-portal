@@ -43,6 +43,14 @@ const envSchema = z.object({
   // mount (e.g. /image-upload) so photos survive an App server redeploy.
   PHOTO_UPLOAD_DIR: z.string().default("./uploads/attendance-photos"),
   // Face-verified attendance (CompreFace, self-hosted on the APP server). Off until CompreFace is installed.
+  // Collection staff (Tax Collector, Team Leader, Project Manager, Agency Operator) can sign in only after their
+  // identity documents are approved by the City Manager and DMC. Off until switched on (staffKyc.service.ts).
+  // Public online purchase of garden entry tickets - through the garden's own payment gateway (not the agency's).
+  // Stays off until that gateway is integrated (gardenGateway.ts).
+  // Community hall online payment needs its own gateway (not the property tax one): off until it is integrated.
+  HALL_ONLINE_PAYMENT_ENABLED: z.preprocess((v) => (typeof v === "string" ? ["true", "1", "yes"].includes(v.trim().toLowerCase()) : v), z.boolean().default(false)),
+  GARDEN_ONLINE_PAYMENT_ENABLED: z.preprocess((v) => (typeof v === "string" ? ["true", "1", "yes"].includes(v.trim().toLowerCase()) : v), z.boolean().default(false)),
+  STAFF_KYC_REQUIRED: z.preprocess((v) => (typeof v === "string" ? ["true", "1", "yes"].includes(v.trim().toLowerCase()) : v), z.boolean().default(false)),
   FACE_ATTENDANCE_ENABLED: z.preprocess((v) => (typeof v === "string" ? ["true", "1", "yes"].includes(v.trim().toLowerCase()) : v), z.boolean().default(false)),
   COMPREFACE_URL: z.string().default("http://127.0.0.1:8000"),
   // API key of the CompreFace *Recognition* service (CompreFace web UI > application > service). Server .env only.
@@ -51,7 +59,8 @@ const envSchema = z.object({
   FACE_MATCH_THRESHOLD: z.coerce.number().min(0).max(1).default(0.85),
   FACE_MATCH_THRESHOLD_TURNED: z.coerce.number().min(0).max(1).default(0.75),
   // Liveness: straight photo must be within this many degrees of straight; the turn must move the head at least this much.
-  FACE_FRONT_MAX_YAW: z.coerce.number().default(15),
+  // Phone cameras and the pose estimate read a straight face at 15-25 degrees; the liveness rests on the turn (below).
+  FACE_FRONT_MAX_YAW: z.coerce.number().default(25),
   FACE_TURN_MIN_YAW: z.coerce.number().default(20),
   // Which sign of CompreFace's yaw means "worker turned to their LEFT" in a rear-camera photo: 1 or -1.
   // 0 = check only that the head turned (either way) - use until calibrated (see FACE_ATTENDANCE_SETUP.md).

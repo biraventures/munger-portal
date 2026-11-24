@@ -1,12 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AlertCircle, BookOpen, CheckCircle2, Loader2, Search, XCircle } from "lucide-react";
+import { AlertCircle, BookOpen, CheckCircle2, Loader2, RotateCcw, Search, XCircle } from "lucide-react";
 import { AdminHeader } from "@/components/admin-header";
 import { useAdminGuard } from "@/lib/use-admin-guard";
 import { WARDS } from "@/lib/new-holding-api";
 import {
   approveEntry,
+  revertEntry,
+  ROLE_NAME,
   fetchEntries,
   fetchWorklist,
   lookupHolding,
@@ -41,7 +43,13 @@ function EntryForm({ onSaved }: { onSaved: (msg: string) => void }) {
     try {
       const d = await lookupHolding(no);
       setData(d);
-      setArv({});
+      // Reverted for correction: start from what was entered, so only the wrong figure needs changing.
+      const last = d.history[0];
+      if (last?.status === "reverted" && !d.pending) {
+        setArv(Object.fromEntries(last.entries.map((e) => [e.period, String(e.arv)])));
+        setReference(last.register_reference);
+        setRemarks(last.remarks ?? "");
+      } else setArv({});
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Could not load this holding.");
     } finally {
@@ -124,7 +132,16 @@ function EntryForm({ onSaved }: { onSaved: (msg: string) => void }) {
             <p className="rounded-md border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">
               An entry made by {data.pending.entered_by_name} on {fmt(data.pending.entered_at)} is waiting for the City Manager&apos;s approval.
             </p>
-          ) : data.neededPeriods.length === 0 ? (
+          ) : null}
+          {!data.pending && data.history[0]?.status === "reverted" && (
+            <p className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+              <RotateCcw className="mr-1 inline h-4 w-4" />
+              <b>Reverted for correction</b> by {data.history[0].reverted_by_name} ({ROLE_NAME[data.history[0].reverted_by_role ?? ""] ?? data.history[0].reverted_by_role}),{" "}
+              {fmt(data.history[0].reverted_at ?? null)}: {data.history[0].revert_comment}
+              <span className="mt-1 block text-xs">The earlier figures are filled in below - correct them and send again.</span>
+            </p>
+          )}
+          {data.pending ? null : data.neededPeriods.length === 0 ? (
             <p className="rounded-md border border-green-200 bg-green-50 p-3 text-sm text-green-800">
               No pending year before 2011-12 is missing its assessment - nothing to enter.
               {data.missingAfter2011 && ` (Years ${data.missingAfter2011} have no assessment: the holding's floor details need completing.)`}
@@ -197,8 +214,9 @@ function EntryForm({ onSaved }: { onSaved: (msg: string) => void }) {
               {data.history.map((h) => (
                 <p key={h.id}>
                   {fmt(h.entered_at)} by {h.entered_by_name}: {h.entries.map((e) => `${e.period} ARV ${rs(e.arv)}`).join("; ")} - <b>{h.status}</b>
-                  {h.decided_by_name ? ` by ${h.decided_by_name}` : ""}
-                  {h.decision_remarks ? ` (${h.decision_remarks})` : ""}
+                  {h.status === "reverted"
+                    ? `${h.reverted_from === "approved" && h.decided_by_name ? ` after approval by ${h.decided_by_name},` : ""} by ${h.reverted_by_name}: ${h.revert_comment}`
+                    : `${h.decided_by_name ? ` by ${h.decided_by_name}` : ""}${h.decision_remarks ? ` (${h.decision_remarks})` : ""}`}
                 </p>
               ))}
             </div>
@@ -209,17 +227,30 @@ function EntryForm({ onSaved }: { onSaved: (msg: string) => void }) {
   );
 }
 
-function EntryCard({ e, canDecide, onDone }: { e: Pre2011Entry; canDecide: boolean; onDone: (m: string) => void }) {
-  const [mode, setMode] = useState<"approve" | "reject" | null>(null);
+function EntryCard({ e, role, onDone }: { e: Pre2011Entry; role: string; onDone: (m: string) => void }) {
+  const canDecide = role === "city_manager";
+  // Revert to the Tax Daroga: a waiting entry by the City Manager, DMC or MC; an approved one by the DMC or MC.
+  const canRevert =
+    (e.status === "pending" && ["city_manager", "deputy_commissioner", "commissioner"].includes(role)) ||
+    (e.status === "approved" && ["deputy_commissioner", "commissioner"].includes(role));
+  const [mode, setMode] = useState<"approve" | "reject" | "revert" | null>(null);
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   async function act() {
     setErr(null);
     if (mode === "reject" && text.trim().length < 3) return setErr("Give the reason.");
+    if (mode === "revert" && text.trim().length < 5) return setErr("Say what the Tax Daroga has to correct.");
     setBusy(true);
     try {
-      if (mode === "approve") {
+      if (mode === "revert") {
+        await revertEntry(e.id, text.trim());
+        onDone(
+          e.status === "approved"
+            ? `Holding ${e.holding_no}: approval reverted - the pre-2011 ARV rows are removed and the entry is back with the Tax Daroga for correction.`
+            : `Holding ${e.holding_no}: entry reverted to the Tax Daroga for correction.`,
+        );
+      } else if (mode === "approve") {
         await approveEntry(e.id, text.trim() || null);
         onDone(`Holding ${e.holding_no}: pre-2011 ARV approved. Any earlier notice is closed - generate a new demand notice, which now includes these years.`);
       } else {
@@ -276,24 +307,45 @@ function EntryCard({ e, canDecide, onDone }: { e: Pre2011Entry; canDecide: boole
         Register reference: <b>{e.register_reference}</b>
         {e.remarks ? ` · Remarks: ${e.remarks}` : ""}
       </p>
-      {e.status !== "pending" ? (
+      {e.status === "reverted" ? (
+        <p className="mt-2 text-xs text-amber-800">
+          <RotateCcw className="mr-1 inline h-3.5 w-3.5" />
+          <b>Reverted{e.reverted_from === "approved" ? " after approval" : ""}</b> to the Tax Daroga by {e.reverted_by_name} (
+          {ROLE_NAME[e.reverted_by_role ?? ""] ?? e.reverted_by_role}), {fmt(e.reverted_at ?? null)} - {e.revert_comment}
+          {e.reverted_from === "approved" && e.decided_by_name ? ` (had been approved by ${e.decided_by_name}, ${fmt(e.decided_at)})` : ""}
+        </p>
+      ) : e.status !== "pending" ? (
         <p className={`mt-2 text-xs ${e.status === "approved" ? "text-green-700" : "text-red-700"}`}>
           {e.status === "approved" ? <CheckCircle2 className="mr-1 inline h-3.5 w-3.5" /> : <XCircle className="mr-1 inline h-3.5 w-3.5" />}
           <b>{e.status === "approved" ? "Approved" : "Rejected"}</b> by {e.decided_by_name}, {fmt(e.decided_at)}
           {e.decision_remarks ? ` - ${e.decision_remarks}` : ""}
         </p>
-      ) : canDecide ? (
+      ) : !canDecide && !canRevert ? (
+        <p className="mt-2 text-xs text-slate-500">Waiting for the City Manager&apos;s approval.</p>
+      ) : null}
+      {(canDecide && e.status === "pending") || canRevert ? (
         mode ? (
           <div className="mt-3 space-y-2">
-            <input value={text} onChange={(x) => setText(x.target.value)} placeholder={mode === "approve" ? "Remarks (optional)" : "Reason for rejecting"} className={inputClass} />
+            {mode === "revert" && e.status === "approved" && (
+              <p className="rounded-md border border-amber-200 bg-amber-50 p-2 text-xs text-amber-900">
+                This removes the pre-2011 ARV rows this approval added to the holding&apos;s tax history and closes any unpaid demand notice. No notice or
+                payment for the holding until the Tax Daroga&apos;s corrected entry is approved. Not possible if tax was collected after the approval.
+              </p>
+            )}
+            <input
+              value={text}
+              onChange={(x) => setText(x.target.value)}
+              placeholder={mode === "approve" ? "Remarks (optional)" : mode === "reject" ? "Reason for rejecting" : "What should the Tax Daroga correct?"}
+              className={inputClass}
+            />
             {err && <p className="text-xs font-medium text-red-700">{err}</p>}
             <div className="flex gap-2">
               <button
                 onClick={act}
                 disabled={busy}
-                className={`rounded-md px-4 py-2 text-xs font-semibold text-white disabled:opacity-60 ${mode === "approve" ? "bg-green-600" : "bg-red-600"}`}
+                className={`rounded-md px-4 py-2 text-xs font-semibold text-white disabled:opacity-60 ${mode === "approve" ? "bg-green-600" : mode === "revert" ? "bg-amber-600" : "bg-red-600"}`}
               >
-                {busy ? "Saving…" : mode === "approve" ? "Confirm approval" : "Confirm rejection"}
+                {busy ? "Saving…" : mode === "approve" ? "Confirm approval" : mode === "revert" ? "Confirm revert to Tax Daroga" : "Confirm rejection"}
               </button>
               <button onClick={() => setMode(null)} className="rounded-md border border-slate-300 px-4 py-2 text-xs font-semibold text-slate-700">
                 Cancel
@@ -301,18 +353,26 @@ function EntryCard({ e, canDecide, onDone }: { e: Pre2011Entry; canDecide: boole
             </div>
           </div>
         ) : (
-          <div className="mt-3 flex gap-2">
-            <button onClick={() => setMode("approve")} className="rounded-md bg-green-600 px-4 py-2 text-xs font-semibold text-white">
-              Approve
-            </button>
-            <button onClick={() => setMode("reject")} className="rounded-md border border-red-300 px-4 py-2 text-xs font-semibold text-red-700">
-              Reject
-            </button>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {canDecide && e.status === "pending" && (
+              <>
+                <button onClick={() => setMode("approve")} className="rounded-md bg-green-600 px-4 py-2 text-xs font-semibold text-white">
+                  Approve
+                </button>
+                <button onClick={() => setMode("reject")} className="rounded-md border border-red-300 px-4 py-2 text-xs font-semibold text-red-700">
+                  Reject
+                </button>
+              </>
+            )}
+            {canRevert && (
+              <button onClick={() => setMode("revert")} className="inline-flex items-center gap-1 rounded-md border border-amber-400 px-4 py-2 text-xs font-semibold text-amber-800">
+                <RotateCcw className="h-3.5 w-3.5" /> {e.status === "approved" ? "Revert approval to Tax Daroga" : "Revert to Tax Daroga"}
+              </button>
+            )}
+            {!canDecide && e.status === "pending" && <span className="self-center text-xs text-slate-500">Waiting for the City Manager&apos;s approval.</span>}
           </div>
         )
-      ) : (
-        <p className="mt-2 text-xs text-slate-500">Waiting for the City Manager&apos;s approval.</p>
-      )}
+      ) : null}
     </div>
   );
 }
@@ -320,7 +380,7 @@ function EntryCard({ e, canDecide, onDone }: { e: Pre2011Entry; canDecide: boole
 export default function Pre2011ArvPage() {
   const admin = useAdminGuard();
   const [tab, setTab] = useState<"entries" | "worklist" | "enter">("entries");
-  const [status, setStatus] = useState<"pending" | "approved" | "rejected" | "">("pending");
+  const [status, setStatus] = useState<"pending" | "approved" | "rejected" | "reverted" | "">("pending");
   const [entries, setEntries] = useState<Pre2011Entry[] | null>(null);
   const [ward, setWard] = useState("");
   const [worklist, setWorklist] = useState<WorklistRow[] | null>(null);
@@ -420,6 +480,7 @@ export default function Pre2011ArvPage() {
                   ["pending", "Awaiting approval"],
                   ["approved", "Approved"],
                   ["rejected", "Rejected"],
+                  ["reverted", "Reverted"],
                   ["", "All"],
                 ] as const
               ).map(([v, l]) => (
@@ -442,7 +503,7 @@ export default function Pre2011ArvPage() {
                   <EntryCard
                     key={e.id}
                     e={e}
-                    canDecide={isCm}
+                    role={admin.role}
                     onDone={(m) => {
                       setNotice(m);
                       loadEntries();

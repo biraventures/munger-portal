@@ -16,7 +16,7 @@ const KINDS: StreetlightReportKind[] = ["ward-wise", "street-wise", "agency-wise
 
 // The Light-wise list can run to thousands of rows - only this many are drawn on screen, the CSV download always has every row.
 const PREVIEW_ROW_LIMIT = 300;
-const ALLOWED_ROLES = ["commissioner", "deputy_commissioner", "city_manager", "je_mechanical", "ae_mechanical"];
+const ALLOWED_ROLES = ["commissioner", "deputy_commissioner", "city_manager"];
 
 export default function StreetlightReportsPage() {
   const admin = useAdminGuard();
@@ -67,7 +67,7 @@ export default function StreetlightReportsPage() {
         <main className="mx-auto max-w-2xl px-6 py-10">
           <div role="alert" className="flex items-center gap-2 rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-700">
             <AlertCircle className="h-4 w-4 shrink-0" />
-            Street light reports are available to the Commissioner, Deputy Commissioner, City Manager and JE/AE - Mechanical.
+            Street light reports are available to the Commissioner, Deputy Commissioner, and City Manager. The JE / AE (Mechanical) see theirs on the asset management login.
           </div>
         </main>
       </div>

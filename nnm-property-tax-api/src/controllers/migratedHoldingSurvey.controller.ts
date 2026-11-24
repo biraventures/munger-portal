@@ -3,7 +3,7 @@ import { listSurveyorsWithWards } from "../services/surveyorWards.service";
 import { z } from "zod";
 import ExcelJS from "exceljs";
 import { holdingNoSchema } from "../utils/holdingNoSchema";
-import { importMigratedHoldingsXlsx, listReviewRows, importReviewRow, discardReviewRow } from "../services/migratedHoldingImport.service";
+import { listReviewRows, importReviewRow, discardReviewRow, discardAllReviewRows } from "../services/migratedHoldingImport.service";
 import { applyPropertySave } from "../services/propertySave.service";
 import { renameHoldingTo } from "../services/propertyRenumber.service";
 import { getNextFinalizedMigratedHoldingNo } from "../services/holdingNumberSeries.service";
@@ -16,22 +16,6 @@ import { ApiError } from "../utils/ApiError";
 import type { PropertySaveInput, FloorInput } from "../types/propertySave.types";
 
 const holdingNoParamSchema = z.object({ holdingNo: holdingNoSchema });
-
-/** POST /api/v1/admin/migrated-holdings/bulk-upload - commissioner only, matching the existing bulk-upload pattern. */
-export const uploadMigratedHoldingsHandler = asyncHandler(async (req: Request, res: Response) => {
-  const parsed = z.object({ fileDataBase64: z.string().min(1), fileName: z.string().max(255).optional() }).safeParse(req.body);
-  if (!parsed.success) throw ApiError.badRequest("Invalid input", parsed.error.flatten().fieldErrors);
-  let fileBuffer: Buffer;
-  try {
-    fileBuffer = Buffer.from(parsed.data.fileDataBase64, "base64");
-  } catch {
-    throw ApiError.badRequest("Could not decode the uploaded file.");
-  }
-  if (fileBuffer.length === 0) throw ApiError.badRequest("The uploaded file is empty.");
-
-  const result = await importMigratedHoldingsXlsx(fileBuffer, req.admin!.displayName, parsed.data.fileName ?? null);
-  res.status(200).json(result);
-});
 
 function wardParityForRole(role: string): "odd" | "even" {
   return role === "deputy_commissioner" ? "odd" : "even";
@@ -392,4 +376,12 @@ export const discardReviewRowHandler = asyncHandler(async (req: Request, res: Re
   if (!b.success) throw ApiError.badRequest(b.error.issues[0]?.message ?? "Invalid input");
   await discardReviewRow(id.data, b.data.note, req.admin!.displayName);
   res.status(200).json({ ok: true });
+});
+
+/** POST /api/v1/admin/migrated-holdings/review-rows/discard-all - Commissioner: clear the whole "to review" list. */
+export const discardAllReviewRowsHandler = asyncHandler(async (req: Request, res: Response) => {
+  const b = z.object({ note: z.string().trim().min(3, "Say why all rows are discarded").max(500) }).safeParse(req.body);
+  if (!b.success) throw ApiError.badRequest(b.error.issues[0]?.message ?? "Invalid input");
+  const discarded = await discardAllReviewRows(b.data.note, req.admin!.displayName);
+  res.status(200).json({ discarded });
 });

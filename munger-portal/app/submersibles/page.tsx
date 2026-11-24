@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { ReportByLocation } from "@/components/public-reports/report-by-location";
 import { AlertCircle, CheckCircle2, ChevronLeft, ChevronRight, Droplet, Loader2, LogOut, XCircle } from "lucide-react";
 import { SiteHeader } from "@/components/site-header";
 import { SiteFooter } from "@/components/site-footer";
@@ -13,6 +14,7 @@ import {
   fetchPyauWards,
   openSession,
   PROBLEM_OPTIONS,
+  reportPyauFaultByLocation,
   reportPyauFault,
   savedSession,
   type MyPyauReport,
@@ -133,6 +135,7 @@ export default function PublicSubmersiblePage() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [wards, setWards] = useState<PyauWardRow[] | null>(null);
+  const [locProblem, setLocProblem] = useState<PyauProblem | "">("");
   const [openWard, setOpenWard] = useState<PyauWardRow | null>(null);
   const [pyaus, setPyaus] = useState<PublicPyau[] | null>(null);
   const [tab, setTab] = useState<"list" | "mine">("list");
@@ -319,7 +322,33 @@ export default function PublicSubmersiblePage() {
                       </div>
                     )}
                   </div>
-                ) : !openWard ? (
+                ) : (
+                  <>
+                  <ReportByLocation
+                    what="submersible"
+                    loadWards={() => fetchPyauWards().then((w) => w.map((x) => ({ id: Number(x.wardId), name: x.wardName })))}
+                    defaultWardId={session.homeWardId ?? null}
+                    extraProblem={() => (!locProblem ? "Choose the problem you saw." : null)}
+                    extra={
+                      <div>
+                        <label className="mb-1 block text-xs font-medium text-slate-600">Problem you saw</label>
+                        <select value={locProblem} onChange={(e) => setLocProblem(e.target.value as PyauProblem)} className={inputClass}>
+                          <option value="">Choose</option>
+                          {PROBLEM_OPTIONS.map((o) => (
+                            <option key={o.value} value={o.value}>
+                              {o.label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    }
+                    send={async (r) => {
+                      await reportPyauFaultByLocation({ ...r, problem: locProblem as PyauProblem });
+                      setLocProblem("");
+                    }}
+                    onSent={reported}
+                  />
+                  {!openWard ? (
                   <div className={cardClass}>
                     {!wards ? (
                       <p className="p-4 text-sm text-slate-400">Loading…</p>
@@ -382,6 +411,8 @@ export default function PublicSubmersiblePage() {
                         shown.map((p) => <PyauItem key={p.pyauId} pyau={p} onReported={reported} />)
                       )}
                     </div>
+                  </>
+                  )}
                   </>
                 )}
               </>

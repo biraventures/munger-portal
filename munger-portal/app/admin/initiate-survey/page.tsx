@@ -1,6 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { floorChangeProblem, isUseChange } from "@/components/floor-change-box";
+import { fileToBase64 } from "@/components/admin/discrepancy-capture-section";
+import { shrinkPhotoFile } from "@/lib/upload-limits";
 import { AlertCircle, CheckCircle2, Search, ClipboardCheck } from "lucide-react";
 import { sanitizeHoldingNoInput } from "@/lib/holding-no";
 import { AdminHeader } from "@/components/admin-header";
@@ -8,9 +11,16 @@ import { useAdminGuard } from "@/lib/use-admin-guard";
 import { FieldVerificationCapture } from "@/components/admin/field-verification-capture";
 import { fetchFullPropertyAdmin, savePropertyAdmin, type AdminSaveError } from "@/lib/admin-api";
 import { fetchFormOptions, type FormOptions } from "@/lib/operator-api";
-import { AdminPropertyDetailsForm, blankAdminPropertyForm, propertyFormFromExisting, propertyFormToPayload, type AdminPropertyFormState } from "@/components/admin/property-details-form";
+import {
+  AdminPropertyDetailsForm,
+  blankAdminPropertyForm,
+  propertyFormFromExisting,
+  propertyFormToPayload,
+  type AdminPropertyFormState,
+} from "@/components/admin/property-details-form";
 
-const inputClass = "w-full rounded-md border border-slate-300 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-nnm-blue focus:ring-offset-1";
+const inputClass =
+  "w-full rounded-md border border-slate-300 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-nnm-blue focus:ring-offset-1";
 
 export default function InitiateSurveyPage() {
   const admin = useAdminGuard();
@@ -22,13 +32,17 @@ export default function InitiateSurveyPage() {
   const [taxPaidTillYear, setTaxPaidTillYear] = useState<string | null>(null);
   const [formOptions, setFormOptions] = useState<FormOptions | null>(null);
   const [form, setForm] = useState<AdminPropertyFormState>(blankAdminPropertyForm());
+  const [originalFloors, setOriginalFloors] = useState<AdminPropertyFormState["floors"]>([]);
+  const [premisesPhoto, setPremisesPhoto] = useState<File | null>(null);
   const [changeReference, setChangeReference] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [success, setSuccess] = useState<{ applied: boolean } | null>(null);
 
   useEffect(() => {
-    fetchFormOptions().then(setFormOptions).catch(() => setFormOptions(null));
+    fetchFormOptions()
+      .then(setFormOptions)
+      .catch(() => setFormOptions(null));
   }, []);
 
   async function handleSearch() {
@@ -49,7 +63,10 @@ export default function InitiateSurveyPage() {
       }
       setIsNewHolding(false);
       setTaxPaidTillYear((result.property.tax_paid_till_year as string | null) ?? null);
-      setForm(propertyFormFromExisting(result.property, result.floors ?? []));
+      const loaded = propertyFormFromExisting(result.property, result.floors ?? []);
+      setForm(loaded);
+      setOriginalFloors(loaded.floors);
+      setPremisesPhoto(null);
       setFound(true);
     } catch (err) {
       setSearchError(err instanceof Error ? err.message : "Search failed.");
@@ -63,6 +80,16 @@ export default function InitiateSurveyPage() {
       setSubmitError("Describe what the resurvey found/corrected.");
       return;
     }
+    const floorProblem = isNewHolding ? null : floorChangeProblem(originalFloors, form.floors, form.floorChange);
+    if (floorProblem) {
+      setSubmitError(floorProblem);
+      return;
+    }
+    const needsPhoto = !isNewHolding && isUseChange(originalFloors, form.floors, form.floorChange);
+    if (needsPhoto && !premisesPhoto) {
+      setSubmitError("Attach a photo of the premises - it is required for a change of use or a back-dated floor change.");
+      return;
+    }
     setSubmitting(true);
     setSubmitError(null);
     try {
@@ -70,6 +97,10 @@ export default function InitiateSurveyPage() {
       if (!isNewHolding) {
         payload.changeBasis = "Resurvey/Reassessment";
         payload.changeReference = changeReference.trim();
+        if (needsPhoto && premisesPhoto) {
+          payload.premisesPhotoBase64 = await fileToBase64(premisesPhoto);
+          payload.premisesPhotoMimeType = premisesPhoto.type;
+        }
       }
       const result = await savePropertyAdmin(holdingNo.trim(), payload);
       setSuccess({ applied: result.applied });
@@ -112,12 +143,15 @@ export default function InitiateSurveyPage() {
           Initiate Survey / Resurvey
         </h1>
         <p className="mb-6 text-sm text-slate-500">
-          Search a holding number. If it exists, submit a resurvey with the corrected details - it goes to Tax Daroga for approval like any other
-          property change. If it doesn&apos;t exist yet, you can survey it fresh.
+          Search a holding number. If it exists, submit a resurvey with the corrected details - it goes to Tax Daroga for approval like any
+          other property change. If it doesn&apos;t exist yet, you can survey it fresh.
         </p>
 
         {success && (
-          <div role="status" className="mb-5 flex items-center gap-2 rounded-md border border-green-200 bg-green-50 p-4 text-sm text-green-800">
+          <div
+            role="status"
+            className="mb-5 flex items-center gap-2 rounded-md border border-green-200 bg-green-50 p-4 text-sm text-green-800"
+          >
             <CheckCircle2 className="h-4 w-4 shrink-0" />
             {success.applied ? "New holding created." : "Resurvey submitted - pending Tax Daroga approval before it's applied."}
           </div>
@@ -180,7 +214,15 @@ export default function InitiateSurveyPage() {
 
             <div className="rounded-xl border border-slate-200 bg-white p-6">
               <h2 className="mb-4 text-sm font-semibold text-slate-800">Property details</h2>
-              <AdminPropertyDetailsForm form={form} onChange={setForm} usageTypes={formOptions?.usageTypes ?? []} solidWasteChargeTypes={formOptions?.solidWasteChargeTypes ?? []} />
+              <AdminPropertyDetailsForm
+                form={form}
+                onChange={setForm}
+                usageTypes={formOptions?.usageTypes ?? []}
+                solidWasteChargeTypes={formOptions?.solidWasteChargeTypes ?? []}
+                originalFloors={isNewHolding ? undefined : originalFloors}
+                premisesPhoto={premisesPhoto}
+                onPremisesPhoto={async (f) => setPremisesPhoto(f ? await shrinkPhotoFile(f) : null)}
+              />
             </div>
 
             {submitError && (

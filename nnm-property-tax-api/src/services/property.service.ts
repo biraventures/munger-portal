@@ -1,3 +1,4 @@
+import { discrepancyHold } from "./discrepancyHold.service";
 import { propertyRepository } from "../repositories/property.repository";
 import { solidWasteTypeBlock } from "./solidWasteGuard.service";
 import { getHoldingDocumentStatus, onlinePaymentDocumentsMessage } from "./holdingDocuments.service";
@@ -109,12 +110,16 @@ export async function searchPropertyByHoldingNo(holdingNoRaw: string): Promise<P
   } catch (err) {
     paymentHold = err instanceof Error ? err.message : "Tax assessment missing for some years.";
   }
+  // A property discrepancy reported on the holding and not yet resolved also stops collection (discrepancyHold.service).
+  const discrepancy = await discrepancyHold(property.holding_no);
+  if (discrepancy) paymentHold = paymentHold ? `${discrepancy} ${paymentHold}` : discrepancy;
 
   return {
     found: true,
     property: {
       ...property,
       paymentHold,
+      discrepancyPending: !!discrepancy,
       pendingDemandNotices,
       solidWasteTypeMissing: isSolidWasteTypeMissing(property),
       currentTax: calc.currentTax,
@@ -197,11 +202,13 @@ export async function searchPropertyForCitizen(
   // Online payment needs the holding's documents on file - the citizen is told what to get uploaded.
   const docs = await getHoldingDocumentStatus(result.property.holding_no);
   const swMsg = await solidWasteTypeBlock(result.property);
-  const hold = result.property.paymentHold
-    ? `Holding tax of this holding cannot be paid yet: its tax for some earlier years is still being assessed by the Nagar Nigam${
-        /before 2011/.test(result.property.paymentHold) ? " (ARV of the years before 2011-12 from the old demand register)" : ""
-      }. Please contact the Holding Tax Section, Municipal Corporation Office, Munger.`
-    : null;
+  const hold = result.property.discrepancyPending
+    ? "Holding tax of this holding cannot be paid yet: a correction of its property details is being verified by the Nagar Nigam. Please contact the Holding Tax Section, Municipal Corporation Office, Munger."
+    : result.property.paymentHold
+      ? `Holding tax of this holding cannot be paid yet: its tax for some earlier years is still being assessed by the Nagar Nigam${
+          /before 2011/.test(result.property.paymentHold) ? " (ARV of the years before 2011-12 from the old demand register)" : ""
+        }. Please contact the Holding Tax Section, Municipal Corporation Office, Munger.`
+      : null;
   const blocked =
     hold ??
     (swMsg

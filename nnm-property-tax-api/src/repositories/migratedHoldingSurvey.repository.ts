@@ -72,6 +72,7 @@ export const migratedHoldingSurveyRepository = {
     const { rows } = await pool.query<MigratedHoldingSurveyRow>(
       `SELECT * FROM migrated_holding_surveys
        WHERE status = 'pending_assignment' AND ward ~ '^[0-9]+$' AND (CAST(ward AS INTEGER) % 2) = $1
+         AND NOT EXISTS (SELECT 1 FROM property_discrepancy_requests r WHERE r.holding_no = migrated_holding_surveys.holding_no AND r.status IN ('pending', 'reverted')) -- being entered by a Tax Collector
        ORDER BY holding_no ASC`,
       [parity === "odd" ? 1 : 0],
     );
@@ -136,6 +137,7 @@ export const migratedHoldingSurveyRepository = {
         status = 'assigned_to_surveyor', assigned_by_username = $2, assigned_by_display_name = $3, assigned_by_role = $4,
         assigned_to_tax_daroga_username = $5, assigned_to_tax_daroga_display_name = $6, assigned_at = now()
        WHERE holding_no = $1 AND status = 'pending_assignment'
+         AND NOT EXISTS (SELECT 1 FROM property_discrepancy_requests r WHERE r.holding_no = migrated_holding_surveys.holding_no AND r.status IN ('pending', 'reverted'))
        RETURNING *`,
       [holdingNo, assignedByUsername, assignedByDisplayName, assignedByRole, taxDarogaUsername, taxDarogaDisplayName],
     );
@@ -251,14 +253,25 @@ export const migratedHoldingSurveyRepository = {
    * state the old survey workflow had it in. Returns null when there is
    * no survey row or it was already finalized.
    */
-  async finalizeViaCollectorChain(holdingNo: string, finalUsername: string, finalDisplayName: string, collectorDisplayName: string): Promise<MigratedHoldingSurveyRow | null> {
+  async finalizeViaCollectorChain(
+    holdingNo: string,
+    finalUsername: string,
+    finalDisplayName: string,
+    collectorDisplayName: string,
+    finalRole = "deputy_commissioner",
+  ): Promise<MigratedHoldingSurveyRow | null> {
     const { rows } = await pool.query<MigratedHoldingSurveyRow>(
-      `UPDATE migrated_holding_surveys SET status = 'finalized', final_verified_by_username = $2, final_verified_by_display_name = $3, final_verified_at = now()
+      `UPDATE migrated_holding_surveys SET status = 'finalized', final_verified_by_username = $2, final_verified_by_display_name = $3, final_verified_by_role = $4, final_verified_at = now()
        WHERE holding_no = $1 AND status <> 'finalized' RETURNING *`,
-      [holdingNo, finalUsername, finalDisplayName],
+      [holdingNo, finalUsername, finalDisplayName, finalRole],
     );
     if (rows[0]) {
-      await logEvent(holdingNo, "finalized", { username: finalUsername, displayName: finalDisplayName, role: "deputy_commissioner" }, `Entered by Tax Collector ${collectorDisplayName} and approved through the Tax Surveyor, Tax Daroga, City Manager and Deputy Commissioner chain.`);
+      await logEvent(
+        holdingNo,
+        "finalized",
+        { username: finalUsername, displayName: finalDisplayName, role: finalRole },
+        `Entered by Tax Collector ${collectorDisplayName} and approved through the Tax Surveyor, Tax Daroga, City Manager, Deputy Commissioner${finalRole === "commissioner" ? " and Municipal Commissioner" : ""} chain.`,
+      );
     }
     return rows[0] ?? null;
   },

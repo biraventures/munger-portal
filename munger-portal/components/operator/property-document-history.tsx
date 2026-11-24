@@ -245,8 +245,10 @@ export function PropertyDocumentHistory({ holdingNo, api = OPERATOR_HISTORY_API 
                       {p.cancelled && <span className="ml-1 font-semibold text-red-600">· cancelled</span>}
                       {p.cancellationPending && <span className="ml-1 font-semibold text-amber-600">· cancellation pending approval</span>}
                     </span>
+                    {p.historical && <span className="block text-slate-500">Old receipt / register ref.: {p.formattedReceiptNo}</span>}
                   </div>
                   <div className="flex items-center gap-1.5">
+                    {!p.historical && (
                     <button
                       onClick={() => handleOpenReceipt(p.receiptNo)}
                       disabled={loadingItem === `receipt-${p.receiptNo}`}
@@ -255,7 +257,8 @@ export function PropertyDocumentHistory({ holdingNo, api = OPERATOR_HISTORY_API 
                       {loadingItem === `receipt-${p.receiptNo}` ? <Loader2 className="h-3 w-3 animate-spin" /> : <Printer className="h-3 w-3" />}
                       View
                     </button>
-                    {api.requestCancellation && !p.cancelled && !p.cancellationPending && (
+                    )}
+                    {api.requestCancellation && !p.historical && !p.cancelled && !p.cancellationPending && (
                       <button
                         onClick={() => openCancel("receipt", p.receiptNo)}
                         className="inline-flex items-center gap-1 rounded border border-red-300 px-2 py-1 font-semibold text-red-600 hover:bg-red-50"

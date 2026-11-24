@@ -211,6 +211,8 @@ export interface PropertySearchResult {
     onlinePaymentBlockedReason?: string | null;
     /** Why no demand notice / payment can be taken now (a pending year has no assessment - e.g. pre-2011 ARV); null when fine. */
     paymentHold?: string | null;
+    /** A property discrepancy reported on the holding is not yet resolved - no tax is collected meanwhile. */
+    discrepancyPending?: boolean;
   };
   floors?: FloorRow[];
   taxCalc?: TaxCalculationResult;

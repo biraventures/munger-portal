@@ -257,7 +257,7 @@ export default function SurveyorAssignmentsPage() {
                         {w.type === "new_holding"
                           ? " - together with the demand register number."
                           : w.type === "migrated_survey"
-                            ? " (Old Holdings Survey page)."
+                            ? " (Old Records (MIG) page)."
                             : " - together with the area verification."}
                       </p>
                     ))}

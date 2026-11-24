@@ -209,9 +209,9 @@ export function NoticeView({
                   </tr>
                 ) : row.demolished ? (
                   <tr key={i} className="italic text-slate-400">
-                    <td className="border border-slate-400 px-1.5 py-px">{row.floor} (Demolished)</td>
+                    <td className="border border-slate-400 px-1.5 py-px">{row.floor} (earlier)</td>
                     <td colSpan={4} className="border border-slate-400 px-1.5 py-px">
-                      Not part of current total — historical reference only
+                      Earlier details (demolished, or use / size changed) - counted only for the years they applied
                     </td>
                     <td className="border border-slate-400 px-1.5 py-px text-right">—</td>
                     <td className="border border-slate-400 px-1.5 py-px text-right">{row.floorArv || "N/A"}</td>

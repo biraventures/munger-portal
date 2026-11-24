@@ -7,7 +7,7 @@ import { useAttendanceGuard } from "@/lib/use-attendance-guard";
 
 const OVERSIGHT_ROLES = ["city_manager", "municipal_commissioner", "deputy_municipal_commissioner", "attendance_admin"];
 const COMMISSIONER_ROLES = ["municipal_commissioner", "attendance_admin"];
-const LIGHT_CHANGE_ROLES = ["streetlight_nodal_clerk", "streetlight_ae", "streetlight_je", "streetlight_contractor", "city_manager", "municipal_commissioner", "deputy_municipal_commissioner", "attendance_admin"];
+const LIGHT_CHANGE_ROLES = ["streetlight_nodal_clerk", "streetlight_ae", "streetlight_je", "je_mechanical", "ae_mechanical", "streetlight_contractor", "city_manager", "municipal_commissioner", "deputy_municipal_commissioner", "attendance_admin"];
 const VIEWER_ROLES = ["mayor", "deputy_mayor", "ward_parshad"];
 
 const cardClass = "flex flex-col rounded-xl border border-slate-200 bg-white p-6 transition-shadow hover:shadow-md";

@@ -71,6 +71,8 @@ export interface StagedHoldingList {
   page: number;
   pageSize: number;
   wards: string[];
+  /** Per ward of the whole upload: pending, ready to review, reviewed, cannot import, kept out, integrated. */
+  wardCounts?: { ward: string; pending: number; ready: number; reviewed: number; blocked: number; excluded: number; integrated: number }[];
 }
 
 export interface StagedHoldingDetail {
@@ -120,7 +122,7 @@ export const integrateStaged = (id: number, mode: IntegrateMode, holdingNos?: st
 export const discardImport = (id: number) => call<{ ok: boolean }>(`/admin/property-imports/${id}/discard`, { method: "POST", body: "{}" });
 
 /** Tax Daroga only: tag holdings as reviewed (or remove the tag). Pass all:true for every pending holding without a blocking issue. */
-export const markReviewed = (id: number, reviewed: boolean, target: { holdingNos?: string[]; all?: boolean }) =>
+export const markReviewed = (id: number, reviewed: boolean, target: { holdingNos?: string[]; all?: boolean; ward?: string }) =>
   call<{ updated: number }>(`/admin/property-imports/${id}/review`, { method: "POST", body: JSON.stringify({ reviewed, ...target }) });
 
 export interface ResidentialSolidWastePreview {
@@ -142,3 +144,131 @@ export const applyResidentialSolidWaste = (id: number, includeOtherTypes: boolea
     method: "POST",
     body: JSON.stringify({ includeOtherTypes }),
   });
+
+// ---------- held / not uploaded: resolution (importResolution.service.ts) ----------
+
+export type HeldCategory = "kept_out" | "blocked" | "failed" | "not_staged" | "resolved";
+export type ResolutionAction = "correct_import" | "import_as_is" | "drop" | "merge";
+export type ResolutionStage = "city_manager" | "deputy_commissioner" | "commissioner" | "tax_daroga" | "done";
+
+export interface ResolutionEvent {
+  stage: string;
+  action: string;
+  by: string;
+  role: string;
+  at: string;
+  comment: string | null;
+}
+
+export interface FieldCompare {
+  field: string;
+  label: string;
+  live: string;
+  uploaded: string;
+  status: "same" | "live_only" | "upload_only" | "differ";
+  taxEffect: boolean;
+}
+export interface RowCompare {
+  key: string;
+  status: "new" | "same" | "differ" | "other_holding" | "overlap" | "invalid";
+  live: string | null;
+  uploaded: string;
+  note: string | null;
+}
+export interface MergeComparison {
+  holdingNo: string;
+  fields: FieldCompare[];
+  floors: { live: Record<string, string>[]; uploaded: Record<string, string>[]; same: boolean };
+  receipts: RowCompare[];
+  notices: RowCompare[];
+  stages: RowCompare[];
+  history: { uploaded: number; live: number };
+  disputes: number;
+}
+export interface MergePlan {
+  fields: Record<string, "live" | "uploaded">;
+  floors: "keep_live" | "use_uploaded";
+  addReceipts: string[];
+  addNotices: string[];
+  addStages: string[];
+  appendHistory: boolean;
+}
+export interface MergeSummary {
+  fieldsTaken: { field: string; label: string; from: string; to: string }[];
+  valuesRejected: { what: string; rejected: string; kept: string; source: "upload" | "live" }[];
+  floors: string;
+  receiptsAdded: string[];
+  noticesAdded: string[];
+  stagesAdded: string[];
+  historyAppended: number;
+}
+
+export interface ResolutionCase {
+  id: number;
+  kind: "staged" | "upload_row";
+  holdingNo: string | null;
+  problem: string;
+  action: ResolutionAction;
+  remarks: string;
+  stage: ResolutionStage;
+  stageLabel: string;
+  status: "open" | "reverted" | "approved" | "failed";
+  outcome: string | null;
+  events: ResolutionEvent[];
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+  changedFields: string[];
+  floorsChanged: boolean;
+  merge: { plan: MergePlan; comparison: MergeComparison; summary: MergeSummary } | null;
+}
+
+export interface HeldItem {
+  ref: string;
+  kind: "staged" | "upload_row";
+  category: HeldCategory;
+  holdingNo: string | null;
+  ownerName: string | null;
+  ward: string | null;
+  problem: string;
+  canImport: boolean;
+  canMerge: boolean;
+  case: ResolutionCase | null;
+  resolved: boolean;
+  waitingForMe: boolean;
+}
+
+export interface HeldList {
+  batchStatus: string;
+  counts: { keptOut: number; blocked: number; failed: number; notStaged: number; resolved: number; inProgress: number; waitingForMe: number };
+  items: HeldItem[];
+}
+
+export interface HeldDetail {
+  sheet: string;
+  master: Record<string, string> | null;
+  floors: Record<string, string>[];
+  rawRow: Record<string, string> | null;
+  issues: StagedIssue[];
+  merge: MergeComparison | null;
+  proposal: (ResolutionCase & { master: Record<string, string> | null; floors: Record<string, string>[] | null }) | null;
+  history: ResolutionCase[];
+}
+
+export const fetchHeld = (batchId: number) => call<HeldList>(`/admin/property-imports/${batchId}/held`);
+export const fetchHeldItem = (batchId: number, ref: string) => call<HeldDetail>(`/admin/property-imports/${batchId}/held/${ref}`);
+export const proposeResolution = (
+  batchId: number,
+  ref: string,
+  body: { action: ResolutionAction; masterChanges?: Record<string, string> | null; floors?: Record<string, string>[] | null; mergePlan?: MergePlan | null; remarks: string },
+) => call<{ id: number }>(`/admin/property-imports/${batchId}/held/${ref}/resolution`, { method: "POST", body: JSON.stringify(body) });
+export const decideResolution = (caseId: number, decision: "forward" | "approve" | "revert", comment: string | null) =>
+  call<{ status: string; outcome?: string; detail?: string; stage?: string }>(`/admin/import-resolutions/${caseId}/decide`, {
+    method: "POST",
+    body: JSON.stringify({ decision, comment }),
+  });
+export const fetchResolutionsWaiting = () => call<{ total: number; byBatch: Record<string, number> }>("/admin/import-resolutions/waiting");
+
+/** City Manager only: integrate every reviewed holding of one ward of the upload. */
+export const integrateWard = (id: number, ward: string) =>
+  call<{ started: boolean; holdings: number }>(`/admin/property-imports/${id}/integrate`, { method: "POST", body: JSON.stringify({ mode: "all", ward }) });

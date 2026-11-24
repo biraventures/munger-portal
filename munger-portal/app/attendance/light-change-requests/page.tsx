@@ -8,6 +8,10 @@ import { useAttendanceGuard } from "@/lib/use-attendance-guard";
 import { fetchAttendanceWards, type AttendanceWard } from "@/lib/attendance-api";
 import {
   requestLightChange,
+  DEFAULT_LAMP_TYPE,
+  LAMP_TYPES,
+  LAMP_TYPE_LABELS,
+  type LampType,
   fetchLightChangeRequests,
   approveLightChange,
   rejectLightChange,
@@ -19,8 +23,16 @@ import {
   type InstallationAgency,
 } from "@/lib/streetlight-api";
 
-const inputClass = "w-full rounded-md border border-slate-300 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-nnm-blue focus:ring-offset-1";
-const REQUESTER_ROLES = ["streetlight_je", "streetlight_ae", "streetlight_nodal_clerk", "streetlight_contractor"];
+const inputClass =
+  "w-full rounded-md border border-slate-300 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-nnm-blue focus:ring-offset-1";
+const REQUESTER_ROLES = [
+  "streetlight_je",
+  "streetlight_ae",
+  "je_mechanical",
+  "ae_mechanical",
+  "streetlight_nodal_clerk",
+  "streetlight_contractor",
+];
 const APPROVER_ROLES = ["city_manager", "deputy_municipal_commissioner", "municipal_commissioner"];
 // Read-only visibility into streetlight change activity - can't propose or approve/reject, just see what's happening.
 const VIEWER_ONLY_ROLES = ["attendance_admin"];
@@ -52,6 +64,7 @@ export default function LightChangeRequestsPage() {
   const [addWardId, setAddWardId] = useState<number | "">("");
   const [addLocality, setAddLocality] = useState("");
   const [addSerial, setAddSerial] = useState("");
+  const [addLampType, setAddLampType] = useState<LampType>(DEFAULT_LAMP_TYPE);
   const [addAgencyId, setAddAgencyId] = useState<number | "">("");
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -66,9 +79,15 @@ export default function LightChangeRequestsPage() {
     if (!attendance) return;
     load();
     if (REQUESTER_ROLES.includes(attendance.role)) {
-      fetchLights().then(setLights).catch(() => setLights([]));
-      fetchAttendanceWards().then(setWards).catch(() => setWards([]));
-      fetchInstallationAgencies().then(setAgencies).catch(() => setAgencies([]));
+      fetchLights()
+        .then(setLights)
+        .catch(() => setLights([]));
+      fetchAttendanceWards()
+        .then(setWards)
+        .catch(() => setWards([]));
+      fetchInstallationAgencies()
+        .then(setAgencies)
+        .catch(() => setAgencies([]));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [attendance, statusFilter]);
@@ -86,7 +105,14 @@ export default function LightChangeRequestsPage() {
         setError("Ward, locality, and serial number are required to add a light.");
         return;
       }
-      proposedData = { lightType: "streetlight", wardId: addWardId, localityName: addLocality.trim(), serialNumber: addSerial.trim(), installationAgencyId: addAgencyId || null };
+      proposedData = {
+        lightType: "streetlight",
+        wardId: addWardId,
+        localityName: addLocality.trim(),
+        serialNumber: addSerial.trim(),
+        installationAgencyId: addAgencyId || null,
+        lampType: addLampType,
+      };
     } else {
       if (!selectedLightId) {
         setError("Choose a light.");
@@ -189,7 +215,10 @@ export default function LightChangeRequestsPage() {
             </button>
           )}
         </div>
-        <p className="mb-6 text-sm text-slate-500">Add, change status of, deactivate, reactivate, or delete a light - approved through City Manager, DMC, then Municipal Commissioner.</p>
+        <p className="mb-6 text-sm text-slate-500">
+          Add, change status of, deactivate, reactivate, or delete a light - approved through City Manager, DMC, then Municipal
+          Commissioner.
+        </p>
 
         {error && (
           <div role="alert" className="mb-5 flex items-center gap-2 rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-700">
@@ -198,7 +227,10 @@ export default function LightChangeRequestsPage() {
           </div>
         )}
         {success && (
-          <div role="status" className="mb-5 flex items-center gap-2 rounded-md border border-green-200 bg-green-50 p-4 text-sm text-green-800">
+          <div
+            role="status"
+            className="mb-5 flex items-center gap-2 rounded-md border border-green-200 bg-green-50 p-4 text-sm text-green-800"
+          >
             <CheckCircle2 className="h-4 w-4 shrink-0" />
             Request submitted.
           </div>
@@ -207,7 +239,11 @@ export default function LightChangeRequestsPage() {
         {proposing && (
           <div className="mb-6 rounded-xl border border-slate-200 bg-white p-6">
             <label className="mb-1 block text-xs font-medium text-slate-600">Action</label>
-            <select value={actionType} onChange={(e) => setActionType(e.target.value as LightChangeActionType)} className={`${inputClass} mb-4`}>
+            <select
+              value={actionType}
+              onChange={(e) => setActionType(e.target.value as LightChangeActionType)}
+              className={`${inputClass} mb-4`}
+            >
               <option value="status_change">Change functionality status</option>
               <option value="deactivate">Deactivate</option>
               <option value="reactivate">Reactivate</option>
@@ -217,7 +253,11 @@ export default function LightChangeRequestsPage() {
 
             {actionType === "add" ? (
               <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <select value={addWardId} onChange={(e) => setAddWardId(e.target.value ? Number(e.target.value) : "")} className={inputClass}>
+                <select
+                  value={addWardId}
+                  onChange={(e) => setAddWardId(e.target.value ? Number(e.target.value) : "")}
+                  className={inputClass}
+                >
                   <option value="">Choose ward…</option>
                   {wards.map((w) => (
                     <option key={w.id} value={w.id}>
@@ -225,7 +265,11 @@ export default function LightChangeRequestsPage() {
                     </option>
                   ))}
                 </select>
-                <select value={addAgencyId} onChange={(e) => setAddAgencyId(e.target.value ? Number(e.target.value) : "")} className={inputClass}>
+                <select
+                  value={addAgencyId}
+                  onChange={(e) => setAddAgencyId(e.target.value ? Number(e.target.value) : "")}
+                  className={inputClass}
+                >
                   <option value="">Choose agency…</option>
                   {agencies.map((a) => (
                     <option key={a.id} value={a.id}>
@@ -233,13 +277,37 @@ export default function LightChangeRequestsPage() {
                     </option>
                   ))}
                 </select>
-                <input placeholder="Locality name" value={addLocality} onChange={(e) => setAddLocality(e.target.value)} className={inputClass} />
-                <input placeholder="Serial number" value={addSerial} onChange={(e) => setAddSerial(e.target.value)} className={inputClass} />
+                <input
+                  placeholder="Locality name"
+                  value={addLocality}
+                  onChange={(e) => setAddLocality(e.target.value)}
+                  className={inputClass}
+                />
+                <input
+                  placeholder="Serial number"
+                  value={addSerial}
+                  onChange={(e) => setAddSerial(e.target.value)}
+                  className={inputClass}
+                />
+                <label className="block text-xs text-slate-600">
+                  Type of light
+                  <select value={addLampType} onChange={(e) => setAddLampType(e.target.value as LampType)} className={`${inputClass} mt-1`}>
+                    {LAMP_TYPES.map((t) => (
+                      <option key={t} value={t}>
+                        {LAMP_TYPE_LABELS[t]}
+                      </option>
+                    ))}
+                  </select>
+                </label>
               </div>
             ) : (
               <>
                 <label className="mb-1 block text-xs font-medium text-slate-600">Light</label>
-                <select value={selectedLightId} onChange={(e) => setSelectedLightId(e.target.value ? Number(e.target.value) : "")} className={`${inputClass} mb-4`}>
+                <select
+                  value={selectedLightId}
+                  onChange={(e) => setSelectedLightId(e.target.value ? Number(e.target.value) : "")}
+                  className={`${inputClass} mb-4`}
+                >
                   <option value="">Choose a light…</option>
                   {lights.map((l) => (
                     <option key={l.id} value={l.id}>
@@ -253,7 +321,11 @@ export default function LightChangeRequestsPage() {
             {actionType === "status_change" && (
               <>
                 <label className="mb-1 block text-xs font-medium text-slate-600">New status</label>
-                <select value={newStatus} onChange={(e) => setNewStatus(e.target.value as typeof newStatus)} className={`${inputClass} mb-4`}>
+                <select
+                  value={newStatus}
+                  onChange={(e) => setNewStatus(e.target.value as typeof newStatus)}
+                  className={`${inputClass} mb-4`}
+                >
                   <option value="working">Working</option>
                   <option value="not_working">Not Working</option>
                   <option value="automatic">Automatic</option>
@@ -266,10 +338,17 @@ export default function LightChangeRequestsPage() {
             <textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={2} className={`${inputClass} mb-4`} />
 
             <div className="flex gap-2">
-              <button onClick={handlePropose} disabled={submitting} className="rounded-md bg-nnm-blue px-4 py-2 text-sm font-semibold text-white hover:bg-nnm-blue-dark disabled:opacity-60">
+              <button
+                onClick={handlePropose}
+                disabled={submitting}
+                className="rounded-md bg-nnm-blue px-4 py-2 text-sm font-semibold text-white hover:bg-nnm-blue-dark disabled:opacity-60"
+              >
                 {submitting ? "Submitting…" : "Submit Request"}
               </button>
-              <button onClick={() => setProposing(false)} className="rounded-md border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50">
+              <button
+                onClick={() => setProposing(false)}
+                className="rounded-md border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50"
+              >
                 Cancel
               </button>
             </div>
@@ -298,7 +377,8 @@ export default function LightChangeRequestsPage() {
               <div key={r.id} className="p-4">
                 <p className="text-sm font-semibold text-slate-800">{ACTION_LABELS[r.action_type]}</p>
                 <p className="text-xs text-slate-500">
-                  Stage: {r.current_stage.replace(/_/g, " ")} · Requested by {r.requestedByName ?? "-"} on {new Date(r.requested_at).toLocaleDateString("en-IN")} · Reason: {r.reason}
+                  Stage: {r.current_stage.replace(/_/g, " ")} · Requested by {r.requestedByName ?? "-"} on{" "}
+                  {new Date(r.requested_at).toLocaleDateString("en-IN")} · Reason: {r.reason}
                 </p>
                 <LightChangeReview r={r} />
                 {canApprove && r.current_stage === attendance.role && (

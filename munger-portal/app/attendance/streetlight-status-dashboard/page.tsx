@@ -1,7 +1,21 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { AlertCircle, BarChart3, ChevronLeft, ChevronDown, ChevronRight, CheckCircle2, XCircle, PlusCircle, Pencil, Trash2, X, MapPin, LocateFixed } from "lucide-react";
+import {
+  AlertCircle,
+  BarChart3,
+  ChevronLeft,
+  ChevronDown,
+  ChevronRight,
+  CheckCircle2,
+  XCircle,
+  PlusCircle,
+  Pencil,
+  Trash2,
+  X,
+  MapPin,
+  LocateFixed,
+} from "lucide-react";
 import { AttendanceHeader } from "@/components/attendance/attendance-header";
 import { useAttendanceGuard } from "@/lib/use-attendance-guard";
 import { fetchAttendanceWards, type AttendanceWard } from "@/lib/attendance-api";
@@ -25,13 +39,30 @@ import {
   type StreetStatus,
   type SegmentLightStatus,
   type LightSwitchStatus,
+  DEFAULT_LAMP_TYPE,
+  LAMP_TYPES,
+  LAMP_TYPE_LABELS,
+  type LampType,
 } from "@/lib/streetlight-api";
 
 const OVERSIGHT_ROLES = ["city_manager", "deputy_municipal_commissioner", "municipal_commissioner", "attendance_admin"];
-const SWITCH_STATUS_LABELS: Record<LightSwitchStatus, string> = { working: "Working", not_working: "Not Working", automatic: "Automatic", joint: "Joint" };
-const inputClass = "w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-nnm-blue focus:ring-offset-1";
+const SWITCH_STATUS_LABELS: Record<LightSwitchStatus, string> = {
+  working: "Working",
+  not_working: "Not Working",
+  automatic: "Automatic",
+  joint: "Joint",
+};
+const inputClass =
+  "w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-nnm-blue focus:ring-offset-1";
 
-const emptyStreetForm = { agency: "NN" as "NN" | "EESL", startPoint: "", intermediatePoint: "", endPoint: "", lightCount: "0" };
+const emptyStreetForm = {
+  agency: "NN" as "NN" | "EESL",
+  startPoint: "",
+  intermediatePoint: "",
+  endPoint: "",
+  lightCount: "0",
+  lampType: "led_panel_tall" as LampType,
+};
 
 /** Local (not UTC) today, so the date input's default doesn't drift a day off around midnight IST. */
 function todayLocalDateString(): string {
@@ -67,6 +98,8 @@ export default function StreetlightStatusDashboardPage() {
 
   const [changingStatusLightId, setChangingStatusLightId] = useState<number | null>(null);
   const [insertingSeq, setInsertingSeq] = useState<number | null>(null);
+  // Type of the next light added with the "Add light" buttons.
+  const [newLampType, setNewLampType] = useState<LampType>(DEFAULT_LAMP_TYPE);
   const [markingRepairedLightId, setMarkingRepairedLightId] = useState<number | null>(null);
   const [markingFaultyLightId, setMarkingFaultyLightId] = useState<number | null>(null);
   const [faultyFormLightId, setFaultyFormLightId] = useState<number | null>(null);
@@ -110,12 +143,17 @@ export default function StreetlightStatusDashboardPage() {
 
   useEffect(() => {
     if (!attendance) return;
-    fetchAttendanceWards().then(setAllWards).catch(() => setAllWards([]));
+    fetchAttendanceWards()
+      .then(setAllWards)
+      .catch(() => setAllWards([]));
   }, [attendance]);
 
   const wardTotals = useMemo(() => {
     if (!wards) return null;
-    return wards.reduce((acc, w) => ({ total: acc.total + w.totalLights, working: acc.working + w.working, notWorking: acc.notWorking + w.notWorking }), { total: 0, working: 0, notWorking: 0 });
+    return wards.reduce(
+      (acc, w) => ({ total: acc.total + w.totalLights, working: acc.working + w.working, notWorking: acc.notWorking + w.notWorking }),
+      { total: 0, working: 0, notWorking: 0 },
+    );
   }, [wards]);
 
   const streetsInOpenWard = useMemo(() => {
@@ -143,7 +181,10 @@ export default function StreetlightStatusDashboardPage() {
 
   const streetTotalsForWard = useMemo(() => {
     if (streetsInOpenWard.length === 0) return null;
-    return streetsInOpenWard.reduce((acc, s) => ({ total: acc.total + s.totalLights, working: acc.working + s.working, notWorking: acc.notWorking + s.notWorking }), { total: 0, working: 0, notWorking: 0 });
+    return streetsInOpenWard.reduce(
+      (acc, s) => ({ total: acc.total + s.totalLights, working: acc.working + s.working, notWorking: acc.notWorking + s.notWorking }),
+      { total: 0, working: 0, notWorking: 0 },
+    );
   }, [streetsInOpenWard]);
 
   function openWardView(wardName: string) {
@@ -195,6 +236,7 @@ export default function StreetlightStatusDashboardPage() {
         intermediatePoint: addStreetForm.intermediatePoint.trim() || null,
         endPoint: addStreetForm.endPoint.trim() || null,
         lightCount: Number(addStreetForm.lightCount) || 0,
+        lampType: addStreetForm.lampType,
       });
       setShowAddStreet(false);
       setAddStreetForm(emptyStreetForm);
@@ -215,6 +257,7 @@ export default function StreetlightStatusDashboardPage() {
       intermediatePoint: "",
       endPoint: s.endPoint ?? "",
       lightCount: "0",
+      lampType: DEFAULT_LAMP_TYPE,
     });
   }
 
@@ -384,7 +427,10 @@ export default function StreetlightStatusDashboardPage() {
     }
     const lat = latTrim === "" ? null : Number(latTrim);
     const lng = lngTrim === "" ? null : Number(lngTrim);
-    if ((lat !== null && (Number.isNaN(lat) || lat < -90 || lat > 90)) || (lng !== null && (Number.isNaN(lng) || lng < -180 || lng > 180))) {
+    if (
+      (lat !== null && (Number.isNaN(lat) || lat < -90 || lat > 90)) ||
+      (lng !== null && (Number.isNaN(lng) || lng < -180 || lng > 180))
+    ) {
       setGpsFormError("Enter valid coordinates (latitude -90 to 90, longitude -180 to 180).");
       return;
     }
@@ -419,7 +465,7 @@ export default function StreetlightStatusDashboardPage() {
     setInsertingSeq(afterSeq);
     setError(null);
     try {
-      await insertLight(segmentId, afterSeq);
+      await insertLight(segmentId, afterSeq, newLampType);
       await refreshSegmentLights(segmentId);
       load();
     } catch (err) {
@@ -436,7 +482,8 @@ export default function StreetlightStatusDashboardPage() {
    * data-entry mistake, never real field activity.
    */
   async function handleDeleteStreet(segmentId: number, label: string) {
-    if (!window.confirm(`Remove "${label}" and every light on it? This can't be undone. Only use this if the street was added by mistake.`)) return;
+    if (!window.confirm(`Remove "${label}" and every light on it? This can't be undone. Only use this if the street was added by mistake.`))
+      return;
     setDeletingSegmentId(segmentId);
     setError(null);
     try {
@@ -557,7 +604,9 @@ export default function StreetlightStatusDashboardPage() {
           !wards ? (
             <p className="text-sm text-slate-400">Loading…</p>
           ) : wards.length === 0 ? (
-            <div className="rounded-xl border border-slate-200 bg-white p-6 text-center text-sm text-slate-400">No lights registered yet.</div>
+            <div className="rounded-xl border border-slate-200 bg-white p-6 text-center text-sm text-slate-400">
+              No lights registered yet.
+            </div>
           ) : (
             <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
               <table className="w-full text-sm">
@@ -573,18 +622,26 @@ export default function StreetlightStatusDashboardPage() {
                 </thead>
                 <tbody>
                   {wards.map((w) => (
-                    <tr key={w.wardId} onClick={() => openWardView(w.wardName)} className="cursor-pointer border-b border-slate-50 last:border-0 hover:bg-slate-50">
+                    <tr
+                      key={w.wardId}
+                      onClick={() => openWardView(w.wardName)}
+                      className="cursor-pointer border-b border-slate-50 last:border-0 hover:bg-slate-50"
+                    >
                       <td className="px-4 py-2.5 text-slate-400">
                         <ChevronRight className="h-4 w-4" />
                       </td>
                       <td className="px-4 py-2.5 font-semibold text-slate-800">{w.wardName}</td>
                       <td className="px-4 py-2.5">{w.totalLights}</td>
                       <td className="px-4 py-2.5 text-green-700">{w.working}</td>
-                      <td className="px-4 py-2.5">{w.notWorking > 0 ? <span className="font-semibold text-red-600">{w.notWorking}</span> : 0}</td>
+                      <td className="px-4 py-2.5">
+                        {w.notWorking > 0 ? <span className="font-semibold text-red-600">{w.notWorking}</span> : 0}
+                      </td>
                       {agencyFilter === "" && (
                         <td className="px-4 py-2.5 text-slate-600">
                           {w.highMast ?? 0}
-                          {w.highMastNotWorking ? <span className="ml-1 text-xs text-red-600">({w.highMastNotWorking} not working)</span> : null}
+                          {w.highMastNotWorking ? (
+                            <span className="ml-1 text-xs text-red-600">({w.highMastNotWorking} not working)</span>
+                          ) : null}
                         </td>
                       )}
                     </tr>
@@ -599,7 +656,9 @@ export default function StreetlightStatusDashboardPage() {
                       <td className="px-4 py-2.5">{wardTotals.total}</td>
                       <td className="px-4 py-2.5 text-green-700">{wardTotals.working}</td>
                       <td className="px-4 py-2.5 text-red-600">{wardTotals.notWorking}</td>
-                      {agencyFilter === "" && <td className="px-4 py-2.5 text-slate-600">{wards.reduce((n, w) => n + (w.highMast ?? 0), 0)}</td>}
+                      {agencyFilter === "" && (
+                        <td className="px-4 py-2.5 text-slate-600">{wards.reduce((n, w) => n + (w.highMast ?? 0), 0)}</td>
+                      )}
                     </tr>
                   </tfoot>
                 )}
@@ -608,469 +667,594 @@ export default function StreetlightStatusDashboardPage() {
           )
         ) : (
           <>
-            <button onClick={backToWards} className="mb-4 inline-flex items-center gap-1 text-sm font-semibold text-nnm-blue hover:underline">
+            <button
+              onClick={backToWards}
+              className="mb-4 inline-flex items-center gap-1 text-sm font-semibold text-nnm-blue hover:underline"
+            >
               <ChevronLeft className="h-4 w-4" />
               Back to wards
             </button>
 
             {showStreets && (
               <>
-            {streetsInOpenWard.length === 0 ? (
-              <div className="rounded-xl border border-slate-200 bg-white p-6 text-center text-sm text-slate-400">No street segments in {openWard} yet.</div>
-            ) : (
-              <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-slate-100 text-left text-xs font-semibold uppercase text-slate-500">
-                      <th className="px-4 py-2.5"></th>
-                      <th className="px-4 py-2.5">Street</th>
-                      <th className="px-4 py-2.5">Agency</th>
-                      <th className="px-4 py-2.5">Total</th>
-                      <th className="px-4 py-2.5">Working</th>
-                      <th className="px-4 py-2.5">Not Working</th>
-                      {canManageStreets && <th className="px-4 py-2.5"></th>}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {streetsInOpenWard.map((s) => (
-                      <>
-                        <tr key={s.segmentId} className="border-b border-slate-50 last:border-0 hover:bg-slate-50">
-                          <td onClick={() => s.segmentId && toggleSegment(s.segmentId)} className="cursor-pointer px-4 py-2.5 text-slate-400">
-                            {expandedSegmentId === s.segmentId ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                          </td>
-                          <td onClick={() => s.segmentId && toggleSegment(s.segmentId)} className="cursor-pointer px-4 py-2.5 font-semibold text-slate-800">
-                            {s.endPoint ? `${s.startPoint} - ${s.endPoint}` : s.startPoint}
-                          </td>
-                          <td className="px-4 py-2.5">{s.agencyName}</td>
-                          <td className="px-4 py-2.5">{s.totalLights}</td>
-                          <td className="px-4 py-2.5 text-green-700">{s.working}</td>
-                          <td className="px-4 py-2.5">{s.notWorking > 0 ? <span className="font-semibold text-red-600">{s.notWorking}</span> : 0}</td>
-                          {canManageStreets && (
-                            <td className="px-4 py-2.5">
-                              <div className="flex items-center gap-3">
-                                <button onClick={() => openEditStreet(s)} className="inline-flex items-center gap-1 text-xs font-medium text-nnm-blue hover:underline">
-                                  <Pencil className="h-3 w-3" />
-                                  Edit
-                                </button>
-                                {s.segmentId && (
-                                  <button
-                                    onClick={() => handleDeleteStreet(s.segmentId!, (s.endPoint ? `${s.startPoint} - ${s.endPoint}` : s.startPoint) ?? "this street")}
-                                    disabled={deletingSegmentId === s.segmentId}
-                                    title="Remove this street if it was added by mistake"
-                                    className="inline-flex items-center gap-1 text-xs font-medium text-red-600 hover:underline disabled:opacity-60"
-                                  >
-                                    <Trash2 className="h-3 w-3" />
-                                    {deletingSegmentId === s.segmentId ? "Removing…" : "Delete"}
-                                  </button>
-                                )}
-                              </div>
-                            </td>
-                          )}
+                {streetsInOpenWard.length === 0 ? (
+                  <div className="rounded-xl border border-slate-200 bg-white p-6 text-center text-sm text-slate-400">
+                    No street segments in {openWard} yet.
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-slate-100 text-left text-xs font-semibold uppercase text-slate-500">
+                          <th className="px-4 py-2.5"></th>
+                          <th className="px-4 py-2.5">Street</th>
+                          <th className="px-4 py-2.5">Agency</th>
+                          <th className="px-4 py-2.5">Total</th>
+                          <th className="px-4 py-2.5">Working</th>
+                          <th className="px-4 py-2.5">Not Working</th>
+                          {canManageStreets && <th className="px-4 py-2.5"></th>}
                         </tr>
-
-                        {editingSegmentId === s.segmentId && (
-                          <tr key={`${s.segmentId}-edit`}>
-                            <td colSpan={7} className="border-b border-slate-100 bg-blue-50 p-4">
-                              <form onSubmit={handleEditStreet} className="space-y-3">
-                                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                                  <select value={editStreetForm.agency} onChange={(e) => setEditStreetForm((f) => ({ ...f, agency: e.target.value as "NN" | "EESL" }))} className={inputClass}>
-                                    <option value="NN">Nagar Nigam</option>
-                                    <option value="EESL">EESL</option>
-                                  </select>
-                                  <input
-                                    required
-                                    placeholder="Start point"
-                                    value={editStreetForm.startPoint}
-                                    onChange={(e) => setEditStreetForm((f) => ({ ...f, startPoint: e.target.value }))}
-                                    className={inputClass}
-                                  />
-                                  <input
-                                    placeholder="Intermediate point"
-                                    value={editStreetForm.intermediatePoint}
-                                    onChange={(e) => setEditStreetForm((f) => ({ ...f, intermediatePoint: e.target.value }))}
-                                    className={inputClass}
-                                  />
-                                  <input
-                                    placeholder="End point"
-                                    value={editStreetForm.endPoint}
-                                    onChange={(e) => setEditStreetForm((f) => ({ ...f, endPoint: e.target.value }))}
-                                    className={inputClass}
-                                  />
-                                </div>
-                                <div className="flex gap-2">
-                                  <button type="submit" disabled={editStreetSaving} className="rounded-md bg-nnm-blue px-3 py-1.5 text-xs font-semibold text-white hover:bg-nnm-blue-dark disabled:opacity-60">
-                                    {editStreetSaving ? "Saving…" : "Save Changes"}
-                                  </button>
-                                  <button type="button" onClick={() => setEditingSegmentId(null)} className="rounded-md border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100">
-                                    Cancel
-                                  </button>
-                                </div>
-                              </form>
-                            </td>
-                          </tr>
-                        )}
-
-                        {expandedSegmentId === s.segmentId && (
-                          <tr key={`${s.segmentId}-detail`}>
-                            <td colSpan={7} className="border-b border-slate-100 bg-slate-50 p-4">
-                              {loadingSegmentId === s.segmentId ? (
-                                <p className="text-xs text-slate-400">Loading…</p>
-                              ) : !s.segmentId || !segmentLights[s.segmentId] || segmentLights[s.segmentId]!.length === 0 ? (
-                                <div>
-                                  <p className="mb-3 text-xs text-slate-400">No lights on this street yet.</p>
-                                  {canEditLights && (
+                      </thead>
+                      <tbody>
+                        {streetsInOpenWard.map((s) => (
+                          <>
+                            <tr key={s.segmentId} className="border-b border-slate-50 last:border-0 hover:bg-slate-50">
+                              <td
+                                onClick={() => s.segmentId && toggleSegment(s.segmentId)}
+                                className="cursor-pointer px-4 py-2.5 text-slate-400"
+                              >
+                                {expandedSegmentId === s.segmentId ? (
+                                  <ChevronDown className="h-4 w-4" />
+                                ) : (
+                                  <ChevronRight className="h-4 w-4" />
+                                )}
+                              </td>
+                              <td
+                                onClick={() => s.segmentId && toggleSegment(s.segmentId)}
+                                className="cursor-pointer px-4 py-2.5 font-semibold text-slate-800"
+                              >
+                                {s.endPoint ? `${s.startPoint} - ${s.endPoint}` : s.startPoint}
+                              </td>
+                              <td className="px-4 py-2.5">{s.agencyName}</td>
+                              <td className="px-4 py-2.5">{s.totalLights}</td>
+                              <td className="px-4 py-2.5 text-green-700">{s.working}</td>
+                              <td className="px-4 py-2.5">
+                                {s.notWorking > 0 ? <span className="font-semibold text-red-600">{s.notWorking}</span> : 0}
+                              </td>
+                              {canManageStreets && (
+                                <td className="px-4 py-2.5">
+                                  <div className="flex items-center gap-3">
                                     <button
-                                      onClick={() => handleInsertLight(s.segmentId!, 0)}
-                                      disabled={insertingSeq === 0}
-                                      className="inline-flex items-center gap-1 text-xs font-semibold text-nnm-blue hover:underline"
+                                      onClick={() => openEditStreet(s)}
+                                      className="inline-flex items-center gap-1 text-xs font-medium text-nnm-blue hover:underline"
                                     >
-                                      <PlusCircle className="h-3.5 w-3.5" />
-                                      {insertingSeq === 0 ? "Adding…" : "Add first light"}
+                                      <Pencil className="h-3 w-3" />
+                                      Edit
                                     </button>
-                                  )}
-                                </div>
-                              ) : (
-                                <div className="space-y-2">
+                                    {s.segmentId && (
+                                      <button
+                                        onClick={() =>
+                                          handleDeleteStreet(
+                                            s.segmentId!,
+                                            (s.endPoint ? `${s.startPoint} - ${s.endPoint}` : s.startPoint) ?? "this street",
+                                          )
+                                        }
+                                        disabled={deletingSegmentId === s.segmentId}
+                                        title="Remove this street if it was added by mistake"
+                                        className="inline-flex items-center gap-1 text-xs font-medium text-red-600 hover:underline disabled:opacity-60"
+                                      >
+                                        <Trash2 className="h-3 w-3" />
+                                        {deletingSegmentId === s.segmentId ? "Removing…" : "Delete"}
+                                      </button>
+                                    )}
+                                  </div>
+                                </td>
+                              )}
+                            </tr>
+
+                            {editingSegmentId === s.segmentId && (
+                              <tr key={`${s.segmentId}-edit`}>
+                                <td colSpan={7} className="border-b border-slate-100 bg-blue-50 p-4">
+                                  <form onSubmit={handleEditStreet} className="space-y-3">
+                                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                                      <select
+                                        value={editStreetForm.agency}
+                                        onChange={(e) => setEditStreetForm((f) => ({ ...f, agency: e.target.value as "NN" | "EESL" }))}
+                                        className={inputClass}
+                                      >
+                                        <option value="NN">Nagar Nigam</option>
+                                        <option value="EESL">EESL</option>
+                                      </select>
+                                      <input
+                                        required
+                                        placeholder="Start point"
+                                        value={editStreetForm.startPoint}
+                                        onChange={(e) => setEditStreetForm((f) => ({ ...f, startPoint: e.target.value }))}
+                                        className={inputClass}
+                                      />
+                                      <input
+                                        placeholder="Intermediate point"
+                                        value={editStreetForm.intermediatePoint}
+                                        onChange={(e) => setEditStreetForm((f) => ({ ...f, intermediatePoint: e.target.value }))}
+                                        className={inputClass}
+                                      />
+                                      <input
+                                        placeholder="End point"
+                                        value={editStreetForm.endPoint}
+                                        onChange={(e) => setEditStreetForm((f) => ({ ...f, endPoint: e.target.value }))}
+                                        className={inputClass}
+                                      />
+                                    </div>
+                                    <div className="flex gap-2">
+                                      <button
+                                        type="submit"
+                                        disabled={editStreetSaving}
+                                        className="rounded-md bg-nnm-blue px-3 py-1.5 text-xs font-semibold text-white hover:bg-nnm-blue-dark disabled:opacity-60"
+                                      >
+                                        {editStreetSaving ? "Saving…" : "Save Changes"}
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => setEditingSegmentId(null)}
+                                        className="rounded-md border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100"
+                                      >
+                                        Cancel
+                                      </button>
+                                    </div>
+                                  </form>
+                                </td>
+                              </tr>
+                            )}
+
+                            {expandedSegmentId === s.segmentId && (
+                              <tr key={`${s.segmentId}-detail`}>
+                                <td colSpan={7} className="border-b border-slate-100 bg-slate-50 p-4">
                                   {canEditLights && (
-                                    <button
-                                      onClick={() => handleInsertLight(s.segmentId!, 0)}
-                                      disabled={insertingSeq === 0}
-                                      className="mb-1 inline-flex items-center gap-1 text-xs font-medium text-slate-500 hover:text-nnm-blue hover:underline"
-                                    >
-                                      <PlusCircle className="h-3.5 w-3.5" />
-                                      {insertingSeq === 0 ? "Adding…" : "Add light before this street's first light"}
-                                    </button>
+                                    <label className="mb-3 flex flex-wrap items-center gap-2 text-xs text-slate-600">
+                                      Type of light added:
+                                      <select
+                                        value={newLampType}
+                                        onChange={(e) => setNewLampType(e.target.value as LampType)}
+                                        className="rounded-md border border-slate-300 px-2 py-1 text-xs"
+                                      >
+                                        {LAMP_TYPES.map((t) => (
+                                          <option key={t} value={t}>
+                                            {LAMP_TYPE_LABELS[t]}
+                                          </option>
+                                        ))}
+                                      </select>
+                                    </label>
                                   )}
-                                  {segmentLights[s.segmentId]!.map((l) => (
-                                    <div key={l.lightId}>
-                                      <div className="rounded-md border border-slate-200 bg-white p-3">
-                                        <div className="mb-1 flex flex-wrap items-center gap-2">
-                                          {gpsFormLightId !== l.lightId &&
-                                            (l.latitude != null && l.longitude != null ? (
-                                              <button
-                                                onClick={() => openGpsForm(l)}
-                                                title="Edit this light's recorded location"
-                                                className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-medium text-blue-700 hover:bg-blue-100"
-                                              >
-                                                <MapPin className="h-3 w-3" />
-                                                {l.latitude.toFixed(5)}, {l.longitude.toFixed(5)}
-                                              </button>
-                                            ) : (
-                                              <button
-                                                onClick={() => openGpsForm(l)}
-                                                title="Optionally record this light's GPS location"
-                                                className="inline-flex items-center gap-1 rounded-full border border-dashed border-slate-300 px-2 py-0.5 text-[10px] font-medium text-slate-400 hover:border-nnm-blue hover:text-nnm-blue"
-                                              >
-                                                <MapPin className="h-3 w-3" />
-                                                Add location
-                                              </button>
-                                            ))}
-                                          <span className="font-mono text-xs text-slate-700">{l.serialNumber}</span>
-                                          {l.working ? (
-                                            <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-semibold uppercase text-green-700">
-                                              <CheckCircle2 className="h-3 w-3" />
-                                              Working
-                                            </span>
-                                          ) : (
-                                            <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-semibold uppercase text-red-700">
-                                              <XCircle className="h-3 w-3" />
-                                              Not Working
-                                            </span>
-                                          )}
-                                          {!l.active && <span className="rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-semibold uppercase text-slate-600">Inactive</span>}
-
-                                          {canEditLights && !l.working && repairFormLightId !== l.lightId && (
-                                            <button
-                                              onClick={() => openRepairForm(l)}
-                                              className="inline-flex items-center gap-1 rounded-full bg-green-600 px-2 py-0.5 text-[10px] font-semibold uppercase text-white hover:bg-green-700"
-                                            >
-                                              <CheckCircle2 className="h-3 w-3" />
-                                              Mark Repaired
-                                            </button>
-                                          )}
-
-                                          {canEditLights && l.working && faultyFormLightId !== l.lightId && (
-                                            <button
-                                              onClick={() => openMarkFaultyForm(l)}
-                                              className="inline-flex items-center gap-1 rounded-full bg-red-600 px-2 py-0.5 text-[10px] font-semibold uppercase text-white hover:bg-red-700"
-                                            >
-                                              <XCircle className="h-3 w-3" />
-                                              Mark Faulty
-                                            </button>
-                                          )}
-
-                                          {canEditLights && (
-                                            <select
-                                              value={l.switchStatus ?? ""}
-                                              disabled={changingStatusLightId === l.lightId}
-                                              onChange={(e) => handleChangeStatus(s.segmentId!, l.lightId, e.target.value as LightSwitchStatus)}
-                                              className="ml-auto rounded-md border border-slate-300 px-2 py-1 text-[11px] outline-none focus:ring-1 focus:ring-nnm-blue"
-                                            >
-                                              <option value="" disabled>
-                                                Switch status…
-                                              </option>
-                                              {(Object.keys(SWITCH_STATUS_LABELS) as LightSwitchStatus[]).map((k) => (
-                                                <option key={k} value={k}>
-                                                  {SWITCH_STATUS_LABELS[k]}
-                                                </option>
-                                              ))}
-                                            </select>
-                                          )}
-
-                                          {canEditLights && (
-                                            <button
-                                              onClick={() => handleDeleteLight(s.segmentId!, l.lightId, l.serialNumber)}
-                                              disabled={deletingLightId === l.lightId}
-                                              title="Remove this light if it was added by mistake"
-                                              className="inline-flex items-center gap-1 rounded-full border border-red-200 px-2 py-0.5 text-[10px] font-semibold uppercase text-red-600 hover:bg-red-50 disabled:opacity-60"
-                                            >
-                                              <Trash2 className="h-3 w-3" />
-                                              {deletingLightId === l.lightId ? "Removing…" : "Delete"}
-                                            </button>
-                                          )}
-                                        </div>
-                                        {repairFormLightId === l.lightId && (
-                                          <div className="mt-2 space-y-2 rounded-md border border-green-200 bg-green-50 p-3">
-                                            <div>
-                                              <label className="mb-1 block text-[10px] font-semibold uppercase text-slate-500">Functional since</label>
-                                              <input
-                                                type="date"
-                                                value={repairFormDate}
-                                                max={todayLocalDateString()}
-                                                onChange={(e) => setRepairFormDate(e.target.value)}
-                                                className="rounded-md border border-slate-300 px-2 py-1 text-xs outline-none focus:ring-1 focus:ring-nnm-blue"
-                                              />
-                                            </div>
-                                            <div>
-                                              <label className="mb-1 block text-[10px] font-semibold uppercase text-slate-500">Remarks</label>
-                                              <textarea
-                                                value={repairFormNotes}
-                                                onChange={(e) => setRepairFormNotes(e.target.value)}
-                                                rows={2}
-                                                placeholder="What was fixed… (optional)"
-                                                className="w-full rounded-md border border-slate-300 px-2 py-1.5 text-xs outline-none focus:ring-1 focus:ring-nnm-blue"
-                                              />
-                                            </div>
-                                            <div className="flex gap-2">
-                                              <button
-                                                onClick={() => submitMarkRepaired(s.segmentId!, l)}
-                                                disabled={markingRepairedLightId === l.lightId}
-                                                className="rounded-md bg-green-600 px-3 py-1 text-xs font-semibold text-white hover:bg-green-700 disabled:opacity-60"
-                                              >
-                                                {markingRepairedLightId === l.lightId ? "Marking…" : "Mark Repaired"}
-                                              </button>
-                                              <button onClick={cancelRepairForm} className="rounded-md border border-slate-300 px-3 py-1 text-xs font-medium text-slate-600 hover:bg-slate-100">
-                                                Cancel
-                                              </button>
-                                            </div>
-                                          </div>
-                                        )}
-                                        {faultyFormLightId === l.lightId && (
-                                          <div className="mt-2 space-y-2 rounded-md border border-red-200 bg-red-50 p-3">
-                                            <div>
-                                              <label className="mb-1 block text-[10px] font-semibold uppercase text-slate-500">Non-functional since</label>
-                                              <input
-                                                type="date"
-                                                value={faultyFormDate}
-                                                max={todayLocalDateString()}
-                                                onChange={(e) => setFaultyFormDate(e.target.value)}
-                                                className="rounded-md border border-slate-300 px-2 py-1 text-xs outline-none focus:ring-1 focus:ring-nnm-blue"
-                                              />
-                                            </div>
-                                            <div>
-                                              <label className="mb-1 block text-[10px] font-semibold uppercase text-slate-500">Comments</label>
-                                              <textarea
-                                                value={faultyFormNotes}
-                                                onChange={(e) => setFaultyFormNotes(e.target.value)}
-                                                rows={2}
-                                                placeholder="What's wrong with this light… (optional)"
-                                                className="w-full rounded-md border border-slate-300 px-2 py-1.5 text-xs outline-none focus:ring-1 focus:ring-nnm-blue"
-                                              />
-                                            </div>
-                                            <div className="flex gap-2">
-                                              <button
-                                                onClick={() => submitMarkFaulty(s.segmentId!, l.lightId)}
-                                                disabled={markingFaultyLightId === l.lightId}
-                                                className="rounded-md bg-red-600 px-3 py-1 text-xs font-semibold text-white hover:bg-red-700 disabled:opacity-60"
-                                              >
-                                                {markingFaultyLightId === l.lightId ? "Reporting…" : "Report Faulty"}
-                                              </button>
-                                              <button onClick={cancelMarkFaultyForm} className="rounded-md border border-slate-300 px-3 py-1 text-xs font-medium text-slate-600 hover:bg-slate-100">
-                                                Cancel
-                                              </button>
-                                            </div>
-                                          </div>
-                                        )}
-                                        {gpsFormLightId === l.lightId && (
-                                          <div className="mt-2 space-y-2 rounded-md border border-blue-200 bg-blue-50 p-3">
-                                            <div className="flex flex-wrap items-end gap-2">
-                                              <div>
-                                                <label className="mb-1 block text-[10px] font-semibold uppercase text-slate-500">Latitude</label>
-                                                <input
-                                                  type="text"
-                                                  inputMode="decimal"
-                                                  value={gpsFormLat}
-                                                  onChange={(e) => setGpsFormLat(e.target.value)}
-                                                  placeholder="e.g. 25.3746"
-                                                  className="w-28 rounded-md border border-slate-300 px-2 py-1 text-xs outline-none focus:ring-1 focus:ring-nnm-blue"
-                                                />
-                                              </div>
-                                              <div>
-                                                <label className="mb-1 block text-[10px] font-semibold uppercase text-slate-500">Longitude</label>
-                                                <input
-                                                  type="text"
-                                                  inputMode="decimal"
-                                                  value={gpsFormLng}
-                                                  onChange={(e) => setGpsFormLng(e.target.value)}
-                                                  placeholder="e.g. 86.4735"
-                                                  className="w-28 rounded-md border border-slate-300 px-2 py-1 text-xs outline-none focus:ring-1 focus:ring-nnm-blue"
-                                                />
-                                              </div>
-                                              <button
-                                                onClick={useCurrentLocationForGpsForm}
-                                                disabled={locatingGps}
-                                                title="Use this device's current location"
-                                                className="inline-flex items-center gap-1 rounded-md border border-slate-300 px-2 py-1 text-xs font-medium text-slate-600 hover:bg-slate-100 disabled:opacity-60"
-                                              >
-                                                <LocateFixed className="h-3.5 w-3.5" />
-                                                {locatingGps ? "Locating…" : "Use current location"}
-                                              </button>
-                                            </div>
-                                            {gpsFormError && <p className="text-xs text-red-600">{gpsFormError}</p>}
-                                            <div className="flex flex-wrap gap-2">
-                                              <button
-                                                onClick={() => submitGpsForm(s.segmentId!, l.lightId)}
-                                                disabled={savingGpsLightId === l.lightId}
-                                                className="rounded-md bg-nnm-blue px-3 py-1 text-xs font-semibold text-white hover:opacity-90 disabled:opacity-60"
-                                              >
-                                                {savingGpsLightId === l.lightId ? "Saving…" : "Save Location"}
-                                              </button>
-                                              {(l.latitude != null || l.longitude != null) && (
-                                                <button
-                                                  onClick={() => clearGpsForm(s.segmentId!, l.lightId)}
-                                                  disabled={savingGpsLightId === l.lightId}
-                                                  className="rounded-md border border-slate-300 px-3 py-1 text-xs font-medium text-slate-600 hover:bg-slate-100 disabled:opacity-60"
-                                                >
-                                                  Clear
-                                                </button>
-                                              )}
-                                              <button onClick={cancelGpsForm} className="rounded-md border border-slate-300 px-3 py-1 text-xs font-medium text-slate-600 hover:bg-slate-100">
-                                                Cancel
-                                              </button>
-                                            </div>
-                                          </div>
-                                        )}
-                                        {l.faultHistory.length > 0 && (
-                                          <div className="mt-2 space-y-1 border-t border-slate-100 pt-2">
-                                            <p className="text-[10px] font-semibold uppercase text-slate-400">Repair history</p>
-                                            {l.faultHistory.map((f) => (
-                                              <p key={f.faultId} className="text-xs text-slate-600">
-                                                Reported {new Date(f.reportedAt).toLocaleDateString("en-IN")}
-                                                {f.reportedByName ? ` by ${f.reportedByName}` : f.reportedByType === "public" ? " (public report)" : ""}
-                                                {f.status === "repaired" && f.repairedAt
-                                                  ? ` · Repaired ${new Date(f.repairedAt).toLocaleDateString("en-IN")}${f.repairedByName ? ` by ${f.repairedByName}` : ""}${f.functionalSince ? ` (functional since ${new Date(f.functionalSince).toLocaleDateString("en-IN")})` : ""}`
-                                                  : " · Still open"}
-                                                {f.reporterNotes ? ` - "${f.reporterNotes}"` : ""}
-                                                {f.repairNotes ? ` · Remarks: "${f.repairNotes}"` : ""}
-                                              </p>
-                                            ))}
-                                          </div>
-                                        )}
-                                      </div>
-                                      {canEditLights && l.lightSerialSeq != null && (
+                                  {loadingSegmentId === s.segmentId ? (
+                                    <p className="text-xs text-slate-400">Loading…</p>
+                                  ) : !s.segmentId || !segmentLights[s.segmentId] || segmentLights[s.segmentId]!.length === 0 ? (
+                                    <div>
+                                      <p className="mb-3 text-xs text-slate-400">No lights on this street yet.</p>
+                                      {canEditLights && (
                                         <button
-                                          onClick={() => handleInsertLight(s.segmentId!, l.lightSerialSeq!)}
-                                          disabled={insertingSeq === l.lightSerialSeq}
-                                          className="my-1 inline-flex items-center gap-1 text-xs font-medium text-slate-500 hover:text-nnm-blue hover:underline"
+                                          onClick={() => handleInsertLight(s.segmentId!, 0)}
+                                          disabled={insertingSeq === 0}
+                                          className="inline-flex items-center gap-1 text-xs font-semibold text-nnm-blue hover:underline"
                                         >
                                           <PlusCircle className="h-3.5 w-3.5" />
-                                          {insertingSeq === l.lightSerialSeq ? "Adding…" : "Add light after this"}
+                                          {insertingSeq === 0 ? "Adding…" : "Add first light"}
                                         </button>
                                       )}
                                     </div>
-                                  ))}
-                                </div>
-                              )}
-                            </td>
-                          </tr>
-                        )}
-                      </>
-                    ))}
-                  </tbody>
-                  {streetTotalsForWard && (
-                    <tfoot>
-                      <tr className="border-t-2 border-slate-200 bg-slate-50 font-semibold text-slate-800">
-                        <td className="px-4 py-2.5" colSpan={3}>
-                          Total
-                        </td>
-                        <td className="px-4 py-2.5">{streetTotalsForWard.total}</td>
-                        <td className="px-4 py-2.5 text-green-700">{streetTotalsForWard.working}</td>
-                        <td className="px-4 py-2.5 text-red-600">{streetTotalsForWard.notWorking}</td>
-                        {canManageStreets && <td className="px-4 py-2.5"></td>}
-                      </tr>
-                    </tfoot>
-                  )}
-                </table>
-              </div>
-            )}
+                                  ) : (
+                                    <div className="space-y-2">
+                                      {canEditLights && (
+                                        <button
+                                          onClick={() => handleInsertLight(s.segmentId!, 0)}
+                                          disabled={insertingSeq === 0}
+                                          className="mb-1 inline-flex items-center gap-1 text-xs font-medium text-slate-500 hover:text-nnm-blue hover:underline"
+                                        >
+                                          <PlusCircle className="h-3.5 w-3.5" />
+                                          {insertingSeq === 0 ? "Adding…" : "Add light before this street's first light"}
+                                        </button>
+                                      )}
+                                      {segmentLights[s.segmentId]!.map((l) => (
+                                        <div key={l.lightId}>
+                                          <div className="rounded-md border border-slate-200 bg-white p-3">
+                                            <div className="mb-1 flex flex-wrap items-center gap-2">
+                                              {gpsFormLightId !== l.lightId &&
+                                                (l.latitude != null && l.longitude != null ? (
+                                                  <button
+                                                    onClick={() => openGpsForm(l)}
+                                                    title="Edit this light's recorded location"
+                                                    className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-medium text-blue-700 hover:bg-blue-100"
+                                                  >
+                                                    <MapPin className="h-3 w-3" />
+                                                    {l.latitude.toFixed(5)}, {l.longitude.toFixed(5)}
+                                                  </button>
+                                                ) : (
+                                                  <button
+                                                    onClick={() => openGpsForm(l)}
+                                                    title="Optionally record this light's GPS location"
+                                                    className="inline-flex items-center gap-1 rounded-full border border-dashed border-slate-300 px-2 py-0.5 text-[10px] font-medium text-slate-400 hover:border-nnm-blue hover:text-nnm-blue"
+                                                  >
+                                                    <MapPin className="h-3 w-3" />
+                                                    Add location
+                                                  </button>
+                                                ))}
+                                              <span className="font-mono text-xs text-slate-700">{l.serialNumber}</span>
+                                              <span className="text-[11px] text-slate-500">
+                                                {LAMP_TYPE_LABELS[l.lampType ?? DEFAULT_LAMP_TYPE]}
+                                              </span>
+                                              {l.working ? (
+                                                <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-semibold uppercase text-green-700">
+                                                  <CheckCircle2 className="h-3 w-3" />
+                                                  Working
+                                                </span>
+                                              ) : (
+                                                <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-semibold uppercase text-red-700">
+                                                  <XCircle className="h-3 w-3" />
+                                                  Not Working
+                                                </span>
+                                              )}
+                                              {!l.active && (
+                                                <span className="rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-semibold uppercase text-slate-600">
+                                                  Inactive
+                                                </span>
+                                              )}
 
-            {canManageStreets && (
-              <div className="mt-4">
-                {!showAddStreet ? (
-                  <button onClick={() => setShowAddStreet(true)} className="inline-flex items-center gap-1.5 text-sm font-semibold text-nnm-blue hover:underline">
-                    <PlusCircle className="h-4 w-4" />
-                    Add new street
-                  </button>
-                ) : (
-                  <div className="rounded-xl border border-slate-200 bg-white p-6">
-                    <div className="mb-3 flex items-center justify-between">
-                      <h2 className="text-sm font-semibold text-slate-800">Add New Street - {openWard}</h2>
-                      <button onClick={() => setShowAddStreet(false)} className="text-slate-400 hover:text-slate-600">
-                        <X className="h-4 w-4" />
-                      </button>
-                    </div>
-                    <form onSubmit={handleAddStreet} className="space-y-3">
-                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                        <div>
-                          <label className="mb-1 block text-xs font-medium text-slate-600">Agency</label>
-                          <select value={addStreetForm.agency} onChange={(e) => setAddStreetForm((f) => ({ ...f, agency: e.target.value as "NN" | "EESL" }))} className={inputClass}>
-                            <option value="NN">Nagar Nigam</option>
-                            <option value="EESL">EESL</option>
-                          </select>
-                        </div>
-                        <div>
-                          <label className="mb-1 block text-xs font-medium text-slate-600">Number of lights</label>
-                          <input
-                            type="number"
-                            min="0"
-                            value={addStreetForm.lightCount}
-                            onChange={(e) => setAddStreetForm((f) => ({ ...f, lightCount: e.target.value }))}
-                            className={inputClass}
-                          />
-                        </div>
-                      </div>
-                      <div>
-                        <label className="mb-1 block text-xs font-medium text-slate-600">Start point</label>
-                        <input required value={addStreetForm.startPoint} onChange={(e) => setAddStreetForm((f) => ({ ...f, startPoint: e.target.value }))} className={inputClass} />
-                      </div>
-                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                        <div>
-                          <label className="mb-1 block text-xs font-medium text-slate-600">Intermediate point (optional)</label>
-                          <input value={addStreetForm.intermediatePoint} onChange={(e) => setAddStreetForm((f) => ({ ...f, intermediatePoint: e.target.value }))} className={inputClass} />
-                        </div>
-                        <div>
-                          <label className="mb-1 block text-xs font-medium text-slate-600">End point (optional)</label>
-                          <input value={addStreetForm.endPoint} onChange={(e) => setAddStreetForm((f) => ({ ...f, endPoint: e.target.value }))} className={inputClass} />
-                        </div>
-                      </div>
-                      <button type="submit" disabled={addStreetSaving} className="rounded-md bg-nnm-blue px-4 py-2 text-sm font-semibold text-white hover:bg-nnm-blue-dark disabled:opacity-60">
-                        {addStreetSaving ? "Adding…" : "Add Street"}
-                      </button>
-                    </form>
+                                              {canEditLights && !l.working && repairFormLightId !== l.lightId && (
+                                                <button
+                                                  onClick={() => openRepairForm(l)}
+                                                  className="inline-flex items-center gap-1 rounded-full bg-green-600 px-2 py-0.5 text-[10px] font-semibold uppercase text-white hover:bg-green-700"
+                                                >
+                                                  <CheckCircle2 className="h-3 w-3" />
+                                                  Mark Repaired
+                                                </button>
+                                              )}
+
+                                              {canEditLights && l.working && faultyFormLightId !== l.lightId && (
+                                                <button
+                                                  onClick={() => openMarkFaultyForm(l)}
+                                                  className="inline-flex items-center gap-1 rounded-full bg-red-600 px-2 py-0.5 text-[10px] font-semibold uppercase text-white hover:bg-red-700"
+                                                >
+                                                  <XCircle className="h-3 w-3" />
+                                                  Mark Faulty
+                                                </button>
+                                              )}
+
+                                              {canEditLights && (
+                                                <select
+                                                  value={l.switchStatus ?? ""}
+                                                  disabled={changingStatusLightId === l.lightId}
+                                                  onChange={(e) =>
+                                                    handleChangeStatus(s.segmentId!, l.lightId, e.target.value as LightSwitchStatus)
+                                                  }
+                                                  className="ml-auto rounded-md border border-slate-300 px-2 py-1 text-[11px] outline-none focus:ring-1 focus:ring-nnm-blue"
+                                                >
+                                                  <option value="" disabled>
+                                                    Switch status…
+                                                  </option>
+                                                  {(Object.keys(SWITCH_STATUS_LABELS) as LightSwitchStatus[]).map((k) => (
+                                                    <option key={k} value={k}>
+                                                      {SWITCH_STATUS_LABELS[k]}
+                                                    </option>
+                                                  ))}
+                                                </select>
+                                              )}
+
+                                              {canEditLights && (
+                                                <button
+                                                  onClick={() => handleDeleteLight(s.segmentId!, l.lightId, l.serialNumber)}
+                                                  disabled={deletingLightId === l.lightId}
+                                                  title="Remove this light if it was added by mistake"
+                                                  className="inline-flex items-center gap-1 rounded-full border border-red-200 px-2 py-0.5 text-[10px] font-semibold uppercase text-red-600 hover:bg-red-50 disabled:opacity-60"
+                                                >
+                                                  <Trash2 className="h-3 w-3" />
+                                                  {deletingLightId === l.lightId ? "Removing…" : "Delete"}
+                                                </button>
+                                              )}
+                                            </div>
+                                            {repairFormLightId === l.lightId && (
+                                              <div className="mt-2 space-y-2 rounded-md border border-green-200 bg-green-50 p-3">
+                                                <div>
+                                                  <label className="mb-1 block text-[10px] font-semibold uppercase text-slate-500">
+                                                    Functional since
+                                                  </label>
+                                                  <input
+                                                    type="date"
+                                                    value={repairFormDate}
+                                                    max={todayLocalDateString()}
+                                                    onChange={(e) => setRepairFormDate(e.target.value)}
+                                                    className="rounded-md border border-slate-300 px-2 py-1 text-xs outline-none focus:ring-1 focus:ring-nnm-blue"
+                                                  />
+                                                </div>
+                                                <div>
+                                                  <label className="mb-1 block text-[10px] font-semibold uppercase text-slate-500">
+                                                    Remarks
+                                                  </label>
+                                                  <textarea
+                                                    value={repairFormNotes}
+                                                    onChange={(e) => setRepairFormNotes(e.target.value)}
+                                                    rows={2}
+                                                    placeholder="What was fixed… (optional)"
+                                                    className="w-full rounded-md border border-slate-300 px-2 py-1.5 text-xs outline-none focus:ring-1 focus:ring-nnm-blue"
+                                                  />
+                                                </div>
+                                                <div className="flex gap-2">
+                                                  <button
+                                                    onClick={() => submitMarkRepaired(s.segmentId!, l)}
+                                                    disabled={markingRepairedLightId === l.lightId}
+                                                    className="rounded-md bg-green-600 px-3 py-1 text-xs font-semibold text-white hover:bg-green-700 disabled:opacity-60"
+                                                  >
+                                                    {markingRepairedLightId === l.lightId ? "Marking…" : "Mark Repaired"}
+                                                  </button>
+                                                  <button
+                                                    onClick={cancelRepairForm}
+                                                    className="rounded-md border border-slate-300 px-3 py-1 text-xs font-medium text-slate-600 hover:bg-slate-100"
+                                                  >
+                                                    Cancel
+                                                  </button>
+                                                </div>
+                                              </div>
+                                            )}
+                                            {faultyFormLightId === l.lightId && (
+                                              <div className="mt-2 space-y-2 rounded-md border border-red-200 bg-red-50 p-3">
+                                                <div>
+                                                  <label className="mb-1 block text-[10px] font-semibold uppercase text-slate-500">
+                                                    Non-functional since
+                                                  </label>
+                                                  <input
+                                                    type="date"
+                                                    value={faultyFormDate}
+                                                    max={todayLocalDateString()}
+                                                    onChange={(e) => setFaultyFormDate(e.target.value)}
+                                                    className="rounded-md border border-slate-300 px-2 py-1 text-xs outline-none focus:ring-1 focus:ring-nnm-blue"
+                                                  />
+                                                </div>
+                                                <div>
+                                                  <label className="mb-1 block text-[10px] font-semibold uppercase text-slate-500">
+                                                    Comments
+                                                  </label>
+                                                  <textarea
+                                                    value={faultyFormNotes}
+                                                    onChange={(e) => setFaultyFormNotes(e.target.value)}
+                                                    rows={2}
+                                                    placeholder="What's wrong with this light… (optional)"
+                                                    className="w-full rounded-md border border-slate-300 px-2 py-1.5 text-xs outline-none focus:ring-1 focus:ring-nnm-blue"
+                                                  />
+                                                </div>
+                                                <div className="flex gap-2">
+                                                  <button
+                                                    onClick={() => submitMarkFaulty(s.segmentId!, l.lightId)}
+                                                    disabled={markingFaultyLightId === l.lightId}
+                                                    className="rounded-md bg-red-600 px-3 py-1 text-xs font-semibold text-white hover:bg-red-700 disabled:opacity-60"
+                                                  >
+                                                    {markingFaultyLightId === l.lightId ? "Reporting…" : "Report Faulty"}
+                                                  </button>
+                                                  <button
+                                                    onClick={cancelMarkFaultyForm}
+                                                    className="rounded-md border border-slate-300 px-3 py-1 text-xs font-medium text-slate-600 hover:bg-slate-100"
+                                                  >
+                                                    Cancel
+                                                  </button>
+                                                </div>
+                                              </div>
+                                            )}
+                                            {gpsFormLightId === l.lightId && (
+                                              <div className="mt-2 space-y-2 rounded-md border border-blue-200 bg-blue-50 p-3">
+                                                <div className="flex flex-wrap items-end gap-2">
+                                                  <div>
+                                                    <label className="mb-1 block text-[10px] font-semibold uppercase text-slate-500">
+                                                      Latitude
+                                                    </label>
+                                                    <input
+                                                      type="text"
+                                                      inputMode="decimal"
+                                                      value={gpsFormLat}
+                                                      onChange={(e) => setGpsFormLat(e.target.value)}
+                                                      placeholder="e.g. 25.3746"
+                                                      className="w-28 rounded-md border border-slate-300 px-2 py-1 text-xs outline-none focus:ring-1 focus:ring-nnm-blue"
+                                                    />
+                                                  </div>
+                                                  <div>
+                                                    <label className="mb-1 block text-[10px] font-semibold uppercase text-slate-500">
+                                                      Longitude
+                                                    </label>
+                                                    <input
+                                                      type="text"
+                                                      inputMode="decimal"
+                                                      value={gpsFormLng}
+                                                      onChange={(e) => setGpsFormLng(e.target.value)}
+                                                      placeholder="e.g. 86.4735"
+                                                      className="w-28 rounded-md border border-slate-300 px-2 py-1 text-xs outline-none focus:ring-1 focus:ring-nnm-blue"
+                                                    />
+                                                  </div>
+                                                  <button
+                                                    onClick={useCurrentLocationForGpsForm}
+                                                    disabled={locatingGps}
+                                                    title="Use this device's current location"
+                                                    className="inline-flex items-center gap-1 rounded-md border border-slate-300 px-2 py-1 text-xs font-medium text-slate-600 hover:bg-slate-100 disabled:opacity-60"
+                                                  >
+                                                    <LocateFixed className="h-3.5 w-3.5" />
+                                                    {locatingGps ? "Locating…" : "Use current location"}
+                                                  </button>
+                                                </div>
+                                                {gpsFormError && <p className="text-xs text-red-600">{gpsFormError}</p>}
+                                                <div className="flex flex-wrap gap-2">
+                                                  <button
+                                                    onClick={() => submitGpsForm(s.segmentId!, l.lightId)}
+                                                    disabled={savingGpsLightId === l.lightId}
+                                                    className="rounded-md bg-nnm-blue px-3 py-1 text-xs font-semibold text-white hover:opacity-90 disabled:opacity-60"
+                                                  >
+                                                    {savingGpsLightId === l.lightId ? "Saving…" : "Save Location"}
+                                                  </button>
+                                                  {(l.latitude != null || l.longitude != null) && (
+                                                    <button
+                                                      onClick={() => clearGpsForm(s.segmentId!, l.lightId)}
+                                                      disabled={savingGpsLightId === l.lightId}
+                                                      className="rounded-md border border-slate-300 px-3 py-1 text-xs font-medium text-slate-600 hover:bg-slate-100 disabled:opacity-60"
+                                                    >
+                                                      Clear
+                                                    </button>
+                                                  )}
+                                                  <button
+                                                    onClick={cancelGpsForm}
+                                                    className="rounded-md border border-slate-300 px-3 py-1 text-xs font-medium text-slate-600 hover:bg-slate-100"
+                                                  >
+                                                    Cancel
+                                                  </button>
+                                                </div>
+                                              </div>
+                                            )}
+                                            {l.faultHistory.length > 0 && (
+                                              <div className="mt-2 space-y-1 border-t border-slate-100 pt-2">
+                                                <p className="text-[10px] font-semibold uppercase text-slate-400">Repair history</p>
+                                                {l.faultHistory.map((f) => (
+                                                  <p key={f.faultId} className="text-xs text-slate-600">
+                                                    Reported {new Date(f.reportedAt).toLocaleDateString("en-IN")}
+                                                    {f.reportedByName
+                                                      ? ` by ${f.reportedByName}`
+                                                      : f.reportedByType === "public"
+                                                        ? " (public report)"
+                                                        : ""}
+                                                    {f.status === "repaired" && f.repairedAt
+                                                      ? ` · Repaired ${new Date(f.repairedAt).toLocaleDateString("en-IN")}${f.repairedByName ? ` by ${f.repairedByName}` : ""}${f.functionalSince ? ` (functional since ${new Date(f.functionalSince).toLocaleDateString("en-IN")})` : ""}`
+                                                      : " · Still open"}
+                                                    {f.reporterNotes ? ` - "${f.reporterNotes}"` : ""}
+                                                    {f.repairNotes ? ` · Remarks: "${f.repairNotes}"` : ""}
+                                                  </p>
+                                                ))}
+                                              </div>
+                                            )}
+                                          </div>
+                                          {canEditLights && l.lightSerialSeq != null && (
+                                            <button
+                                              onClick={() => handleInsertLight(s.segmentId!, l.lightSerialSeq!)}
+                                              disabled={insertingSeq === l.lightSerialSeq}
+                                              className="my-1 inline-flex items-center gap-1 text-xs font-medium text-slate-500 hover:text-nnm-blue hover:underline"
+                                            >
+                                              <PlusCircle className="h-3.5 w-3.5" />
+                                              {insertingSeq === l.lightSerialSeq ? "Adding…" : "Add light after this"}
+                                            </button>
+                                          )}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                </td>
+                              </tr>
+                            )}
+                          </>
+                        ))}
+                      </tbody>
+                      {streetTotalsForWard && (
+                        <tfoot>
+                          <tr className="border-t-2 border-slate-200 bg-slate-50 font-semibold text-slate-800">
+                            <td className="px-4 py-2.5" colSpan={3}>
+                              Total
+                            </td>
+                            <td className="px-4 py-2.5">{streetTotalsForWard.total}</td>
+                            <td className="px-4 py-2.5 text-green-700">{streetTotalsForWard.working}</td>
+                            <td className="px-4 py-2.5 text-red-600">{streetTotalsForWard.notWorking}</td>
+                            {canManageStreets && <td className="px-4 py-2.5"></td>}
+                          </tr>
+                        </tfoot>
+                      )}
+                    </table>
                   </div>
                 )}
-              </div>
-            )}
+
+                {canManageStreets && (
+                  <div className="mt-4">
+                    {!showAddStreet ? (
+                      <button
+                        onClick={() => setShowAddStreet(true)}
+                        className="inline-flex items-center gap-1.5 text-sm font-semibold text-nnm-blue hover:underline"
+                      >
+                        <PlusCircle className="h-4 w-4" />
+                        Add new street
+                      </button>
+                    ) : (
+                      <div className="rounded-xl border border-slate-200 bg-white p-6">
+                        <div className="mb-3 flex items-center justify-between">
+                          <h2 className="text-sm font-semibold text-slate-800">Add New Street - {openWard}</h2>
+                          <button onClick={() => setShowAddStreet(false)} className="text-slate-400 hover:text-slate-600">
+                            <X className="h-4 w-4" />
+                          </button>
+                        </div>
+                        <form onSubmit={handleAddStreet} className="space-y-3">
+                          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                            <div>
+                              <label className="mb-1 block text-xs font-medium text-slate-600">Agency</label>
+                              <select
+                                value={addStreetForm.agency}
+                                onChange={(e) => setAddStreetForm((f) => ({ ...f, agency: e.target.value as "NN" | "EESL" }))}
+                                className={inputClass}
+                              >
+                                <option value="NN">Nagar Nigam</option>
+                                <option value="EESL">EESL</option>
+                              </select>
+                            </div>
+                            <div>
+                              <label className="mb-1 block text-xs font-medium text-slate-600">Number of lights</label>
+                              <input
+                                type="number"
+                                min="0"
+                                value={addStreetForm.lightCount}
+                                onChange={(e) => setAddStreetForm((f) => ({ ...f, lightCount: e.target.value }))}
+                                className={inputClass}
+                              />
+                            </div>
+                          </div>
+                          <div>
+                            <label className="mb-1 block text-xs font-medium text-slate-600">Type of light</label>
+                            <select
+                              value={addStreetForm.lampType}
+                              onChange={(e) => setAddStreetForm((f) => ({ ...f, lampType: e.target.value as LampType }))}
+                              className={inputClass}
+                            >
+                              {LAMP_TYPES.map((t) => (
+                                <option key={t} value={t}>
+                                  {LAMP_TYPE_LABELS[t]}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          <div>
+                            <label className="mb-1 block text-xs font-medium text-slate-600">Start point</label>
+                            <input
+                              required
+                              value={addStreetForm.startPoint}
+                              onChange={(e) => setAddStreetForm((f) => ({ ...f, startPoint: e.target.value }))}
+                              className={inputClass}
+                            />
+                          </div>
+                          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                            <div>
+                              <label className="mb-1 block text-xs font-medium text-slate-600">Intermediate point (optional)</label>
+                              <input
+                                value={addStreetForm.intermediatePoint}
+                                onChange={(e) => setAddStreetForm((f) => ({ ...f, intermediatePoint: e.target.value }))}
+                                className={inputClass}
+                              />
+                            </div>
+                            <div>
+                              <label className="mb-1 block text-xs font-medium text-slate-600">End point (optional)</label>
+                              <input
+                                value={addStreetForm.endPoint}
+                                onChange={(e) => setAddStreetForm((f) => ({ ...f, endPoint: e.target.value }))}
+                                className={inputClass}
+                              />
+                            </div>
+                          </div>
+                          <button
+                            type="submit"
+                            disabled={addStreetSaving}
+                            className="rounded-md bg-nnm-blue px-4 py-2 text-sm font-semibold text-white hover:bg-nnm-blue-dark disabled:opacity-60"
+                          >
+                            {addStreetSaving ? "Adding…" : "Add Street"}
+                          </button>
+                        </form>
+                      </div>
+                    )}
+                  </div>
+                )}
               </>
             )}
 
@@ -1079,7 +1263,10 @@ export default function StreetlightStatusDashboardPage() {
                 <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-4 py-3">
                   <h2 className="text-sm font-semibold text-slate-800">High Mast lights in {openWard}</h2>
                   {openWardId && (
-                    <a href={`/attendance/high-mast-status-dashboard?ward=${openWardId}`} className="text-xs font-semibold text-nnm-blue hover:underline">
+                    <a
+                      href={`/attendance/high-mast-status-dashboard?ward=${openWardId}`}
+                      className="text-xs font-semibold text-nnm-blue hover:underline"
+                    >
                       Mark faulty / repaired, add GPS →
                     </a>
                   )}
@@ -1118,15 +1305,24 @@ export default function StreetlightStatusDashboardPage() {
                                 </span>
                               )}
                               {l.functionalStatus === "partially_functional" && (
-                                <span className="ml-1 text-[11px] text-amber-700">({FUNCTIONAL_STATUS_LABELS.partially_functional.toLowerCase()})</span>
+                                <span className="ml-1 text-[11px] text-amber-700">
+                                  ({FUNCTIONAL_STATUS_LABELS.partially_functional.toLowerCase()})
+                                </span>
                               )}
                             </td>
-                            <td className="px-4 py-2 text-xs">{l.noOfLights != null ? `${l.noOfFunctionalLights ?? "?"} / ${l.noOfLights}` : "-"}</td>
+                            <td className="px-4 py-2 text-xs">
+                              {l.noOfLights != null ? `${l.noOfFunctionalLights ?? "?"} / ${l.noOfLights}` : "-"}
+                            </td>
                             <td className="px-4 py-2 text-xs">{l.panelStatus ? (l.panelStatus === "working" ? "OK" : "Not OK") : "-"}</td>
                             <td className="px-4 py-2 text-xs">{l.switchStatus ? SWITCH_STATUS_LABELS[l.switchStatus] : "-"}</td>
                             <td className="px-4 py-2 text-xs">
                               {l.latitude != null && l.longitude != null ? (
-                                <a href={`https://www.google.com/maps?q=${l.latitude},${l.longitude}`} target="_blank" rel="noreferrer" className="text-nnm-blue hover:underline">
+                                <a
+                                  href={`https://www.google.com/maps?q=${l.latitude},${l.longitude}`}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="text-nnm-blue hover:underline"
+                                >
                                   Map
                                 </a>
                               ) : (

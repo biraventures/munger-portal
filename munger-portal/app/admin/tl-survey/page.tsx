@@ -2,12 +2,19 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { AlertCircle, CheckCircle2, Loader2 } from "lucide-react";
+import { AlertCircle, CheckCircle2, Loader2, MapPin } from "lucide-react";
 import { AdminHeader } from "@/components/admin-header";
 import { useAdminGuard } from "@/lib/use-admin-guard";
 import { getCurrentGpsPosition } from "@/lib/geolocation";
 import { sanitizeHoldingNoInput } from "@/lib/holding-no";
-import { currentFinancialYear, licenseYearOptions, readLicenceFile, submitTlSurvey, validTillOptions, type FileUpload } from "@/lib/tl-notice-api";
+import {
+  currentFinancialYear,
+  licenseYearOptions,
+  readLicenceFile,
+  submitTlSurvey,
+  validTillOptions,
+  type FileUpload,
+} from "@/lib/tl-notice-api";
 
 const input = "w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-nnm-blue focus:outline-none";
 const label = "mb-1 block text-xs font-medium text-slate-600";
@@ -31,6 +38,32 @@ export default function TlSurveyPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<{ status: string; noticeNo: string | null } | null>(null);
+  // Shop location - required when a notice is issued, so the business can be found again later.
+  const [shopGps, setShopGps] = useState<{ lat: number; lng: number; accuracy: number } | null>(null);
+  const [gpsBusy, setGpsBusy] = useState(false);
+  const [gpsError, setGpsError] = useState<string | null>(null);
+
+  function captureShopGps() {
+    setGpsError(null);
+    if (typeof navigator === "undefined" || !navigator.geolocation) return setGpsError("This phone / browser cannot read the location.");
+    setGpsBusy(true);
+    navigator.geolocation.getCurrentPosition(
+      (p) => {
+        setShopGps({ lat: p.coords.latitude, lng: p.coords.longitude, accuracy: Math.round(p.coords.accuracy) });
+        setError(null);
+        setGpsBusy(false);
+      },
+      (e) => {
+        setGpsBusy(false);
+        setGpsError(
+          e.code === e.PERMISSION_DENIED
+            ? "Location permission is blocked - allow location for this site in the browser settings, switch on the phone's GPS, and try again."
+            : "Could not read the location - switch on the phone's GPS, step outside if indoors, and try again.",
+        );
+      },
+      { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 },
+    );
+  }
 
   if (!admin) return <div className="flex min-h-screen items-center justify-center text-sm text-slate-400">Loading…</div>;
   if (admin.role !== "tax_collector") {
@@ -61,6 +94,8 @@ export default function TlSurveyPage() {
     setNnmShopNo("");
     setDone(null);
     setError(null);
+    setShopGps(null);
+    setGpsError(null);
   }
 
   async function onFile(file: File | undefined) {
@@ -82,9 +117,11 @@ export default function TlSurveyPage() {
     if (hasLicense && !validTill) return setError("Choose the year the licence is valid till.");
     if (hasLicense && !photo) return setError("Upload a photo of the trade licence.");
     if (needsNotice && !/^[6-9]\d{9}$/.test(phone)) return setError("Enter a valid 10-digit phone number.");
+    if (needsNotice && !shopGps) return setError('Capture the shop\'s GPS location - stand at the shop and press "Capture shop location".');
     setBusy(true);
     try {
-      const gps = await getCurrentGpsPosition().catch(() => null);
+      // With a notice the shop location captured above is sent; otherwise the location is taken quietly if available.
+      const gps = needsNotice ? shopGps : await getCurrentGpsPosition().catch(() => null);
       const r = await submitTlSurvey({
         holdingNo: holdingNo.trim(),
         hasLicense: !!hasLicense,
@@ -100,6 +137,7 @@ export default function TlSurveyPage() {
         nnmShopNo: isNnmShop ? nnmShopNo.trim() || null : null,
         latitude: gps?.lat ?? null,
         longitude: gps?.lng ?? null,
+        gpsAccuracyM: needsNotice ? (shopGps?.accuracy ?? null) : null,
       });
       setDone(r);
     } catch (err) {
@@ -129,7 +167,8 @@ export default function TlSurveyPage() {
             </p>
             {done.noticeNo ? (
               <p>
-                Notice <b className="font-mono">{done.noticeNo}</b> has been generated (14 days to obtain the licence). It is in today&apos;s print list.
+                Notice <b className="font-mono">{done.noticeNo}</b> has been generated (14 days to obtain the licence). It is in
+                today&apos;s print list.
               </p>
             ) : (
               <p>Valid licence recorded — no notice needed.</p>
@@ -170,7 +209,13 @@ export default function TlSurveyPage() {
               <>
                 <div>
                   <label className={label}>Holding number</label>
-                  <input value={holdingNo} onChange={(e) => setHoldingNo(sanitizeHoldingNoInput(e.target.value))} required maxLength={32} className={input} />
+                  <input
+                    value={holdingNo}
+                    onChange={(e) => setHoldingNo(sanitizeHoldingNoInput(e.target.value))}
+                    required
+                    maxLength={32}
+                    className={input}
+                  />
                 </div>
 
                 <div>
@@ -191,7 +236,13 @@ export default function TlSurveyPage() {
                     ))}
                   </div>
                   {isNnmShop && (
-                    <input value={nnmShopNo} onChange={(e) => setNnmShopNo(e.target.value)} maxLength={50} placeholder="Stall / shop number" className={`${input} mt-2`} />
+                    <input
+                      value={nnmShopNo}
+                      onChange={(e) => setNnmShopNo(e.target.value)}
+                      maxLength={50}
+                      placeholder="Stall / shop number"
+                      className={`${input} mt-2`}
+                    />
                   )}
                 </div>
 
@@ -233,12 +284,19 @@ export default function TlSurveyPage() {
                     </div>
                     <div>
                       <label className={label}>Photo of the trade licence</label>
-                      <input type="file" accept="image/jpeg,image/png,application/pdf" capture="environment" onChange={(e) => onFile(e.target.files?.[0])} className="text-sm" />
+                      <input
+                        type="file"
+                        accept="image/jpeg,image/png,application/pdf"
+                        capture="environment"
+                        onChange={(e) => onFile(e.target.files?.[0])}
+                        className="text-sm"
+                      />
                       {photoName && <p className="mt-1 text-xs text-green-700">✓ {photoName}</p>}
                     </div>
                     {expired && (
                       <p className="rounded-md bg-amber-50 p-3 text-xs text-amber-800">
-                        The licence was valid only till {validTill}, before the current year {fy} — a notice will be issued to renew it. Fill in the details below.
+                        The licence was valid only till {validTill}, before the current year {fy} — a notice will be issued to renew it.
+                        Fill in the details below.
                       </p>
                     )}
                   </>
@@ -248,15 +306,34 @@ export default function TlSurveyPage() {
                   <>
                     <div>
                       <label className={label}>Name of person</label>
-                      <input value={personName} onChange={(e) => setPersonName(e.target.value)} required maxLength={255} className={input} />
+                      <input
+                        value={personName}
+                        onChange={(e) => setPersonName(e.target.value)}
+                        required
+                        maxLength={255}
+                        className={input}
+                      />
                     </div>
                     <div>
                       <label className={label}>Name of business</label>
-                      <input value={businessName} onChange={(e) => setBusinessName(e.target.value)} required maxLength={255} className={input} />
+                      <input
+                        value={businessName}
+                        onChange={(e) => setBusinessName(e.target.value)}
+                        required
+                        maxLength={255}
+                        className={input}
+                      />
                     </div>
                     <div>
                       <label className={label}>Address</label>
-                      <textarea value={address} onChange={(e) => setAddress(e.target.value)} required maxLength={500} rows={2} className={input} />
+                      <textarea
+                        value={address}
+                        onChange={(e) => setAddress(e.target.value)}
+                        required
+                        maxLength={500}
+                        rows={2}
+                        className={input}
+                      />
                     </div>
                     <div>
                       <label className={label}>Phone number</label>
@@ -268,10 +345,48 @@ export default function TlSurveyPage() {
                         className={input}
                       />
                     </div>
+                    <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
+                      <label className={label}>Shop location (GPS) - required</label>
+                      <p className="mb-2 text-xs text-slate-500">
+                        Stand at the shop&apos;s entrance and capture its location, so it can be found again.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={captureShopGps}
+                        disabled={gpsBusy}
+                        className="inline-flex items-center gap-2 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 disabled:opacity-60"
+                      >
+                        {gpsBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <MapPin className="h-4 w-4" />}
+                        {shopGps ? "Capture again" : "Capture shop location"}
+                      </button>
+                      {shopGps && (
+                        <p className="mt-2 text-xs text-green-700">
+                          ✓ {shopGps.lat.toFixed(6)}, {shopGps.lng.toFixed(6)} (within about {shopGps.accuracy} m) ·{" "}
+                          <a
+                            href={`https://www.google.com/maps?q=${shopGps.lat},${shopGps.lng}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="underline"
+                          >
+                            check on map
+                          </a>
+                          {shopGps.accuracy > 50 && (
+                            <span className="block text-amber-700">
+                              The location is not precise - wait a few seconds outdoors and capture again.
+                            </span>
+                          )}
+                        </p>
+                      )}
+                      {gpsError && <p className="mt-2 text-xs text-red-700">{gpsError}</p>}
+                    </div>
                   </>
                 )}
 
-                <button type="submit" disabled={busy} className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-nnm-blue px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60">
+                <button
+                  type="submit"
+                  disabled={busy}
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-nnm-blue px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
+                >
                   {busy && <Loader2 className="h-4 w-4 animate-spin" />}
                   {needsNotice ? "Save & generate notice" : "Save"}
                 </button>

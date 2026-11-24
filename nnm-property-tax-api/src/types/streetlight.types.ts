@@ -25,6 +25,8 @@ export interface StreetSegmentRow {
 export interface LightRow {
   id: number;
   light_type: "streetlight" | "high_mast";
+  /** Fitting: globe / LED strip / halogen / LED panel short / LED panel tall. */
+  lamp_type: LampType;
   ward_id: number;
   locality_name: string;
   serial_number: string;
@@ -96,7 +98,14 @@ export type StreetlightAgency = "NN" | "EESL";
  * point alone (no dash) when there's no end point.
  */
 /** Serial number format: agency/ward/street/sequence, e.g. "NN/25/MG Road-Station Chowk/1". Applies to lights created from here on - existing serial numbers aren't retroactively changed. */
-export function formatLightSerialNo(agency: StreetlightAgency, seq: number, startPoint: string, endPoint: string | null, wardNo: string, suffix?: string | null): string {
+export function formatLightSerialNo(
+  agency: StreetlightAgency,
+  seq: number,
+  startPoint: string,
+  endPoint: string | null,
+  wardNo: string,
+  suffix?: string | null,
+): string {
   const span = endPoint ? `${startPoint}-${endPoint}` : startPoint;
   return `${agency}/${wardNo}/${span}/${seq}${suffix ?? ""}`;
 }
@@ -136,3 +145,15 @@ export function nextLightChangeStage(current: LightChangeStage): LightChangeStag
   const idx = LIGHT_CHANGE_STAGE_ORDER.indexOf(current);
   return LIGHT_CHANGE_STAGE_ORDER[idx + 1] ?? null;
 }
+
+/** Type of streetlight fitting (lights.lamp_type). LED panel light - tall is the default. */
+export const LAMP_TYPES = ["globe", "led_strip", "halogen", "led_panel_short", "led_panel_tall"] as const;
+export type LampType = (typeof LAMP_TYPES)[number];
+export const DEFAULT_LAMP_TYPE: LampType = "led_panel_tall";
+export const LAMP_TYPE_LABELS: Record<LampType, string> = {
+  globe: "Globe light",
+  led_strip: "LED strip light",
+  halogen: "Halogen lamp",
+  led_panel_short: "LED panel light - short",
+  led_panel_tall: "LED panel light - tall",
+};

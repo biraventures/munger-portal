@@ -29,6 +29,8 @@ const MANAGE_ROLES = [
   "streetlight_nodal_clerk",
   "streetlight_ae",
   "streetlight_je",
+  "je_mechanical",
+  "ae_mechanical",
   "city_manager",
   "municipal_commissioner",
   "deputy_municipal_commissioner",

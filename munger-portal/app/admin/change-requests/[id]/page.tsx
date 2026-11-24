@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { FloorChangeSummary } from "@/components/admin/floor-change-summary";
 import { useParams, useRouter } from "next/navigation";
 import { AlertCircle, Loader2, RotateCcw } from "lucide-react";
 import { AdminHeader } from "@/components/admin-header";
@@ -18,8 +19,23 @@ import { PropertyChangeReview } from "@/components/admin/property-change-review"
 import { TaxExemptionReview } from "@/components/admin/tax-exemption-review";
 import { MutationApplicationPanel } from "@/components/admin/mutation-application-panel";
 import { MutationTimeline } from "@/components/admin/mutation-timeline";
-import { AreaVerificationForm, AreaVerificationView, floorName, isPartial, toBody, verificationProblem, type VerificationDraft } from "@/components/admin/mutation-area-verification";
-import { blankFieldReport, FieldReportForm, FieldReportList, fieldReportBody, SurveyorSelect, type FieldReportDraft } from "@/components/admin/field-report";
+import {
+  AreaVerificationForm,
+  AreaVerificationView,
+  floorName,
+  isPartial,
+  toBody,
+  verificationProblem,
+  type VerificationDraft,
+} from "@/components/admin/mutation-area-verification";
+import {
+  blankFieldReport,
+  FieldReportForm,
+  FieldReportList,
+  fieldReportBody,
+  SurveyorSelect,
+  type FieldReportDraft,
+} from "@/components/admin/field-report";
 
 export default function ChangeRequestDetailPage() {
   const admin = useAdminGuard();
@@ -78,9 +94,19 @@ export default function ChangeRequestDetailPage() {
   }, [admin, id]);
 
   const needsVerification =
-    !!detail && !!admin && detail.request.status === "pending" && detail.request.current_stage === "tax_daroga" && detail.request.approval_tier === "mutation" && admin.role === "tax_daroga";
+    !!detail &&
+    !!admin &&
+    detail.request.status === "pending" &&
+    detail.request.current_stage === "tax_daroga" &&
+    detail.request.approval_tier === "mutation" &&
+    admin.role === "tax_daroga";
 
-  const isSurveyorStep = !!detail && !!admin && detail.request.status === "pending" && detail.request.current_stage === "tax_surveyor" && admin.role === "tax_surveyor";
+  const isSurveyorStep =
+    !!detail &&
+    !!admin &&
+    detail.request.status === "pending" &&
+    detail.request.current_stage === "tax_surveyor" &&
+    admin.role === "tax_surveyor";
 
   async function handleApprove() {
     let extra: Parameters<typeof approveChangeRequest>[3];
@@ -91,7 +117,8 @@ export default function ChangeRequestDetailPage() {
         return;
       }
       if (!surveyor) return setError("Choose the Tax Surveyor who will give the field report.");
-      if (isPartial(verification) && !registerNo.trim()) return setError("This mutation creates a new holding - enter the old holding number given to it in the demand register.");
+      if (isPartial(verification) && !registerNo.trim())
+        return setError("This mutation creates a new holding - enter the old holding number given to it in the demand register.");
       extra = { assignment: { surveyorUsername: surveyor, registerOldHoldingNo: isPartial(verification) ? registerNo.trim() : null } };
     }
     if (isSurveyorStep) {
@@ -191,6 +218,15 @@ export default function ChangeRequestDetailPage() {
               <StageBadge status={detail.request.status} currentStage={detail.request.current_stage} />
             </div>
 
+            <FloorChangeSummary
+              floorChange={
+                (detail.request.proposed_data as { floorChange?: Parameters<typeof FloorChangeSummary>[0]["floorChange"] }).floorChange
+              }
+              floors={(detail.request.proposed_data as { floors?: Parameters<typeof FloorChangeSummary>[0]["floors"] }).floors}
+              premisesPhotoPath={detail.request.premises_photo_path ? `/admin/change-requests/${detail.request.id}/premises-photo` : null}
+              useChange={detail.request.approval_tier === "use_change"}
+            />
+
             <PropertyChangeReview
               status={detail.request.status}
               current={detail.currentProperty}
@@ -215,10 +251,15 @@ export default function ChangeRequestDetailPage() {
               <section className="rounded-xl border border-slate-200 bg-white p-6">
                 <h2 className="mb-2 text-base font-semibold text-slate-900">Field verification</h2>
                 <p className="mb-3 text-sm text-slate-600">
-                  {detail.request.assigned_surveyor_name ? <>Tax Surveyor: <b>{detail.request.assigned_surveyor_name}</b>. </> : null}
+                  {detail.request.assigned_surveyor_name ? (
+                    <>
+                      Tax Surveyor: <b>{detail.request.assigned_surveyor_name}</b>.{" "}
+                    </>
+                  ) : null}
                   {detail.request.register_old_holding_no ? (
                     <>
-                      Old holding no. for the new holding (demand register): <b className="font-mono">{detail.request.register_old_holding_no}</b>
+                      Old holding no. for the new holding (demand register):{" "}
+                      <b className="font-mono">{detail.request.register_old_holding_no}</b>
                     </>
                   ) : null}
                 </p>
@@ -233,8 +274,9 @@ export default function ChangeRequestDetailPage() {
                   <p key={l.child_holding_no}>
                     <b className="font-mono">{l.child_holding_no}</b> created for the transferred{" "}
                     {l.floors?.length ? `${l.floors.map(floorName).join(", ")} with ` : ""}
-                    {Number(l.area_sqft).toLocaleString("en-IN")} sq ft land; holding <b className="font-mono">{l.parent_holding_no}</b> continues with{" "}
-                    {Number(l.parent_area_after).toLocaleString("en-IN")} sq ft (was {Number(l.parent_area_before).toLocaleString("en-IN")}).
+                    {Number(l.area_sqft).toLocaleString("en-IN")} sq ft land; holding <b className="font-mono">{l.parent_holding_no}</b>{" "}
+                    continues with {Number(l.parent_area_after).toLocaleString("en-IN")} sq ft (was{" "}
+                    {Number(l.parent_area_before).toLocaleString("en-IN")}).
                     {l.floors?.length ? "" : " The new holding is flagged for a floor survey."}
                   </p>
                 ))}
@@ -250,7 +292,11 @@ export default function ChangeRequestDetailPage() {
               <section className="rounded-xl border border-nnm-blue bg-blue-50 p-6">
                 <h2 className="mb-1 text-base font-semibold text-slate-900">Your decision</h2>
                 <p className="mb-4 text-xs text-slate-500">
-                  Approving sends this to {ADMIN_ROLE_LABELS[detail.request.current_stage] === ADMIN_ROLE_LABELS["commissioner"] ? "final application" : "the next desk"}.
+                  Approving sends this to{" "}
+                  {ADMIN_ROLE_LABELS[detail.request.current_stage] === ADMIN_ROLE_LABELS["commissioner"]
+                    ? "final application"
+                    : "the next desk"}
+                  .
                 </p>
                 {needsVerification && !reverting && (
                   <>
@@ -262,13 +308,26 @@ export default function ChangeRequestDetailPage() {
                     <div className="mb-4 grid grid-cols-1 gap-3 rounded-lg border border-slate-200 bg-white p-4 sm:grid-cols-2">
                       <div>
                         <label className="mb-1 block text-xs font-medium text-slate-600">Tax Surveyor for the field report</label>
-                        <SurveyorSelect value={surveyor} onChange={setSurveyor} ward={(detail.currentProperty?.ward as string | null | undefined) ?? null} />
+                        <SurveyorSelect
+                          value={surveyor}
+                          onChange={setSurveyor}
+                          ward={(detail.currentProperty?.ward as string | null | undefined) ?? null}
+                        />
                       </div>
                       {isPartial(verification) && (
                         <div>
-                          <label className="mb-1 block text-xs font-medium text-slate-600">Old holding no. for the new holding (from the demand register)</label>
-                          <input value={registerNo} onChange={(e) => setRegisterNo(e.target.value)} maxLength={32} className="w-full rounded-md border border-slate-300 bg-white px-2.5 py-2 text-sm" />
-                          <p className="mt-0.5 text-[11px] text-slate-500">Enter the new holding in the offline demand register first, then give its number here.</p>
+                          <label className="mb-1 block text-xs font-medium text-slate-600">
+                            Old holding no. for the new holding (from the demand register)
+                          </label>
+                          <input
+                            value={registerNo}
+                            onChange={(e) => setRegisterNo(e.target.value)}
+                            maxLength={32}
+                            className="w-full rounded-md border border-slate-300 bg-white px-2.5 py-2 text-sm"
+                          />
+                          <p className="mt-0.5 text-[11px] text-slate-500">
+                            Enter the new holding in the offline demand register first, then give its number here.
+                          </p>
                         </div>
                       )}
                     </div>
@@ -278,7 +337,13 @@ export default function ChangeRequestDetailPage() {
                 <textarea
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
-                  placeholder={reverting ? "Comment explaining what needs to be corrected" : isSurveyorStep ? "Notes for the next desk (optional)" : "Notes (required to reject, optional to approve)"}
+                  placeholder={
+                    reverting
+                      ? "Comment explaining what needs to be corrected"
+                      : isSurveyorStep
+                        ? "Notes for the next desk (optional)"
+                        : "Notes (required to reject, optional to approve)"
+                  }
                   rows={3}
                   className="mb-4 w-full rounded-md border border-slate-300 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-nnm-blue focus:ring-offset-1"
                 />
@@ -298,7 +363,11 @@ export default function ChangeRequestDetailPage() {
                         disabled={acting !== null}
                         className="rounded-md bg-nnm-blue px-5 py-2.5 text-sm font-semibold text-white hover:bg-nnm-blue-dark disabled:opacity-60"
                       >
-                        {acting === "approve" ? "Saving…" : detail.request.current_stage === detail.request.final_stage ? "Approve (final)" : "Approve & forward"}
+                        {acting === "approve"
+                          ? "Saving…"
+                          : detail.request.current_stage === detail.request.final_stage
+                            ? "Approve (final)"
+                            : "Approve & forward"}
                       </button>
                       <button
                         onClick={handleReject}
@@ -323,7 +392,11 @@ export default function ChangeRequestDetailPage() {
                         disabled={acting !== null}
                         className="rounded-md bg-amber-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-amber-700 disabled:opacity-60"
                       >
-                        {acting === "revert" ? "Sending back…" : detail.request.public_application_id ? "Confirm — send back to applicant" : "Confirm Revert to Operator"}
+                        {acting === "revert"
+                          ? "Sending back…"
+                          : detail.request.public_application_id
+                            ? "Confirm — send back to applicant"
+                            : "Confirm Revert to Operator"}
                       </button>
                       <button
                         onClick={() => {
@@ -345,11 +418,15 @@ export default function ChangeRequestDetailPage() {
                   {detail.request.public_application_id ? "Sent back to the applicant" : "Reverted to Operator"}
                 </h2>
                 <p className="text-sm text-amber-800">
-                  Sent back by {detail.request.reverted_by} ({ADMIN_ROLE_LABELS[detail.request.reverted_from_stage as keyof typeof ADMIN_ROLE_LABELS] ?? detail.request.reverted_from_stage})
-                  {detail.request.reverted_at ? ` on ${new Date(detail.request.reverted_at).toLocaleDateString("en-IN")}` : ""} -{" "}
+                  Sent back by {detail.request.reverted_by} (
+                  {ADMIN_ROLE_LABELS[detail.request.reverted_from_stage as keyof typeof ADMIN_ROLE_LABELS] ??
+                    detail.request.reverted_from_stage}
+                  ){detail.request.reverted_at ? ` on ${new Date(detail.request.reverted_at).toLocaleDateString("en-IN")}` : ""} -{" "}
                   {detail.request.public_application_id ? "awaiting the applicant's online correction." : "awaiting operator correction."}
                 </p>
-                {detail.request.revert_comment && <p className="mt-1 text-sm text-amber-700">&ldquo;{detail.request.revert_comment}&rdquo;</p>}
+                {detail.request.revert_comment && (
+                  <p className="mt-1 text-sm text-amber-700">&ldquo;{detail.request.revert_comment}&rdquo;</p>
+                )}
               </section>
             ) : detail.request.status === "pending" ? (
               <p className="text-sm text-slate-500">

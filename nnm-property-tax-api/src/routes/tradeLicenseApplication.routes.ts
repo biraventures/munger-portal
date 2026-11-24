@@ -7,6 +7,7 @@ import {
   putDocumentChecklistItem,
   postStageTradeLicenseDocument,
   getTradeLicenseDocumentFile,
+  getNoticePrefillHandler,
 } from "../controllers/tradeLicenseApplication.controller";
 import rateLimit from "express-rate-limit";
 import { requireOperator } from "../middleware/requireOperator";
@@ -24,6 +25,9 @@ tradeLicenseApplicationRouter.get("/renewal-autofill", autofillPerIp, autofillPe
 
 // GET /api/v1/trade-license-applications/by-number/:applicationNumber — operator only, MUST
 // come before any catch-all param routes (none currently exist here, kept for clarity)
+// GET /api/v1/trade-license-applications/notice-prefill - public, signed link from a notice's QR code
+tradeLicenseApplicationRouter.get("/notice-prefill", autofillPerIp, getNoticePrefillHandler);
+
 tradeLicenseApplicationRouter.get("/by-number/:applicationNumber", requireOperator, getTradeLicenseApplicationByNumberHandler);
 
 // POST /api/v1/trade-license-applications/documents — public, one document file per request (attached on submit)

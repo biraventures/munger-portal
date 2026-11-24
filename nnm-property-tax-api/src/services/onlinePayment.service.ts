@@ -1,3 +1,4 @@
+import { assertNoDiscrepancyPending } from "./discrepancyHold.service";
 import crypto from "node:crypto";
 import { assertSolidWasteReady } from "./solidWasteGuard.service";
 import { assertDocumentsForOnlinePayment } from "./holdingDocuments.service";
@@ -59,6 +60,7 @@ export async function initiateOnlinePayment(
   assertNotDisputed(property);
   assertNoResurveyPending(property);
   await assertNoNoticeOnHold(holdingNo);
+  await assertNoDiscrepancyPending(holdingNo);
   // Same check as the counter: no online payment while some pending years have no assessment on file.
   assertNoMissingTaxYears(property, await propertyRepository.findTaxHistoryByHoldingNo(holdingNo));
 

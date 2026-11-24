@@ -5,6 +5,7 @@ import { requestLightChange, approveLightChangeAtStage, rejectLightChangeAtStage
 import { lightChangeRequestRepository } from "../repositories/lightChangeRequest.repository";
 import { asyncHandler } from "../middleware/asyncHandler";
 import { ApiError } from "../utils/ApiError";
+import { assertRecordWard, assertWard, wardScope } from "../services/wardScope";
 
 const requestSchema = z.object({
   actionType: z.enum(["add", "status_change", "deactivate", "reactivate", "delete"]),
@@ -16,6 +17,10 @@ const requestSchema = z.object({
 export const postRequestLightChangeHandler = asyncHandler(async (req: Request, res: Response) => {
   const parsed = requestSchema.safeParse(req.body);
   if (!parsed.success) throw ApiError.badRequest("Invalid input", parsed.error.flatten().fieldErrors);
+  if (parsed.data.lightId) await assertRecordWard(req, `SELECT ward_id FROM lights WHERE id = $1`, parsed.data.lightId);
+  const proposed = parsed.data.proposedData ?? {};
+  if (proposed.wardId != null) await assertWard(req, proposed.wardId);
+  if (proposed.segmentId != null) await assertRecordWard(req, `SELECT ward_id FROM street_segments WHERE id = $1`, proposed.segmentId);
   const request = await requestLightChange(req.attendanceUser!, {
     actionType: parsed.data.actionType,
     lightId: parsed.data.lightId ?? null,
@@ -35,7 +40,7 @@ export const listLightChangeRequestsHandler = asyncHandler(async (req: Request, 
 
   if (parsed.data.status && parsed.data.status !== "pending") {
     const requests = await lightChangeRequestRepository.listAll(parsed.data.status);
-    res.status(200).json({ requests: await withLightDetails(requests) });
+    res.status(200).json({ requests: await inMyWards(req, await withLightDetails(requests)) });
     return;
   }
 
@@ -43,8 +48,26 @@ export const listLightChangeRequestsHandler = asyncHandler(async (req: Request, 
   const requests = APPROVAL_STAGE_ROLES.includes(role)
     ? await lightChangeRequestRepository.listPending(role as never)
     : await lightChangeRequestRepository.listPending();
-  res.status(200).json({ requests: await withLightDetails(requests) });
+  res.status(200).json({ requests: await inMyWards(req, await withLightDetails(requests)) });
 });
+
+/** A ward-limited JE / AE sees only requests about lights (or new lights) in their wards. */
+async function inMyWards<T extends { light_id: number | string | null; proposed_data: unknown }>(req: Request, requests: T[]): Promise<T[]> {
+  const scope = await wardScope(req);
+  if (scope === null || requests.length === 0) return requests;
+  const ids = [...new Set(requests.map((r) => r.light_id).filter((x) => x != null).map(Number))];
+  const { rows } = await pool.query<{ id: string; ward_id: string }>(`SELECT id, ward_id FROM lights WHERE id = ANY($1::bigint[])`, [ids]);
+  const segIds = [...new Set(requests.map((r) => (r.proposed_data as Record<string, unknown> | null)?.segmentId).filter((x) => x != null).map(Number))];
+  const { rows: segs } = await pool.query<{ id: string; ward_id: string }>(`SELECT id, ward_id FROM street_segments WHERE id = ANY($1::bigint[])`, [segIds]);
+  const lightWard = new Map(rows.map((r) => [Number(r.id), Number(r.ward_id)]));
+  const segWard = new Map(segs.map((r) => [Number(r.id), Number(r.ward_id)]));
+  return requests.filter((r) => {
+    const p = (r.proposed_data ?? {}) as Record<string, unknown>;
+    const ward =
+      r.light_id != null ? lightWard.get(Number(r.light_id)) : p.wardId != null ? Number(p.wardId) : p.segmentId != null ? segWard.get(Number(p.segmentId)) : undefined;
+    return ward !== undefined && scope.includes(ward);
+  });
+}
 
 /**
  * Every desk sees the light itself (serial, type, ward, locality, agency, status) and what the request changes - the

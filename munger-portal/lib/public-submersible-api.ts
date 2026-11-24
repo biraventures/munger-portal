@@ -65,4 +65,15 @@ export const fetchPyauWards = () => call<{ wards: PyauWardRow[] }>("/wards", {},
 export const fetchPyauWard = (id: number) => call<{ pyaus: PublicPyau[] }>(`/wards/${id}`, {}, "Could not load the ward.").then((r) => r.pyaus);
 export const reportPyauFault = (body: { pyauId: number; nonFunctionalSince: string; problem: PyauProblem; remarks: string | null }) =>
   call<{ reportId: number; serialNumber: string | null }>("/faults", { method: "POST", body: JSON.stringify(body) }, "Could not send the report.");
+/** A submersible the citizen cannot find in the list, reported by its GPS location (the officer identifies it). */
+export const reportPyauFaultByLocation = (body: {
+  wardId: number;
+  latitude: number;
+  longitude: number;
+  accuracyM: number | null;
+  landmark: string;
+  nonFunctionalSince: string;
+  remarks: string | null;
+  problem: PyauProblem;
+}) => call<{ reportId: number }>("/faults-by-location", { method: "POST", body: JSON.stringify(body) }, "Could not send the report.");
 export const fetchMyPyauReports = () => call<{ reports: MyPyauReport[] }>("/my-reports", {}, "Could not load your reports.").then((r) => r.reports);

@@ -1,7 +1,6 @@
 import { getAttendanceToken } from "./attendance-auth";
 
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_PROPERTY_TAX_API_URL || "http://localhost:4000/api/v1";
+const API_BASE_URL = process.env.NEXT_PUBLIC_PROPERTY_TAX_API_URL || "http://localhost:4000/api/v1";
 
 function authHeaders(): HeadersInit {
   const token = getAttendanceToken();
@@ -19,6 +18,8 @@ export interface Pyau {
   schemeName: string | null;
   overheadTankCount: number;
   housesServed: number | null;
+  waterTapCount: number | null;
+  standpostCount: number | null;
   structureType: "pcc_structure" | "iron_stand" | "nothing" | null;
   tankStandType: string | null;
   functionalStatus: "functional" | "non_functional";
@@ -48,6 +49,8 @@ export async function createPyau(input: {
   schemeName: string | null;
   overheadTankCount: number;
   housesServed: number | null;
+  waterTapCount: number | null;
+  standpostCount: number | null;
   structureType: "pcc_structure" | "iron_stand" | "nothing" | null;
   tankStandType: string | null;
   pumpDetails: string | null;
@@ -73,6 +76,7 @@ export async function createPyau(input: {
 
 export interface PyauCsvImportResult {
   created: number;
+  alreadyInRegistry?: number;
   errors: { row: number; message: string }[];
 }
 
@@ -108,6 +112,8 @@ export async function updatePyau(
     schemeName: string | null;
     overheadTankCount: number;
     housesServed: number | null;
+    waterTapCount: number | null;
+    standpostCount: number | null;
     structureType: "pcc_structure" | "iron_stand" | "nothing" | null;
     tankStandType: string | null;
     pumpDetails: string | null;

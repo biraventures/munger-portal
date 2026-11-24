@@ -46,6 +46,44 @@ export async function searchMigratedHoldings(q: string, ward?: string): Promise<
   return data.results;
 }
 
+export interface OldHoldingRow {
+  holding_no: string;
+  old_holding_no: string | null;
+  old_pid: string | null;
+  owner_name: string;
+  relation_type: string | null;
+  relation_name: string | null;
+  address: string | null;
+  ward: string | null;
+  old_last_payment_year: string | null;
+  old_tax_status: string | null;
+  survey_status: string;
+  assigned_to_tax_daroga_display_name: string | null;
+  assigned_to_tax_surveyor_display_name: string | null;
+  entry_id: string | null;
+  entry_status: "pending" | "reverted" | null;
+  entry_stage: string | null;
+  entry_by: string | null;
+  entry_is_mine: boolean | null;
+  entry_revert_comment: string | null;
+}
+
+/** Tax Collector's "Old Holdings Survey" list - old-record holdings of their wards with where each entry stands. */
+export async function fetchOldHoldings(opts: { q?: string; ward?: string; show: "open" | "mine" | "all"; page: number }): Promise<{
+  holdings: OldHoldingRow[];
+  total: number;
+  page: number;
+  pageSize: number;
+  wards: string[];
+}> {
+  const params = new URLSearchParams({ show: opts.show, page: String(opts.page) });
+  if (opts.q?.trim()) params.set("q", opts.q.trim());
+  if (opts.ward?.trim()) params.set("ward", opts.ward.trim());
+  const res = await fetch(`${API_BASE_URL}/admin/old-holdings?${params}`, { headers: authHeaders() });
+  if (!res.ok) throw new Error(await failureMessage(res, "Could not load the old holdings"));
+  return res.json();
+}
+
 // ---------------------------------------------------------------------------
 // Unsurveyed houses
 // ---------------------------------------------------------------------------

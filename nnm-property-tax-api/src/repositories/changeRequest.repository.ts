@@ -26,6 +26,10 @@ export const changeRequestRepository = {
     return rows[0]!;
   },
 
+  async setPremisesPhoto(id: number, photoPath: string): Promise<void> {
+    await pool.query(`UPDATE property_change_requests SET premises_photo_path = $2 WHERE id = $1`, [id, photoPath]);
+  },
+
   async findById(id: number): Promise<ChangeRequestRow | null> {
     const { rows } = await pool.query<ChangeRequestRow>(`SELECT * FROM property_change_requests WHERE id = $1`, [id]);
     return rows[0] ?? null;

@@ -119,6 +119,15 @@ export default function TradeLicenseRequestDetailPage() {
                 <p className="mt-1 text-xs text-slate-400">
                   requested by {detail.application.requested_by} on {new Date(detail.application.requested_at).toLocaleString("en-IN")}
                 </p>
+                <p className="mt-1 text-xs">
+                  {detail.application.source === "notice" ? (
+                    <span className="rounded bg-green-50 px-1.5 py-0.5 font-medium text-green-800">
+                      Against notice {detail.application.tl_notice_no} - credited to {detail.application.credited_collector_name}
+                    </span>
+                  ) : (
+                    <span className="rounded bg-slate-100 px-1.5 py-0.5 text-slate-600">Automatic application (no Tax Collector&apos;s notice)</span>
+                  )}
+                </p>
               </div>
               <StageBadge status={detail.application.status} currentStage={detail.application.current_stage as AdminRole} />
             </div>

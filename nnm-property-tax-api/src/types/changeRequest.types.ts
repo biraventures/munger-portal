@@ -10,6 +10,8 @@ export interface ChangeRequestRow {
   requested_by: string;
   requested_at: Date;
   status: ChangeRequestStatus;
+  /** Photo of the premises (change of use / back-dated floor change). */
+  premises_photo_path?: string | null;
   change_basis: string;
   change_reference: string;
   proposed_data: PropertySaveInput;
@@ -48,7 +50,7 @@ export interface ChangeRequestApprovalRow {
 }
 export interface EntryRevertEventRow {
   id: number;
-  entry_type: "property_mutation" | "shop_agreement" | "property_discrepancy";
+  entry_type: "property_mutation" | "shop_agreement" | "property_discrepancy" | "pre2011_arv";
   entry_id: number;
   reference_no: string;
   originally_requested_by: string;

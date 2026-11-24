@@ -6,9 +6,11 @@ export interface OperatorTaskCardProps {
   description: string;
   icon: LucideIcon;
   href?: string; // omit for a not-yet-live task
+  /** Items waiting - shown as a red count. */
+  badge?: number;
 }
 
-export function OperatorTaskCard({ title, description, icon: Icon, href }: OperatorTaskCardProps) {
+export function OperatorTaskCard({ title, description, icon: Icon, href, badge }: OperatorTaskCardProps) {
   const isLive = Boolean(href);
 
   const content = (
@@ -22,6 +24,11 @@ export function OperatorTaskCard({ title, description, icon: Icon, href }: Opera
       </span>
       <h3 className={`mb-1.5 text-base font-semibold ${isLive ? "text-slate-900" : "text-slate-500"}`}>
         {title}
+        {!!badge && (
+          <span className="ml-2 inline-flex min-w-6 items-center justify-center rounded-full bg-red-600 px-1.5 py-0.5 text-xs font-bold text-white">
+            {badge.toLocaleString("en-IN")}
+          </span>
+        )}
       </h3>
       <p className="text-sm text-slate-500">{description}</p>
       {!isLive && (

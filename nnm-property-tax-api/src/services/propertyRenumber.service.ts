@@ -78,6 +78,33 @@ async function moveHoldingNo(client: PoolClient, oldHoldingNo: string, newHoldin
   await client.query(`UPDATE property_discrepancy_requests SET holding_no = $1 WHERE holding_no = $2`, [newHoldingNo, oldHoldingNo]);
   await client.query(`UPDATE migrated_holding_surveys SET holding_no = $1 WHERE holding_no = $2`, [newHoldingNo, oldHoldingNo]);
   await client.query(`UPDATE migrated_holding_survey_events SET holding_no = $1 WHERE holding_no = $2`, [newHoldingNo, oldHoldingNo]);
+  // Further tables pointing at the holding (field visits, collection issues, historical payments, ...). Without these a
+  // holding with any of them could not be renumbered (or, for solid_waste_payment_log, would lose those rows).
+  for (const [table, column] of [
+    ["property_field_verifications", "holding_no"],
+    ["collection_issues", "holding_no"],
+    ["collection_issue_notices", "holding_no"],
+    ["historical_payments", "holding_no"],
+    ["historical_payment_settlements", "holding_no"],
+    ["holding_lineage", "child_holding_no"],
+    ["holding_lineage", "parent_holding_no"],
+    ["mutation_applications", "holding_no"],
+    ["new_holding_requests", "new_holding_no"],
+    ["pg_request", "holding_no"],
+    ["property_resurvey_flags", "holding_no"],
+    ["solid_waste_payment_log", "holding_no"],
+    ["trade_license_surveys", "holding_no"],
+  ] as const) {
+    await client.query(`UPDATE ${table} SET ${column} = $1 WHERE ${column} = $2`, [newHoldingNo, oldHoldingNo]);
+  }
+  // The old record (MIG) the holding came from follows it; its final MNN- number marks the record finalized.
+  await client.query(
+    `UPDATE mig_records SET holding_no = $1, status = CASE WHEN $1 LIKE 'MNN-%' THEN 'finalized' ELSE status END, updated_at = now(),
+            events = events || jsonb_build_array(jsonb_build_object('at', now(), 'action', CASE WHEN $1 LIKE 'MNN-%' THEN 'finalized' ELSE 'renumbered' END,
+                                                                    'by', $3::text, 'note', $2::text || ' -> ' || $1))
+      WHERE holding_no = $2`,
+    [newHoldingNo, oldHoldingNo, actorDisplayName],
+  );
 
   // Soft references (no FK, just a matching string).
   await client.query(`UPDATE trade_license_applications SET holding_no = $1 WHERE holding_no = $2`, [newHoldingNo, oldHoldingNo]);

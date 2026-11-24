@@ -39,7 +39,9 @@ const DOWN = `(f.light_id IS NOT NULL OR l.switch_status = 'not_working')`;
 
 const SWITCH_LABEL: Record<string, string> = { working: "Working", not_working: "Not working", automatic: "Automatic", joint: "Joint" };
 
-const ACTIVE_LIGHT = `l.active = TRUE AND l.deleted_at IS NULL`;
+/** Active lights, limited to the given wards (a ward-limited JE / AE) when scope is set. */
+const wardIn = (col: string, scope: number[] | null) => (scope === null ? "TRUE" : `${col} = ANY(ARRAY[${scope.map(Number).join(",") || "0"}]::bigint[])`);
+const activeLight = (scope: number[] | null) => `l.active = TRUE AND l.deleted_at IS NULL AND ${wardIn("l.ward_id", scope)}`;
 
 function todayIst(): string {
   return new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
@@ -53,7 +55,7 @@ function sumColumns(rows: (string | number)[][], from: number): (string | number
   return out;
 }
 
-async function wardWise(): Promise<StreetlightReportTable> {
+async function wardWise(scope: number[] | null): Promise<StreetlightReportTable> {
   const { rows } = await pool.query<{
     ward_name: string;
     sl_total: number;
@@ -68,7 +70,7 @@ async function wardWise(): Promise<StreetlightReportTable> {
        COUNT(l.id) FILTER (WHERE l.light_type = 'high_mast')::int AS hm_total,
        COUNT(l.id) FILTER (WHERE l.light_type = 'high_mast' AND ${DOWN})::int AS hm_not_working
      FROM attendance_wards w
-     LEFT JOIN lights l ON l.ward_id = w.id AND ${ACTIVE_LIGHT}
+     LEFT JOIN lights l ON l.ward_id = w.id AND ${activeLight(scope)}
      LEFT JOIN open_faults f ON f.light_id = l.id
      GROUP BY w.id, w.ward_name
      HAVING COUNT(l.id) > 0
@@ -107,7 +109,7 @@ async function wardWise(): Promise<StreetlightReportTable> {
   };
 }
 
-async function streetWise(): Promise<StreetlightReportTable> {
+async function streetWise(scope: number[] | null): Promise<StreetlightReportTable> {
   const { rows } = await pool.query<{
     ward_name: string;
     start_point: string;
@@ -124,8 +126,9 @@ async function streetWise(): Promise<StreetlightReportTable> {
      FROM street_segments ss
      JOIN attendance_wards w ON w.id = ss.ward_id
      LEFT JOIN installation_agencies ia ON ia.id = ss.installation_agency_id
-     LEFT JOIN lights l ON l.segment_id = ss.id AND ${ACTIVE_LIGHT}
+     LEFT JOIN lights l ON l.segment_id = ss.id AND ${activeLight(scope)}
      LEFT JOIN open_faults f ON f.light_id = l.id
+     WHERE ${wardIn("ss.ward_id", scope)}
      GROUP BY ss.id, w.ward_name, ss.start_point, ss.intermediate_point, ss.end_point, ia.agency_name
      ORDER BY NULLIF(regexp_replace(w.ward_name, '[^0-9]', '', 'g'), '')::int NULLS LAST, w.ward_name, ss.start_point, ss.id`,
   );
@@ -149,7 +152,7 @@ async function streetWise(): Promise<StreetlightReportTable> {
   };
 }
 
-async function agencyWise(): Promise<StreetlightReportTable> {
+async function agencyWise(scope: number[] | null): Promise<StreetlightReportTable> {
   const { rows } = await pool.query<{
     agency_name: string;
     wards_covered: number;
@@ -170,7 +173,7 @@ async function agencyWise(): Promise<StreetlightReportTable> {
      FROM lights l
      LEFT JOIN installation_agencies ia ON ia.id = l.installation_agency_id
      LEFT JOIN open_faults f ON f.light_id = l.id
-     WHERE ${ACTIVE_LIGHT}
+     WHERE ${activeLight(scope)}
      GROUP BY ia.id, ia.agency_name
      ORDER BY (ia.id IS NULL), ia.agency_name`,
   );
@@ -212,7 +215,7 @@ async function agencyWise(): Promise<StreetlightReportTable> {
   };
 }
 
-async function lightWise(): Promise<StreetlightReportTable> {
+async function lightWise(scope: number[] | null): Promise<StreetlightReportTable> {
   const { rows } = await pool.query<{
     ward_name: string;
     place: string | null;
@@ -236,7 +239,7 @@ async function lightWise(): Promise<StreetlightReportTable> {
      LEFT JOIN street_segments ss ON ss.id = l.segment_id
      LEFT JOIN installation_agencies ia ON ia.id = l.installation_agency_id
      LEFT JOIN open_faults f ON f.light_id = l.id
-     WHERE ${ACTIVE_LIGHT}
+     WHERE ${activeLight(scope)}
      ORDER BY NULLIF(regexp_replace(w.ward_name, '[^0-9]', '', 'g'), '')::int NULLS LAST, w.ward_name,
        (l.light_type = 'high_mast'), place, l.light_serial_seq NULLS LAST, l.light_serial_suffix NULLS FIRST, l.serial_number`,
   );
@@ -261,11 +264,11 @@ async function lightWise(): Promise<StreetlightReportTable> {
   };
 }
 
-export async function buildStreetlightReport(kind: StreetlightReportKind): Promise<StreetlightReportTable> {
-  if (kind === "ward-wise") return wardWise();
-  if (kind === "street-wise") return streetWise();
-  if (kind === "agency-wise") return agencyWise();
-  return lightWise();
+export async function buildStreetlightReport(kind: StreetlightReportKind, scope: number[] | null = null): Promise<StreetlightReportTable> {
+  if (kind === "ward-wise") return wardWise(scope);
+  if (kind === "street-wise") return streetWise(scope);
+  if (kind === "agency-wise") return agencyWise(scope);
+  return lightWise(scope);
 }
 
 /** UTF-8 with a byte-order mark, so Excel opens ward/street names in Hindi correctly instead of garbling them. */

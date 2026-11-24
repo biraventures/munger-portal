@@ -8,6 +8,12 @@ export interface PyauRow {
   scheme_name: string | null;
   overhead_tank_count: number;
   houses_served: number | null;
+  water_tap_count: number | null;
+  standpost_count: number | null;
+  agency_id: number | null;
+  maintenance_contractor_id: number | null;
+  /** Ticked for newly built pyaus still maintained by their builder (not one of the maintenance contractors). */
+  under_builder_maintenance: boolean;
   structure_type: "pcc_structure" | "iron_stand" | "nothing" | null;
   tank_stand_type: string | null;
   functional_status: "functional" | "non_functional";

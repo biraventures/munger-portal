@@ -3,8 +3,11 @@ import type { PropertyRow, FloorRow } from "../types/property.types";
 import type { PropertySaveInput } from "../types/propertySave.types";
 import { num } from "../utils/num";
 import { exemptionChanged } from "../utils/taxExemption";
+import { floorsDiffer, floorUseChanged, planIsUseChange } from "../utils/floorTimeline";
+import { floorPlanOf } from "./floorChange.service";
+import { getCurrentAssessmentYearStartNum, parseYearStartOrNull } from "../utils/assessmentYear";
 
-export type ApprovalTier = "minor" | "significant" | "mutation";
+export type ApprovalTier = "minor" | "significant" | "mutation" | "use_change";
 
 /**
  * The last stage each tier's approval chain must reach before the change
@@ -25,12 +28,14 @@ export const TIER_FINAL_STAGE: Record<ApprovalTier, AdminRole> = {
   minor: "tax_daroga",
   significant: "mutation_nodal_clerk",
   mutation: "commissioner",
+  use_change: "deputy_commissioner",
 };
 
 export const TIER_LABELS: Record<ApprovalTier, string> = {
   minor: "Minor Clerical Editing",
   significant: "Significant Change",
   mutation: "Mutation (Ownership Change)",
+  use_change: "Change of Use / Back-dated Floor Change",
 };
 
 /**
@@ -42,16 +47,30 @@ export const TIER_LABELS: Record<ApprovalTier, string> = {
  * this function is the actual authority on which chain applies; Change
  * Basis remains just a stated reason for the audit trail.
  */
-export function classifyPropertyChange(
-  existingProperty: PropertyRow,
-  existingFloors: FloorRow[],
-  input: PropertySaveInput,
-): ApprovalTier {
+export function classifyPropertyChange(existingProperty: PropertyRow, existingFloors: FloorRow[], input: PropertySaveInput): ApprovalTier {
   const ownerChanged = (input.ownerName || "").trim() !== (existingProperty.owner_name || "").trim();
   if (ownerChanged) {
     return "mutation";
   }
 
+  // A floor's use changing, or any floor change applied to past years (back-dated or a correction), alters arrears:
+  // Tax Daroga -> City Manager -> Deputy Commissioner.
+  if (floorsDiffer(existingFloors, input.floors)) {
+    const plan = floorPlanOf(existingFloors, input);
+    if (plan) {
+      if (planIsUseChange(plan, getCurrentAssessmentYearStartNum())) return "use_change";
+      return areaOrStructureTier(existingProperty, existingFloors, input);
+    }
+    const fc = input.floorChange;
+    const from = parseYearStartOrNull(fc?.effectiveYear ?? null);
+    const backDated = fc?.kind === "correction" || (from !== null && from < getCurrentAssessmentYearStartNum());
+    if (backDated || floorUseChanged(existingFloors, input.floors)) return "use_change";
+  }
+
+  return areaOrStructureTier(existingProperty, existingFloors, input);
+}
+
+function areaOrStructureTier(existingProperty: PropertyRow, existingFloors: FloorRow[], input: PropertySaveInput): ApprovalTier {
   const areaChanged = num(input.areaSqft) !== num(existingProperty.area_sqft);
 
   const floorsStructurallyChanged =
@@ -59,10 +78,7 @@ export function classifyPropertyChange(
     input.floors.some((f, i) => {
       const old = existingFloors[i];
       if (!old) return true; // a floor was added
-      return (
-        num(f.buildupSqft) !== num(old.buildup_sqft) ||
-        String(f.floorLabel).trim() !== String(old.floor_label).trim()
-      );
+      return num(f.buildupSqft) !== num(old.buildup_sqft) || String(f.floorLabel).trim() !== String(old.floor_label).trim();
     });
 
   // Marking a holding as slum / non-slum switches the below-250-sqft relief on or

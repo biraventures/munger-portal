@@ -1,6 +1,6 @@
 import { Router } from "express";
 import rateLimit from "express-rate-limit";
-import { getMyReports, getSegmentLights, getWard, getWards, postFault, postSession } from "../controllers/publicLightFault.controller";
+import { getMyReports, getSegmentLights, getWard, getWards, postFault, postFaultByLocation, postSession } from "../controllers/publicLightFault.controller";
 
 /** Public reporting of non-working streetlights / High Masts (holding number + registered mobile). */
 export const publicStreetlightRouter = Router();
@@ -23,4 +23,5 @@ publicStreetlightRouter.get("/wards", readLimit, getWards);
 publicStreetlightRouter.get("/wards/:id", readLimit, getWard);
 publicStreetlightRouter.get("/segments/:id/lights", readLimit, getSegmentLights);
 publicStreetlightRouter.post("/faults", reportLimit, postFault);
+publicStreetlightRouter.post("/faults-by-location", reportLimit, postFaultByLocation);
 publicStreetlightRouter.get("/my-reports", readLimit, getMyReports);

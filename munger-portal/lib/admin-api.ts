@@ -76,12 +76,13 @@ export async function setAdminAccountActive(id: number, active: boolean): Promis
 
 export type ChangeRequestStatus = "pending" | "approved" | "rejected" | "reverted";
 
-export type ApprovalTier = "minor" | "significant" | "mutation";
+export type ApprovalTier = "minor" | "significant" | "mutation" | "use_change";
 
 export const TIER_LABELS: Record<ApprovalTier, string> = {
   minor: "Minor Clerical Editing",
   significant: "Significant Change",
   mutation: "Mutation (Ownership Change)",
+  use_change: "Change of Use / Back-dated Floor Change",
 };
 
 export interface ChangeRequestSummary {
@@ -97,6 +98,8 @@ export interface ChangeRequestSummary {
   current_stage: AdminRole;
   approval_tier: ApprovalTier;
   final_stage: AdminRole;
+  /** Photo of the premises (change of use / back-dated floor change). */
+  premises_photo_path?: string | null;
   reviewed_by: string | null;
   reviewed_role: string | null;
   reviewed_at: string | null;
@@ -417,6 +420,8 @@ export interface PaymentHistoryEntry {
   date: string;
   amountReceived: string;
   paymentMode: string;
+  /** An old part payment settled through "Historical Part Payments" - no receipt of this system to view. */
+  historical?: boolean;
 }
 
 export async function fetchPaymentHistoryAdmin(holdingNo: string): Promise<PaymentHistoryEntry[]> {
@@ -751,47 +756,6 @@ export async function deletePropertyHolding(holdingNo: string, confirmationPhras
   }
 }
 
-export interface PropertyBulkImportResult {
-  batchId: number;
-  totalHoldings: number;
-  ready: number;
-  withWarnings: number;
-  withBlockers: number;
-  errors: { sheet: string; row: number; message: string }[];
-}
-
-/** Plain-language reason when the server's reply carries no message (e.g. a proxy rejecting the request). */
-function uploadFailureMessage(status: number): string {
-  if (status === 413)
-    return "The file is too large for the server to accept (error 413). Ask the administrator to raise the upload size limit on the web server, or upload a smaller file.";
-  if (status === 502 || status === 503 || status === 504)
-    return `The server did not respond in time (error ${status}). Please wait a minute and try again; if it keeps happening, tell the administrator.`;
-  if (status === 401 || status === 403)
-    return `You are not allowed to do this, or your login has expired (error ${status}). Please sign in again.`;
-  return `Could not upload this file (error ${status}).`;
-}
-
-/**
- * Commissioner / Tax Daroga / City Manager. fileDataBase64 is the raw base64 content of the .xlsx file (no data-URL prefix).
- * The file is NOT imported - it is parked for review by Tax Daroga / City Manager.
- */
-export async function uploadPropertiesXlsx(
-  fileDataBase64: string,
-  dataSourceName: string,
-  fileName?: string,
-): Promise<PropertyBulkImportResult> {
-  const res = await fetch(`${API_BASE_URL}/admin/properties/bulk-upload`, {
-    method: "POST",
-    headers: authHeaders(),
-    body: JSON.stringify({ fileDataBase64, dataSourceName, fileName }),
-  });
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body.error || uploadFailureMessage(res.status));
-  }
-  return res.json();
-}
-
 export interface SpaceRemovalResult {
   fixed: { from: string; to: string }[];
   skipped: { holdingNo: string; reason: string }[];
@@ -871,29 +835,6 @@ export async function removeDuplicateFloors(): Promise<DuplicateFloorsCleanupRes
 // floor-wise detail entry, then verifies, then the original assigner
 // gives final sign-off. See migratedHoldingSurvey.controller.ts.
 // ---------------------------------------------------------------------------
-
-export interface MigratedHoldingImportResult {
-  holdingsCreated: number;
-  rowsSkipped: number;
-  errors: { row: number; message: string }[];
-  /** Rows already in the system - not created again. */
-  alreadyImported?: number;
-  /** Rows held back in the review list, with the reason. */
-  review?: { row: number; reason: string; kind: "needs_review" | "error" }[];
-}
-
-export async function uploadMigratedHoldingsXlsx(fileDataBase64: string, fileName?: string): Promise<MigratedHoldingImportResult> {
-  const res = await fetch(`${API_BASE_URL}/admin/migrated-holdings/bulk-upload`, {
-    method: "POST",
-    headers: authHeaders(),
-    body: JSON.stringify({ fileDataBase64, fileName }),
-  });
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body.error || uploadFailureMessage(res.status));
-  }
-  return res.json();
-}
 
 export type MigratedHoldingSurveyStatus =
   | "pending_assignment"
@@ -1462,7 +1403,7 @@ export async function assignTaxCollectorCityManager(
 
 export interface EntryRevertEvent {
   id: number;
-  entry_type: "property_mutation" | "shop_agreement";
+  entry_type: "property_mutation" | "shop_agreement" | "property_discrepancy" | "pre2011_arv";
   entry_id: number;
   reference_no: string;
   originally_requested_by: string;
@@ -1904,6 +1845,9 @@ export interface PropertyDiscrepancyRequest {
   gps_lat: string | null;
   gps_lng: string | null;
   photo_path: string | null;
+  previous_receipt_photo_path?: string | null;
+  aadhaar_photo_path?: string | null;
+  owner_photo_path?: string | null;
   reverted_by: string | null;
   reverted_by_role: string | null;
   reverted_from_stage: string | null;
@@ -1922,6 +1866,8 @@ export interface ReportDiscrepancyInput {
   previousReceiptPhotoMimeType?: string;
   aadhaarPhotoBase64Data?: string;
   aadhaarPhotoMimeType?: string;
+  ownerPhotoBase64Data?: string;
+  ownerPhotoMimeType?: string;
 }
 
 export async function reportPropertyDiscrepancy(holdingNo: string, input: ReportDiscrepancyInput): Promise<PropertyDiscrepancyRequest> {
@@ -1971,7 +1917,10 @@ export interface PropertyDiscrepancyApproval {
 }
 
 /** The holding photo the Tax Collector attached at submission. */
-export async function fetchDiscrepancyPhotoBlobUrl(id: number, kind: "holding" | "receipt" | "aadhaar" = "holding"): Promise<string> {
+export async function fetchDiscrepancyPhotoBlobUrl(
+  id: number,
+  kind: "holding" | "receipt" | "aadhaar" | "owner" = "holding",
+): Promise<string> {
   const res = await fetch(`${API_BASE_URL}/admin/property-discrepancy-requests/${id}/photo/${kind}`, { headers: authHeaders() });
   if (!res.ok) throw new Error("Could not load this photo.");
   const blob = await res.blob();
@@ -2084,6 +2033,12 @@ export interface CollectionIssue {
   reported_by_username: string;
   reported_by_display_name: string;
   reported_at: string;
+  /** open -> notice_issued -> resolved (automatically when the demand is paid, or by the City Manager). */
+  status: "open" | "notice_issued" | "resolved";
+  resolved_how: "paid" | "manual" | null;
+  resolved_at: string | null;
+  resolved_by: string | null;
+  resolution_note: string | null;
 }
 
 /** One notice as listed under its collection issue - see CollectionIssueNotice for the full row. */
@@ -2094,6 +2049,13 @@ export interface CollectionIssueNoticeSummary {
   demand_no: string | null;
   generated_by_display_name: string;
   generated_at: string;
+  /** Receiving copy (signed by the taxpayer); removal only with the DMC's approval. */
+  receiving_uploaded_at: string | null;
+  receiving_by: string | null;
+  removal_requested_at: string | null;
+  removal_requested_by: string | null;
+  removal_reason: string | null;
+  removed_count: number;
 }
 
 export interface CollectionIssueWithNotices extends CollectionIssue {
@@ -2195,7 +2157,9 @@ export async function fetchFieldVerificationsForHolding(holdingNo: string): Prom
 }
 
 /** Oversight worklist - Tax Daroga, Commissioner, and City Manager (who also generates notices from here). */
-export async function fetchAllCollectionIssues(status?: "pending" | "noticed"): Promise<CollectionIssueWithNotices[]> {
+export async function fetchAllCollectionIssues(
+  status?: "pending" | "noticed" | "open" | "notice_issued" | "resolved" | "unresolved" | "receiving_missing" | "removal",
+): Promise<CollectionIssueWithNotices[]> {
   const qs = status ? `?status=${status}` : "";
   const res = await fetch(`${API_BASE_URL}/admin/collection-issues${qs}`, { headers: authHeaders() });
   if (!res.ok) throw new Error("Could not load collection issues.");
@@ -2239,6 +2203,8 @@ export interface GeneratedCollectionIssueNotice {
   noticeDate: string;
   complianceDays: number;
   language: NoticeLanguage;
+  /** Who signs the notice (older notices: the City Manager). */
+  signatory?: "city_manager" | "tax_daroga";
   /** True when this is a reprint of a notice issued before copies were kept - rebuilt from current records, so property details may differ from the original. */
   reconstructed?: boolean;
 }
@@ -2545,6 +2511,18 @@ export async function importMigratedReviewRow(id: string, data: MigratedRowData,
   const body = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(body.error || "Could not import this row.");
   return body;
+}
+
+/** Commissioner: discard every row waiting for review (kept as discarded, with the reason). */
+export async function discardAllMigratedReviewRows(note: string): Promise<number> {
+  const res = await fetch(`${API_BASE_URL}/admin/migrated-holdings/review-rows/discard-all`, {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify({ note }),
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body.error || "Could not discard the rows.");
+  return body.discarded;
 }
 
 export async function discardMigratedReviewRow(id: string, note: string): Promise<void> {
