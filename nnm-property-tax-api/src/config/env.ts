@@ -59,7 +59,8 @@ const envSchema = z.object({
   FACE_MATCH_THRESHOLD: z.coerce.number().min(0).max(1).default(0.85),
   FACE_MATCH_THRESHOLD_TURNED: z.coerce.number().min(0).max(1).default(0.75),
   // Liveness: straight photo must be within this many degrees of straight; the turn must move the head at least this much.
-  FACE_FRONT_MAX_YAW: z.coerce.number().default(15),
+  // Phone cameras and the pose estimate read a straight face at 15-25 degrees; the liveness rests on the turn (below).
+  FACE_FRONT_MAX_YAW: z.coerce.number().default(25),
   FACE_TURN_MIN_YAW: z.coerce.number().default(20),
   // Which sign of CompreFace's yaw means "worker turned to their LEFT" in a rear-camera photo: 1 or -1.
   // 0 = check only that the head turned (either way) - use until calibrated (see FACE_ATTENDANCE_SETUP.md).
